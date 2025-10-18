@@ -18,7 +18,7 @@ func convertType(t types.Type) goast.Expr {
 		return &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
 	}
 
-	switch t.Kind() {
+	switch t.Underlying().Kind() {
 	case types.ASCII:
 		return &goast.SelectorExpr{
 			X:   &goast.Ident{Name: "cog"},
@@ -47,6 +47,28 @@ func convertType(t types.Type) goast.Expr {
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int32], nil)}
 	case types.Int64:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int64], nil)}
+	case types.OptionKind:
+		optionType, ok := t.(*types.Option)
+		if !ok {
+			panic("unable to assert option type")
+		}
+
+		valueType := convertType(optionType.Value)
+
+		return &goast.StructType{
+			Fields: &goast.FieldList{
+				List: []*goast.Field{
+					{
+						Names: []*goast.Ident{{Name: "Value"}},
+						Type:  valueType,
+					},
+					{
+						Names: []*goast.Ident{{Name: "Set"}},
+						Type:  &goast.Ident{Name: "bool"},
+					},
+				},
+			},
+		}
 	case types.Uint8:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint8], nil)}
 	case types.Uint16:
@@ -115,15 +137,15 @@ func convertType(t types.Type) goast.Expr {
 			Fields: &goast.FieldList{
 				List: []*goast.Field{
 					{
-						Names: []*goast.Ident{{Name: convertExport("either", unionType.Exported)}},
+						Names: []*goast.Ident{{Name: "Either"}},
 						Type:  convertType(unionType.Either),
 					},
 					{
-						Names: []*goast.Ident{{Name: convertExport("or", unionType.Exported)}},
+						Names: []*goast.Ident{{Name: "Or"}},
 						Type:  convertType(unionType.Or),
 					},
 					{
-						Names: []*goast.Ident{{Name: convertExport("tag", unionType.Exported)}},
+						Names: []*goast.Ident{{Name: "Tag"}},
 						Type:  &goast.Ident{Name: "bool"},
 					},
 				},
@@ -135,10 +157,10 @@ func convertType(t types.Type) goast.Expr {
 			Sel: &goast.Ident{Name: "UTF8"},
 		}
 	default:
-		// Assume user defined type.
-		if alias, ok := t.(*types.Alias); ok {
-			return &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
-		}
+		// // Assume user defined type.
+		// if alias, ok := t.(*types.Alias); ok {
+		// 	return &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
+		// }
 
 		panic(fmt.Sprintf("unknown type %q", t))
 	}

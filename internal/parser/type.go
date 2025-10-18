@@ -88,6 +88,15 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 	p.advance("parseType type") // consume type
 
+	if p.this().Type == tokens.Question {
+		// Optional type
+		p.advance("parseType ?") // consume ?
+
+		return &types.Option{
+			Value: typ,
+		}
+	}
+
 	return typ
 }
 

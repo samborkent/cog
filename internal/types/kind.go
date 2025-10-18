@@ -42,6 +42,9 @@ const (
 	// Combined types
 	TupleKind
 	UnionKind
+
+	// Modified types
+	OptionKind
 )
 
 func (t Kind) String() string {
