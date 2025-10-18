@@ -18,15 +18,27 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	case *ast.Declaration:
 		identifier := convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported)
 
-		expr, err := t.convertExpr(n.Assignment.Expression)
-		if err != nil {
-			return nil, err
-		}
-
 		_, ok := identifiers[identifier]
 		if !ok {
 			// Define as unused.
 			identifiers[identifier] = &goast.Ident{Name: "_"}
+		}
+
+		if n.Assignment.Expression == nil {
+			return []goast.Decl{&goast.GenDecl{
+				Tok: gotoken.VAR,
+				Specs: []goast.Spec{
+					&goast.ValueSpec{
+						Names: []*goast.Ident{identifiers[identifier]},
+						Type:  convertType(n.Type),
+					},
+				},
+			}}, nil
+		}
+
+		expr, err := t.convertExpr(n.Assignment.Expression)
+		if err != nil {
+			return nil, err
 		}
 
 		valueSpec := &goast.ValueSpec{

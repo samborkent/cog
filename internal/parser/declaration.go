@@ -125,19 +125,31 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 		return nil
 	}
 
+	if ident.ValueType == nil {
+		ident.ValueType = types.None
+	}
+
 	node := &ast.Declaration{
 		Assignment: &ast.Assignment{
 			Token:      p.this(),
 			Identifier: ident,
 		},
 		Constant: constant,
+		Type:     ident.ValueType,
+	}
+
+	if p.this().Type != tokens.Assign {
+		// Empty declaration.
+
+		if constant {
+			p.error(p.this(), "constant declarations must be initialized", "parseDeclaration")
+			return nil
+		}
+
+		return node
 	}
 
 	p.advance("parseDeclaration") // consume ':=' or '='
-
-	if ident.ValueType == nil {
-		ident.ValueType = types.None
-	}
 
 	startToken := p.this()
 
@@ -155,8 +167,6 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 		ident.ValueType = exprType
 		node.Assignment.Identifier.ValueType = exprType
 		node.Type = exprType
-	} else {
-		node.Type = ident.ValueType
 	}
 
 	kind := SymbolKindVariable

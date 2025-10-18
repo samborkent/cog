@@ -39,13 +39,29 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			Label: n.Label.Go(),
 		}}, nil
 	case *ast.Declaration:
+		// Define as unused variable.
+		identifiers[n.Assignment.Identifier.Name] = &goast.Ident{Name: "_"}
+
+		if n.Assignment.Expression == nil {
+			return []goast.Stmt{
+				&goast.DeclStmt{
+					Decl: &goast.GenDecl{
+						Tok: gotoken.VAR,
+						Specs: []goast.Spec{
+							&goast.ValueSpec{
+								Names: []*goast.Ident{identifiers[n.Assignment.Identifier.Name]},
+								Type:  convertType(n.Type),
+							},
+						},
+					},
+				},
+			}, nil
+		}
+
 		expr, err := t.convertExpr(n.Assignment.Expression)
 		if err != nil {
 			return nil, err
 		}
-
-		// Define as unused variable.
-		identifiers[n.Assignment.Identifier.Name] = &goast.Ident{Name: "_"}
 
 		// Optional type declaration.
 		var declType goast.Expr

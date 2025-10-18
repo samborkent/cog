@@ -37,5 +37,9 @@ func (d *Declaration) String() string {
 		return prefix + d.Assignment.Identifier.String() + " := " + d.Assignment.Expression.String()
 	}
 
+	if d.Assignment.Expression == nil {
+		return prefix + d.Assignment.Identifier.String() + " : " + d.Type.String()
+	}
+
 	return prefix + d.Assignment.Identifier.String() + " : " + d.Type.String() + " = " + d.Assignment.Expression.String()
 }
