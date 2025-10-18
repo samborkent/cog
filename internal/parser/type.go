@@ -77,6 +77,8 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 			return nil
 		}
 
+		p.advance("parseType alias") // consume type
+
 		return &types.Alias{
 			Name:     typeSymbol.Identifier.Name,
 			Derived:  typeSymbol.Identifier.ValueType,

@@ -2,6 +2,7 @@ package main
 
 main : proc() = {
     either : Either = "hello"
+    either = 10
 }
 
 Either ~ utf8 | uint64

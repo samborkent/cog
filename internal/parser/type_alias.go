@@ -40,8 +40,6 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 
 		enumValType := p.parseCombinedType(ctx, ident.Exported)
 
-		p.advance("parseTypeAlias enum type") // consume type
-
 		if p.this().Type != tokens.RBracket {
 			p.error(p.this(), "expected ] in enum declaration", "parseTypeAlias")
 			return nil
@@ -102,6 +100,8 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 				p.advance("parseTypeAlias enum literal ,") // consume ,
 			}
 		}
+
+		p.advance("parseTypeAlias }") // consume }
 
 		typeDecl.Literal = enumLiteral
 

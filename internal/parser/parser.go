@@ -225,8 +225,6 @@ func (p *Parser) findGlobalType(ctx context.Context, ident *ast.Identifier) {
 
 		enumValType := p.parseCombinedType(ctx, ident.Exported)
 
-		p.advance("findGlobalType enum type") // consume type
-
 		if p.this().Type != tokens.RBracket {
 			p.error(p.this(), "expected ] in enum declaration", "findGlobalType")
 			return
