@@ -1,0 +1,24 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  FILE: either.cog
+  DEBUG: false
+
+tasks:
+  compile:
+    cmds:
+    - go run cmd/main.go -file={{.FILE}} -debug={{.DEBUG}} -write=false
+    silent: true
+
+  transpile:
+    cmds:
+    - go run cmd/main.go -file={{.FILE}} -debug=false -write=true
+    silent: true
+
+  run:
+    cmds:
+    - task transpile
+    - go run tmp/{{.FILE | trimSuffix ".cog"}}.go -asan -ldflags="-asan -race -s -w"
+    silent: true

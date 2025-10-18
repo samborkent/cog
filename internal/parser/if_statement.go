@@ -1,0 +1,66 @@
+package parser
+
+import (
+	"context"
+
+	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/tokens"
+	"github.com/samborkent/cog/internal/types"
+)
+
+func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
+	node := &ast.IfStatement{
+		Token: p.this(),
+	}
+
+	p.advance("parseIfStatement if") // consume 'if'
+
+	if p.this().Type != tokens.LParen {
+		p.error(p.this(), "expected '(' after if", "parseIfStatement")
+		return nil
+	}
+
+	expr := p.expression(ctx, types.None)
+	if expr == nil {
+		p.error(p.this(), "unable to parse bool expression in if condition", "parseIfStatement")
+		return nil
+	}
+
+	if expr.Type().Underlying().Kind() != types.Bool {
+		p.error(p.this(), "expected bool expression in switch case", "parseIfStatement")
+		return nil
+	}
+
+	node.Condition = expr
+
+	if p.prev().Type != tokens.RParen {
+		p.error(p.this(), "missing closing ')' after if-expression", "parseIfStatement")
+		return nil
+	}
+
+	consequence := p.parseBlock(ctx)
+	if consequence == nil {
+		p.error(p.this(), "unable to parse if block", "parseIfStatement")
+		return nil
+	}
+
+	node.Consequence = consequence
+
+	if p.this().Type == tokens.Else {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		p.advance("parseIfStatement else") // consume 'else'
+
+		alternative := p.parseBlock(ctx)
+		if alternative == nil {
+			p.error(p.this(), "unable to parse else block", "parseIfStatement")
+			return nil
+		}
+
+		node.Alternative = alternative
+	}
+
+	return node
+}

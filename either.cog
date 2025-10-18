@@ -1,0 +1,7 @@
+package main
+
+main : proc() = {
+    either : Either = "hello"
+}
+
+Either ~ utf8 | uint64

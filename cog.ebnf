@@ -1,0 +1,35 @@
+primary
+    = INT
+    | FLOAT
+    | STRING
+    | "true"
+    | "false"
+    | "(", expression, ")";
+
+unary
+    = ( "!"
+    | "-" ), unary
+    | primary;
+
+factor
+    = unary, { ( "/"
+    | "*" ), unary };
+
+term
+    = factor, { ( "-"
+    | "+" ), factor };
+
+comparison
+    = term, { ( ">"
+    | ">="
+    | "<"
+    | "<=" ), term };
+
+equality
+    = comparison, { ( "!="
+    | "==" ), comparison };
+
+expression
+    = equality, { ( "and"
+    | "or"
+    | "xor" ), equality };

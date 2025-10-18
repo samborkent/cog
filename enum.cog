@@ -1,0 +1,35 @@
+package main
+
+main : proc() = {
+    enum1 := Status.Open
+    enum2 := Status.Closed
+
+    if (enum1 != enum2) {
+        @print(enum1)
+    }
+
+    _ = Planets.Earth.mass
+}
+
+Status ~ enum[utf8] {
+    Open := "open",
+    Closed := "closed",
+}
+
+Planets ~ enum[planet] {
+    Earth := {
+        radius = 0.5,
+        mass = 0.1,
+    },
+}
+
+planet ~ struct {
+    name : ascii
+
+    export pressure : float64
+
+    export (
+        radius : float64
+        mass : float64
+    )
+}
