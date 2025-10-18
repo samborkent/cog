@@ -233,17 +233,8 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				Type: &goast.Ident{Name: convertExport(unionType.String(), unionType.Exported)},
 				Elts: []goast.Expr{
 					&goast.KeyValueExpr{
-						Key: &goast.Ident{Name: convertExport("or", unionType.Exported)},
-						Value: &goast.CallExpr{
-							Fun: &goast.IndexExpr{
-								X: &goast.SelectorExpr{
-									X:   &goast.Ident{Name: "cog"},
-									Sel: &goast.Ident{Name: "Ptr"},
-								},
-								Index: convertType(unionType.Or),
-							},
-							Args: []goast.Expr{expr},
-						},
+						Key:   &goast.Ident{Name: convertExport("or", unionType.Exported)},
+						Value: expr,
 					},
 					&goast.KeyValueExpr{
 						Key:   &goast.Ident{Name: convertExport("tag", unionType.Exported)},
@@ -256,17 +247,8 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		return &goast.CompositeLit{
 			Type: &goast.Ident{Name: convertExport(unionType.String(), unionType.Exported)},
 			Elts: []goast.Expr{&goast.KeyValueExpr{
-				Key: &goast.Ident{Name: convertExport("either", unionType.Exported)},
-				Value: &goast.CallExpr{
-					Fun: &goast.IndexExpr{
-						X: &goast.SelectorExpr{
-							X:   &goast.Ident{Name: "cog"},
-							Sel: &goast.Ident{Name: "Ptr"},
-						},
-						Index: convertType(unionType.Either),
-					},
-					Args: []goast.Expr{expr},
-				},
+				Key:   &goast.Ident{Name: convertExport("either", unionType.Exported)},
+				Value: expr,
 			}},
 		}, nil
 	case *ast.UTF8Literal:

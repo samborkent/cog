@@ -95,6 +95,8 @@ caseSwitch:
     tuple : Tuple = {"hello", 10, false}
 
     // _ = Planets.Earth.mass
+
+    either : Either = "hello"
 }
 
 const definedHere := "defined globally!"
@@ -123,6 +125,8 @@ Planets ~ enum[planet] {
 }
 
 Tuple ~ utf8, uint64, bool
+
+Either ~ utf8 | uint64
 
 /*
 {
