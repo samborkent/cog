@@ -169,7 +169,5 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 
 	field.Type = p.parseCombinedType(ctx, exported)
 
-	p.advance("parseField type") // consume type
-
 	return field
 }

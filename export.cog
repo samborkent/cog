@@ -1,0 +1,12 @@
+package main
+
+planet ~ struct {
+    name : ascii
+
+    export pressure : float64
+
+    export (
+        radius : float64
+        mass : float64
+    )
+}
