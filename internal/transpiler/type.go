@@ -55,19 +55,12 @@ func convertType(t types.Type) goast.Expr {
 
 		valueType := convertType(optionType.Value)
 
-		return &goast.StructType{
-			Fields: &goast.FieldList{
-				List: []*goast.Field{
-					{
-						Names: []*goast.Ident{{Name: "Value"}},
-						Type:  valueType,
-					},
-					{
-						Names: []*goast.Ident{{Name: "Set"}},
-						Type:  &goast.Ident{Name: "bool"},
-					},
-				},
+		return &goast.IndexExpr{
+			X: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Option"},
 			},
+			Index: valueType,
 		}
 	case types.Uint8:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint8], nil)}

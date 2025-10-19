@@ -28,6 +28,12 @@ func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifie
 
 	p.advance("parseTypedDeclaration type") // consume type
 
+	if p.this().Type == tokens.Question {
+		identType = &types.Option{Value: identType}
+
+		p.advance("parseTypedDeclaration type ?") // consume ?
+	}
+
 	// Check if type is an alias.
 	_, ok = identType.(*types.Alias)
 	if ok {
