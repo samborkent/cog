@@ -13,12 +13,14 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 		Token: p.this(),
 	}
 
-	p.advance("parseIfStatement if") // consume 'if'
+	p.advance("parseIfStatement if") // consume if
 
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), "expected '(' after if", "parseIfStatement")
 		return nil
 	}
+
+	p.advance("parseIfStatement if (") // consume (
 
 	expr := p.expression(ctx, types.None)
 	if expr == nil {
@@ -26,17 +28,19 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 		return nil
 	}
 
-	if expr.Type().Underlying().Kind() != types.Bool {
-		p.error(p.this(), "expected bool expression in switch case", "parseIfStatement")
+	if p.prev().Type != tokens.Question && expr.Type().Kind() != types.Bool {
+		p.error(p.this(), "expected option or bool expression in if condition", "parseIfStatement")
 		return nil
 	}
 
 	node.Condition = expr
 
-	if p.prev().Type != tokens.RParen {
+	if p.this().Type != tokens.RParen {
 		p.error(p.this(), "missing closing ')' after if-expression", "parseIfStatement")
 		return nil
 	}
+
+	p.advance("parseIfStatement )") // consume )
 
 	consequence := p.parseBlock(ctx)
 	if consequence == nil {

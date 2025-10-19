@@ -171,9 +171,9 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 
 	node.Assignment.Expression = expr
 
-	exprType := expr.Type()
-
 	if ident.ValueType == types.None {
+		exprType := expr.Type()
+
 		ident.ValueType = exprType
 		node.Assignment.Identifier.ValueType = exprType
 		node.Type = exprType

@@ -20,6 +20,7 @@ cog is a Go-based programming language that brings some additional features.
 
 ### Long-term
 
+- Audit all uses of `types.Underlying().Kind()`
 - Allow package-less files (scripts)
     - These files cannot be imported, and will be excuted as if wrapped in a main function.
     - Should `ctx` be predefined in a script?

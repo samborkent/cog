@@ -63,10 +63,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	case *ast.Procedure:
 		funcName := n.Identifier.Go()
 
-		if n.Exported && funcName.Name != "" && funcName.Name != "main" {
-			funcName.Name = convertExport(funcName.Name, true)
-		}
-
 		gofunc := &goast.FuncDecl{
 			Name: funcName,
 			Type: &goast.FuncType{

@@ -150,11 +150,6 @@ func convertType(t types.Type) goast.Expr {
 			Sel: &goast.Ident{Name: "UTF8"},
 		}
 	default:
-		// // Assume user defined type.
-		// if alias, ok := t.(*types.Alias); ok {
-		// 	return &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
-		// }
-
 		panic(fmt.Sprintf("unknown type %q", t))
 	}
 }

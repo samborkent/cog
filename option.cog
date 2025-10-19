@@ -1,13 +1,29 @@
 package main
 
 main : proc() = {
-    utf : utf8?  = "hello"
+    // TODO: none
 
+    utf : utf8?  = "hello"
     // option : Option? // not allowed
-    
     utf = "option"
     
-    //if (option) {}
+    if (utf?) {
+        @print("hello")
+    }
+
+    /*
+    option : uint64?
+
+    if (option?) {
+        @print("do not print")
+    }
+
+    option = 10
+
+    if (option?) {
+        @print("do print")
+    }
+    */
 }
 
 Option ~ utf8?

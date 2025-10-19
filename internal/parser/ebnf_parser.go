@@ -199,12 +199,38 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		}
 	}
 
-	node := p.primary(ctx, typeToken)
-	if node != nil {
-		return node
+	if (typeToken == nil || typeToken == types.None) && p.this().Type == tokens.Identifier {
+		// TODO: get rid of double lookup for identifiers
+		symbol, ok := p.symbols.Resolve(p.this().Literal)
+		if !ok {
+			p.error(p.this(), "undefined identifier", "primary")
+			return nil
+		}
+
+		typeToken = symbol.Type()
 	}
 
-	return nil
+	node := p.primary(ctx, typeToken)
+	if node == nil {
+		return nil
+	}
+
+	if p.this().Type == tokens.Question {
+		token := p.this()
+		p.advance("unary ?") // consume ?
+
+		if typeToken.Kind() != types.OptionKind {
+			p.error(token, "option operator requires option type", "unary")
+			return nil
+		}
+
+		return &ast.Suffix{
+			Operator: token,
+			Left:     node,
+		}
+	}
+
+	return node
 }
 
 func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expression {
@@ -214,8 +240,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			typeToken = aliasType.Underlying()
 		}
 
-		switch typeToken.Kind() {
-		case types.OptionKind:
+		if typeToken.Kind() == types.OptionKind {
 			// Handle option literal.
 			optionType, ok := typeToken.(*types.Option)
 			if !ok {
@@ -224,13 +249,10 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			// TODO: handle none type
 
-			expr := p.primary(ctx, optionType.Value)
-			if expr == nil {
-				return nil
-			}
+			typeToken = optionType.Value
+		}
 
-			return expr
-		case types.UnionKind:
+		if typeToken.Kind() == types.UnionKind {
 			// Handle union literal.
 			unionType, ok := typeToken.(*types.Union)
 			if !ok {

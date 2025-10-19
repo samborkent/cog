@@ -2,6 +2,8 @@ package ast
 
 import (
 	goast "go/ast"
+	"strings"
+	"unicode"
 
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
@@ -44,6 +46,25 @@ func (e *Identifier) Go() *goast.Ident {
 	}
 
 	return &goast.Ident{
-		Name: e.Name,
+		Name: convertExport(e.Name, e.Exported),
 	}
+}
+
+func convertExport(ident string, exported bool) string {
+	r := rune(ident[0])
+	str := string(r)
+
+	if exported {
+		// If exported, ensure first letter is uppercase.
+		str = strings.ToUpper(str)
+	} else if unicode.IsUpper(r) {
+		// If not exported, but first letter is uppercase, prefix it with underscore.
+		str = "_" + str
+	}
+
+	if len(ident) > 1 {
+		str += ident[1:]
+	}
+
+	return str
 }
