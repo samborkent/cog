@@ -99,6 +99,10 @@ func (t Kind) String() string {
 		return "enum"
 	case TupleKind:
 		return "tuple"
+	case UnionKind:
+		return "union"
+	case OptionKind:
+		return "option"
 	case Invalid:
 		fallthrough
 	default:

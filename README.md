@@ -12,6 +12,7 @@ cog is a Go-based programming language that brings some additional features.
 
 ### Short-term
 
+- Refactor `parseTypedDeclaration` to use same logic as `parseCombinedType`
 - Fix global type definition ordering bug for complex type (e.g. enum[planet] before planet)
 - Remove if-condition parentheses
 - Change `and`/`or` and `&&`/`||`, remove `xor`.

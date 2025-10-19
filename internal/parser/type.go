@@ -77,9 +77,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 			return nil
 		}
 
-		p.advance("parseType alias") // consume type
-
-		return &types.Alias{
+		typ = &types.Alias{
 			Name:     typeSymbol.Identifier.Name,
 			Derived:  typeSymbol.Identifier.ValueType,
 			Exported: typeSymbol.Identifier.Exported,
@@ -91,6 +89,11 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 	if p.this().Type == tokens.Question {
 		// Optional type
 		p.advance("parseType ?") // consume ?
+
+		if typ.Kind() == types.OptionKind {
+			p.error(p.this(), "nested optional types are not allowed", "parseType")
+			return nil
+		}
 
 		return &types.Option{
 			Value: typ,

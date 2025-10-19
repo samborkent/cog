@@ -208,31 +208,57 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 }
 
 func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expression {
-	if typeToken != nil && typeToken.Kind() == types.UnionKind {
-		// Handle union literal.
-		unionType, ok := typeToken.Underlying().(*types.Union)
-		if !ok {
-			panic("unable to assert union type")
+	if typeToken != nil {
+		aliasType, ok := typeToken.(*types.Alias)
+		if ok {
+			typeToken = aliasType.Underlying()
 		}
 
-		token := p.this()
+		switch typeToken.Kind() {
+		case types.OptionKind:
+			// Handle option literal.
+			optionType, ok := typeToken.(*types.Option)
+			if !ok {
+				panic("unable to assert option type")
+			}
 
-		// Infer type.
-		expr := p.primary(ctx, types.None)
+			// TODO: handle none type
 
-		isEither := expr.Type().Kind() == unionType.Either.Kind()
-		isOr := expr.Type().Kind() == unionType.Or.Kind()
+			expr := p.primary(ctx, optionType.Value)
+			if expr == nil {
+				return nil
+			}
 
-		if !isEither && !isOr {
-			p.error(p.this(), fmt.Sprintf("expression of type %q not in union type %q", expr.Type().String(), unionType.String()), "primary")
-			return nil
-		}
+			return expr
+		case types.UnionKind:
+			// Handle union literal.
+			unionType, ok := typeToken.(*types.Union)
+			if !ok {
+				panic("unable to assert union type")
+			}
 
-		return &ast.UnionLiteral{
-			Token:     token,
-			UnionType: unionType,
-			Value:     expr,
-			Tag:       isOr,
+			token := p.this()
+
+			// Infer type.
+			expr := p.primary(ctx, types.None)
+			if expr == nil {
+				return nil
+			}
+
+			isEither := expr.Type().Kind() == unionType.Either.Kind()
+			isOr := expr.Type().Kind() == unionType.Or.Kind()
+
+			if !isEither && !isOr {
+				p.error(p.this(), fmt.Sprintf("expression of type %q not in union type %q", expr.Type().String(), unionType.String()), "primary")
+				return nil
+			}
+
+			return &ast.UnionLiteral{
+				Token:     token,
+				UnionType: unionType,
+				Value:     expr,
+				Tag:       isOr,
+			}
 		}
 	}
 

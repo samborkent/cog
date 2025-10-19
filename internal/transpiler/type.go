@@ -11,14 +11,14 @@ import (
 
 func convertType(t types.Type) goast.Expr {
 	if alias, ok := t.(*types.Alias); ok {
-		if alias.Derived.Underlying().Kind() == types.EnumKind {
+		if alias.Underlying().Kind() == types.EnumKind {
 			return &goast.Ident{Name: convertExport(alias.Name, alias.Exported) + "Enum"}
 		}
 
 		return &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
 	}
 
-	switch t.Underlying().Kind() {
+	switch t.Kind() {
 	case types.ASCII:
 		return &goast.SelectorExpr{
 			X:   &goast.Ident{Name: "cog"},

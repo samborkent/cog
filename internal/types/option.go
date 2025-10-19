@@ -13,5 +13,5 @@ func (t *Option) String() string {
 }
 
 func (t *Option) Underlying() Type {
-	return t
+	return t.Value
 }

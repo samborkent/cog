@@ -28,6 +28,17 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			return nil, err
 		}
 
+		if n.Identifier.ValueType.Kind() == types.OptionKind {
+			// Warp option type.
+			expr = &goast.CompositeLit{
+				Type: convertType(n.Identifier.ValueType),
+				Elts: []goast.Expr{
+					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
+					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
+				},
+			}
+		}
+
 		return []goast.Stmt{&goast.AssignStmt{
 			Lhs: []goast.Expr{ident},
 			Tok: gotoken.ASSIGN,
@@ -68,6 +79,17 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 		if n.Type != nil && n.Type != types.None {
 			declType = convertType(n.Type)
+		}
+
+		if n.Type.Kind() == types.OptionKind {
+			// Warp option type.
+			expr = &goast.CompositeLit{
+				Type: declType,
+				Elts: []goast.Expr{
+					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
+					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
+				},
+			}
 		}
 
 		// Replace type string with type name.

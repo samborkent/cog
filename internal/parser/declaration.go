@@ -29,9 +29,14 @@ func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifie
 	p.advance("parseTypedDeclaration type") // consume type
 
 	if p.this().Type == tokens.Question {
-		identType = &types.Option{Value: identType}
-
 		p.advance("parseTypedDeclaration type ?") // consume ?
+
+		if identType.Kind() == types.OptionKind {
+			p.error(p.this(), "nested optional types are not allowed", "parseType")
+			return nil
+		}
+
+		identType = &types.Option{Value: identType}
 	}
 
 	// Check if type is an alias.
@@ -146,7 +151,6 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 
 	if p.this().Type != tokens.Assign {
 		// Empty declaration.
-
 		if constant {
 			p.error(p.this(), "constant declarations must be initialized", "parseDeclaration")
 			return nil

@@ -1,12 +1,12 @@
 package main
 
 main : proc() = {
-    utf : utf8?
+    utf : utf8?  = "hello"
 
-    // option : Option?
-    // option : Option? = none
-    // option = "option"
-
+    // option : Option? // not allowed
+    
+    utf = "option"
+    
     //if (option) {}
 }
 

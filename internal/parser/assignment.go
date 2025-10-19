@@ -26,7 +26,7 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 
 	node := &ast.Assignment{
 		Token:      p.this(),
-		Identifier: ident,
+		Identifier: symbol.Identifier,
 	}
 
 	p.advance("parseAssignment") // consume '='
@@ -38,12 +38,14 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 
 	node.Expression = expr
 
-	if symbol.Identifier.Name != "_" && symbol.Type() != expr.Type() {
+	if symbol.Identifier.Name != "_" && !types.Equal(symbol.Type(), expr.Type()) {
 		p.error(node.Token, fmt.Sprintf("type mismatch: cannot assign %q to variable of type %q", expr.Type(), symbol.Type()), "parseAssignment")
 		return nil
 	}
 
-	node.Identifier.ValueType = expr.Type()
+	if node.Identifier.ValueType == nil || node.Identifier.ValueType == types.None {
+		node.Identifier.ValueType = expr.Type()
+	}
 
 	if symbol.Type() == types.None {
 		p.symbols.Update(ident.Name, expr.Type())
