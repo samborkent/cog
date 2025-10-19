@@ -10,10 +10,9 @@ main : proc() = {
     if (utf?) {
         @print("hello")
     }
-
-    /*
+    
     option : uint64?
-
+    
     if (option?) {
         @print("do not print")
     }
@@ -23,7 +22,6 @@ main : proc() = {
     if (option?) {
         @print("do print")
     }
-    */
 }
 
 Option ~ utf8?

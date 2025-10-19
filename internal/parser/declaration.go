@@ -149,12 +149,19 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 		Type:     ident.ValueType,
 	}
 
+	kind := SymbolKindVariable
+	if constant {
+		kind = SymbolKindConstant
+	}
+
 	if p.this().Type != tokens.Assign {
 		// Empty declaration.
 		if constant {
 			p.error(p.this(), "constant declarations must be initialized", "parseDeclaration")
 			return nil
 		}
+
+		p.symbols.Define(ident, kind)
 
 		return node
 	}
@@ -177,11 +184,6 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 		ident.ValueType = exprType
 		node.Assignment.Identifier.ValueType = exprType
 		node.Type = exprType
-	}
-
-	kind := SymbolKindVariable
-	if constant {
-		kind = SymbolKindConstant
 	}
 
 	p.symbols.Define(ident, kind)
