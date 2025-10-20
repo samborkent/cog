@@ -92,14 +92,10 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			}
 		}
 
-		// Replace type string with type name.
-		switch n.Assignment.Expression.Type().Kind() {
-		case types.TupleKind:
-			// TODO: improve this
-			expr.(*goast.CompositeLit).Type.(*goast.Ident).Name = convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)
-		case types.UnionKind:
-			// TODO: improve this
-			expr.(*goast.CompositeLit).Type.(*goast.Ident).Name = convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)
+		// Replace type string with type name if missing (for structs, tuples, unions).
+		compositeLiteral, ok := expr.(*goast.CompositeLit)
+		if ok && compositeLiteral.Type == nil {
+			compositeLiteral.Type = &goast.Ident{Name: convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)}
 		}
 
 		return []goast.Stmt{&goast.DeclStmt{

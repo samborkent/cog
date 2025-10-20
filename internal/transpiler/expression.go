@@ -27,7 +27,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		expr := &goast.CallExpr{
 			Fun: &goast.SelectorExpr{
 				X:   n.Import.Go(),
-				Sel: n.Call.Identifier.Go(),
+				Sel: &goast.Ident{Name: n.Call.Identifier.Name},
 			},
 			Args: make([]goast.Expr, 0, len(n.Call.Arguments)),
 		}
@@ -192,7 +192,6 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		return &goast.CompositeLit{
-			Type: &goast.Ident{Name: n.StructType.String()},
 			Elts: exprs,
 		}, nil
 	case *ast.Suffix:
@@ -213,11 +212,6 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Sel: &goast.Ident{Name: "Set"},
 		}, nil
 	case *ast.TupleLiteral:
-		tupleType, ok := n.TupleType.Underlying().(*types.Tuple)
-		if !ok {
-			panic("unable to assert tuple type")
-		}
-
 		values := make([]goast.Expr, 0, len(n.Values))
 
 		for _, v := range n.Values {
@@ -230,7 +224,6 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		return &goast.CompositeLit{
-			Type: &goast.Ident{Name: convertExport(tupleType.String(), tupleType.Exported)},
 			Elts: values,
 		}, nil
 	case *ast.Uint64Literal:
@@ -263,7 +256,6 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		return &goast.CompositeLit{
-			Type: &goast.Ident{Name: convertExport(unionType.String(), unionType.Exported)},
 			Elts: []goast.Expr{&goast.KeyValueExpr{
 				Key:   &goast.Ident{Name: "Either"},
 				Value: expr,

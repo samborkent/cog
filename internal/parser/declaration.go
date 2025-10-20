@@ -154,19 +154,19 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 		kind = SymbolKindConstant
 	}
 
-	if p.this().Type != tokens.Assign {
-		// Empty declaration.
+	if p.this().Type != tokens.Assign && p.this().Type != tokens.Declaration {
 		if constant {
 			p.error(p.this(), "constant declarations must be initialized", "parseDeclaration")
 			return nil
 		}
 
+		// Uninitialized variable
 		p.symbols.Define(ident, kind)
 
 		return node
 	}
 
-	p.advance("parseDeclaration") // consume ':=' or '='
+	p.advance("parseDeclaration") // consume := or =
 
 	startToken := p.this()
 
