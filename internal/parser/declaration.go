@@ -28,6 +28,17 @@ func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifie
 
 	p.advance("parseTypedDeclaration type") // consume type
 
+	if p.this().Type == tokens.Question {
+		p.advance("parseTypedDeclaration type ?") // consume ?
+
+		if identType.Kind() == types.OptionKind {
+			p.error(p.this(), "nested optional types are not allowed", "parseType")
+			return nil
+		}
+
+		identType = &types.Option{Value: identType}
+	}
+
 	// Check if type is an alias.
 	_, ok = identType.(*types.Alias)
 	if ok {
@@ -125,19 +136,37 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 		return nil
 	}
 
+	if ident.ValueType == nil {
+		ident.ValueType = types.None
+	}
+
 	node := &ast.Declaration{
 		Assignment: &ast.Assignment{
 			Token:      p.this(),
 			Identifier: ident,
 		},
 		Constant: constant,
+		Type:     ident.ValueType,
 	}
 
-	p.advance("parseDeclaration") // consume ':=' or '='
-
-	if ident.ValueType == nil {
-		ident.ValueType = types.None
+	kind := SymbolKindVariable
+	if constant {
+		kind = SymbolKindConstant
 	}
+
+	if p.this().Type != tokens.Assign && p.this().Type != tokens.Declaration {
+		if constant {
+			p.error(p.this(), "constant declarations must be initialized", "parseDeclaration")
+			return nil
+		}
+
+		// Uninitialized variable
+		p.symbols.Define(ident, kind)
+
+		return node
+	}
+
+	p.advance("parseDeclaration") // consume := or =
 
 	startToken := p.this()
 
@@ -149,19 +178,12 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 
 	node.Assignment.Expression = expr
 
-	exprType := expr.Type()
-
 	if ident.ValueType == types.None {
+		exprType := expr.Type()
+
 		ident.ValueType = exprType
 		node.Assignment.Identifier.ValueType = exprType
 		node.Type = exprType
-	} else {
-		node.Type = ident.ValueType
-	}
-
-	kind := SymbolKindVariable
-	if constant {
-		kind = SymbolKindConstant
 	}
 
 	p.symbols.Define(ident, kind)

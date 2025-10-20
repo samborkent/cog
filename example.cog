@@ -94,6 +94,28 @@ caseSwitch:
 
     tuple : Tuple = {"hello", 10, false}
 
+    either : Either = "hello"
+
+    utf : utf8?  = "hello"
+    // option : Option? // not allowed
+    utf = "option"
+    
+    if (utf?) {
+        @print("hello")
+    }
+    
+    option : uint64?
+    
+    if (option?) {
+        @print("do not print")
+    }
+
+    option = 10
+
+    if (option?) {
+        @print("do print")
+    }
+
     // _ = Planets.Earth.mass
 }
 
@@ -123,6 +145,10 @@ Planets ~ enum[planet] {
 }
 
 Tuple ~ utf8, uint64, bool
+
+Either ~ utf8 | uint64
+
+Option ~ utf8?
 
 /*
 {

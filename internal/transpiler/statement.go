@@ -28,6 +28,17 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			return nil, err
 		}
 
+		if n.Identifier.ValueType.Kind() == types.OptionKind {
+			// Warp option type.
+			expr = &goast.CompositeLit{
+				Type: convertType(n.Identifier.ValueType),
+				Elts: []goast.Expr{
+					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
+					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
+				},
+			}
+		}
+
 		return []goast.Stmt{&goast.AssignStmt{
 			Lhs: []goast.Expr{ident},
 			Tok: gotoken.ASSIGN,
@@ -39,13 +50,29 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			Label: n.Label.Go(),
 		}}, nil
 	case *ast.Declaration:
+		// Define as unused variable.
+		identifiers[n.Assignment.Identifier.Name] = &goast.Ident{Name: "_"}
+
+		if n.Assignment.Expression == nil {
+			return []goast.Stmt{
+				&goast.DeclStmt{
+					Decl: &goast.GenDecl{
+						Tok: gotoken.VAR,
+						Specs: []goast.Spec{
+							&goast.ValueSpec{
+								Names: []*goast.Ident{identifiers[n.Assignment.Identifier.Name]},
+								Type:  convertType(n.Type),
+							},
+						},
+					},
+				},
+			}, nil
+		}
+
 		expr, err := t.convertExpr(n.Assignment.Expression)
 		if err != nil {
 			return nil, err
 		}
-
-		// Define as unused variable.
-		identifiers[n.Assignment.Identifier.Name] = &goast.Ident{Name: "_"}
 
 		// Optional type declaration.
 		var declType goast.Expr
@@ -54,14 +81,21 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			declType = convertType(n.Type)
 		}
 
-		// Replace type string with type name.
-		switch n.Assignment.Expression.Type().Kind() {
-		case types.TupleKind:
-			// TODO: improve this
-			expr.(*goast.CompositeLit).Type.(*goast.Ident).Name = convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)
-		case types.UnionKind:
-			// TODO: improve this
-			expr.(*goast.CompositeLit).Type.(*goast.Ident).Name = convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)
+		if n.Type.Kind() == types.OptionKind {
+			// Warp option type.
+			expr = &goast.CompositeLit{
+				Type: declType,
+				Elts: []goast.Expr{
+					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
+					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
+				},
+			}
+		}
+
+		// Replace type string with type name if missing (for structs, tuples, unions).
+		compositeLiteral, ok := expr.(*goast.CompositeLit)
+		if ok && compositeLiteral.Type == nil {
+			compositeLiteral.Type = &goast.Ident{Name: convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)}
 		}
 
 		return []goast.Stmt{&goast.DeclStmt{

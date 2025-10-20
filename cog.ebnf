@@ -6,14 +6,18 @@ primary
     | "false"
     | "(", expression, ")";
 
-unary
+suffix
+    = prefix, "?"
+    | primary;
+
+prefix
     = ( "!"
-    | "-" ), unary
+    | "-" ), prefix
     | primary;
 
 factor
-    = unary, { ( "/"
-    | "*" ), unary };
+    = prefix, { ( "/"
+    | "*" ), prefix };
 
 term
     = factor, { ( "-"

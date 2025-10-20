@@ -42,6 +42,9 @@ const (
 	// Combined types
 	TupleKind
 	UnionKind
+
+	// Modified types
+	OptionKind
 )
 
 func (t Kind) String() string {
@@ -96,6 +99,10 @@ func (t Kind) String() string {
 		return "enum"
 	case TupleKind:
 		return "tuple"
+	case UnionKind:
+		return "union"
+	case OptionKind:
+		return "option"
 	case Invalid:
 		fallthrough
 	default:

@@ -199,40 +199,88 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		}
 	}
 
-	node := p.primary(ctx, typeToken)
-	if node != nil {
-		return node
-	}
-
-	return nil
-}
-
-func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expression {
-	if typeToken != nil && typeToken.Kind() == types.UnionKind {
-		// Handle union literal.
-		unionType, ok := typeToken.Underlying().(*types.Union)
+	if (typeToken == nil || typeToken == types.None) && p.this().Type == tokens.Identifier {
+		// TODO: get rid of double lookup for identifiers
+		symbol, ok := p.symbols.Resolve(p.this().Literal)
 		if !ok {
-			panic("unable to assert union type")
-		}
-
-		token := p.this()
-
-		// Infer type.
-		expr := p.primary(ctx, types.None)
-
-		isEither := expr.Type().Kind() == unionType.Either.Kind()
-		isOr := expr.Type().Kind() == unionType.Or.Kind()
-
-		if !isEither && !isOr {
-			p.error(p.this(), fmt.Sprintf("expression of type %q not in union type %q", expr.Type().String(), unionType.String()), "primary")
+			p.error(p.this(), "undefined identifier", "primary")
 			return nil
 		}
 
-		return &ast.UnionLiteral{
-			Token:     token,
-			UnionType: unionType,
-			Value:     expr,
-			Tag:       isOr,
+		typeToken = symbol.Type()
+	}
+
+	node := p.primary(ctx, typeToken)
+	if node == nil {
+		return nil
+	}
+
+	if p.this().Type == tokens.Question {
+		token := p.this()
+		p.advance("unary ?") // consume ?
+
+		if typeToken.Kind() != types.OptionKind {
+			p.error(token, "option operator requires option type", "unary")
+			return nil
+		}
+
+		return &ast.Suffix{
+			Operator: token,
+			Left:     node,
+		}
+	}
+
+	return node
+}
+
+func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expression {
+	if typeToken != nil {
+		aliasType, ok := typeToken.(*types.Alias)
+		if ok {
+			typeToken = aliasType.Underlying()
+		}
+
+		if typeToken.Kind() == types.OptionKind {
+			// Handle option literal.
+			optionType, ok := typeToken.(*types.Option)
+			if !ok {
+				panic("unable to assert option type")
+			}
+
+			// TODO: handle none type
+
+			typeToken = optionType.Value
+		}
+
+		if typeToken.Kind() == types.UnionKind {
+			// Handle union literal.
+			unionType, ok := typeToken.(*types.Union)
+			if !ok {
+				panic("unable to assert union type")
+			}
+
+			token := p.this()
+
+			// Infer type.
+			expr := p.primary(ctx, types.None)
+			if expr == nil {
+				return nil
+			}
+
+			isEither := expr.Type().Kind() == unionType.Either.Kind()
+			isOr := expr.Type().Kind() == unionType.Or.Kind()
+
+			if !isEither && !isOr {
+				p.error(p.this(), fmt.Sprintf("expression of type %q not in union type %q", expr.Type().String(), unionType.String()), "primary")
+				return nil
+			}
+
+			return &ast.UnionLiteral{
+				Token:     token,
+				UnionType: unionType,
+				Value:     expr,
+				Tag:       isOr,
+			}
 		}
 	}
 

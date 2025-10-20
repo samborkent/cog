@@ -33,6 +33,10 @@ func (d *Declaration) String() string {
 		prefix = prefix + "const "
 	}
 
+	if d.Assignment.Expression == nil {
+		return prefix + d.Assignment.Identifier.String() + " : " + d.Type.String()
+	}
+
 	if d.Type == nil || d.Type == types.None {
 		return prefix + d.Assignment.Identifier.String() + " := " + d.Assignment.Expression.String()
 	}

@@ -4,8 +4,6 @@ import (
 	"strings"
 )
 
-const UnionNumTypes = 2
-
 type Union struct {
 	Either, Or Type
 	Exported   bool
