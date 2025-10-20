@@ -1,5 +1,14 @@
 # cog
-cog is a Go-based programming language that brings some additional features.
+
+cog is a Go-based hobby programming language that brings some additional features. It is wholly incomplete and a work-in-progress.
+
+The following basic features are missing that need to be implemented before Cog can be used to write useful programs:
+
+- Function declarations
+- Cog function calls (Go std lib function calls are working)
+- Go-to-Cog type conversions
+- Multi-file programs
+- Cog packages / imports
 
 ## Features
 
@@ -19,18 +28,14 @@ cog is a Go-based programming language that brings some additional features.
     - `@print(msg any)` print to std out
     - `@if[T any](if : bool, then : T, else :? T)`
 - `context` included as base type
-- Additional base types
-    - `int128` (WIP)
-    - `uint128` (using [lukechampine.com/uint128])
-    - `float16` (using [github.com/x448/float16])
-    - `complex32` (using `float16`)
-    - `ascii` string where every character is a single byte
-    - `utf8` alias for Go `string`
 - `main` takes a `ctx` argument to control lifetime of application
+- Call Go std library functions
+    - Import using `goimport`
+    - Call using `@go` namespace prefix (e.g. `@go.strings.ToUpper("call me"))
 
 ### Planned
 
-- Explicit exports using `export` (WIP)
+- Explicit exports using `export`
 - Optional function parameters `foo(optional :? utf8)`
     - With default values `foo(default :? utf8 = 10)`
 - Distinction between `func` and `proc`
@@ -50,11 +55,18 @@ cog is a Go-based programming language that brings some additional features.
     - `@map[K comparable, V any, I uint](ctx : context, cap :? I = 8) map[K]V`
     - `@set[K comparable, I uint](ctx : context, cap :? I = 8) set[K]`
 - Additional types:
+    - `int128`
+    - `uint128` (using [lukechampine.com/uint128])
+    - `float16` (using [github.com/x448/float16])
+    - `complex32` (using `float16`)
+    - `ascii` string where every character is a single byte
+    - `utf8` alias for Go `string`
     - `signal[T any]` alias of `chan[T any]struct{}`
 - Arena based allocations (using `arena` experiment)
     - Allocations are handled through an arena contained within `context`.
     - A new arena is created when entering a new `proc` scope.
     - Arena is cleared when leaving `proc` scope.
+- Builtin `upx` binary packer for smaller binaries.
 
 ## Syntax
 
