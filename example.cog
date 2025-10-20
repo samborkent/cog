@@ -116,6 +116,9 @@ caseSwitch:
         @print("do print")
     }
 
+    upperCaseString := upper(language)
+    @print(upperCaseString)
+
     // _ = Planets.Earth.mass
 }
 
@@ -150,20 +153,26 @@ Either ~ utf8 | uint64
 
 Option ~ utf8?
 
-/*
-{
-    L := upper(language)
+upper : func(str : utf8) utf8 = {
+    return @go.strings.ToUpper(str)
 }
+
+/*
 
 // string can be either ascii or utf8.
 // this is determined at compile time.
 // argument type determines return type as well.
-export upper : func(str: string) string = {
-    return @go.strings.Upper(str) // TODO: find valid way to convert str to Go string
-}
-    async {
-
+export upper : func[S string](str : S) S = {
+    switch type str {
+    case ascii:
+        return @go.strings.Upper(@cast[utf8](str))
+    case utf8:
+        return @go.strings.Upper(str)
     }
+}
+
+async {
+
 }
 
 handleRequest : proc(ctx: context, req: Request) (res: Response, err: error) {

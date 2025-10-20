@@ -66,8 +66,8 @@ The following basic features are missing that need to be implemented before Cog 
         - Also implement `@convert[A, B any](x A) B`, which will perform best-effort conversion, allowing some precision loss and handling overflows.
 - Additional types:
     - `int128`
-    - `uint128` (using [lukechampine.com/uint128])
-    - `float16` (using [github.com/x448/float16])
+    - `uint128` (using [lukechampine.com/uint128](lukechampine.com/uint128))
+    - `float16` (using [github.com/x448/float16](github.com/x448/float16))
     - `complex32` (using `float16`)
     - `ascii` string where every character is a single byte
     - `utf8` alias for Go `string`
@@ -108,3 +108,164 @@ The following basic features are missing that need to be implemented before Cog 
     - These files cannot be imported, and will be excuted as if wrapped in a main function.
     - Should `ctx` be predefined in a script?
 - Disallow `main` in declarations besides `main : proc(ctx: context)`.
+
+## Example code
+
+```go
+package main
+
+goimport (
+    "strings"
+)
+
+const a : int64 = 0
+
+export const isExported := true
+const NotExported := true
+
+String ~ utf8
+export notExported ~ uint64
+export ExportedString ~ String
+
+main : proc(ctx: context) = {
+    str := @go.strings.ToUpper("str")
+
+    b : float32 = 0.0
+
+    language := "cog" // utf8
+    lang : utf8 = "cog"
+    lng : ascii = "cog"
+
+    leeng := lng
+    c1 := `hello
+    
+        world`
+    c2 := "hello\n\n\tworld"
+
+    @print(c1)
+    @print(c2)
+
+    language = "go"
+
+    if true {
+        break
+    } else {
+        lng = "else"
+    }
+
+    if true != false {}
+    if true == false && true != false {}
+    if (language == "cog") != (lng == "cog") {}
+    if 5 <= 6 {}
+    if !true {}
+
+    fl := -0.6e-7
+
+    collection : set[string] = { "hello1", "hello2" }
+
+    maths := 5 * 6 / (2 + 3)
+
+ifLabel:
+    if true {
+        if true {
+            break ifLabel
+        }
+    }
+
+    newString := definedHere
+
+    newLang := @if(language == "cog", 25 + 10 - 6, 5)
+
+    earth : planet = {
+        radius = 10,
+        mass = 20,
+    }
+
+    _ = earth.radius
+
+caseSwitch:
+    switch {
+    case 5e-6 <= 6:
+        break
+    case 5 >= 0.6:
+        break caseSwitch
+    default:
+        lang = "foo"
+    }
+
+    switch language {
+    case "en":
+    case "nl":
+    default:
+    }
+
+    enum1 := Status.Open
+    enum2 := Status.Closed
+
+    if enum1 == enum2 {
+        @print(enum1)
+    }
+
+    tuple : Tuple = {"hello", 10, false}
+
+    either : Either = "hello"
+
+    utf : utf8?  = "hello"
+    // option : Option? // not allowed
+    utf = "option"
+    
+    if utf? {
+        @print("hello")
+    }
+    
+    option : uint64?
+    
+    if option? {
+        @print("do not print")
+    }
+
+    option = 10
+
+    if option? {
+        @print("do print")
+    }
+
+    upperCaseString := upper(language)
+    @print(upperCaseString)
+}
+
+const definedHere := "defined globally!"
+
+planet ~ struct {
+    name : ascii
+
+    export pressure : float64
+
+    export (
+        radius : float64
+        mass : float64
+    )
+}
+
+Status ~ enum[utf8] {
+    Open := "open",
+    Closed := "closed",
+}
+
+Planets ~ enum[planet] {
+    Earth := {
+        radius = 0.5,
+        mass = 0.1,
+    },
+}
+
+Tuple ~ utf8, uint64, bool
+
+Either ~ utf8 | uint64
+
+Option ~ utf8?
+
+upper : func(str : utf8) utf8 = {
+    return @go.strings.ToUpper(str)
+}
+```
