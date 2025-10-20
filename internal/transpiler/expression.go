@@ -159,7 +159,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 					X:   &goast.Ident{Name: "cog"},
 					Sel: &goast.Ident{Name: "Set"},
 				},
-				Index: convertType(n.ValueType),
+				Index: t.convertType(n.ValueType),
 			},
 			Elts: exprs,
 		}, nil

@@ -30,7 +30,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				Specs: []goast.Spec{
 					&goast.ValueSpec{
 						Names: []*goast.Ident{identifiers[identifier]},
-						Type:  convertType(n.Type),
+						Type:  t.convertType(n.Type),
 					},
 				},
 			}}, nil
@@ -47,7 +47,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		}
 
 		if n.Type != types.None {
-			valueSpec.Type = convertType(n.Type)
+			valueSpec.Type = t.convertType(n.Type)
 		}
 
 		tok := gotoken.VAR
@@ -88,7 +88,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				Names: []*goast.Ident{
 					param.Identifier.Go(),
 				},
-				Type: convertType(param.ValueType),
+				Type: t.convertType(param.ValueType),
 			})
 		}
 
@@ -193,7 +193,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 		for _, param := range n.ReturnParameters {
 			field := &goast.Field{
-				Type: convertType(param.ValueType),
+				Type: t.convertType(param.ValueType),
 			}
 
 			if param.Identifier != nil {
@@ -236,7 +236,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			Specs: []goast.Spec{
 				&goast.TypeSpec{
 					Name: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported)},
-					Type: convertType(n.Alias),
+					Type: t.convertType(n.Alias),
 				},
 			},
 		}}, nil
@@ -317,7 +317,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 			Specs: []goast.Spec{
 				&goast.TypeSpec{
 					Name: typeName,
-					Type: convertType(n.Literal.ValueType),
+					Type: t.convertType(n.Literal.ValueType),
 				},
 			},
 		},

@@ -31,7 +31,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		if n.Identifier.ValueType.Kind() == types.OptionKind {
 			// Warp option type.
 			expr = &goast.CompositeLit{
-				Type: convertType(n.Identifier.ValueType),
+				Type: t.convertType(n.Identifier.ValueType),
 				Elts: []goast.Expr{
 					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
 					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
@@ -61,7 +61,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 						Specs: []goast.Spec{
 							&goast.ValueSpec{
 								Names: []*goast.Ident{identifiers[n.Assignment.Identifier.Name]},
-								Type:  convertType(n.Type),
+								Type:  t.convertType(n.Type),
 							},
 						},
 					},
@@ -78,7 +78,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		var declType goast.Expr
 
 		if n.Type != nil && n.Type != types.None {
-			declType = convertType(n.Type)
+			declType = t.convertType(n.Type)
 		}
 
 		if n.Type.Kind() == types.OptionKind {

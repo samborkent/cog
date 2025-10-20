@@ -40,13 +40,15 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 			args = append(args, alternative)
 		}
 
+		t.addCogImport()
+
 		return &goast.CallExpr{
 			Fun: &goast.IndexExpr{
 				X: &goast.SelectorExpr{
 					X:   &goast.Ident{Name: "cog"},
 					Sel: &goast.Ident{Name: "If"},
 				},
-				Index: convertType(node.Arguments[1].Type()),
+				Index: t.convertType(node.Arguments[1].Type()),
 			},
 			Args: args,
 		}, nil
@@ -72,6 +74,8 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 				Index: arg,
 			}
 		}
+
+		t.addCogImport()
 
 		return &goast.CallExpr{
 			Fun: &goast.SelectorExpr{
