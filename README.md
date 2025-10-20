@@ -72,6 +72,9 @@ The following basic features are missing that need to be implemented before Cog 
     - `ascii` string where every character is a single byte
     - `utf8` alias for Go `string`
     - `signal[T any]` alias of `chan[T any]struct{}`
+    - `any!` result type (alias of `any | error`)
+        - Error can be extracted with `err!`
+        - E.g `res := someFunc(); if res! { @print(res) }`
 - Arena based allocations (using `arena` experiment)
     - Allocations are handled through an arena contained within `context`.
     - A new arena is created when entering a new `proc` scope.
