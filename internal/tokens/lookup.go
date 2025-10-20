@@ -22,10 +22,11 @@ var Runes = map[rune]Type{
 	'!': Not,
 	'~': Tilde,
 	'|': Pipe,
+	'&': BitAnd,
+	'^': BitXor,
 }
 
 var Keywords = map[string]Type{
-	"and":        And,
 	"any":        Any,
 	"ascii":      ASCII,
 	"async":      Async,
@@ -57,7 +58,6 @@ var Keywords = map[string]Type{
 	"int128":     Int128,
 	"package":    Package,
 	"proc":       Procedure,
-	"or":         Or,
 	"return":     Return,
 	"select":     Select,
 	"set":        Set,
@@ -71,7 +71,6 @@ var Keywords = map[string]Type{
 	"uint64":     Uint64,
 	"uint128":    Uint128,
 	"utf8":       UTF8,
-	"xor":        Xor,
 }
 
 var Types = map[Type]struct{}{

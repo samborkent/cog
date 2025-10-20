@@ -298,8 +298,6 @@ func convertBinaryOperator(t tokens.Type) gotoken.Token {
 		return gotoken.LAND
 	case tokens.Or:
 		return gotoken.LOR
-	case tokens.Xor:
-		return gotoken.NEQ
 	default:
 		panic("unknown binary operator " + t.String())
 	}

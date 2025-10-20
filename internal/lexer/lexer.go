@@ -87,6 +87,16 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 					t.Type = tokens.NotEqual
 					s.Next()
 				}
+			case tokens.BitAnd:
+				if s.Peek() == '&' {
+					t.Type = tokens.And
+					s.Next()
+				}
+			case tokens.Pipe:
+				if s.Peek() == '|' {
+					t.Type = tokens.Or
+					s.Next()
+				}
 			case tokens.Builtin:
 				t.Type = tokens.Builtin
 				// TODO: error handling

@@ -4,7 +4,7 @@ main : proc() = {
     enum1 := Status.Open
     enum2 := Status.Closed
 
-    if (enum1 != enum2) {
+    if enum1 != enum2 {
         @print(enum1)
     }
 
