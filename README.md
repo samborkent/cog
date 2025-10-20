@@ -1,7 +1,64 @@
 # cog
 cog is a Go-based programming language that brings some additional features.
 
-# Operators
+## Features
+
+### Implemented
+
+- Refined syntax
+    - Function declaration `main : proc(ctx : context) = { ... }`
+    - Typed variable declaration `foo : uint64 = 10`
+    - Type alias `String ~ string`
+- Extended types
+    - Enum `enum[any]`
+    - Set `set[any]` (alias for `map[any]struct{}`)
+    - Either `this | that`
+    - Tuple `this, and, that`
+    - Option `foo : uint64?; if (foo?) { ... }`
+- Clear builtin functions with `@` prefix
+    - `@print(msg any)` print to std out
+    - `@if[T any](if : bool, then : T, else :? T)`
+- `context` included as base type
+- Additional base types
+    - `int128` (WIP)
+    - `uint128` (using [lukechampine.com/uint128])
+    - `float16` (using [github.com/x448/float16])
+    - `complex32` (using `float16`)
+    - `ascii` string where every character is a single byte
+    - `utf8` alias for Go `string`
+- `main` takes a `ctx` argument to control lifetime of application
+
+### Planned
+
+- Explicit exports using `export` (WIP)
+- Optional function parameters `foo(optional :? utf8)`
+    - With default values `foo(default :? utf8 = 10)`
+- Distinction between `func` and `proc`
+    - `func` is a function without any side-effects with at least 1 return value. It cannot take a `context` argument.
+    - `proc` is a function that may have side-effects, where return values are optional. It always takes `ctx` as first argument.
+- Additional generic constraints:
+    - `string ~ ascii | utf8`
+    - `int ~ int8 | int16 | int32 | int64 | int128`
+    - `uint ~ uint8 | uint16 | uint32 | uint64 | uint128`
+    - `float ~ float16 | float32 | float64`
+    - `complex ~ complex32 | complex64 | complex128`
+    - `signed ~ int | float | complex`
+    - `number ~ signed | uint`
+- Allocation builtins:
+    - `@ptr[T valueType]() *T`
+    - `@slice[T any, I uint](ctx : context, len : I, cap :? I = len) []T`
+    - `@map[K comparable, V any, I uint](ctx : context, cap :? I = 8) map[K]V`
+    - `@set[K comparable, I uint](ctx : context, cap :? I = 8) set[K]`
+- Additional types:
+    - `signal[T any]` alias of `chan[T any]struct{}`
+- Arena based allocations (using `arena` experiment)
+    - Allocations are handled through an arena contained within `context`.
+    - A new arena is created when entering a new `proc` scope.
+    - Arena is cleared when leaving `proc` scope.
+
+## Syntax
+
+### Operators
 
 * `:` - declare a value identifier with type
 * `=` - assign a value to a value identifier

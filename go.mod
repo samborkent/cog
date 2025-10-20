@@ -1,6 +1,6 @@
 module github.com/samborkent/cog
 
-go 1.25.2
+go 1.25.3
 
 require (
 	github.com/x448/float16 v0.8.4
