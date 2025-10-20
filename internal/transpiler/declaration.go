@@ -69,6 +69,9 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				Params: &goast.FieldList{
 					List: make([]*goast.Field, 0, len(n.InputParameters)),
 				},
+				Results: &goast.FieldList{
+					List: make([]*goast.Field, 0, len(n.ReturnParameters)),
+				},
 			},
 		}
 
@@ -76,7 +79,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 		for i, param := range n.InputParameters {
 			// Handle context argument for main func.
-			if i == 0 && funcName.Name == "main" && param.Identifier.ValueType == types.Basics[types.Context] {
+			if i == 0 && funcName.Name == "main" && param.ValueType == types.Basics[types.Context] {
 				mainWithContext = true
 				continue
 			}
@@ -85,7 +88,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				Names: []*goast.Ident{
 					param.Identifier.Go(),
 				},
-				Type: convertType(param.Identifier.ValueType),
+				Type: convertType(param.ValueType),
 			})
 		}
 
@@ -186,6 +189,18 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					},
 				}
 			}
+		}
+
+		for _, param := range n.ReturnParameters {
+			field := &goast.Field{
+				Type: convertType(param.ValueType),
+			}
+
+			if param.Identifier != nil {
+				field.Names = []*goast.Ident{param.Identifier.Go()}
+			}
+
+			gofunc.Type.Results.List = append(gofunc.Type.Results.List, field)
 		}
 
 		if n.Body != nil {

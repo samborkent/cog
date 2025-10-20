@@ -5,7 +5,6 @@ import (
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
-	"github.com/samborkent/cog/internal/types"
 )
 
 func (p *Parser) parseProcedure(ctx context.Context, ident *ast.Identifier, exported bool) *ast.Procedure {
@@ -22,36 +21,60 @@ func (p *Parser) parseProcedure(ctx context.Context, ident *ast.Identifier, expo
 
 	p.advance("parseProcedure proc / func") // consume proc or func token
 
-	if p.next().Type == tokens.Identifier {
+	if p.this().Type != tokens.LParen {
+		p.error(p.this(), "expected '(' after procedure identifier", "parseParameters")
+		return nil
+	}
+
+	p.advance("parseParameters (") // consume '('
+
+	if p.this().Type == tokens.Identifier {
 		// Enter parameter scope.
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
-		inputParams := p.parseParameters(ctx)
+		inputParams := p.parseParameters(ctx, false)
 		if inputParams == nil {
 			p.error(p.this(), "unable to parse input parameters for procedure", "parseProcedure")
 			return nil
 		}
 
 		node.InputParameters = inputParams
-	} else {
-		p.advance("parseProcedure (") // consume (
-		p.advance("parseProcedure )") // consume )
 	}
 
-	// TODO: implement parsing multiple return parameters
-	returnType, ok := types.Lookup[p.this().Type]
-	if ok {
-		// Parse return parameter
-		node.ReturnParameters = []*ast.Parameter{
-			{
-				Identifier: &ast.Identifier{
-					Token:     p.this(),
-					ValueType: returnType,
-				},
-			},
+	if p.this().Type != tokens.RParen {
+		p.error(p.this(), "missing parameter close token ')' in procedure declaration", "parseProcedure")
+		return nil
+	}
+
+	p.advance("parseProcedure )") // consume )
+
+	if p.this().Type != tokens.Assign {
+		// There are return parameters.
+
+		multipleParams := false
+
+		if p.this().Type == tokens.LParen {
+			// There are multiple return parameters.
+			p.advance("parseProcedure (") // consume '('
+			multipleParams = true
 		}
 
-		p.advance("parseProcedure return type") // consume return type
+		returnParams := p.parseParameters(ctx, true)
+		if returnParams == nil {
+			p.error(p.this(), "unable to parse return parameters for procedure", "parseProcedure")
+			return nil
+		}
+
+		node.ReturnParameters = returnParams
+
+		if multipleParams {
+			if p.this().Type != tokens.RParen {
+				p.error(p.this(), "missing return parameter close token ')' in procedure declaration", "parseProcedure")
+				return nil
+			}
+
+			p.advance("parseProcedure )") // consume ')'
+		}
 	}
 
 	if p.this().Type != tokens.Assign {

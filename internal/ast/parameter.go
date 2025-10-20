@@ -1,11 +1,14 @@
 package ast
 
+import "github.com/samborkent/cog/internal/types"
+
 var _ Statement = &Parameter{}
 
 type Parameter struct {
 	statement
 
 	Identifier *Identifier
+	ValueType  types.Type
 	Default    Expression // optional
 }
 
@@ -18,10 +21,10 @@ func (p *Parameter) Hash() uint64 {
 }
 
 func (p *Parameter) String() string {
-	str := p.Identifier.Type().String()
+	str := p.ValueType.String()
 
-	if p.Identifier.Name != "" {
-		str = p.Identifier.Name + ": " + str
+	if p.Identifier != nil && p.Identifier.Name != "" {
+		str = p.Identifier.Name + " : " + str
 	}
 
 	if p.Default == nil {

@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/samborkent/cog/internal/ast"
@@ -24,6 +25,8 @@ type Transpiler struct {
 
 	nodes   map[uint64]ast.Node
 	imports map[string]*goast.ImportSpec // Key: import name
+
+	addCogImportOnce sync.Once
 }
 
 func NewTranspiler(f *ast.File) *Transpiler {
@@ -69,15 +72,6 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	}
 
 	t.imports = make(map[string]*goast.ImportSpec)
-
-	// Base import
-	t.imports["cog"] = &goast.ImportSpec{
-		Name: &goast.Ident{Name: "cog"},
-		Path: &goast.BasicLit{
-			Kind:  gotoken.STRING,
-			Value: `"github.com/samborkent/cog"`,
-		},
-	}
 
 	for _, stmt := range t.file.Statements {
 		switch s := stmt.(type) {
@@ -144,4 +138,16 @@ func convertField(field *types.Field) *goast.Field {
 		Names: []*goast.Ident{{Name: convertExport(field.Name, field.Exported)}},
 		Type:  convertType(field.Type),
 	}
+}
+
+func (t *Transpiler) addCogImport() {
+	t.addCogImportOnce.Do(func() {
+		t.imports["cog"] = &goast.ImportSpec{
+			Name: &goast.Ident{Name: "cog"},
+			Path: &goast.BasicLit{
+				Kind:  gotoken.STRING,
+				Value: `"github.com/samborkent/cog"`,
+			},
+		}
+	})
 }

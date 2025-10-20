@@ -162,6 +162,25 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		}
 
 		return stmts, nil
+	case *ast.Return:
+		if len(n.Values) == 0 {
+			return []goast.Stmt{&goast.ReturnStmt{}}, nil
+		}
+
+		exprs := make([]goast.Expr, 0, len(n.Values))
+
+		for _, val := range n.Values {
+			expr, err := t.convertExpr(val)
+			if err != nil {
+				return nil, fmt.Errorf("converting return expression: %w", err)
+			}
+
+			exprs = append(exprs, expr)
+		}
+
+		return []goast.Stmt{&goast.ReturnStmt{
+			Results: exprs,
+		}}, nil
 	case *ast.Switch:
 		cases := make([]goast.Stmt, 0, len(n.Cases))
 

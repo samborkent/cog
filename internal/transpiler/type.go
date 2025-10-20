@@ -145,10 +145,7 @@ func convertType(t types.Type) goast.Expr {
 			},
 		}
 	case types.UTF8:
-		return &goast.SelectorExpr{
-			X:   &goast.Ident{Name: "cog"},
-			Sel: &goast.Ident{Name: "UTF8"},
-		}
+		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.String], nil)}
 	default:
 		panic(fmt.Sprintf("unknown type %q", t))
 	}

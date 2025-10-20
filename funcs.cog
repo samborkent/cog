@@ -1,0 +1,9 @@
+package main
+
+goimport (
+    "strings"
+)
+
+upper : func(str : utf8) utf8 = {
+    return @go.strings.ToUpper(str)
+}
