@@ -168,7 +168,7 @@ func (e *Infix) Type() types.Type {
 
 	// Return bool type for comparison operators
 	switch e.Operator.Type {
-	case tokens.And, tokens.Or, tokens.Xor,
+	case tokens.And, tokens.Or,
 		tokens.Equal, tokens.NotEqual,
 		tokens.GT, tokens.GTEqual, tokens.LT, tokens.LTEqual:
 		return types.Basics[types.Bool]

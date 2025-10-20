@@ -33,6 +33,10 @@ const (
 	LTEqual     // <=
 	Declaration // :=
 	Optional    // :?
+	BitAnd      // &
+	BitXor      // ^
+	And         // &&
+	Or          // ||
 
 	// Literals
 	Identifier
@@ -66,11 +70,6 @@ const (
 	// Boolean keywords
 	True
 	False
-
-	// Operator keywords
-	And
-	Or
-	Xor
 
 	// Control-flow keywords
 	If
@@ -179,6 +178,14 @@ func (t Type) String() string {
 		return ":="
 	case Optional:
 		return ":?"
+	case BitAnd:
+		return "&"
+	case BitXor:
+		return "^"
+	case And:
+		return "&&"
+	case Or:
+		return "||"
 	case Identifier:
 		return "identifier"
 	case Constant:
@@ -233,12 +240,6 @@ func (t Type) String() string {
 		return "true"
 	case False:
 		return "false"
-	case And:
-		return "and"
-	case Or:
-		return "or"
-	case Xor:
-		return "xor"
 	case If:
 		return "if"
 	case Else:

@@ -14,7 +14,7 @@ import (
 func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.Expression {
 	expr := p.equality(ctx, typeToken)
 
-	for p.match(tokens.And, tokens.Or, tokens.Xor) {
+	for p.match(tokens.And, tokens.Or) {
 		if ctx.Err() != nil || expr == nil {
 			return nil
 		}

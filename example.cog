@@ -18,7 +18,7 @@ main : proc(ctx: context) = {
 
     b : float32 = 0.0
 
-    language := "cog" // utf8 (or detect based on characters in str)
+    language := "cog" // utf8
     lang : utf8 = "cog"
     lng : ascii = "cog"
 
@@ -40,8 +40,8 @@ main : proc(ctx: context) = {
     }
 
     if (true != false) {}
-    if (true == false and true != false) {}
-    if (language == "cog" xor lng == "cog") {}
+    if (true == false && true != false) {}
+    if ((language == "cog") != (lng == "cog")) {}
     if (5 <= 6) {}
     if (!true) {}
 
