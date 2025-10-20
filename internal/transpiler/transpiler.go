@@ -70,15 +70,6 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 
 	t.imports = make(map[string]*goast.ImportSpec)
 
-	// Base import
-	t.imports["cog"] = &goast.ImportSpec{
-		Name: &goast.Ident{Name: "cog"},
-		Path: &goast.BasicLit{
-			Kind:  gotoken.STRING,
-			Value: `"github.com/samborkent/cog"`,
-		},
-	}
-
 	for _, stmt := range t.file.Statements {
 		switch s := stmt.(type) {
 		case *ast.GoImport:
@@ -139,9 +130,22 @@ func convertExport(ident string, exported bool) string {
 	return str
 }
 
-func convertField(field *types.Field) *goast.Field {
+func (t *Transpiler) convertField(field *types.Field) *goast.Field {
 	return &goast.Field{
 		Names: []*goast.Ident{{Name: convertExport(field.Name, field.Exported)}},
-		Type:  convertType(field.Type),
+		Type:  t.convertType(field.Type),
+	}
+}
+
+func (t *Transpiler) addCogImport() {
+	_, ok := t.imports["cog"]
+	if !ok {
+		t.imports["cog"] = &goast.ImportSpec{
+			Name: &goast.Ident{Name: "cog"},
+			Path: &goast.BasicLit{
+				Kind:  gotoken.STRING,
+				Value: `"github.com/samborkent/cog"`,
+			},
+		}
 	}
 }

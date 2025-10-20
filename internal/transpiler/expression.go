@@ -19,6 +19,22 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		return n.Go(), nil
 	case *ast.Builtin:
 		return t.convertBuiltin(n)
+	case *ast.Call:
+		args := make([]goast.Expr, 0, len(n.Arguments))
+
+		for _, arg := range n.Arguments {
+			expr, err := t.convertExpr(arg)
+			if err != nil {
+				return nil, fmt.Errorf("transpiling argument in call expression: %w", err)
+			}
+
+			args = append(args, expr)
+		}
+
+		return &goast.CallExpr{
+			Fun:  n.Identifier.Go(),
+			Args: args,
+		}, nil
 	case *ast.Float32Literal:
 		return n.Go(), nil
 	case *ast.Float64Literal:
@@ -159,7 +175,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 					X:   &goast.Ident{Name: "cog"},
 					Sel: &goast.Ident{Name: "Set"},
 				},
-				Index: convertType(n.ValueType),
+				Index: t.convertType(n.ValueType),
 			},
 			Elts: exprs,
 		}, nil

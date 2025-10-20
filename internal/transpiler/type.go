@@ -9,8 +9,8 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func convertType(t types.Type) goast.Expr {
-	if alias, ok := t.(*types.Alias); ok {
+func (t *Transpiler) convertType(typ types.Type) goast.Expr {
+	if alias, ok := typ.(*types.Alias); ok {
 		if alias.Underlying().Kind() == types.EnumKind {
 			return &goast.Ident{Name: convertExport(alias.Name, alias.Exported) + "Enum"}
 		}
@@ -18,8 +18,10 @@ func convertType(t types.Type) goast.Expr {
 		return &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
 	}
 
-	switch t.Kind() {
+	switch typ.Kind() {
 	case types.ASCII:
+		t.addCogImport()
+
 		return &goast.SelectorExpr{
 			X:   &goast.Ident{Name: "cog"},
 			Sel: &goast.Ident{Name: "ASCII"},
@@ -48,12 +50,14 @@ func convertType(t types.Type) goast.Expr {
 	case types.Int64:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int64], nil)}
 	case types.OptionKind:
-		optionType, ok := t.(*types.Option)
+		optionType, ok := typ.(*types.Option)
 		if !ok {
 			panic("unable to assert option type")
 		}
 
-		valueType := convertType(optionType.Value)
+		valueType := t.convertType(optionType.Value)
+
+		t.addCogImport()
 
 		return &goast.IndexExpr{
 			X: &goast.SelectorExpr{
@@ -71,20 +75,22 @@ func convertType(t types.Type) goast.Expr {
 	case types.Uint64:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint64], nil)}
 	case types.SetKind:
-		setType, ok := t.(*types.Set)
+		setType, ok := typ.(*types.Set)
 		if !ok {
 			panic("unable to assert set type")
 		}
+
+		t.addCogImport()
 
 		return &goast.IndexExpr{
 			X: &goast.SelectorExpr{
 				X:   &goast.Ident{Name: "cog"},
 				Sel: &goast.Ident{Name: "Set"},
 			},
-			Index: convertType(setType.Element),
+			Index: t.convertType(setType.Element),
 		}
 	case types.StructKind:
-		structType, ok := t.(*types.Struct)
+		structType, ok := typ.(*types.Struct)
 		if !ok {
 			panic("unable to assert struct type")
 		}
@@ -92,7 +98,7 @@ func convertType(t types.Type) goast.Expr {
 		fields := make([]*goast.Field, len(structType.Fields))
 
 		for i := range structType.Fields {
-			fields[i] = convertField(structType.Fields[i])
+			fields[i] = t.convertField(structType.Fields[i])
 		}
 
 		return &goast.StructType{
@@ -101,7 +107,7 @@ func convertType(t types.Type) goast.Expr {
 			},
 		}
 	case types.TupleKind:
-		tupleType, ok := t.(*types.Tuple)
+		tupleType, ok := typ.(*types.Tuple)
 		if !ok {
 			panic("unable to assert tuple type")
 		}
@@ -111,7 +117,7 @@ func convertType(t types.Type) goast.Expr {
 		for i := range tupleType.Types {
 			fields = append(fields, &goast.Field{
 				Names: []*goast.Ident{{Name: convertExport("t"+strconv.Itoa(i), tupleType.Exported)}},
-				Type:  convertType(tupleType.Types[i]),
+				Type:  t.convertType(tupleType.Types[i]),
 			})
 		}
 
@@ -121,7 +127,7 @@ func convertType(t types.Type) goast.Expr {
 			},
 		}
 	case types.UnionKind:
-		unionType, ok := t.(*types.Union)
+		unionType, ok := typ.(*types.Union)
 		if !ok {
 			panic("unable to assert union type")
 		}
@@ -131,11 +137,11 @@ func convertType(t types.Type) goast.Expr {
 				List: []*goast.Field{
 					{
 						Names: []*goast.Ident{{Name: "Either"}},
-						Type:  convertType(unionType.Either),
+						Type:  t.convertType(unionType.Either),
 					},
 					{
 						Names: []*goast.Ident{{Name: "Or"}},
-						Type:  convertType(unionType.Or),
+						Type:  t.convertType(unionType.Or),
 					},
 					{
 						Names: []*goast.Ident{{Name: "Tag"}},
@@ -145,11 +151,8 @@ func convertType(t types.Type) goast.Expr {
 			},
 		}
 	case types.UTF8:
-		return &goast.SelectorExpr{
-			X:   &goast.Ident{Name: "cog"},
-			Sel: &goast.Ident{Name: "UTF8"},
-		}
+		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.String], nil)}
 	default:
-		panic(fmt.Sprintf("unknown type %q", t))
+		panic(fmt.Sprintf("unknown type %q", typ))
 	}
 }

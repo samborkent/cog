@@ -5,28 +5,25 @@ import (
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
-	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseParameters(ctx context.Context) []*ast.Parameter {
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after procedure identifier", "parseParameters")
-		return nil
-	}
-
-	p.advance("parseParameters (") // consume '('
-
+func (p *Parser) parseParameters(ctx context.Context, returnParams bool) []*ast.Parameter {
 	params := make([]*ast.Parameter, 0)
 
-tokenLoop:
-	for ; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; p.advance("parseParameters loop") {
+	for !p.match(tokens.RParen, tokens.EOF) {
 		if ctx.Err() != nil {
 			return nil
 		}
 
-		switch p.this().Type {
-		case tokens.Identifier:
-			ident := &ast.Identifier{
+		var ident *ast.Identifier
+
+		if !returnParams && p.this().Type != tokens.Identifier {
+			p.error(p.this(), "expected parameter identifier", "parseParameters")
+			return nil
+		}
+
+		if !returnParams || (returnParams && p.this().Type == tokens.Identifier) {
+			ident = &ast.Identifier{
 				Token: p.this(),
 				Name:  p.this().Literal,
 			}
@@ -35,55 +32,56 @@ tokenLoop:
 
 			if p.this().Type != tokens.Colon {
 				p.error(p.this(), "expected ':' after parameter identifier", "parseParameters")
-				continue tokenLoop
+				return nil
 			}
 
 			p.advance("parseParameters loop :") // consume ':'
+		}
 
-			identType, ok := types.Lookup[p.this().Type]
-			if !ok {
-				p.error(p.this(), "unknown parameter type", "parseParameters")
-				continue tokenLoop
-			}
+		identType := p.parseCombinedType(ctx, false)
+		if identType == nil {
+			p.error(p.this(), "unknown parameter type", "parseParameters")
+			return nil
+		}
 
+		if ident != nil {
 			ident.ValueType = identType
 
 			// TODO: ensure we want to make function parameters always constant (read-only)
 			p.symbols.Define(ident, SymbolKindConstant)
+		}
 
-			param := &ast.Parameter{
-				Identifier: ident,
-			}
+		param := &ast.Parameter{
+			Identifier: ident,
+			ValueType:  identType,
+		}
 
-			p.advance("parseParameters loop type") // consume type token
-
-			if p.this().Type == tokens.Assign {
-				// Default parameter value assignment
-				p.advance("parseParameters loop =") // consume '='
-
-				expr := p.expression(ctx, identType)
-				if expr != nil {
-					param.Default = expr
+		if p.this().Type == tokens.Assign {
+			if returnParams {
+				if p.next().Type != tokens.LBrace {
+					p.error(p.this(), "return parameters cannot have default values", "parseParameters")
+					return nil
 				}
+
+				// Only single parameter
+				return []*ast.Parameter{param}
 			}
 
-			params = append(params, param)
+			// Default parameter value assignment
+			p.advance("parseParameters loop =") // consume '='
 
-			switch p.this().Type {
-			case tokens.RParen, tokens.EOF:
-				break tokenLoop
-			case tokens.Comma:
-				p.advance("parseParameters loop ,") // consume ','
-			default:
-				p.error(p.this(), "unexpected token found in parameter list", "parseParameters")
+			expr := p.expression(ctx, identType)
+			if expr != nil {
+				param.Default = expr
 			}
-		default:
-			p.error(p.this(), "expected parameter identifier", "parseParameters")
-			continue tokenLoop
+		}
+
+		params = append(params, param)
+
+		if p.this().Type == tokens.Comma {
+			p.advance("parseParameters loop ,") // consume ','
 		}
 	}
-
-	p.advance("parseParameters )") // consume ')'
 
 	return params
 }

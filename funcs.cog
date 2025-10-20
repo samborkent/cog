@@ -1,0 +1,15 @@
+package main
+
+goimport (
+    "strings"
+)
+
+main : proc(ctx : context) = {
+    a := upper("hello")
+
+    @print(a)
+}
+
+upper : func(str : utf8) utf8 = {
+    return @go.strings.ToUpper(str)
+}
