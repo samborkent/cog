@@ -15,13 +15,6 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 
 	p.advance("parseIfStatement if") // consume if
 
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after if", "parseIfStatement")
-		return nil
-	}
-
-	p.advance("parseIfStatement if (") // consume (
-
 	expr := p.expression(ctx, types.None)
 	if expr == nil {
 		p.error(p.this(), "unable to parse bool expression in if condition", "parseIfStatement")
@@ -34,13 +27,6 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 	}
 
 	node.Condition = expr
-
-	if p.this().Type != tokens.RParen {
-		p.error(p.this(), "missing closing ')' after if-expression", "parseIfStatement")
-		return nil
-	}
-
-	p.advance("parseIfStatement )") // consume )
 
 	consequence := p.parseBlock(ctx)
 	if consequence == nil {

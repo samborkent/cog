@@ -33,17 +33,17 @@ main : proc(ctx: context) = {
 
     language = "go"
 
-    if (true) {
+    if true {
         break
     } else {
         lng = "else"
     }
 
-    if (true != false) {}
-    if (true == false && true != false) {}
-    if ((language == "cog") != (lng == "cog")) {}
-    if (5 <= 6) {}
-    if (!true) {}
+    if true != false {}
+    if true == false && true != false {}
+    if (language == "cog") != (lng == "cog") {}
+    if 5 <= 6 {}
+    if !true {}
 
     fl := -0.6e-7
 
@@ -52,8 +52,8 @@ main : proc(ctx: context) = {
     maths := 5 * 6 / (2 + 3)
 
 ifLabel:
-    if (true) {
-        if (true) {
+    if true {
+        if true {
             break ifLabel
         }
     }
@@ -88,7 +88,7 @@ caseSwitch:
     enum1 := Status.Open
     enum2 := Status.Closed
 
-    if (enum1 == enum2) {
+    if enum1 == enum2 {
         @print(enum1)
     }
 
@@ -100,19 +100,19 @@ caseSwitch:
     // option : Option? // not allowed
     utf = "option"
     
-    if (utf?) {
+    if utf? {
         @print("hello")
     }
     
     option : uint64?
     
-    if (option?) {
+    if option? {
         @print("do not print")
     }
 
     option = 10
 
-    if (option?) {
+    if option? {
         @print("do print")
     }
 

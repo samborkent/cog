@@ -67,6 +67,10 @@ The following basic features are missing that need to be implemented before Cog 
     - A new arena is created when entering a new `proc` scope.
     - Arena is cleared when leaving `proc` scope.
 - Builtin `upx` binary packer for smaller binaries.
+- Script mode
+    - Files without package declaration will be parsed as script.
+    - This is basically just a `main` package, and script gets inserted in `main()` body.
+    - Pre-defined `ctx` variable?
 
 ## Syntax
 
@@ -81,11 +85,9 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Short-term
 
+- Handle set type parsing in `parseType`.
 - Refactor `parseTypedDeclaration` to use same logic as `parseCombinedType`
 - Fix global type definition ordering bug for complex type (e.g. enum[planet] before planet)
-- Remove if-condition parentheses
-- Change `and`/`or` and `&&`/`||`, remove `xor`.
-- Handle set type parsing in `parseType`.
 
 ### Long-term
 
