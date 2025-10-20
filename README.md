@@ -82,6 +82,7 @@ The following basic features are missing that need to be implemented before Cog 
     - Files without package declaration will be parsed as script.
     - This is basically just a `main` package, and script gets inserted in `main()` body.
     - Pre-defined `ctx` variable?
+- Cog LSP
 
 ## Syntax
 

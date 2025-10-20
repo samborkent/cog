@@ -32,7 +32,7 @@ func (p *Parser) parseProcedure(ctx context.Context, ident *ast.Identifier, expo
 		// Enter parameter scope.
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
-		inputParams := p.parseParameters(ctx, false)
+		inputParams := p.parseParameters(ctx, node.Token.Type == tokens.Procedure, false)
 		if inputParams == nil {
 			p.error(p.this(), "unable to parse input parameters for procedure", "parseProcedure")
 			return nil
@@ -59,7 +59,7 @@ func (p *Parser) parseProcedure(ctx context.Context, ident *ast.Identifier, expo
 			multipleParams = true
 		}
 
-		returnParams := p.parseParameters(ctx, true)
+		returnParams := p.parseParameters(ctx, node.Token.Type == tokens.Procedure, true)
 		if returnParams == nil {
 			p.error(p.this(), "unable to parse return parameters for procedure", "parseProcedure")
 			return nil
