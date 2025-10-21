@@ -38,7 +38,7 @@ func (t *Tuple) String() string {
 		_, _ = out.WriteString(typ.String())
 
 		if i < len(t.Types)-1 {
-			_, _ = out.WriteString(", ")
+			_, _ = out.WriteString(" & ")
 		}
 	}
 

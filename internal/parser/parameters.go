@@ -8,8 +8,12 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseParameters(ctx context.Context, procedure, returnParams bool) []*ast.Parameter {
+func (p *Parser) parseParameters(ctx context.Context, procedure bool) []*ast.Parameter {
 	params := make([]*ast.Parameter, 0)
+
+	// Flag to keep track of any of the parameters is optional.
+	// When a parameter is marked as optional, all following parameters must also be optional.
+	haveOptional := false
 
 	for i := 0; !p.match(tokens.RParen, tokens.EOF); i++ {
 		if ctx.Err() != nil {
@@ -18,42 +22,42 @@ func (p *Parser) parseParameters(ctx context.Context, procedure, returnParams bo
 
 		var ident *ast.Identifier
 
-		if !returnParams && p.this().Type != tokens.Identifier {
+		if p.this().Type != tokens.Identifier {
 			p.error(p.this(), "expected parameter identifier", "parseParameters")
 			return nil
 		}
 
 		var optional bool
 
-		if !returnParams || (returnParams && p.this().Type == tokens.Identifier) {
-			ident = &ast.Identifier{
-				Token: p.this(),
-				Name:  p.this().Literal,
-			}
-
-			if (!procedure && ident.Name == "ctx") || (returnParams && ident.Name == "ctx") {
-				p.error(p.this(), "ctx is a reserved name for the first context input parameter of procedures", "parseParameters")
-				return nil
-			}
-
-			p.advance("parseParameters loop identifier") // consume identifier
-
-			if returnParams {
-				if p.this().Type != tokens.Colon {
-					p.error(p.this(), "expected ':' after return parameter identifier", "parseParameters")
-					return nil
-				}
-			} else {
-				if !p.match(tokens.Colon, tokens.Optional) {
-					p.error(p.this(), "expected ':' or ':?' after input parameter identifier", "parseParameters")
-					return nil
-				}
-
-				optional = p.this().Type == tokens.Optional
-			}
-
-			p.advance("parseParameters loop : / :?") // consume : or :?
+		ident = &ast.Identifier{
+			Token: p.this(),
+			Name:  p.this().Literal,
 		}
+
+		if ident.Name == "ctx" && (!procedure || i > 0) {
+			p.error(p.this(), "'ctx' identifier is reserved for the first input parameter of procedures", "parseParameters")
+			return nil
+		}
+
+		p.advance("parseParameters loop identifier") // consume identifier
+
+		if p.this().Type == tokens.Question {
+			optional = true
+			haveOptional = true
+
+			p.advance("parseParameters loop ?") // consume ?
+		} else if haveOptional {
+			// This parameter is not optional, but a previous parameter was, this is not allowed.
+			p.error(p.prev(), "all input parameters following an optional parameter must also be optional", "parseParameters")
+			return nil
+		}
+
+		if p.this().Type != tokens.Colon {
+			p.error(p.this(), "expected ':' after return parameter identifier", "parseParameters")
+			return nil
+		}
+
+		p.advance("parseParameters loop :") // consume :
 
 		identType := p.parseCombinedType(ctx, false)
 		if identType == nil {
@@ -61,37 +65,26 @@ func (p *Parser) parseParameters(ctx context.Context, procedure, returnParams bo
 			return nil
 		}
 
-		if ident != nil {
-			if !returnParams && (ident.Name == "ctx" && identType.Kind() != types.Context) {
-				p.error(p.this(), "ctx is a reserved name for the first context input parameter of procedures", "parseParameters")
-				return nil
-			} else if identType.Kind() == types.Context && (!procedure || ident.Name != "ctx") {
-				p.error(p.this(), "context type may only be used for the first context input parameter of procedures named ctx", "parseParameters")
-				return nil
-			}
-
-			ident.ValueType = identType
-
-			// TODO: ensure we want to make function parameters always constant (read-only)
-			p.symbols.Define(ident, SymbolKindConstant)
+		if ident.Name == "ctx" && identType.Kind() != types.Context {
+			p.error(p.this(), "input parameter 'ctx' must be of type 'context'", "parseParameters")
+			return nil
+		} else if identType.Kind() == types.Context && (!procedure || ident.Name != "ctx") {
+			p.error(p.this(), "context type may only be used as first input parameter of procedures", "parseParameters")
+			return nil
 		}
+
+		ident.ValueType = identType
+
+		// TODO: ensure we want to make function parameters always constant (read-only)
+		p.symbols.Define(ident, SymbolKindConstant)
 
 		param := &ast.Parameter{
 			Identifier: ident,
 			ValueType:  identType,
+			Optional:   optional,
 		}
 
 		if p.this().Type == tokens.Assign {
-			if returnParams {
-				if p.next().Type != tokens.LBrace {
-					p.error(p.this(), "return parameters cannot have default values", "parseParameters")
-					return nil
-				}
-
-				// Only single parameter
-				return []*ast.Parameter{param}
-			}
-
 			if !optional {
 				p.error(p.this(), "default values are only allowed for optional input parameters", "parseParameters")
 				return nil

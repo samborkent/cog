@@ -1,8 +1,7 @@
 package ast
 
 import (
-	"math/big"
-
+	"github.com/ryanavella/wide"
 	f16 "github.com/x448/float16"
 	u128 "lukechampine.com/uint128"
 
@@ -88,7 +87,7 @@ func (e *Infix) EqualizeLiteralTypes() {
 			// TODO: handle overflow
 			e.Right = &Int128Literal{
 				Token: right.Token,
-				Value: big.NewInt(right.Value),
+				Value: wide.Int128FromInt64(right.Value),
 			}
 
 			return
@@ -263,7 +262,7 @@ func upgradeLiteralType(expr Expression, ref Expression) Expression {
 			// Upgrade int8 to int128.
 			return &Int128Literal{
 				Token: e.Token,
-				Value: big.NewInt(int64(e.Value)),
+				Value: wide.Int128FromInt64(int64(e.Value)),
 			}
 		case types.Float16:
 			// Upgrade int8 to float16.
@@ -302,7 +301,7 @@ func upgradeLiteralType(expr Expression, ref Expression) Expression {
 			// Upgrade int16 to int128.
 			return &Int128Literal{
 				Token: e.Token,
-				Value: big.NewInt(int64(e.Value)),
+				Value: wide.Int128FromInt64(int64(e.Value)),
 			}
 		case types.Float16:
 			// Upgrade int16 to float16.
@@ -335,7 +334,7 @@ func upgradeLiteralType(expr Expression, ref Expression) Expression {
 			// Upgrade int32 to int128.
 			return &Int128Literal{
 				Token: e.Token,
-				Value: big.NewInt(int64(e.Value)),
+				Value: wide.Int128FromInt64(int64(e.Value)),
 			}
 		case types.Float32:
 			// Upgrade int32 to float32.
@@ -356,7 +355,7 @@ func upgradeLiteralType(expr Expression, ref Expression) Expression {
 			// Upgrade int64 to int128.
 			return &Int128Literal{
 				Token: e.Token,
-				Value: big.NewInt(int64(e.Value)),
+				Value: wide.Int128FromInt64(e.Value),
 			}
 		case types.Float64:
 			// Upgrade int64 to float64.
@@ -413,7 +412,7 @@ func upgradeLiteralType(expr Expression, ref Expression) Expression {
 			// Upgrade uint8 to int128.
 			return &Int128Literal{
 				Token: e.Token,
-				Value: big.NewInt(int64(e.Value)),
+				Value: wide.Int128FromInt64(int64(e.Value)),
 			}
 		case types.Float16:
 			// Upgrade uint8 to float16.
@@ -470,7 +469,7 @@ func upgradeLiteralType(expr Expression, ref Expression) Expression {
 			// Upgrade uint16 to int128.
 			return &Int128Literal{
 				Token: e.Token,
-				Value: big.NewInt(int64(e.Value)),
+				Value: wide.Int128FromInt64(int64(e.Value)),
 			}
 		case types.Float16:
 			// Upgrade uint16 to float16.
@@ -515,7 +514,7 @@ func upgradeLiteralType(expr Expression, ref Expression) Expression {
 			// Upgrade uint32 to int128.
 			return &Int128Literal{
 				Token: e.Token,
-				Value: big.NewInt(int64(e.Value)),
+				Value: wide.Int128FromInt64(int64(e.Value)),
 			}
 		case types.Float32:
 			// Upgrade uint32 to float32.
@@ -542,7 +541,7 @@ func upgradeLiteralType(expr Expression, ref Expression) Expression {
 			// Upgrade uint32 to int128.
 			return &Int128Literal{
 				Token: e.Token,
-				Value: big.NewInt(int64(e.Value)),
+				Value: wide.Int128FromInt64(int64(e.Value)),
 			}
 		case types.Float64:
 			// Upgrade uint32 to float64.

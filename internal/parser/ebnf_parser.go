@@ -121,9 +121,20 @@ func (p *Parser) term(ctx context.Context, typeToken types.Type) ast.Expression 
 			return nil
 		}
 
-		if !types.IsNumber(expr.Type()) {
-			p.error(p.this(), "operator requires numeric type", "term")
-			return nil
+		// TODO: this is a hack due to lack of known Go typing at compile time, figure out a better solution.
+		if expr.Type() != types.None {
+			if p.this().Type == tokens.Plus {
+				if !types.IsSummable(expr.Type()) {
+					p.error(p.this(), fmt.Sprintf("operator requires numeric or string type, got %q", expr.Type()), "term")
+					return nil
+				}
+			} else {
+				// Minus
+				if !types.IsNumber(expr.Type()) {
+					p.error(p.this(), fmt.Sprintf("operator requires numeric type, got %q", expr.Type()), "term")
+					return nil
+				}
+			}
 		}
 
 		operator := p.this()
@@ -342,6 +353,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 	case tokens.Identifier:
 		symbol, ok := p.symbols.Resolve(p.this().Literal)
 		if !ok {
+			fmt.Println(p.symbols.Outer.table)
+
 			p.error(p.this(), "undefined identifier", "primary")
 			return nil
 		}
@@ -351,10 +364,15 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 		switch p.this().Type {
 		case tokens.LParen:
 			// Function call
+			proc, ok := p.symbols.ResolveProcedure(symbol.Identifier.Name)
+			if !ok {
+				panic("unable to find procedure for identifier")
+			}
+
 			return &ast.Call{
-				Token:      p.this(),
-				Identifier: symbol.Identifier,
-				Arguments:  p.parseCallArguments(ctx),
+				Token:     p.this(),
+				Procedure: proc,
+				Arguments: p.parseCallArguments(ctx, proc),
 			}
 		case tokens.Dot:
 			// TODO: recursive selector expression

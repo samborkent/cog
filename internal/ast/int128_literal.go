@@ -4,12 +4,13 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/ryanavella/wide"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
 
 // TODO: implement overflow and other fixed-size int behaviour
-type int128 = *big.Int
+type int128 = wide.Int128
 
 var _ Expression = &Int128Literal{}
 
@@ -30,7 +31,7 @@ func NewInt128Literal(t tokens.Token) (*Int128Literal, error) {
 
 	return &Int128Literal{
 		Token: t,
-		Value: value,
+		Value: wide.Int128FromBigInt(value),
 	}, nil
 }
 

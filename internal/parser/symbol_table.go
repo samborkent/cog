@@ -37,9 +37,10 @@ var None = &ast.Identifier{
 type SymbolTable struct {
 	Outer *SymbolTable
 
-	table     map[string]Symbol
-	goimports map[string]*ast.Identifier
-	fields    map[string]map[string]Symbol
+	table      map[string]Symbol
+	goimports  map[string]*ast.Identifier
+	fields     map[string]map[string]Symbol
+	procedures map[string]*ast.Procedure
 }
 
 func NewSymbolTable() *SymbolTable {
@@ -52,9 +53,10 @@ func NewSymbolTable() *SymbolTable {
 	}
 
 	return &SymbolTable{
-		table:     table,
-		goimports: make(map[string]*ast.Identifier),
-		fields:    make(map[string]map[string]Symbol),
+		table:      table,
+		goimports:  make(map[string]*ast.Identifier),
+		fields:     make(map[string]map[string]Symbol),
+		procedures: make(map[string]*ast.Procedure),
 	}
 }
 
@@ -64,6 +66,16 @@ func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
 	s.goimports = outer.goimports
 
 	return s
+}
+
+func (s *SymbolTable) DefineProcdure(procedure *ast.Procedure, kind SymbolKind, global bool) {
+	if global {
+		s.DefineGlobal(procedure.Identifier, kind)
+	} else {
+		s.Define(procedure.Identifier, kind)
+	}
+
+	s.procedures[procedure.Identifier.Name] = procedure
 }
 
 func (s *SymbolTable) Define(ident *ast.Identifier, kind SymbolKind) {
@@ -186,6 +198,20 @@ func (s *SymbolTable) ResolveField(typeName, field string) (Symbol, bool) {
 func (s *SymbolTable) ResolveGoImport(name string) (*ast.Identifier, bool) {
 	ident, ok := s.goimports[name]
 	return ident, ok
+}
+
+func (s *SymbolTable) ResolveProcedure(name string) (*ast.Procedure, bool) {
+	proc, ok := s.procedures[name]
+	if !ok && s.Outer != nil {
+		proc, ok = s.Outer.ResolveProcedure(name)
+		if !ok {
+			return nil, false
+		}
+
+		return proc, true
+	}
+
+	return proc, ok
 }
 
 func (s *SymbolTable) Update(name string, t types.Type) {

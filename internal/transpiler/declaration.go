@@ -11,25 +11,17 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var identifiers = make(map[string]*goast.Ident)
-
 func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	switch n := node.(type) {
 	case *ast.Declaration:
-		identifier := convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported)
-
-		_, ok := identifiers[identifier]
-		if !ok {
-			// Define as unused.
-			identifiers[identifier] = &goast.Ident{Name: "_"}
-		}
+		ident := t.symbols.Define(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported))
 
 		if n.Assignment.Expression == nil {
 			return []goast.Decl{&goast.GenDecl{
 				Tok: gotoken.VAR,
 				Specs: []goast.Spec{
 					&goast.ValueSpec{
-						Names: []*goast.Ident{identifiers[identifier]},
+						Names: []*goast.Ident{ident},
 						Type:  t.convertType(n.Type),
 					},
 				},
@@ -42,7 +34,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		}
 
 		valueSpec := &goast.ValueSpec{
-			Names:  []*goast.Ident{identifiers[identifier]},
+			Names:  []*goast.Ident{ident},
 			Values: []goast.Expr{expr},
 		}
 
@@ -69,31 +61,37 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				Params: &goast.FieldList{
 					List: make([]*goast.Field, 0, len(n.InputParameters)),
 				},
-				Results: &goast.FieldList{
-					List: make([]*goast.Field, 0, len(n.ReturnParameters)),
-				},
 			},
 		}
 
 		mainWithContext := false
 
+		if len(n.InputParameters) > 0 {
+			// Enter parameter scope.
+			t.symbols = NewEnclosedSymbolTable(t.symbols)
+		}
+
 		for i, param := range n.InputParameters {
 			// Handle context argument for main func.
-			if i == 0 && funcName.Name == "main" && param.ValueType == types.Basics[types.Context] {
+			if i == 0 && funcName.Name == "main" && param.Identifier.Name == "ctx" {
 				mainWithContext = true
+				_ = t.symbols.Define(param.Identifier.Name)
 				continue
 			}
 
+			ident := t.symbols.Define(param.Identifier.Name)
+
 			gofunc.Type.Params.List = append(gofunc.Type.Params.List, &goast.Field{
-				Names: []*goast.Ident{
-					param.Identifier.Go(),
-				},
-				Type: t.convertType(param.ValueType),
+				Names: []*goast.Ident{ident},
+				Type:  t.convertType(param.ValueType),
 			})
 		}
 
 		if mainWithContext {
-			identifiers["ctx"] = &goast.Ident{Name: "_"}
+			ident, ok := t.symbols.Resolve("ctx")
+			if !ok {
+				panic("missing ctx identifier")
+			}
 
 			// Add signal context to top of main if it has a context parameter
 			gofunc.Body = &goast.BlockStmt{
@@ -101,7 +99,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					// ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 					&goast.AssignStmt{
 						Lhs: []goast.Expr{
-							identifiers["ctx"],
+							ident,
 							&goast.Ident{
 								Name: "_stop",
 							},
@@ -160,7 +158,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			}
 
 			// Define imports
-			_, ok := t.imports["ctx"]
+			_, ok = t.imports["ctx"]
 			if !ok {
 				t.imports["ctx"] = &goast.ImportSpec{
 					Path: &goast.BasicLit{
@@ -191,20 +189,17 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			}
 		}
 
-		for _, param := range n.ReturnParameters {
-			field := &goast.Field{
-				Type: t.convertType(param.ValueType),
-			}
-
-			if param.Identifier != nil {
-				field.Names = []*goast.Ident{param.Identifier.Go()}
-			}
-
-			gofunc.Type.Results.List = append(gofunc.Type.Results.List, field)
+		if n.ReturnType != nil {
+			gofunc.Type.Results = &goast.FieldList{List: []*goast.Field{{Type: t.convertType(n.ReturnType)}}}
 		}
 
 		if n.Body != nil {
 			stmts := make([]goast.Stmt, 0, len(n.Body.Statements))
+
+			if len(n.Body.Statements) > 0 {
+				// Enter body scope.
+				t.symbols = NewEnclosedSymbolTable(t.symbols)
+			}
 
 			for _, stmt := range n.Body.Statements {
 				s, err := t.convertStmt(stmt)
@@ -215,6 +210,11 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				stmts = append(stmts, s...)
 			}
 
+			if len(n.Body.Statements) > 0 {
+				// Leave body scope.
+				t.symbols = t.symbols.Outer
+			}
+
 			if gofunc.Body != nil && gofunc.Body.List != nil {
 				// Add to statement list if some statements already exist.
 				gofunc.Body.List = append(gofunc.Body.List, stmts...)
@@ -223,6 +223,11 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					List: stmts,
 				}
 			}
+		}
+
+		if len(n.InputParameters) > 0 {
+			// Leave parameter scope.
+			t.symbols = t.symbols.Outer
 		}
 
 		return []goast.Decl{gofunc}, nil

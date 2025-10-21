@@ -12,13 +12,13 @@ var _ Expression = &Call{}
 type Call struct {
 	expression
 
-	Token      tokens.Token // The '(' token
-	Identifier *Identifier
-	Arguments  []Expression
+	Token     tokens.Token // The '(' token
+	Procedure *Procedure
+	Arguments []Expression
 }
 
 func (c *Call) Pos() (uint32, uint16) {
-	return c.Identifier.Pos()
+	return c.Procedure.Identifier.Pos()
 }
 
 func (c *Call) Hash() uint64 {
@@ -28,7 +28,7 @@ func (c *Call) Hash() uint64 {
 func (c *Call) String() string {
 	var out strings.Builder
 
-	_, _ = out.WriteString(c.Identifier.String())
+	_, _ = out.WriteString(c.Procedure.Identifier.String())
 	_ = out.WriteByte('(')
 
 	for i, arg := range c.Arguments {
@@ -46,9 +46,9 @@ func (c *Call) String() string {
 
 // TODO: return a proper return type here
 func (c *Call) Type() types.Type {
-	if c.Identifier.ValueType == nil {
-		panic("call with nil type detected")
+	if c.Procedure == nil || c.Procedure.ReturnType == nil {
+		panic("call with nil return type detected")
 	}
 
-	return c.Identifier.ValueType
+	return c.Procedure.ReturnType
 }

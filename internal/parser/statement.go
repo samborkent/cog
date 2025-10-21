@@ -85,7 +85,9 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 					return nil
 				}
 
-				if proc := p.parseProcedure(ctx, ident, true); proc != nil {
+				if proc := p.parseProcedure(ctx, ident, false); proc != nil {
+					p.symbols.DefineProcdure(proc, SymbolKindVariable, false)
+
 					return proc
 				}
 
@@ -157,6 +159,8 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			_, ok := tokens.FuncTypes[p.this().Type]
 			if ok {
 				if proc := p.parseProcedure(ctx, ident, false); proc != nil {
+					p.symbols.DefineProcdure(proc, SymbolKindVariable, false)
+
 					return proc
 				}
 

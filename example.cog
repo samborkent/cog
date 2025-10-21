@@ -119,6 +119,8 @@ caseSwitch:
     upperCaseString := upper(language)
     @print(upperCaseString)
 
+    @print(upper("foo", "bar"))
+
     // _ = Planets.Earth.mass
 }
 
@@ -147,14 +149,14 @@ Planets ~ enum[planet] {
     },
 }
 
-Tuple ~ utf8, uint64, bool
+Tuple ~ utf8 & uint64 & bool
 
 Either ~ utf8 | uint64
 
 Option ~ utf8?
 
-upper : func(str : utf8) utf8 = {
-    return @go.strings.ToUpper(str)
+upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8 = {
+    return @go.strings.ToUpper(str) + optional + alsoOptional
 }
 
 /*

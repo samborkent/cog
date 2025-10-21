@@ -107,11 +107,8 @@ func (p *Parser) parseGoCallExpression(ctx context.Context) *ast.GoCallExpressio
 		return nil
 	}
 
-	node.Call = &ast.Call{
-		Token:      p.this(),
-		Identifier: callIdent,
-		Arguments:  p.parseCallArguments(ctx),
-	}
+	node.CallIdentifier = callIdent
+	node.Arguments = p.parseCallArguments(ctx, nil)
 
 	return node
 }

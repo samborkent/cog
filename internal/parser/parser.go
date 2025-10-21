@@ -196,10 +196,11 @@ func (p *Parser) findGlobalProc(ctx context.Context, ident *ast.Identifier) {
 			p.error(p.this(), "cannot redeclare functions", "findGlobals")
 		} else {
 			// TODO: support constant functions
-			p.symbols.DefineGlobal(ident, SymbolKindVariable)
+			procedure := p.parseProcedure(ctx, ident, true)
+			if procedure != nil {
+				p.symbols.DefineProcdure(procedure, SymbolKindVariable, true)
+			}
 		}
-
-		p.skipScope(ctx)
 	}
 }
 
@@ -297,14 +298,14 @@ func (p *Parser) skipScope(ctx context.Context) {
 			return
 		}
 
-		p.advance("skipScope")
-
 		switch p.this().Type {
 		case tokens.LBrace:
 			braceIndex++
 		case tokens.RBrace:
 			braceIndex--
 		}
+
+		p.advance("skipScope " + p.this().Literal)
 
 		if braceIndex == 0 {
 			return
@@ -315,6 +316,9 @@ func (p *Parser) skipScope(ctx context.Context) {
 // TODO: create separate parse methods, this requires keeping index state in parser
 func (p *Parser) Parse(ctx context.Context) (*ast.File, error) {
 	p.findGlobals(ctx)
+
+	// Reset errors, so they're only printed once.
+	p.errs = make([]error, 0, len(p.errs))
 
 	p.builtins = map[string]BuiltinParser{
 		"if":    p.parseBuiltinIf,

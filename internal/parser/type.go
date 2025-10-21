@@ -11,7 +11,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 	typ := p.parseType(ctx)
 
 	switch p.this().Type {
-	case tokens.Comma:
+	case tokens.BitAnd:
 		// Tuple
 		tuple := &types.Tuple{
 			Types:    make([]types.Type, 1, types.TupleMaxTypes),
@@ -21,8 +21,8 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 		// Put parsed type as first type.
 		tuple.Types[0] = typ
 
-		for p.this().Type == tokens.Comma {
-			p.advance("parseCombinedType tuple ,") // consume ,
+		for p.this().Type == tokens.BitAnd {
+			p.advance("parseCombinedType tuple &") // consume &
 
 			next := p.parseType(ctx)
 			if next != nil {

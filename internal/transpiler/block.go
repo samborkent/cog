@@ -20,6 +20,11 @@ func (t *Transpiler) convertIfBlock(node *ast.Block) (*goast.BlockStmt, *goast.L
 
 	var label *goast.LabeledStmt
 
+	if len(node.Statements) > 0 {
+		// Enter if block scope.
+		t.symbols = NewEnclosedSymbolTable(t.symbols)
+	}
+
 	for i, stmt := range node.Statements {
 		breakExpr, ok := stmt.(*ast.Break)
 		if ok {
@@ -53,6 +58,11 @@ func (t *Transpiler) convertIfBlock(node *ast.Block) (*goast.BlockStmt, *goast.L
 		}
 
 		block.List = append(block.List, goStmts...)
+	}
+
+	if len(node.Statements) > 0 {
+		// Leave if block scope.
+		t.symbols = t.symbols.Outer
 	}
 
 	return block, label, nil

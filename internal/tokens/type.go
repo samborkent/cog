@@ -32,7 +32,6 @@ const (
 	LT          // <
 	LTEqual     // <=
 	Declaration // :=
-	Optional    // :?
 	BitAnd      // &
 	BitXor      // ^
 	And         // &&
@@ -176,8 +175,6 @@ func (t Type) String() string {
 		return "<="
 	case Declaration:
 		return ":="
-	case Optional:
-		return ":?"
 	case BitAnd:
 		return "&"
 	case BitXor:
