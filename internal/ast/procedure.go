@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/samborkent/cog/internal/tokens"
-	"github.com/samborkent/cog/internal/types"
 )
 
 var _ Statement = &Procedure{}
@@ -12,11 +11,9 @@ var _ Statement = &Procedure{}
 type Procedure struct {
 	statement
 
-	Token           tokens.Token
-	Identifier      *Identifier
-	InputParameters []*Parameter
-	ReturnType      types.Type // optional
-	Body            *Block
+	Token      tokens.Token
+	Identifier *Identifier
+	Body       *Block
 }
 
 func (p *Procedure) Pos() (uint32, uint16) {
@@ -34,27 +31,13 @@ func (p *Procedure) String() string {
 		_, _ = out.WriteString("export ")
 	}
 
-	_, _ = out.WriteString(p.Identifier.String())
+	_, _ = out.WriteString(p.Identifier.Name)
 	_, _ = out.WriteString(" : ")
-	_, _ = out.WriteString(p.Token.Type.String())
-	_ = out.WriteByte('(')
 
-	for i, param := range p.InputParameters {
-		_, _ = out.WriteString(param.String())
-
-		if i < len(p.InputParameters)-1 {
-			_, _ = out.WriteString(", ")
-		}
-	}
-
-	_, _ = out.WriteString(") ")
-
-	if p.ReturnType != nil {
-		_, _ = out.WriteString(p.ReturnType.String())
-		_ = out.WriteByte(' ')
-	}
+	_, _ = out.WriteString(p.Identifier.ValueType.String())
 
 	if p.Body != nil {
+		_, _ = out.WriteString(" = ")
 		_, _ = out.WriteString(p.Body.String())
 	}
 

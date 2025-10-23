@@ -3,7 +3,6 @@ package ast
 import (
 	"strings"
 
-	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -12,13 +11,12 @@ var _ Expression = &Call{}
 type Call struct {
 	expression
 
-	Token     tokens.Token // The '(' token
-	Procedure *Procedure
-	Arguments []Expression
+	Identifier *Identifier
+	Arguments  []Expression
 }
 
 func (c *Call) Pos() (uint32, uint16) {
-	return c.Procedure.Identifier.Pos()
+	return c.Identifier.Pos()
 }
 
 func (c *Call) Hash() uint64 {
@@ -28,7 +26,7 @@ func (c *Call) Hash() uint64 {
 func (c *Call) String() string {
 	var out strings.Builder
 
-	_, _ = out.WriteString(c.Procedure.Identifier.String())
+	_, _ = out.WriteString(c.Identifier.String())
 	_ = out.WriteByte('(')
 
 	for i, arg := range c.Arguments {
@@ -46,9 +44,9 @@ func (c *Call) String() string {
 
 // TODO: return a proper return type here
 func (c *Call) Type() types.Type {
-	if c.Procedure == nil || c.Procedure.ReturnType == nil {
+	if c.Identifier == nil || c.Identifier.ValueType == nil {
 		panic("call with nil return type detected")
 	}
 
-	return c.Procedure.ReturnType
+	return c.Identifier.ValueType
 }

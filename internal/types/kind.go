@@ -45,6 +45,9 @@ const (
 
 	// Modified types
 	OptionKind
+
+	// Function type
+	ProcedureKind
 )
 
 func (t Kind) String() string {
@@ -103,6 +106,8 @@ func (t Kind) String() string {
 		return "union"
 	case OptionKind:
 		return "option"
+	case ProcedureKind:
+		return "proc"
 	case Invalid:
 		fallthrough
 	default:

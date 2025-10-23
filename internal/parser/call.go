@@ -22,6 +22,16 @@ func (p *Parser) parseCallArguments(ctx context.Context, procedure *ast.Procedur
 
 	args := []ast.Expression{}
 
+	var procType *types.Procedure
+	var ok bool
+
+	if procedure != nil {
+		procType, ok = procedure.Identifier.ValueType.(*types.Procedure)
+		if !ok {
+			panic("failed to assert procedure type")
+		}
+	}
+
 	for i := 0; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; i++ {
 		if ctx.Err() != nil {
 			return nil
@@ -35,7 +45,7 @@ func (p *Parser) parseCallArguments(ctx context.Context, procedure *ast.Procedur
 				return nil
 			}
 		} else {
-			arg = p.expression(ctx, procedure.InputParameters[i].ValueType)
+			arg = p.expression(ctx, procType.Parameters[i].Type)
 			if arg == nil {
 				return nil
 			}

@@ -146,7 +146,6 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 			Identifier: ident,
 		},
 		Constant: constant,
-		Type:     ident.ValueType,
 	}
 
 	kind := SymbolKindVariable
@@ -183,7 +182,6 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 
 		ident.ValueType = exprType
 		node.Assignment.Identifier.ValueType = exprType
-		node.Type = exprType
 	}
 
 	p.symbols.Define(ident, kind)

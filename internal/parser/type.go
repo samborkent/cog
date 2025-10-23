@@ -2,12 +2,18 @@ package parser
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
 
 func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Type {
+	if p.match(tokens.Function, tokens.Procedure) {
+		return p.parseProcedureType(ctx)
+	}
+
 	typ := p.parseType(ctx)
 
 	switch p.this().Type {
@@ -184,4 +190,112 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 	field.Type = p.parseCombinedType(ctx, exported)
 
 	return field
+}
+
+func (p *Parser) parseProcedureType(ctx context.Context) *types.Procedure {
+	procType := &types.Procedure{
+		Function:   p.this().Type == tokens.Function,
+		Parameters: make([]*types.Parameter, 0),
+	}
+
+	p.advance("parseProcedureType proc/func")
+
+	if p.this().Type != tokens.LParen {
+		p.error(p.this(), fmt.Sprintf("expected '(' after %q in type", p.prev().Type))
+		return nil
+	}
+
+	// Flag to keep track of if any of the parameters is optional.
+	// When a parameter is marked as optional, all following parameters must also be optional.
+	haveOptional := false
+
+	for i := 0; !p.match(tokens.RParen, tokens.EOF); i++ {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.Identifier {
+			p.error(p.this(), "expected parameter identifier", "parseParameters")
+			return nil
+		}
+
+		var optional bool
+
+		ident := &ast.Identifier{
+			Token: p.this(),
+			Name:  p.this().Literal,
+		}
+
+		param := &types.Parameter{
+			Name: p.this().Literal,
+		}
+
+		if param.Name == "ctx" && (procType.Function || i > 0) {
+			p.error(p.this(), "'ctx' identifier is reserved for the first input parameter of procedures", "parseParameters")
+			return nil
+		}
+
+		p.advance("parseParameters loop identifier") // consume identifier
+
+		if p.this().Type == tokens.Question {
+			param.Optional = true
+			haveOptional = true
+
+			p.advance("parseParameters loop ?") // consume ?
+		} else if haveOptional {
+			// This parameter is not optional, but a previous parameter was, this is not allowed.
+			p.error(p.prev(), "all input parameters following an optional parameter must also be optional", "parseParameters")
+			return nil
+		}
+
+		if p.this().Type != tokens.Colon {
+			p.error(p.this(), "expected ':' after input parameter identifier", "parseParameters")
+			return nil
+		}
+
+		p.advance("parseParameters loop :") // consume :
+
+		paramType := p.parseCombinedType(ctx, false)
+		if paramType == nil {
+			p.error(p.this(), "unknown parameter type", "parseParameters")
+			return nil
+		}
+
+		if param.Name == "ctx" && paramType.Kind() != types.Context {
+			p.error(p.this(), "input parameter 'ctx' must be of type 'context'", "parseParameters")
+			return nil
+		} else if paramType.Kind() == types.Context && (procType.Function || param.Name != "ctx") {
+			p.error(p.this(), "context type may only be used as first input parameter of procedures", "parseParameters")
+			return nil
+		}
+
+		param.Type = paramType
+		ident.ValueType = paramType
+
+		// TODO: ensure we want to make function parameters always constant (read-only)
+		p.symbols.Define(ident, SymbolKindConstant)
+
+		if p.this().Type == tokens.Assign {
+			if !optional {
+				p.error(p.this(), "default values are only allowed for optional input parameters", "parseParameters")
+				return nil
+			}
+
+			// Default parameter value assignment
+			p.advance("parseParameters loop =") // consume '='
+
+			expr := p.expression(ctx, paramType)
+			if expr != nil {
+				param.Default = expr
+			}
+		}
+
+		procType.Parameters = append(procType.Parameters, param)
+
+		if p.this().Type == tokens.Comma {
+			p.advance("parseParameters loop ,") // consume ','
+		}
+	}
+
+	return procType
 }

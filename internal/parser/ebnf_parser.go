@@ -370,8 +370,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			return &ast.Call{
-				Token:     p.this(),
-				Procedure: proc,
+				Identifier: &ast.Identifier{
+					Token:     p.this(),
+					Name:      p.this().Literal,
+					ValueType: proc.Identifier.ValueType,
+					Exported:  proc.Identifier.Exported,
+				},
 				Arguments: p.parseCallArguments(ctx, proc),
 			}
 		case tokens.Dot:

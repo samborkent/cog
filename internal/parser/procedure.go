@@ -5,12 +5,20 @@ import (
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
+	"github.com/samborkent/cog/internal/types"
 )
 
 func (p *Parser) parseProcedure(ctx context.Context, ident *ast.Identifier, skipBody bool) *ast.Procedure {
 	if p.this().Type != tokens.Procedure && p.this().Type != tokens.Function {
 		p.error(p.this(), "expected procedure or function keyword", "parseProcedure")
 		return nil
+	}
+
+	if ident.ValueType == nil || ident.ValueType == types.None {
+		// Enter parameter scope.
+		p.symbols = NewEnclosedSymbolTable(p.symbols)
+
+		ident.ValueType = p.parseCombinedType(ctx, ident.Exported)
 	}
 
 	node := &ast.Procedure{
@@ -28,8 +36,6 @@ func (p *Parser) parseProcedure(ctx context.Context, ident *ast.Identifier, skip
 	p.advance("parseParameters (") // consume '('
 
 	if p.this().Type == tokens.Identifier {
-		// Enter parameter scope.
-		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
 		inputParams := p.parseParameters(ctx, node.Token.Type == tokens.Procedure)
 		if inputParams == nil {
