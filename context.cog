@@ -1,0 +1,15 @@
+package cog
+
+goimport "time"
+
+context ~ interface {
+    Deadline() (deadline @go.time.Time, ok bool)
+    Done() <-signal
+    Err() ContextError
+    Value[K string, V any](key K) V
+}
+
+ContextError ~ error[ascii] {
+    Canceled := "context cancelled",
+    DeadlineExceeded := "context deadline exceeded",
+}
