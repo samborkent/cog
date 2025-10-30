@@ -1,5 +1,7 @@
 github.com/ryanavella/wide v0.0.0-20190709032049-e93517939246 h1:0SZhYbgJP6nLl9eR1jA52I3ODO/k/a7hfvj2hXYqgbg=
 github.com/ryanavella/wide v0.0.0-20190709032049-e93517939246/go.mod h1:BSx6mpeWyxA4fQ+ZQ54r4tiWVIwNR1BS4s28OWXr9Ns=
+github.com/petermattis/goid v0.0.0-20250904145737-900bdf8bb490 h1:QTvNkZ5ylY0PGgA+Lih+GdboMLY/G9SEGLMEGVjTVA4=
+github.com/petermattis/goid v0.0.0-20250904145737-900bdf8bb490/go.mod h1:pxMtw7cyUw6B2bRH0ZBANSPg+AoSud1I1iyJHI69jH4=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
 golang.org/x/text v0.30.0 h1:yznKA/E9zq54KzlzBEAWn1NXSQ8DIp/NYMy88xJjl4k=

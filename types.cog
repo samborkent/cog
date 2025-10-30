@@ -1,0 +1,25 @@
+package cog
+
+string ~ ascii | utf8
+stringer ~ string | interface{ String() string }
+error[E string | interface{ comparable; Error() string }] ~ enum[E]
+
+HTTPStatus ~ struct {
+    code : uint16
+    text : ascii
+}
+
+HTTPError ~ error[HTTPStatus] {
+    NotFound: {
+        code: 404,
+        text: "NotFound
+    }
+}
+
+handler : proc(ctx : context, req : utf8) utf8 ! HTTPError = {
+    if req != "" {
+        return "Success"
+    }
+
+    return HTTPError.NotFound
+}
