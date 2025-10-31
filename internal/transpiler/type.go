@@ -6,6 +6,7 @@ import (
 	gotypes "go/types"
 	"strconv"
 
+	"github.com/samborkent/cog/internal/transpiler/comp"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -65,6 +66,34 @@ func (t *Transpiler) convertType(typ types.Type) goast.Expr {
 				Sel: &goast.Ident{Name: "Option"},
 			},
 			Index: valueType,
+		}
+	case types.ProcedureKind:
+		procType, ok := typ.(*types.Procedure)
+		if !ok {
+			panic("unable to assert procedure type")
+		}
+
+		inputParams := make([]*goast.Field, 0, len(procType.Parameters))
+
+		if !procType.Function {
+			// All procedures take context.
+			inputParams = append(inputParams, comp.ContextArg())
+		}
+
+		for _, param := range procType.Parameters {
+			inputParams = append(inputParams, &goast.Field{
+				Names: []*goast.Ident{{Name: param.Name}},
+				Type:  t.convertType(param.Type),
+			})
+		}
+
+		// TODO: handle error types (add second error return type)
+
+		return &goast.FuncType{
+			Params: &goast.FieldList{List: inputParams},
+			Results: &goast.FieldList{List: []*goast.Field{
+				{Type: t.convertType(procType.ReturnType)},
+			}},
 		}
 	case types.Uint8:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint8], nil)}

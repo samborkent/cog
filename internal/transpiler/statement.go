@@ -52,6 +52,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 	case *ast.Declaration:
 		// Define as unused variable.
 		ident := t.symbols.Define(n.Assignment.Identifier.Name)
+		typ := n.Assignment.Identifier.ValueType
 
 		if n.Assignment.Expression == nil {
 			return []goast.Stmt{
@@ -61,7 +62,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 						Specs: []goast.Spec{
 							&goast.ValueSpec{
 								Names: []*goast.Ident{ident},
-								Type:  t.convertType(n.Type),
+								Type:  t.convertType(typ),
 							},
 						},
 					},
@@ -77,11 +78,11 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		// Optional type declaration.
 		var declType goast.Expr
 
-		if n.Type != nil && n.Type != types.None {
-			declType = t.convertType(n.Type)
+		if typ != nil && typ != types.None {
+			declType = t.convertType(typ)
 		}
 
-		if n.Type.Kind() == types.OptionKind {
+		if typ.Kind() == types.OptionKind {
 			// Warp option type.
 			expr = &goast.CompositeLit{
 				Type: declType,

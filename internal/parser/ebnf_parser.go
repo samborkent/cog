@@ -353,8 +353,6 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 	case tokens.Identifier:
 		symbol, ok := p.symbols.Resolve(p.this().Literal)
 		if !ok {
-			fmt.Println(p.symbols.Outer.table)
-
 			p.error(p.this(), "undefined identifier", "primary")
 			return nil
 		}
@@ -364,19 +362,19 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 		switch p.this().Type {
 		case tokens.LParen:
 			// Function call
-			proc, ok := p.symbols.ResolveProcedure(symbol.Identifier.Name)
+			procType, ok := symbol.Identifier.ValueType.(*types.Procedure)
 			if !ok {
-				panic("unable to find procedure for identifier")
+				panic("unable to cast to procedure type")
 			}
 
 			return &ast.Call{
 				Identifier: &ast.Identifier{
 					Token:     p.this(),
 					Name:      p.this().Literal,
-					ValueType: proc.Identifier.ValueType,
-					Exported:  proc.Identifier.Exported,
+					ValueType: symbol.Identifier.ValueType,
+					Exported:  symbol.Identifier.Exported,
 				},
-				Arguments: p.parseCallArguments(ctx, proc),
+				Arguments: p.parseCallArguments(ctx, procType),
 			}
 		case tokens.Dot:
 			// TODO: recursive selector expression
@@ -519,6 +517,19 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			p.advance("primary enum }") // consume }
 
 			return enumLiteral
+		case *types.Procedure:
+			procLiteral := &ast.ProcedureLiteral{
+				ProcdureType: t,
+			}
+
+			body := p.parseBlockStatement(ctx)
+			if body == nil {
+				return nil
+			}
+
+			procLiteral.Body = body
+
+			return procLiteral
 		case *types.Set:
 			setLiteral := &ast.SetLiteral{
 				Token:     p.this(),

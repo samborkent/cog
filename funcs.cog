@@ -4,7 +4,7 @@ goimport (
     "strings"
 )
 
-main : proc(ctx : context) = {
+main : proc() = {
     a := upper("hello")
 
     @print(a)
@@ -17,7 +17,7 @@ upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8
 
 someFunc : func() uint64
 
-handlerFunc ~ proc(ctx : context, req : utf8) utf8
+handlerFunc ~ proc(req : utf8) utf8
 
 
 /*

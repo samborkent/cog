@@ -9,7 +9,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast.Type {
+func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier, constant bool) *ast.Type {
 	if p.symbols.Outer == nil {
 		// Ensure type already exists (created during find globals sweep)
 		_, ok := p.symbols.Resolve(ident.Name)
@@ -38,7 +38,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 
 		p.advance("parseTypeAlias enum [") // consume [
 
-		enumValType := p.parseCombinedType(ctx, ident.Exported)
+		enumValType := p.parseCombinedType(ctx, ident.Exported, constant)
 
 		if p.this().Type != tokens.RBracket {
 			p.error(p.this(), "expected ] in enum declaration", "parseTypeAlias")
@@ -109,7 +109,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 			Value: enumValType,
 		}
 	} else {
-		typ = p.parseCombinedType(ctx, ident.Exported)
+		typ = p.parseCombinedType(ctx, ident.Exported, constant)
 		if typ == nil {
 			return nil
 		}

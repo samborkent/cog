@@ -8,7 +8,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseCallArguments(ctx context.Context, procedure *ast.Procedure) []ast.Expression {
+func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedure) []ast.Expression {
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), "expected '(' after call identifier", "parseCallArguments")
 		return nil
@@ -22,16 +22,6 @@ func (p *Parser) parseCallArguments(ctx context.Context, procedure *ast.Procedur
 
 	args := []ast.Expression{}
 
-	var procType *types.Procedure
-	var ok bool
-
-	if procedure != nil {
-		procType, ok = procedure.Identifier.ValueType.(*types.Procedure)
-		if !ok {
-			panic("failed to assert procedure type")
-		}
-	}
-
 	for i := 0; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; i++ {
 		if ctx.Err() != nil {
 			return nil
@@ -39,7 +29,7 @@ func (p *Parser) parseCallArguments(ctx context.Context, procedure *ast.Procedur
 
 		var arg ast.Expression
 
-		if procedure == nil {
+		if procType == nil {
 			arg = p.expression(ctx, types.None)
 			if arg == nil {
 				return nil

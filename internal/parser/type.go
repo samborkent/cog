@@ -9,12 +9,51 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Type {
-	if p.match(tokens.Function, tokens.Procedure) {
+func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool) types.Type {
+	switch p.this().Type {
+	case tokens.Enum:
+		if !constant {
+			p.error(p.this(), "enum declarations must be constant", "parseCombinedType")
+			return nil
+		}
+
+		if p.this().Type != tokens.LBracket {
+			p.error(p.this(), "expected [ after enum type", "parseCombinedType")
+			return nil
+		}
+
+		p.advance("parseCombinedType enum [") // consume [
+
+		valType, ok := types.Lookup[p.this().Type]
+		if !ok {
+			symbol, ok := p.symbols.Resolve(p.this().Literal)
+			if !ok {
+				p.error(p.this(), "expected enum value type", "parseCombinedType")
+				return nil
+			}
+
+			valType = &types.Alias{
+				Name:     p.this().Literal,
+				Derived:  symbol.Type(),
+				Exported: symbol.Identifier.Exported,
+			}
+		}
+
+		p.advance("parseCombinedType enum value type") // consume elem type
+
+		if p.this().Type != tokens.RBracket {
+			p.error(p.this(), "expected ] after enum value type", "parseCombinedType")
+			return nil
+		}
+
+		p.advance("parseCombinedType enum ]") // consume ]
+
+		return &types.Enum{Value: valType}
+	case tokens.Function, tokens.Procedure:
 		return p.parseProcedureType(ctx)
 	}
 
-	typ := p.parseType(ctx)
+	typ := p.parseType(ctx, constant)
 
 	switch p.this().Type {
 	case tokens.BitAnd:
@@ -30,7 +69,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 		for p.this().Type == tokens.BitAnd {
 			p.advance("parseCombinedType tuple &") // consume &
 
-			next := p.parseType(ctx)
+			next := p.parseType(ctx, constant)
 			if next != nil {
 				tuple.Types = append(tuple.Types, next)
 			}
@@ -51,7 +90,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 
 		p.advance("parseCombinedType union |") // consume |
 
-		next := p.parseType(ctx)
+		next := p.parseType(ctx, constant)
 		if next != nil {
 			union.Or = next
 		}
@@ -67,9 +106,41 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 	return typ
 }
 
-func (p *Parser) parseType(ctx context.Context) types.Type {
-	// TODO: also parse set type
+func (p *Parser) parseType(ctx context.Context, constant bool) types.Type {
 	switch p.this().Type {
+	case tokens.Set:
+		if p.this().Type != tokens.LBracket {
+			p.error(p.this(), "expected [ after set type", "parseType")
+			return nil
+		}
+
+		p.advance("parseType set [") // consume [
+
+		elemType, ok := types.Lookup[p.this().Type]
+		if !ok {
+			symbol, ok := p.symbols.Resolve(p.this().Literal)
+			if !ok {
+				p.error(p.this(), "expected set element type", "parseType")
+				return nil
+			}
+
+			elemType = &types.Alias{
+				Name:     p.this().Literal,
+				Derived:  symbol.Type(),
+				Exported: symbol.Identifier.Exported,
+			}
+		}
+
+		p.advance("parseType set element type") // consume elem type
+
+		if p.this().Type != tokens.RBracket {
+			p.error(p.this(), "expected ] after set element type", "parseType")
+			return nil
+		}
+
+		p.advance("parseType set ]") // consume ]
+
+		return &types.Set{Element: elemType}
 	case tokens.Struct:
 		return p.parseStruct(ctx)
 	}
@@ -187,7 +258,7 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 
 	p.advance("parseField :") // consume :
 
-	field.Type = p.parseCombinedType(ctx, exported)
+	field.Type = p.parseCombinedType(ctx, exported, false)
 
 	return field
 }
@@ -255,7 +326,7 @@ func (p *Parser) parseProcedureType(ctx context.Context) *types.Procedure {
 
 		p.advance("parseParameters loop :") // consume :
 
-		paramType := p.parseCombinedType(ctx, false)
+		paramType := p.parseCombinedType(ctx, false, false)
 		if paramType == nil {
 			p.error(p.this(), "unknown parameter type", "parseParameters")
 			return nil

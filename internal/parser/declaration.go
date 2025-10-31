@@ -9,117 +9,12 @@ import (
 )
 
 func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier, constant bool) *ast.Declaration {
-	typeToken := p.this()
-
-	identType, ok := types.Lookup[typeToken.Type]
-	if !ok {
-		symbol, ok := p.symbols.Resolve(p.this().Literal)
-		if !ok {
-			p.error(p.this(), "expected type", "parseTypedDeclaration")
-			return nil
-		}
-
-		identType = &types.Alias{
-			Name:     p.this().Literal,
-			Derived:  symbol.Type(),
-			Exported: symbol.Identifier.Exported,
-		}
+	identType := p.parseCombinedType(ctx, ident.Exported, constant)
+	if identType == nil {
+		return nil
 	}
 
-	p.advance("parseTypedDeclaration type") // consume type
-
-	if p.this().Type == tokens.Question {
-		p.advance("parseTypedDeclaration type ?") // consume ?
-
-		if identType.Kind() == types.OptionKind {
-			p.error(p.this(), "nested optional types are not allowed", "parseType")
-			return nil
-		}
-
-		identType = &types.Option{Value: identType}
-	}
-
-	// Check if type is an alias.
-	_, ok = identType.(*types.Alias)
-	if ok {
-		ident.ValueType = identType
-	} else {
-		switch identType.Kind() {
-		case types.EnumKind:
-			if !constant {
-				p.error(ident.Token, "enum declarations must be constant", "parseTypedDeclaration")
-				return nil
-			}
-
-			if p.this().Type != tokens.LBracket {
-				p.error(p.this(), "expected [ after enum type", "parseTypedDeclaration")
-				return nil
-			}
-
-			p.advance("parseTypedDeclaration enum [") // consume [
-
-			valType, ok := types.Lookup[p.this().Type]
-			if !ok {
-				symbol, ok := p.symbols.Resolve(p.this().Literal)
-				if !ok {
-					p.error(p.this(), "expected enum value type", "parseTypedDeclaration")
-					return nil
-				}
-
-				valType = &types.Alias{
-					Name:     p.this().Literal,
-					Derived:  symbol.Type(),
-					Exported: symbol.Identifier.Exported,
-				}
-			}
-
-			p.advance("parseTypedDeclaration enum value type") // consume elem type
-
-			if p.this().Type != tokens.RBracket {
-				p.error(p.this(), "expected ] after enum value type", "parseTypedDeclaration")
-				return nil
-			}
-
-			p.advance("parseTypedDeclaration enum ]") // consume ]
-
-			ident.ValueType = &types.Enum{Value: valType}
-		case types.SetKind:
-			if p.this().Type != tokens.LBracket {
-				p.error(p.this(), "expected [ after set type", "parseTypedDeclaration")
-				return nil
-			}
-
-			p.advance("parseTypedDeclaration set [") // consume [
-
-			elemType, ok := types.Lookup[p.this().Type]
-			if !ok {
-				symbol, ok := p.symbols.Resolve(p.this().Literal)
-				if !ok {
-					p.error(p.this(), "expected set element type", "parseTypedDeclaration")
-					return nil
-				}
-
-				elemType = &types.Alias{
-					Name:     p.this().Literal,
-					Derived:  symbol.Type(),
-					Exported: symbol.Identifier.Exported,
-				}
-			}
-
-			p.advance("parseTypedDeclaration set element type") // consume elem type
-
-			if p.this().Type != tokens.RBracket {
-				p.error(p.this(), "expected ] after set element type", "parseTypedDeclaration")
-				return nil
-			}
-
-			p.advance("parseTypedDeclaration set ]") // consume ]
-
-			ident.ValueType = &types.Set{Element: elemType}
-		default:
-			ident.ValueType = identType
-		}
-	}
+	ident.ValueType = identType
 
 	node := p.parseDeclaration(ctx, ident, constant)
 	if node == nil {

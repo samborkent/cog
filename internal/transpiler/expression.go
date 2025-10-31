@@ -8,6 +8,7 @@ import (
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
+	"github.com/samborkent/cog/internal/transpiler/comp"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -20,7 +21,12 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Builtin:
 		return t.convertBuiltin(n)
 	case *ast.Call:
-		args := make([]goast.Expr, 0, len(n.Procedure.InputParameters))
+		procType, ok := n.Identifier.ValueType.(*types.Procedure)
+		if !ok {
+			panic("failed to assert porcedure type")
+		}
+
+		args := make([]goast.Expr, 0, len(procType.Parameters))
 
 		for _, arg := range n.Arguments {
 			expr, err := t.convertExpr(arg)
@@ -31,21 +37,16 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			args = append(args, expr)
 		}
 
-		if len(n.Procedure.InputParameters) > len(n.Arguments) {
+		if len(procType.Parameters) > len(n.Arguments) {
 			// The number of input parameters is greater than the number of arguments, so there are optional parameters.
-			for i := len(args); i < len(n.Procedure.InputParameters); i++ {
-				if n.Procedure.InputParameters[i].Default == nil {
+			for i := len(args); i < len(procType.Parameters); i++ {
+				if procType.Parameters[i].Default == nil {
 					// Add zero value of parameter type.
-					args = append(args, &goast.StarExpr{
-						X: &goast.CallExpr{
-							Fun:  &goast.Ident{Name: "new"},
-							Args: []goast.Expr{t.convertType(n.Procedure.InputParameters[i].ValueType)},
-						},
-					})
+					args = append(args, comp.ZeroValue(t.convertType(procType.Parameters[i].Type)))
 					continue
 				}
 
-				defaultExpr, err := t.convertExpr(n.Procedure.InputParameters[i].Default)
+				defaultExpr, err := t.convertExpr(procType.Parameters[i].Default.(ast.Expression))
 				if err != nil {
 					return nil, fmt.Errorf("parsing default value of input parameter in call expression: %w", err)
 				}
@@ -55,7 +56,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		return &goast.CallExpr{
-			Fun:  n.Procedure.Identifier.Go(),
+			Fun:  n.Identifier.Go(),
 			Args: args,
 		}, nil
 	case *ast.Float32Literal:
@@ -142,6 +143,53 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		return &goast.UnaryExpr{
 			Op: convertUnaryOperator(n.Operator.Type),
 			X:  right,
+		}, nil
+	case *ast.ProcedureLiteral:
+		// procType, ok := n.ProcdureType.(*types.Procedure)
+		// if !ok {
+		// 	panic("unable to assert procedure type")
+		// }
+
+		stmts := make([]goast.Stmt, 0, len(n.Body.Statements))
+
+		// if len(procType.Parameters) > 0 {
+		// 	// Enter parameter scope.
+		// 	t.symbols = NewEnclosedSymbolTable(t.symbols)
+
+		// 	for _, param := range procType.Parameters {
+		// 		_ = t.symbols.Define(param.Name)
+		// 	}
+		// }
+
+		if len(n.Body.Statements) > 0 {
+			// Enter body scope.
+			t.symbols = NewEnclosedSymbolTable(t.symbols)
+		}
+
+		for _, s := range n.Body.Statements {
+			stmt, err := t.convertStmt(s)
+			if err != nil {
+				return nil, err
+			}
+
+			stmts = append(stmts, stmt...)
+		}
+
+		if len(n.Body.Statements) > 0 {
+			// Leave body scope.
+			t.symbols = t.symbols.Outer
+		}
+
+		// if len(procType.Parameters) > 0 {
+		// 	// Leave parameter scope.
+		// 	t.symbols = t.symbols.Outer
+		// }
+
+		return &goast.FuncLit{
+			Type: t.convertType(n.ProcdureType).(*goast.FuncType),
+			Body: &goast.BlockStmt{
+				List: stmts,
+			},
 		}, nil
 	case *ast.Selector:
 		name := convertExport(n.Identifier.Name, n.Identifier.Exported)

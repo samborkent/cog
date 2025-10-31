@@ -151,4 +151,8 @@ var Lookup = map[tokens.Type]Type{
 	tokens.Set:    &Set{},
 	tokens.Struct: &Struct{},
 	tokens.Enum:   &Enum{},
+
+	// Procedure type
+	tokens.Procedure: &Procedure{},
+	tokens.Function:  &Procedure{Function: true},
 }
