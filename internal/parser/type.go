@@ -50,10 +50,10 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool)
 
 		return &types.Enum{Value: valType}
 	case tokens.Function, tokens.Procedure:
-		return p.parseProcedureType(ctx)
+		return p.parseProcedureType(ctx, exported, constant)
 	}
 
-	typ := p.parseType(ctx, constant)
+	typ := p.parseType(ctx)
 
 	switch p.this().Type {
 	case tokens.BitAnd:
@@ -69,7 +69,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool)
 		for p.this().Type == tokens.BitAnd {
 			p.advance("parseCombinedType tuple &") // consume &
 
-			next := p.parseType(ctx, constant)
+			next := p.parseType(ctx)
 			if next != nil {
 				tuple.Types = append(tuple.Types, next)
 			}
@@ -90,7 +90,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool)
 
 		p.advance("parseCombinedType union |") // consume |
 
-		next := p.parseType(ctx, constant)
+		next := p.parseType(ctx)
 		if next != nil {
 			union.Or = next
 		}
@@ -106,7 +106,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool)
 	return typ
 }
 
-func (p *Parser) parseType(ctx context.Context, constant bool) types.Type {
+func (p *Parser) parseType(ctx context.Context) types.Type {
 	switch p.this().Type {
 	case tokens.Set:
 		if p.this().Type != tokens.LBracket {
@@ -150,7 +150,7 @@ func (p *Parser) parseType(ctx context.Context, constant bool) types.Type {
 		// Non-basic type, try to find in symbol table.
 		typeSymbol, ok := p.symbols.Resolve(p.this().Literal)
 		if !ok || typeSymbol.Kind != SymbolKindType {
-			p.error(p.this(), "unknown type found in type declaration", "parseStatement")
+			p.error(p.this(), "unknown type found in type declaration", "parseType")
 			return nil
 		}
 
@@ -263,7 +263,7 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 	return field
 }
 
-func (p *Parser) parseProcedureType(ctx context.Context) *types.Procedure {
+func (p *Parser) parseProcedureType(ctx context.Context, exported, constant bool) *types.Procedure {
 	procType := &types.Procedure{
 		Function:   p.this().Type == tokens.Function,
 		Parameters: make([]*types.Parameter, 0),
@@ -275,6 +275,8 @@ func (p *Parser) parseProcedureType(ctx context.Context) *types.Procedure {
 		p.error(p.this(), fmt.Sprintf("expected '(' after %q in type", p.prev().Type))
 		return nil
 	}
+
+	p.advance("parseProcedureType (") // consume (
 
 	// Flag to keep track of if any of the parameters is optional.
 	// When a parameter is marked as optional, all following parameters must also be optional.
@@ -289,8 +291,6 @@ func (p *Parser) parseProcedureType(ctx context.Context) *types.Procedure {
 			p.error(p.this(), "expected parameter identifier", "parseParameters")
 			return nil
 		}
-
-		var optional bool
 
 		ident := &ast.Identifier{
 			Token: p.this(),
@@ -332,13 +332,13 @@ func (p *Parser) parseProcedureType(ctx context.Context) *types.Procedure {
 			return nil
 		}
 
-		if param.Name == "ctx" && paramType.Kind() != types.Context {
-			p.error(p.this(), "input parameter 'ctx' must be of type 'context'", "parseParameters")
-			return nil
-		} else if paramType.Kind() == types.Context && (procType.Function || param.Name != "ctx") {
-			p.error(p.this(), "context type may only be used as first input parameter of procedures", "parseParameters")
-			return nil
-		}
+		// if param.Name == "ctx" && paramType.Kind() != types.Context {
+		// 	p.error(p.this(), "input parameter 'ctx' must be of type 'context'", "parseParameters")
+		// 	return nil
+		// } else if paramType.Kind() == types.Context && (procType.Function || param.Name != "ctx") {
+		// 	p.error(p.this(), "context type may only be used as first input parameter of procedures", "parseParameters")
+		// 	return nil
+		// }
 
 		param.Type = paramType
 		ident.ValueType = paramType
@@ -347,7 +347,7 @@ func (p *Parser) parseProcedureType(ctx context.Context) *types.Procedure {
 		p.symbols.Define(ident, SymbolKindConstant)
 
 		if p.this().Type == tokens.Assign {
-			if !optional {
+			if !param.Optional {
 				p.error(p.this(), "default values are only allowed for optional input parameters", "parseParameters")
 				return nil
 			}
@@ -367,6 +367,16 @@ func (p *Parser) parseProcedureType(ctx context.Context) *types.Procedure {
 			p.advance("parseParameters loop ,") // consume ','
 		}
 	}
+
+	p.advance("parseProcedureType )") // consume )
+
+	// TODO: this should only allow a limited set of types.
+	returnType := p.parseCombinedType(ctx, exported, constant)
+	if returnType == nil {
+		return nil
+	}
+
+	procType.ReturnType = returnType
 
 	return procType
 }

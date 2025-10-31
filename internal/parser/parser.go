@@ -40,39 +40,38 @@ func NewParser(tokens []tokens.Token, debug bool) (*Parser, error) {
 func (p *Parser) findGlobals(ctx context.Context) {
 tokenLoop:
 	for p.this().Type != tokens.EOF {
-		switch p.this().Type {
-		case tokens.Constant:
-			p.advance("findGlobalConst const") // consume const
+		exported := false
+		constant := false
 
-			p.findGlobalDecl(ctx, false, true)
-		case tokens.Export:
+		if p.this().Type == tokens.Export {
 			p.advance("findGlobals export") // consume export
+			exported = true
+		}
 
-			switch p.this().Type {
-			case tokens.Constant:
-				p.advance("findGlobalConst const") // consume const
+		if p.this().Type == tokens.Constant {
+			p.advance("findGlobalConst const") // consume const
+			constant = true
+		}
 
-				p.findGlobalDecl(ctx, true, true)
-			case tokens.Identifier:
-				switch p.this().Type {
-				case tokens.Colon:
-					p.findGlobalDecl(ctx, true, false)
-				case tokens.Tilde:
-					p.findGlobalType(ctx, true)
-				default:
-					p.advance("findGlobals export identifer ?") // consume token
-				}
-			default:
-				p.advance("findGlobals export ?") // consume token
+		switch p.this().Type {
+		case tokens.GoImport:
+			p.advance("findGlobals goimport") // consume goimport
+
+			if p.this().Type == tokens.LParen {
+				p.skipGrouped(ctx)
 			}
 		case tokens.Identifier:
-			switch p.this().Type {
+			switch p.next().Type {
 			case tokens.Colon:
-				p.findGlobalDecl(ctx, false, false)
+				p.findGlobalDecl(ctx, exported, constant)
 			case tokens.Tilde:
-				p.findGlobalType(ctx, false)
-			default:
-				p.advance("findGlobals identifier ?") // consume token
+				p.findGlobalType(ctx, exported, constant)
+			}
+		case tokens.Package:
+			p.advance("findGlobals package") // consume package
+
+			if p.this().Type == tokens.Identifier {
+				p.advance("findGlobals package identifier") // consume package identifier
 			}
 		case tokens.EOF:
 			break tokenLoop
@@ -82,6 +81,7 @@ tokenLoop:
 	}
 
 	p.i = 0
+	p.errs = p.errs[:0]
 }
 
 func (p *Parser) findGlobalDecl(ctx context.Context, exported, constant bool) {
@@ -91,7 +91,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported, constant bool) {
 
 	_, ok := p.symbols.Resolve(p.this().Literal)
 	if ok {
-		p.error(p.this(), "cannot redeclare variable", "findGlobalConst")
+		p.error(p.this(), "cannot redeclare variable", "findGlobalDecl")
 		return
 	}
 
@@ -101,87 +101,35 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported, constant bool) {
 		Exported: exported,
 	}
 
-	p.advance("findGlobalConst const identifier") // consume identifier
+	p.advance("findGlobalDecl identifier") // consume identifier
 
-	if p.this().Type == tokens.Colon || p.this().Type == tokens.Declaration {
+	switch p.this().Type {
+	case tokens.Colon:
+		p.advance("findGlobalDecl :") // consume :
+
+		ident.ValueType = p.parseCombinedType(ctx, exported, constant)
+
 		p.symbols.DefineGlobal(ident, SymbolKindConstant)
 
-		p.advance("findGlobalConst const :/:=") // consume : or :=
+		if p.this().Type == tokens.Assign {
+			p.advance("findGlobalDecl =") // consume =
 
-		if p.this().Type == tokens.Enum {
-			p.advance("findGlobalConst enum") // consume enum
-
-			if p.this().Type != tokens.LBracket {
-				p.error(p.this(), "expected [ in enum declaration", "findGlobalConst")
-				return
-			}
-
-			p.advance("findGlobalConst enum [") // consume [
-
-			enumValType := p.parseCombinedType(ctx, exported, constant)
-
-			p.symbols.Update(ident.Name, &types.Enum{Value: enumValType})
-
-			p.advance("findGlobalConst enum type") // consume type
-
-			if p.this().Type != tokens.RBracket {
-				p.error(p.this(), "expected ] in enum declaration", "findGlobalConst")
-				return
-			}
-
-			p.advance("findGlobalConst enum ]") // consume ]
-
-			if p.this().Type != tokens.Assign {
-				p.error(p.this(), "expected = in enum declaration", "findGlobalConst")
-				return
-			}
-
-			p.advance("findGlobalConst enum =") // consume =
-
-			if p.this().Type != tokens.LBrace {
-				p.error(p.this(), "expected { in enum literal", "findGlobalConst")
-				return
-			}
-
-			p.advance("findGlobalConst enum literal {") // consume {
-
-			for p.this().Type != tokens.RBrace {
-				if ctx.Err() != nil {
-					return
-				}
-
-				if p.this().Type != tokens.Identifier {
-					p.error(p.this(), "expected identifier in enum literal", "findGlobalConst")
-					return
-				}
-
-				p.symbols.DefineEnumValue(ident.Name, &ast.Identifier{
-					Token:     p.this(),
-					Name:      p.this().Literal,
-					ValueType: enumValType,
-					Exported:  exported,
-				})
-
-				p.advance("findGlobalConst enum literal identifier") // consume identifier
-
-				if p.this().Type != tokens.Declaration {
-					p.error(p.this(), "expected := in enum literal", "findGlobalConst")
-					return
-				}
-
-				p.advance("findGlobalConst enum literal :=") // consume :=
-
-				_ = p.expression(ctx, enumValType)
-
-				if p.this().Type == tokens.Comma {
-					p.advance("findGlobalConst enum literal ,") // consume ,
-				}
+			if p.this().Type == tokens.LBrace {
+				p.skipScope(ctx)
+			} else {
+				_ = p.expression(ctx, ident.ValueType)
 			}
 		}
+	case tokens.Declaration:
+		p.advance("findGlobalDecl :=") // consume :=
+		_ = p.expression(ctx, types.None)
+		p.symbols.DefineGlobal(ident, SymbolKindConstant)
+	default:
+		return
 	}
 }
 
-func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
+func (p *Parser) findGlobalType(ctx context.Context, exported, constant bool) {
 	ident := &ast.Identifier{
 		Token:    p.this(),
 		Name:     p.this().Literal,
@@ -199,31 +147,42 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 	p.advance("findGlobalType ~") // consume ~
 
 	if p.this().Type == tokens.Enum {
-		// TODO: avoid code duplication
-		p.advance("findGlobalType enum") // consume enum
+		p.advance("findGlobalConst enum") // consume enum
 
 		if p.this().Type != tokens.LBracket {
-			p.error(p.this(), "expected [ in enum declaration", "findGlobalType")
+			p.error(p.this(), "expected [ in enum declaration", "findGlobalConst")
 			return
 		}
 
-		p.advance("findGlobalType enum [") // consume [
+		p.advance("findGlobalConst enum [") // consume [
 
-		enumValType := p.parseCombinedType(ctx, ident.Exported, false)
+		enumValType := p.parseCombinedType(ctx, exported, constant)
+
+		ident.ValueType = &types.Enum{Value: enumValType}
+		p.symbols.DefineGlobal(ident, SymbolKindType)
+
+		p.advance("findGlobalConst enum type") // consume type
 
 		if p.this().Type != tokens.RBracket {
-			p.error(p.this(), "expected ] in enum declaration", "findGlobalType")
+			p.error(p.this(), "expected ] in enum declaration", "findGlobalConst")
 			return
 		}
 
-		p.advance("findGlobalType enum ]") // consume ]
+		p.advance("findGlobalConst enum ]") // consume ]
+
+		if p.this().Type != tokens.Assign {
+			p.error(p.this(), "expected = in enum declaration", "findGlobalConst")
+			return
+		}
+
+		p.advance("findGlobalConst enum =") // consume =
 
 		if p.this().Type != tokens.LBrace {
-			p.error(p.this(), "expected { after enum declaration", "findGlobalType")
+			p.error(p.this(), "expected { in enum literal", "findGlobalConst")
 			return
 		}
 
-		p.advance("findGlobalType {") // consume {
+		p.advance("findGlobalConst enum literal {") // consume {
 
 		for p.this().Type != tokens.RBrace {
 			if ctx.Err() != nil {
@@ -231,27 +190,25 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 			}
 
 			if p.this().Type != tokens.Identifier {
-				p.error(p.this(), "expected identifier in enum literal", "findGlobalType")
+				p.error(p.this(), "expected identifier in enum literal", "findGlobalConst")
 				return
 			}
 
-			enumIdent := &ast.Identifier{
+			p.symbols.DefineEnumValue(ident.Name, &ast.Identifier{
 				Token:     p.this(),
 				Name:      p.this().Literal,
 				ValueType: enumValType,
-				Exported:  ident.Exported,
-			}
+				Exported:  exported,
+			})
 
-			p.symbols.DefineEnumValue(ident.Name, enumIdent)
-
-			p.advance("parseEnum enum literal identifier") // consume identifier
+			p.advance("findGlobalConst enum literal identifier") // consume identifier
 
 			if p.this().Type != tokens.Declaration {
-				p.error(p.this(), "expected := in enum literal", "parseEnum")
+				p.error(p.this(), "expected := in enum literal", "findGlobalConst")
 				return
 			}
 
-			p.advance("parseEnum enum literal :=") // consume :=
+			p.advance("findGlobalConst enum literal :=") // consume :=
 
 			_ = p.expression(ctx, enumValType)
 
@@ -260,17 +217,15 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 			}
 		}
 
-		ident.ValueType = &types.Enum{
-			Value: enumValType,
-		}
-	} else {
-		alias := p.parseCombinedType(ctx, ident.Exported, false)
-		if alias == nil {
-			return
-		}
-
-		ident.ValueType = alias
+		return
 	}
+
+	alias := p.parseCombinedType(ctx, ident.Exported, false)
+	if alias == nil {
+		return
+	}
+
+	ident.ValueType = alias
 
 	p.symbols.DefineGlobal(ident, SymbolKindType)
 }
@@ -293,6 +248,29 @@ func (p *Parser) skipScope(ctx context.Context) {
 		p.advance("skipScope " + p.this().Literal)
 
 		if braceIndex == 0 {
+			return
+		}
+	}
+}
+
+func (p *Parser) skipGrouped(ctx context.Context) {
+	parenIndex := 0
+
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		switch p.this().Type {
+		case tokens.LParen:
+			parenIndex++
+		case tokens.RParen:
+			parenIndex--
+		}
+
+		p.advance("skipGrouped " + p.this().Literal)
+
+		if parenIndex == 0 {
 			return
 		}
 	}
