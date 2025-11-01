@@ -13,7 +13,7 @@ String ~ utf8
 export notExported ~ uint64
 export ExportedString ~ String
 
-main : proc(ctx: context) = {
+main : proc() = {
     str := @go.strings.ToUpper("str")
 
     b : float32 = 0.0
@@ -93,8 +93,6 @@ caseSwitch:
     }
 
     tuple : Tuple = {"hello", 10, false}
-
-    either : Either = "hello"
 
     utf : utf8?  = "hello"
     // option : Option? // not allowed

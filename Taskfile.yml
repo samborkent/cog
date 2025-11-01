@@ -3,8 +3,8 @@
 version: '3'
 
 vars:
-  FILE: funcs.cog
-  DEBUG: false
+  FILE: example.cog
+  DEBUG: true
 
 tasks:
   compile:

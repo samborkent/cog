@@ -49,7 +49,7 @@ tokenLoop:
 		}
 
 		if p.this().Type == tokens.Constant {
-			p.advance("findGlobalConst const") // consume const
+			p.advance("findGlobals const") // consume const
 			constant = true
 		}
 
@@ -62,7 +62,7 @@ tokenLoop:
 			}
 		case tokens.Identifier:
 			switch p.next().Type {
-			case tokens.Colon:
+			case tokens.Colon, tokens.Declaration:
 				p.findGlobalDecl(ctx, exported, constant)
 			case tokens.Tilde:
 				p.findGlobalType(ctx, exported, constant)
@@ -122,8 +122,13 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported, constant bool) {
 		}
 	case tokens.Declaration:
 		p.advance("findGlobalDecl :=") // consume :=
-		_ = p.expression(ctx, types.None)
 		p.symbols.DefineGlobal(ident, SymbolKindConstant)
+
+		if p.this().Type == tokens.LBrace {
+			p.skipScope(ctx)
+		} else {
+			_ = p.expression(ctx, types.None)
+		}
 	default:
 		return
 	}
