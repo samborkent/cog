@@ -55,6 +55,15 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 						},
 					}
 				}
+
+				// Remove context argument for main func.
+				funcLiteral.Type.Params.List = funcLiteral.Type.Params.List[1:]
+
+				return []goast.Decl{&goast.FuncDecl{
+					Name: &goast.Ident{Name: "main"},
+					Type: funcLiteral.Type,
+					Body: funcLiteral.Body,
+				}}, nil
 			}
 		}
 

@@ -19,7 +19,6 @@ someFunc : func() uint64
 
 handlerFunc ~ proc(req : utf8) utf8
 
-
 /*
 var upper func(str string, optional string, alsoOptional string) string = func(str string, optional string, alsoOptional string) string {
 	return strings.ToUpper(str) + optional + alsoOptional

@@ -28,9 +28,6 @@ const (
 	Uint128
 	UTF8
 
-	// Special types
-	Context
-
 	// Generic type
 	GenericKind
 
@@ -90,8 +87,6 @@ func (t Kind) String() string {
 		return "uint128"
 	case UTF8:
 		return "utf8"
-	case Context:
-		return "context"
 	case GenericKind:
 		return "generic"
 	case SetKind:
@@ -136,9 +131,6 @@ var Lookup = map[tokens.Type]Type{
 	tokens.Uint64:     Basics[Uint64],
 	tokens.Uint128:    Basics[Uint128],
 	tokens.UTF8:       Basics[UTF8],
-
-	// Special types
-	tokens.Context: Basics[Context],
 
 	// Literal types
 	tokens.Complex: Basics[Complex64],

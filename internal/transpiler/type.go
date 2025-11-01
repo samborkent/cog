@@ -33,11 +33,6 @@ func (t *Transpiler) convertType(typ types.Type) goast.Expr {
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex64], nil)}
 	case types.Complex128:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex128], nil)}
-	case types.Context:
-		return &goast.SelectorExpr{
-			X:   &goast.Ident{Name: "context"},
-			Sel: &goast.Ident{Name: "Context"},
-		}
 	case types.Float32:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Float32], nil)}
 	case types.Float64:
@@ -88,13 +83,17 @@ func (t *Transpiler) convertType(typ types.Type) goast.Expr {
 		}
 
 		// TODO: handle error types (add second error return type)
-
-		return &goast.FuncType{
+		funcType := &goast.FuncType{
 			Params: &goast.FieldList{List: inputParams},
-			Results: &goast.FieldList{List: []*goast.Field{
-				{Type: t.convertType(procType.ReturnType)},
-			}},
 		}
+
+		if procType.ReturnType != nil {
+			funcType.Results = &goast.FieldList{List: []*goast.Field{
+				{Type: t.convertType(procType.ReturnType)},
+			}}
+		}
+
+		return funcType
 	case types.Uint8:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint8], nil)}
 	case types.Uint16:

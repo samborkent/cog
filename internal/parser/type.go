@@ -370,6 +370,11 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, constant bool
 
 	p.advance("parseProcedureType )") // consume )
 
+	if p.this().Type == tokens.Assign {
+		// No return type.
+		return procType
+	}
+
 	// TODO: this should only allow a limited set of types.
 	returnType := p.parseCombinedType(ctx, exported, constant)
 	if returnType == nil {

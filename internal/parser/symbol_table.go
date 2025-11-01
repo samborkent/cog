@@ -118,6 +118,10 @@ func (s *SymbolTable) Define(ident *ast.Identifier, kind SymbolKind) {
 }
 
 func (s *SymbolTable) DefineEnumValue(selector string, field *ast.Identifier) {
+	if field.Name == "" {
+		panic("empty enum value identifier")
+	}
+
 	_, ok := s.fields[selector]
 	if !ok {
 		s.fields[selector] = make(map[string]Symbol)
@@ -147,6 +151,10 @@ func (s *SymbolTable) DefineGlobal(ident *ast.Identifier, kind SymbolKind) {
 }
 
 func (s *SymbolTable) DefineGoImport(ident *ast.Identifier) {
+	if ident.Name == "" {
+		panic("empty go import")
+	}
+
 	if ident.ValueType == nil {
 		ident.ValueType = types.None
 	}

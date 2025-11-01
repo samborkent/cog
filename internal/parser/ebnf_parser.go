@@ -368,13 +368,9 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			return &ast.Call{
-				Identifier: &ast.Identifier{
-					Token:     p.this(),
-					Name:      p.this().Literal,
-					ValueType: symbol.Identifier.ValueType,
-					Exported:  symbol.Identifier.Exported,
-				},
-				Arguments: p.parseCallArguments(ctx, procType),
+				Identifier: symbol.Identifier,
+				Arguments:  p.parseCallArguments(ctx, procType),
+				ReturnType: procType.ReturnType,
 			}
 		case tokens.Dot:
 			// TODO: recursive selector expression

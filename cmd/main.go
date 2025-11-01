@@ -130,8 +130,6 @@ func run(ctx context.Context, r io.Reader) {
 		}
 	}
 
-	return
-
 	t := transpiler.NewTranspiler(f)
 
 	gofile, err := t.Transpile()

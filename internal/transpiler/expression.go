@@ -55,6 +55,8 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 		}
 
+		t.symbols.MarkUsed(n.Identifier.Name)
+
 		return &goast.CallExpr{
 			Fun:  n.Identifier.Go(),
 			Args: args,
