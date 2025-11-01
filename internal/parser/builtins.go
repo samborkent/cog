@@ -19,7 +19,8 @@ func (p *Parser) parseBuiltinIf(ctx context.Context, t tokens.Token, tokenType t
 
 	p.advance("parseIf (") // consume (
 
-	condition := p.expression(ctx, types.Basics[types.Bool])
+	// condition := p.expression(ctx, types.Basics[types.Bool])
+	condition := p.expression(ctx, types.None)
 	if condition == nil {
 		return nil
 	}

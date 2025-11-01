@@ -17,7 +17,7 @@ type Parser struct {
 	symbols  *SymbolTable
 	builtins map[string]BuiltinParser
 
-	errs  []error
+	Errs  []error
 	i     int
 	debug bool
 }
@@ -30,7 +30,7 @@ func NewParser(tokens []tokens.Token, debug bool) (*Parser, error) {
 	p := &Parser{
 		tokens:  tokens,
 		symbols: NewSymbolTable(),
-		errs:    make([]error, 0),
+		Errs:    make([]error, 0),
 		debug:   debug,
 	}
 
@@ -81,7 +81,7 @@ tokenLoop:
 	}
 
 	p.i = 0
-	p.errs = p.errs[:0]
+	p.Errs = p.Errs[:0]
 }
 
 func (p *Parser) findGlobalDecl(ctx context.Context, exported, constant bool) {
@@ -163,8 +163,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported, constant bool) {
 
 		enumValType := p.parseCombinedType(ctx, exported, constant)
 
-		ident.ValueType = &types.Enum{Value: enumValType}
-		p.symbols.DefineGlobal(ident, SymbolKindType)
+		enumType := &types.Enum{ValueType: enumValType}
 
 		p.advance("findGlobalConst enum type") // consume type
 
@@ -199,12 +198,14 @@ func (p *Parser) findGlobalType(ctx context.Context, exported, constant bool) {
 				return
 			}
 
-			p.symbols.DefineEnumValue(ident.Name, &ast.Identifier{
+			valIdent := &ast.Identifier{
 				Token:     p.this(),
 				Name:      p.this().Literal,
 				ValueType: enumValType,
 				Exported:  exported,
-			})
+			}
+
+			p.symbols.DefineEnumValue(ident.Name, valIdent)
 
 			p.advance("findGlobalConst enum literal identifier") // consume identifier
 
@@ -215,12 +216,21 @@ func (p *Parser) findGlobalType(ctx context.Context, exported, constant bool) {
 
 			p.advance("findGlobalConst enum literal :=") // consume :=
 
-			_ = p.expression(ctx, enumValType)
+			enumVal := p.expression(ctx, enumValType)
+			if enumVal != nil {
+				enumType.Values = append(enumType.Values, &types.EnumValue{
+					Name:  valIdent.Name,
+					Value: enumVal,
+				})
+			}
 
 			if p.this().Type == tokens.Comma {
 				p.advance("findGlobalConst enum literal ,") // consume ,
 			}
 		}
+
+		ident.ValueType = enumType
+		p.symbols.DefineGlobal(ident, SymbolKindType)
 
 		return
 	}
@@ -286,7 +296,7 @@ func (p *Parser) Parse(ctx context.Context) (*ast.File, error) {
 	p.findGlobals(ctx)
 
 	// Reset errors, so they're only printed once.
-	p.errs = make([]error, 0, len(p.errs))
+	p.Errs = make([]error, 0, len(p.Errs))
 
 	p.builtins = map[string]BuiltinParser{
 		"if":    p.parseBuiltinIf,
@@ -307,7 +317,7 @@ func (p *Parser) Parse(ctx context.Context) (*ast.File, error) {
 tokenLoop:
 	for p.this().Type != tokens.EOF {
 		if ctx.Err() != nil {
-			return f, fmt.Errorf("parser error:\n%w", errors.Join(p.errs...))
+			return f, fmt.Errorf("parser error:\n%w", errors.Join(p.Errs...))
 		}
 
 		switch p.this().Type {
@@ -328,7 +338,7 @@ tokenLoop:
 			break tokenLoop
 		default:
 			p.error(p.this(), "unknown token", "Parse")
-			return f, fmt.Errorf("parser error:\n%w", errors.Join(p.errs...))
+			return f, fmt.Errorf("parser error:\n%w", errors.Join(p.Errs...))
 		}
 
 		// Check for EOF again, in case it was reached during parsing.
@@ -337,7 +347,7 @@ tokenLoop:
 		}
 	}
 
-	if err := errors.Join(p.errs...); err != nil {
+	if err := errors.Join(p.Errs...); err != nil {
 		return f, fmt.Errorf("parser error:\n%w", err)
 	}
 
@@ -378,8 +388,8 @@ func (p *Parser) advance(scope string) {
 
 func (p *Parser) error(t tokens.Token, msg string, scope ...string) {
 	if len(scope) > 0 {
-		p.errs = append(p.errs, fmt.Errorf("\t%s: %v: %s", t, scope, msg))
+		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %v: %s", t, scope, msg))
 	} else {
-		p.errs = append(p.errs, fmt.Errorf("\t%s: %s", t, msg))
+		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %s", t, msg))
 	}
 }

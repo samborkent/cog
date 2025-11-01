@@ -81,13 +81,5 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 
 	p.symbols.Define(ident, kind)
 
-	if node.Assignment.Expression.Type().Underlying().Kind() == types.EnumKind {
-		if enumLiteral, ok := node.Assignment.Expression.(*ast.EnumLiteral); ok {
-			for _, val := range enumLiteral.Values {
-				p.symbols.DefineEnumValue(ident.Name, val.Identifier)
-			}
-		}
-	}
-
 	return node
 }

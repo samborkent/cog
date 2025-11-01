@@ -106,7 +106,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 }
 
 func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
-	_, ok := n.Alias.(*types.Enum)
+	enumType, ok := n.Alias.(*types.Enum)
 	if !ok {
 		panic(fmt.Sprintf("cannot convert type %q to enum", n.Alias))
 	}
@@ -117,20 +117,22 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 
 	enumTypeIdent := gotypes.Typ[gotypes.Uint8].String()
 
-	if len(n.Literal.Values) > math.MaxUint8 {
+	if len(enumType.Values) > math.MaxUint8 {
 		enumTypeIdent = gotypes.Typ[gotypes.Uint16].String()
 	}
 
-	specs := make([]goast.Spec, 0, len(n.Literal.Values))
-	exprs := make([]goast.Expr, 0, len(n.Literal.Values))
+	specs := make([]goast.Spec, 0, len(enumType.Values))
+	exprs := make([]goast.Expr, 0, len(enumType.Values))
 
-	for i, val := range n.Literal.Values {
-		expr, err := t.convertExpr(val.Value)
+	for i, enumVal := range enumType.Values {
+		val := enumVal.Value.(ast.Expression)
+
+		expr, err := t.convertExpr(val)
 		if err != nil {
 			return nil, fmt.Errorf("converting expression %d in enum literal: %w", i, err)
 		}
 
-		if val.Value.Type().Underlying().Kind() == types.StructKind {
+		if val.Type().Underlying().Kind() == types.StructKind {
 			compositeLit, ok := expr.(*goast.CompositeLit)
 			if !ok {
 				panic("cannot cast struct literal as composite literal")
@@ -141,7 +143,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		}
 
 		spec := &goast.ValueSpec{
-			Names: []*goast.Ident{{Name: identifier + titleCaser.String(val.Identifier.Name)}},
+			Names: []*goast.Ident{{Name: identifier + titleCaser.String(enumVal.Name)}},
 		}
 
 		if i == 0 {
@@ -177,7 +179,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 			Specs: []goast.Spec{
 				&goast.TypeSpec{
 					Name: typeName,
-					Type: t.convertType(n.Literal.ValueType),
+					Type: t.convertType(enumType.ValueType),
 				},
 			},
 		},

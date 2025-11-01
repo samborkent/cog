@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	goprinter "go/printer"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
 	"github.com/samborkent/cog/internal/parser"
 	"github.com/samborkent/cog/internal/transpiler"
@@ -109,10 +111,31 @@ func run(ctx context.Context, r io.Reader) {
 		return
 	}
 
-	f, err := p.Parse(ctx)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
+	done := make(chan struct{})
+
+	var f *ast.File
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				if len(p.Errs) > 0 {
+					fmt.Println("parser errors:")
+					fmt.Println(errors.Join(p.Errs...).Error())
+				}
+
+				panic(r)
+			}
+		}()
+
+		f, err = p.Parse(ctx)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+
+		close(done)
+	}()
+
+	<-done
 
 	if !write {
 		fmt.Printf("\nparsed nodes:\n\n")

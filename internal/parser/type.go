@@ -12,10 +12,14 @@ import (
 func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool) types.Type {
 	switch p.this().Type {
 	case tokens.Enum:
+		enumIdent := p.tokens[p.i-2]
+
 		if !constant {
 			p.error(p.this(), "enum declarations must be constant", "parseCombinedType")
 			return nil
 		}
+
+		p.advance("parseCombinedType enum") // consume enum
 
 		if p.this().Type != tokens.LBracket {
 			p.error(p.this(), "expected [ after enum type", "parseCombinedType")
@@ -24,22 +28,10 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool)
 
 		p.advance("parseCombinedType enum [") // consume [
 
-		valType, ok := types.Lookup[p.this().Type]
-		if !ok {
-			symbol, ok := p.symbols.Resolve(p.this().Literal)
-			if !ok {
-				p.error(p.this(), "expected enum value type", "parseCombinedType")
-				return nil
-			}
-
-			valType = &types.Alias{
-				Name:     p.this().Literal,
-				Derived:  symbol.Type(),
-				Exported: symbol.Identifier.Exported,
-			}
+		valType := p.parseType(ctx)
+		if valType == nil {
+			return nil
 		}
-
-		p.advance("parseCombinedType enum value type") // consume elem type
 
 		if p.this().Type != tokens.RBracket {
 			p.error(p.this(), "expected ] after enum value type", "parseCombinedType")
@@ -48,7 +40,62 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool)
 
 		p.advance("parseCombinedType enum ]") // consume ]
 
-		return &types.Enum{Value: valType}
+		if p.this().Type != tokens.LBrace {
+			p.error(p.this(), "expected { after enum type", "parseCombinedType")
+			return nil
+		}
+
+		p.advance("parseCombinedType enum {") // consume {
+
+		typ := &types.Enum{
+			ValueType: valType,
+			Values:    make([]*types.EnumValue, 0),
+		}
+
+		for !p.match(tokens.RBrace, tokens.EOF) {
+			if ctx.Err() != nil {
+				return nil
+			}
+
+			if p.this().Type != tokens.Identifier {
+				p.error(p.this(), "expected identifier in enum declaration", "parseCombinedType")
+				return nil
+			}
+
+			valIdent := &ast.Identifier{
+				Token:     p.this(),
+				Name:      p.this().Literal,
+				ValueType: valType,
+				Exported:  exported,
+			}
+
+			p.symbols.DefineEnumValue(enumIdent.Literal, valIdent)
+
+			p.advance("parseCombinedType enum literal identifier") // consume identifier
+
+			if p.this().Type != tokens.Declaration {
+				p.error(p.this(), "expected := in enum literal", "parseCombinedType")
+				return nil
+			}
+
+			p.advance("parseCombinedType enum literal :=") // consume :=
+
+			enumExpr := p.expression(ctx, valType)
+			if enumExpr != nil {
+				typ.Values = append(typ.Values, &types.EnumValue{
+					Name:  valIdent.Name,
+					Value: enumExpr,
+				})
+			}
+
+			if p.this().Type == tokens.Comma {
+				p.advance("parseCombinedType enum literal ,") // consume ,
+			}
+		}
+
+		p.advance("parseCombinedType enum }") // consume }
+
+		return typ
 	case tokens.Function, tokens.Procedure:
 		return p.parseProcedureType(ctx, exported, constant)
 	}
@@ -109,6 +156,8 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool)
 func (p *Parser) parseType(ctx context.Context) types.Type {
 	switch p.this().Type {
 	case tokens.Set:
+		p.advance("parseType set") // sonsume set
+
 		if p.this().Type != tokens.LBracket {
 			p.error(p.this(), "expected [ after set type", "parseType")
 			return nil
@@ -332,19 +381,8 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, constant bool
 			return nil
 		}
 
-		// if param.Name == "ctx" && paramType.Kind() != types.Context {
-		// 	p.error(p.this(), "input parameter 'ctx' must be of type 'context'", "parseParameters")
-		// 	return nil
-		// } else if paramType.Kind() == types.Context && (procType.Function || param.Name != "ctx") {
-		// 	p.error(p.this(), "context type may only be used as first input parameter of procedures", "parseParameters")
-		// 	return nil
-		// }
-
 		param.Type = paramType
 		ident.ValueType = paramType
-
-		// TODO: ensure we want to make function parameters always constant (read-only)
-		p.symbols.Define(ident, SymbolKindConstant)
 
 		if p.this().Type == tokens.Assign {
 			if !param.Optional {
