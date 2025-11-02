@@ -19,11 +19,6 @@ tokenLoop:
 			exported = true
 		}
 
-		if p.this().Type == tokens.Constant {
-			p.advance("findGlobals const") // consume const
-			constant = true
-		}
-
 		switch p.this().Type {
 		case tokens.GoImport:
 			p.advance("findGlobals goimport") // consume goimport

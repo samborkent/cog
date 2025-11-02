@@ -7,7 +7,7 @@ import (
 	"github.com/samborkent/cog/internal/ast"
 )
 
-func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier, constant bool) *ast.Type {
+func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast.Type {
 	if p.symbols.Outer == nil {
 		// Ensure type already exists (created during find globals sweep)
 		_, ok := p.symbols.Resolve(ident.Name)

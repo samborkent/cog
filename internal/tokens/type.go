@@ -39,7 +39,6 @@ const (
 
 	// Literals
 	Identifier
-	Constant
 	Bool
 	StringLiteral
 	IntLiteral
@@ -64,7 +63,6 @@ const (
 	Complex32
 	Complex64
 	Complex128
-	Context
 
 	// Boolean keywords
 	True
@@ -110,13 +108,8 @@ const (
 	Export
 	GoImport
 
-	// Unwanted keywords
-	// TODO: remove
-	Class // cog is data oriented
-	This  // cog is data oriented
-	Super // cog is data oriented
-	Nil   // cog is nil-safe
-	Print // builtin functions should not be keywords, but identifier, prefixed with @
+	// Type qualifiers
+	Variable // var
 
 	EOF
 )
@@ -185,8 +178,6 @@ func (t Type) String() string {
 		return "||"
 	case Identifier:
 		return "identifier"
-	case Constant:
-		return "const"
 	case Bool:
 		return "bool"
 	case StringLiteral:
@@ -231,8 +222,6 @@ func (t Type) String() string {
 		return "complex64"
 	case Complex128:
 		return "complex128"
-	case Context:
-		return "context"
 	case True:
 		return "true"
 	case False:
@@ -295,16 +284,8 @@ func (t Type) String() string {
 		return "export"
 	case GoImport:
 		return "goimport"
-	case Class:
-		return "class"
-	case This:
-		return "this"
-	case Super:
-		return "super"
-	case Nil:
-		return "nil"
-	case Print:
-		return "print"
+	case Variable:
+		return "var"
 	case EOF:
 		return "EOF"
 	default:

@@ -33,24 +33,26 @@ The following basic features are missing that need to be implemented before Cog 
     - Import using `goimport`
     - Call using `@go` namespace prefix (e.g. `@go.strings.ToUpper("call me"))
 - Break from if-statements
+- Distinction between `func` and `proc`
+    - `func` is a function without any side-effects with at least 1 return value.
+        - It cannot reference dynamically scoped variables.
+        - `func` cannot be called async
+    - `proc` is a function that may have side-effects, where return values are optional.
+        - It can reference dynamically scoped variables.
+        - `proc` may be called async.
+- Optional function parameters `foo(optional :? utf8)`
+    - With default values `foo(default :? utf8 = 10)`
 
 ### Planned
 
 - Explicit exports using `export`
-- Optional function parameters `foo(optional :? utf8)`
-    - With default values `foo(default :? utf8 = 10)`
-- Distinction between `func` and `proc`
-    - `func` is a function without any side-effects with at least 1 return value.
-        - It cannot take a `context` argument.
-        - `func` cannot be called async
-    - `proc` is a function that may have side-effects, where return values are optional.
-        - It always takes `ctx` as first argument.
-        - `proc` may be called async.
+- Type qualifiers
+    - `mut` for mutable variables. Not allowed in package scope.
+    - `dyn` for dynamically scoped variables. Only allowed in package scope.
+    - `comp` for compile time constants. Similar to Zig' `comptime`. When used on variables, like C++ `constexpr`, when used for functions like C++ `consteval`.
 - Variables need to be passed to scope explicitely (no catch all closures)
     - `(foo, bar) { // foo & bar are available in this scope }
 - Additional safety regarding mutability and ownership.
-- Metaprogramming through equivalent of Zig's `comptime`
-    - `const func` can be evaluated at compile time
 - Value switch and type switch
     - `switch var { case val: ... }`
     - `switch var { type uint64: ... }`
@@ -64,9 +66,9 @@ The following basic features are missing that need to be implemented before Cog 
     - `number ~ signed | uint`
 - Allocation builtins:
     - `@ptr[T valueType]() *T`
-    - `@slice[T any, I uint](ctx : context, len : I, cap :? I = len) []T`
-    - `@map[K comparable, V any, I uint](ctx : context, cap :? I = 8) map[K]V`
-    - `@set[K comparable, I uint](ctx : context, cap :? I = 8) set[K]`
+    - `@slice[T any, I uint](len : I, cap :? I = len) []T`
+    - `@map[K comparable, V any, I uint](cap :? I = 8) map[K]V`
+    - `@set[K comparable, I uint](cap :? I = 8) set[K]`
     - `@cast[A, B any](x A) B` to cast types instead of `float32()`, etc.
         - It must panic if casting cannot be done without overflow or precision loss.
         - Also implement `@convert[A, B any](x A) B`, which will perform best-effort conversion, allowing some precision loss and handling overflows.
@@ -90,7 +92,6 @@ The following basic features are missing that need to be implemented before Cog 
 - Script mode
     - Files without package declaration will be parsed as script.
     - This is basically just a `main` package, and script gets inserted in `main()` body.
-    - Pre-defined `ctx` variable?
 - Canonical syntax highlighting
 - LSP
 
@@ -140,7 +141,7 @@ String ~ utf8
 export notExported ~ uint64
 export ExportedString ~ String
 
-main : proc(ctx: context) = {
+main : proc() = {
     str := @go.strings.ToUpper("str")
 
     b : float32 = 0.0
@@ -220,8 +221,6 @@ caseSwitch:
     }
 
     tuple : Tuple = {"hello", 10, false}
-
-    either : Either = "hello"
 
     utf : utf8?  = "hello"
     // option : Option? // not allowed
