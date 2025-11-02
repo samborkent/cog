@@ -63,7 +63,9 @@ tokenLoop:
 		}
 
 		switch p.this().Type {
-		case tokens.Constant, tokens.Export, tokens.Identifier:
+		case tokens.Export,
+			tokens.Identifier,
+			tokens.Variable:
 			node := p.parseStatement(ctx)
 			if node != nil {
 				f.Statements = append(f.Statements, node)
@@ -73,9 +75,6 @@ tokenLoop:
 			if node != nil {
 				f.Statements = append(f.Statements, node)
 			}
-
-			// TODO: remove
-			continue
 		case tokens.EOF:
 			break tokenLoop
 		default:

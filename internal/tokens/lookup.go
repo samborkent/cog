@@ -33,8 +33,6 @@ var Keywords = map[string]Type{
 	"bool":       Bool,
 	"break":      Break,
 	"case":       Case,
-	"const":      Constant,
-	"context":    Context,
 	"complex32":  Complex32,
 	"complex64":  Complex64,
 	"complex128": Complex128,
@@ -71,6 +69,7 @@ var Keywords = map[string]Type{
 	"uint64":     Uint64,
 	"uint128":    Uint128,
 	"utf8":       UTF8,
+	"var":        Variable,
 }
 
 var Types = map[Type]struct{}{
@@ -80,7 +79,6 @@ var Types = map[Type]struct{}{
 	Complex32:  {},
 	Complex64:  {},
 	Complex128: {},
-	Context:    {},
 	Error:      {},
 	Float16:    {},
 	Float32:    {},

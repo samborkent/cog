@@ -43,13 +43,6 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			Token:      t,
 			Expression: builtinParser(ctx, t, types.None),
 		}
-	case tokens.Constant:
-		// Constant declaration.
-		if n := p.parseConstant(ctx, false); n != nil {
-			return n
-		}
-
-		return nil
 	case tokens.Export:
 		if p.symbols.Outer != nil {
 			p.error(p.this(), "export statements are only allowed in the global scope", "parseStatement")
@@ -59,12 +52,6 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		p.advance("parseStatement export") // consume export
 
 		switch p.this().Type {
-		case tokens.Constant:
-			if n := p.parseConstant(ctx, true); n != nil {
-				return n
-			}
-
-			return nil
 		case tokens.Identifier:
 			ident := &ast.Identifier{
 				Token:    p.this(),
@@ -78,28 +65,29 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			case tokens.Colon:
 				p.advance("parseStatement export ident :") // consume :
 
-				// Do not allow exporting variables.
-				_, ok := tokens.FuncTypes[p.this().Type]
-				if !ok {
-					p.error(p.this(), "expected procedure or function type after exported identifier", "parseStatement")
-					return nil
+				decl := p.parseTypedDeclaration(ctx, ident, ast.QualifierImmutable)
+				if decl != nil {
+					return decl
 				}
 
-				decl := p.parseTypedDeclaration(ctx, ident, false)
+				return nil
+			case tokens.Declaration:
+				decl := p.parseDeclaration(ctx, ident, ast.QualifierImmutable)
 				if decl != nil {
 					return decl
 				}
 
 				return nil
 			case tokens.Tilde:
-				typeDecl := p.parseTypeAlias(ctx, ident, false)
+				typeDecl := p.parseTypeAlias(ctx, ident)
 				if typeDecl != nil {
 					return typeDecl
 				}
 
 				return nil
 			default:
-				p.error(p.this(), "unexpected token following exported identifierr", "parseStatement")
+				p.error(p.this(), "unexpected token following exported identifier", "parseStatement")
+				p.advance("parseStatement export error") // consume unknown token
 				return nil
 			}
 		default:
@@ -107,6 +95,11 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			return nil
 		}
 	case tokens.Identifier:
+		qualifier := ast.QualifierImmutable
+		if p.prev().Type == tokens.Variable {
+			qualifier = ast.QualifierVariable
+		}
+
 		ident := &ast.Identifier{
 			Token:    p.this(),
 			Name:     p.this().Literal,
@@ -117,6 +110,11 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 
 		switch p.this().Type {
 		case tokens.Assign: // Assignment
+			if p.symbols.Outer == nil {
+				p.error(p.this(), "no assignment allowed in package scope, use declaration instead", "parseStatement")
+				return nil
+			}
+
 			if a := p.parseAssignment(ctx, ident); a != nil {
 				return a
 			}
@@ -155,30 +153,19 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				return switchStatement
 			}
 
-			_, ok := tokens.FuncTypes[p.this().Type]
-			if !ok {
-				if p.symbols.Outer == nil {
-					p.error(ident.Token, "global variable declarations are not allowed", "parseStatement")
-				}
-			}
-
-			if d := p.parseTypedDeclaration(ctx, ident, false); d != nil {
+			if d := p.parseTypedDeclaration(ctx, ident, qualifier); d != nil {
 				return d
 			}
 
 			return nil
 		case tokens.Declaration: // Untyped declaration
-			if p.symbols.Outer == nil {
-				p.error(p.this(), "global variable declarations are not allowed", "parseStatement")
-			}
-
-			if d := p.parseDeclaration(ctx, ident, false); d != nil {
+			if d := p.parseDeclaration(ctx, ident, qualifier); d != nil {
 				return d
 			}
 
 			return nil
 		case tokens.Tilde: // Type declaration
-			typeDecl := p.parseTypeAlias(ctx, ident, false)
+			typeDecl := p.parseTypeAlias(ctx, ident)
 			if typeDecl != nil {
 				return typeDecl
 			}
@@ -223,6 +210,16 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		}
 
 		return nil
+	case tokens.Variable:
+		// Skip, get it with prev in identifier case.
+		p.advance("parseStatement var") // consume var
+
+		if p.symbols.Outer == nil {
+			p.error(p.this(), "variable declarations are not allowed in package scope", "parseStatement")
+			return nil
+		}
+
+		return p.parseStatement(ctx)
 	case tokens.EOF:
 		return nil
 	default:

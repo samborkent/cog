@@ -18,6 +18,11 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 	switch symbol.Kind {
 	case SymbolKindConstant:
 		p.error(p.prev(), "cannot reassign a constant", "parseAssignment")
+
+		// Skip until next line.
+		p.advance("parseAssignment error =") // consume =
+		_ = p.expression(ctx, symbol.Type())
+
 		return nil
 	case SymbolKindType:
 		p.error(p.prev(), "cannot assign to a type identifier", "parseAssignment")

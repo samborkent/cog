@@ -1,0 +1,15 @@
+package mut
+
+constant := "constant"
+
+// not allowed in global scope
+// var global := "global"
+
+
+main : proc() = {
+    var local := "local"
+    local = "mutable"
+
+    // not allowed to reassign constant
+    //constant = "immutable"
+}

@@ -19,7 +19,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 		if n.Assignment.Expression == nil {
 			return []goast.Decl{&goast.GenDecl{
-				Tok: gotoken.VAR,
+				Tok: gotoken.CONST,
 				Specs: []goast.Spec{
 					&goast.ValueSpec{
 						Names: []*goast.Ident{ident},
@@ -76,10 +76,10 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			valueSpec.Type = t.convertType(n.Assignment.Identifier.ValueType)
 		}
 
-		tok := gotoken.VAR
+		tok := gotoken.CONST
 
-		if n.Constant {
-			tok = gotoken.CONST
+		if n.Qualifier == ast.QualifierVariable || mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
+			tok = gotoken.VAR
 		}
 
 		return []goast.Decl{&goast.GenDecl{
@@ -201,4 +201,13 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 			},
 		},
 	}, nil
+}
+
+func mustBeVariable(t types.Kind) bool {
+	switch t {
+	case types.ProcedureKind:
+		return true
+	default:
+		return false
+	}
 }

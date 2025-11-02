@@ -8,7 +8,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier, constant bool) *ast.Declaration {
+func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier, qualifier ast.Qualifier) *ast.Declaration {
 	identType := p.parseCombinedType(ctx, ident.Exported)
 	if identType == nil {
 		return nil
@@ -16,7 +16,7 @@ func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifie
 
 	ident.ValueType = identType
 
-	node := p.parseDeclaration(ctx, ident, constant)
+	node := p.parseDeclaration(ctx, ident, qualifier)
 	if node == nil {
 		return nil
 	}
@@ -24,7 +24,7 @@ func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifie
 	return node
 }
 
-func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, constant bool) *ast.Declaration {
+func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, qualifier ast.Qualifier) *ast.Declaration {
 	symbol, ok := p.symbols.Resolve(ident.Name)
 	if ok && symbol.Scope != ScanScope {
 		p.error(ident.Token, "cannot redeclare variable", "parseDeclaration")
@@ -40,17 +40,17 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier, co
 			Token:      p.this(),
 			Identifier: ident,
 		},
-		Constant: constant,
+		Qualifier: qualifier,
 	}
 
-	kind := SymbolKindVariable
-	if constant {
-		kind = SymbolKindConstant
+	kind := SymbolKindConstant
+	if qualifier == ast.QualifierVariable {
+		kind = SymbolKindVariable
 	}
 
-	if p.this().Type != tokens.Assign && p.this().Type != tokens.Declaration {
-		if constant {
-			p.error(p.this(), "constant declarations must be initialized", "parseDeclaration")
+	if !p.match(tokens.Assign, tokens.Declaration) {
+		if qualifier == ast.QualifierImmutable {
+			p.error(p.this(), "immutable declarations must be initialized", "parseDeclaration")
 			return nil
 		}
 
