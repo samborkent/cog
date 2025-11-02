@@ -158,6 +158,15 @@ upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8
 }
 
 /*
+switch variable { // value type
+case "value 1":
+case "value 2":
+}
+
+switch variable { // any / interface / union type
+case utf8:
+case ascii:
+}
 
 // string can be either ascii or utf8.
 // this is determined at compile time.

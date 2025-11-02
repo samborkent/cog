@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
@@ -12,7 +13,6 @@ func (p *Parser) findGlobals(ctx context.Context) {
 tokenLoop:
 	for p.this().Type != tokens.EOF {
 		exported := false
-		constant := false
 
 		if p.this().Type == tokens.Export {
 			p.advance("findGlobals export") // consume export
@@ -29,9 +29,12 @@ tokenLoop:
 		case tokens.Identifier:
 			switch p.next().Type {
 			case tokens.Colon, tokens.Declaration:
-				p.findGlobalDecl(ctx, exported, constant)
+				p.findGlobalDecl(ctx, exported)
 			case tokens.Tilde:
-				p.findGlobalType(ctx, exported, constant)
+				p.findGlobalType(ctx, exported)
+			default:
+				p.advance("findGlobals") // consume token
+				fmt.Printf("??? %q\n", p.this())
 			}
 		case tokens.Package:
 			p.advance("findGlobals package") // consume package
@@ -50,7 +53,7 @@ tokenLoop:
 	p.Errs = p.Errs[:0]
 }
 
-func (p *Parser) findGlobalDecl(ctx context.Context, exported, constant bool) {
+func (p *Parser) findGlobalDecl(ctx context.Context, exported bool) {
 	if p.this().Type != tokens.Identifier {
 		return
 	}
@@ -100,7 +103,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported, constant bool) {
 	}
 }
 
-func (p *Parser) findGlobalType(ctx context.Context, exported, constant bool) {
+func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 	ident := &ast.Identifier{
 		Token:    p.this(),
 		Name:     p.this().Literal,

@@ -110,6 +110,7 @@ const (
 
 	// Type qualifiers
 	Variable // var
+	Dynamic  // dyn
 
 	EOF
 )
@@ -286,6 +287,8 @@ func (t Type) String() string {
 		return "goimport"
 	case Variable:
 		return "var"
+	case Dynamic:
+		return "dyn"
 	case EOF:
 		return "EOF"
 	default:

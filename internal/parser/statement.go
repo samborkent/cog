@@ -43,6 +43,16 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			Token:      t,
 			Expression: builtinParser(ctx, t, types.None),
 		}
+	case tokens.Dynamic:
+		// Skip, get it with prev in identifier case.
+		p.advance("parseStatement dyn") // consume dyn
+
+		if p.symbols.Outer != nil {
+			p.error(p.this(), "dynamic scope variable declarations are only allowed in package scope", "parseStatement")
+			return nil
+		}
+
+		return p.parseStatement(ctx)
 	case tokens.Export:
 		if p.symbols.Outer != nil {
 			p.error(p.this(), "export statements are only allowed in the global scope", "parseStatement")
@@ -96,8 +106,12 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		}
 	case tokens.Identifier:
 		qualifier := ast.QualifierImmutable
-		if p.prev().Type == tokens.Variable {
+
+		switch p.prev().Type {
+		case tokens.Variable:
 			qualifier = ast.QualifierVariable
+		case tokens.Dynamic:
+			qualifier = ast.QualifierDynamic
 		}
 
 		ident := &ast.Identifier{

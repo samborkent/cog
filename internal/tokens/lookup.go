@@ -37,6 +37,7 @@ var Keywords = map[string]Type{
 	"complex64":  Complex64,
 	"complex128": Complex128,
 	"default":    Default,
+	"dyn":        Dynamic,
 	"else":       Else,
 	"enum":       Enum,
 	"export":     Export,

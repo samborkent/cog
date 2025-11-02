@@ -6,20 +6,49 @@ import (
 	gotoken "go/token"
 	gotypes "go/types"
 	"math"
+	"strings"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/transpiler/comp"
 	"github.com/samborkent/cog/internal/types"
 )
 
+const delim = "ç"
+
+func joinStr(strs ...string) string {
+	return strings.Join(strs, delim)
+}
+
 func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	switch n := node.(type) {
 	case *ast.Declaration:
+		if n.Qualifier == ast.QualifierDynamic {
+			keyIdent := t.symbols.Define(joinStr(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported), "Key"))
+
+			return []goast.Decl{
+				&goast.GenDecl{
+					Tok: gotoken.TYPE,
+					Specs: []goast.Spec{
+						&goast.TypeSpec{
+							Name: keyIdent,
+							Type: &goast.StructType{Fields: &goast.FieldList{}},
+						},
+					},
+				},
+			}, nil
+		}
+
 		ident := t.symbols.Define(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported))
+
+		tok := gotoken.CONST
+
+		if n.Qualifier == ast.QualifierVariable || mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
+			tok = gotoken.VAR
+		}
 
 		if n.Assignment.Expression == nil {
 			return []goast.Decl{&goast.GenDecl{
-				Tok: gotoken.CONST,
+				Tok: tok,
 				Specs: []goast.Spec{
 					&goast.ValueSpec{
 						Names: []*goast.Ident{ident},
@@ -74,12 +103,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 		if n.Assignment.Identifier.ValueType != types.None {
 			valueSpec.Type = t.convertType(n.Assignment.Identifier.ValueType)
-		}
-
-		tok := gotoken.CONST
-
-		if n.Qualifier == ast.QualifierVariable || mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
-			tok = gotoken.VAR
 		}
 
 		return []goast.Decl{&goast.GenDecl{

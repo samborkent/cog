@@ -132,10 +132,10 @@ goimport (
     "strings"
 )
 
-const a : int64 = 0
+a : int64 = 0
 
-export const isExported := true
-const NotExported := true
+export isExported := true
+NotExported := true
 
 String ~ utf8
 export notExported ~ uint64
@@ -146,9 +146,9 @@ main : proc() = {
 
     b : float32 = 0.0
 
-    language := "cog" // utf8
-    lang : utf8 = "cog"
-    lng : ascii = "cog"
+    var language := "cog" // utf8
+    var lang : utf8 = "cog"
+    var lng : ascii = "cog"
 
     leeng := lng
     c1 := `hello
@@ -222,7 +222,7 @@ caseSwitch:
 
     tuple : Tuple = {"hello", 10, false}
 
-    utf : utf8?  = "hello"
+    var utf : utf8?  = "hello"
     // option : Option? // not allowed
     utf = "option"
     
@@ -230,7 +230,7 @@ caseSwitch:
         @print("hello")
     }
     
-    option : uint64?
+    var option : uint64?
     
     if option? {
         @print("do not print")
@@ -250,7 +250,7 @@ caseSwitch:
     // _ = Planets.Earth.mass
 }
 
-const definedHere := "defined globally!"
+definedHere := "defined globally!"
 
 planet ~ struct {
     name : ascii

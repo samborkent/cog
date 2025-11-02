@@ -3,7 +3,7 @@
 version: '3'
 
 vars:
-  FILE: example.cog
+  FILE: dynamic.cog
   DEBUG: false
 
 tasks:

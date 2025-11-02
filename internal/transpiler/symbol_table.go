@@ -3,14 +3,15 @@ package transpiler
 import (
 	"fmt"
 	goast "go/ast"
-	"maps"
-	"slices"
+
+	"github.com/samborkent/cog/internal/ast"
 )
 
 type SymbolTable struct {
 	Outer *SymbolTable
 
-	table map[string]*goast.Ident
+	table    map[string]*goast.Ident
+	dynamics []*ast.Identifier
 }
 
 func NewSymbolTable() *SymbolTable {
@@ -65,18 +66,4 @@ func (s *SymbolTable) Resolve(name string) (*goast.Ident, bool) {
 	}
 
 	return ident, ok
-}
-
-func (s *SymbolTable) collect() []string {
-	idents := []string{}
-
-	if len(s.table) > 0 {
-		idents = append(idents, slices.Collect(maps.Keys(s.table))...)
-	}
-
-	if s.Outer != nil {
-		idents = append(idents, s.Outer.collect()...)
-	}
-
-	return idents
 }
