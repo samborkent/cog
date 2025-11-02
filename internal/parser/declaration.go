@@ -9,7 +9,7 @@ import (
 )
 
 func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier, constant bool) *ast.Declaration {
-	identType := p.parseCombinedType(ctx, ident.Exported, constant)
+	identType := p.parseCombinedType(ctx, ident.Exported)
 	if identType == nil {
 		return nil
 	}

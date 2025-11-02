@@ -9,15 +9,10 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool) types.Type {
+func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Type {
 	switch p.this().Type {
 	case tokens.Enum:
 		enumIdent := p.tokens[p.i-2]
-
-		if !constant {
-			p.error(p.this(), "enum declarations must be constant", "parseCombinedType")
-			return nil
-		}
 
 		p.advance("parseCombinedType enum") // consume enum
 
@@ -97,7 +92,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, constant bool)
 
 		return typ
 	case tokens.Function, tokens.Procedure:
-		return p.parseProcedureType(ctx, exported, constant)
+		return p.parseProcedureType(ctx, exported)
 	}
 
 	typ := p.parseType(ctx)
@@ -307,12 +302,12 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 
 	p.advance("parseField :") // consume :
 
-	field.Type = p.parseCombinedType(ctx, exported, false)
+	field.Type = p.parseCombinedType(ctx, exported)
 
 	return field
 }
 
-func (p *Parser) parseProcedureType(ctx context.Context, exported, constant bool) *types.Procedure {
+func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.Procedure {
 	procType := &types.Procedure{
 		Function:   p.this().Type == tokens.Function,
 		Parameters: make([]*types.Parameter, 0),
@@ -375,7 +370,7 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, constant bool
 
 		p.advance("parseParameters loop :") // consume :
 
-		paramType := p.parseCombinedType(ctx, false, false)
+		paramType := p.parseCombinedType(ctx, false)
 		if paramType == nil {
 			p.error(p.this(), "unknown parameter type", "parseParameters")
 			return nil
@@ -414,7 +409,7 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, constant bool
 	}
 
 	// TODO: this should only allow a limited set of types.
-	returnType := p.parseCombinedType(ctx, exported, constant)
+	returnType := p.parseCombinedType(ctx, exported)
 	if returnType == nil {
 		return nil
 	}

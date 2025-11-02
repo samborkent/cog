@@ -24,7 +24,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier, cons
 
 	p.advance("parseTypeAlias export ident ~") // consume ~
 
-	typ := p.parseCombinedType(ctx, ident.Exported, constant)
+	typ := p.parseCombinedType(ctx, ident.Exported)
 	if typ == nil {
 		return nil
 	}

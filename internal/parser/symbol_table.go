@@ -135,19 +135,10 @@ func (s *SymbolTable) DefineEnumValue(selector string, field *ast.Identifier) {
 }
 
 func (s *SymbolTable) DefineGlobal(ident *ast.Identifier, kind SymbolKind) {
-	if ident.Name == "" {
-		panic("empty global identifier")
-	}
-
-	if ident.ValueType == nil {
-		ident.ValueType = types.None
-	}
-
-	s.table[ident.Name] = Symbol{
-		Identifier: ident,
-		Scope:      ScanScope,
-		Kind:       kind,
-	}
+	s.Define(ident, kind)
+	symbol := s.table[ident.Name]
+	symbol.Scope = ScanScope
+	s.table[ident.Name] = symbol
 }
 
 func (s *SymbolTable) DefineGoImport(ident *ast.Identifier) {
