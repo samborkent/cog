@@ -13,7 +13,6 @@ type Type struct {
 	Token      tokens.Token
 	Identifier *Identifier
 	Alias      types.Type
-	Literal    *EnumLiteral
 }
 
 func (s *Type) Pos() (uint32, uint16) {
@@ -29,10 +28,6 @@ func (s *Type) String() string {
 
 	if s.Identifier.Exported {
 		str = "export " + str
-	}
-
-	if s.Literal != nil {
-		str += " " + s.Literal.String()
 	}
 
 	return str

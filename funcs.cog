@@ -4,12 +4,27 @@ goimport (
     "strings"
 )
 
-main : proc(ctx : context) = {
+main : proc() = {
     a := upper("hello")
 
     @print(a)
+    @print(upper("foo", "bar"))
 }
 
-upper : func(str : utf8) utf8 = {
-    return @go.strings.ToUpper(str)
+upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8 = {
+    return @go.strings.ToUpper(str) + optional + alsoOptional
 }
+
+someFunc : func() uint64
+
+handlerFunc ~ proc(req : utf8) utf8
+
+/*
+var upper func(str string, optional string, alsoOptional string) string = func(str string, optional string, alsoOptional string) string {
+	return strings.ToUpper(str) + optional + alsoOptional
+}
+
+var someFunc func() uint64
+
+type handlerFunc
+*/

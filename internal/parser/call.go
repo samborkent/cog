@@ -8,7 +8,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseCallArguments(ctx context.Context) []ast.Expression {
+func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedure) []ast.Expression {
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), "expected '(' after call identifier", "parseCallArguments")
 		return nil
@@ -22,15 +22,23 @@ func (p *Parser) parseCallArguments(ctx context.Context) []ast.Expression {
 
 	args := []ast.Expression{}
 
-	for p.this().Type != tokens.RParen && p.this().Type != tokens.EOF {
+	for i := 0; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; i++ {
 		if ctx.Err() != nil {
 			return nil
 		}
 
-		// TODO: get type from function definition
-		arg := p.expression(ctx, types.None)
-		if arg == nil {
-			return nil
+		var arg ast.Expression
+
+		if procType == nil {
+			arg = p.expression(ctx, types.None)
+			if arg == nil {
+				return nil
+			}
+		} else {
+			arg = p.expression(ctx, procType.Parameters[i].Type)
+			if arg == nil {
+				return nil
+			}
 		}
 
 		args = append(args, arg)

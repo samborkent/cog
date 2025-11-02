@@ -8,29 +8,22 @@ import (
 	"math"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/transpiler/comp"
 	"github.com/samborkent/cog/internal/types"
 )
-
-var identifiers = make(map[string]*goast.Ident)
 
 func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	switch n := node.(type) {
 	case *ast.Declaration:
-		identifier := convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported)
-
-		_, ok := identifiers[identifier]
-		if !ok {
-			// Define as unused.
-			identifiers[identifier] = &goast.Ident{Name: "_"}
-		}
+		ident := t.symbols.Define(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported))
 
 		if n.Assignment.Expression == nil {
 			return []goast.Decl{&goast.GenDecl{
 				Tok: gotoken.VAR,
 				Specs: []goast.Spec{
 					&goast.ValueSpec{
-						Names: []*goast.Ident{identifiers[identifier]},
-						Type:  t.convertType(n.Type),
+						Names: []*goast.Ident{ident},
+						Type:  t.convertType(n.Assignment.Identifier.ValueType),
 					},
 				},
 			}}, nil
@@ -41,13 +34,46 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			return nil, err
 		}
 
+		if n.Assignment.Expression.Type().Kind() == types.ProcedureKind {
+			// Procedure declaration
+			funcLiteral, ok := expr.(*goast.FuncLit)
+			if !ok {
+				panic("unable to assert function literal")
+			}
+
+			if n.Assignment.Identifier.Name == "main" {
+				// Main func
+				ident := t.symbols.Define("ctx")
+				funcLiteral.Body.List = append([]goast.Stmt{comp.ContextMain(ident)}, funcLiteral.Body.List...)
+
+				_, ok = t.imports["ctx"]
+				if !ok {
+					t.imports["ctx"] = &goast.ImportSpec{
+						Path: &goast.BasicLit{
+							Kind:  gotoken.STRING,
+							Value: `"context"`,
+						},
+					}
+				}
+
+				// Remove context argument for main func.
+				funcLiteral.Type.Params.List = funcLiteral.Type.Params.List[1:]
+
+				return []goast.Decl{&goast.FuncDecl{
+					Name: &goast.Ident{Name: "main"},
+					Type: funcLiteral.Type,
+					Body: funcLiteral.Body,
+				}}, nil
+			}
+		}
+
 		valueSpec := &goast.ValueSpec{
-			Names:  []*goast.Ident{identifiers[identifier]},
+			Names:  []*goast.Ident{ident},
 			Values: []goast.Expr{expr},
 		}
 
-		if n.Type != types.None {
-			valueSpec.Type = t.convertType(n.Type)
+		if n.Assignment.Identifier.ValueType != types.None {
+			valueSpec.Type = t.convertType(n.Assignment.Identifier.ValueType)
 		}
 
 		tok := gotoken.VAR
@@ -60,172 +86,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			Tok:   tok,
 			Specs: []goast.Spec{valueSpec},
 		}}, nil
-	case *ast.Procedure:
-		funcName := n.Identifier.Go()
-
-		gofunc := &goast.FuncDecl{
-			Name: funcName,
-			Type: &goast.FuncType{
-				Params: &goast.FieldList{
-					List: make([]*goast.Field, 0, len(n.InputParameters)),
-				},
-				Results: &goast.FieldList{
-					List: make([]*goast.Field, 0, len(n.ReturnParameters)),
-				},
-			},
-		}
-
-		mainWithContext := false
-
-		for i, param := range n.InputParameters {
-			// Handle context argument for main func.
-			if i == 0 && funcName.Name == "main" && param.ValueType == types.Basics[types.Context] {
-				mainWithContext = true
-				continue
-			}
-
-			gofunc.Type.Params.List = append(gofunc.Type.Params.List, &goast.Field{
-				Names: []*goast.Ident{
-					param.Identifier.Go(),
-				},
-				Type: t.convertType(param.ValueType),
-			})
-		}
-
-		if mainWithContext {
-			identifiers["ctx"] = &goast.Ident{Name: "_"}
-
-			// Add signal context to top of main if it has a context parameter
-			gofunc.Body = &goast.BlockStmt{
-				List: []goast.Stmt{
-					// ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
-					&goast.AssignStmt{
-						Lhs: []goast.Expr{
-							identifiers["ctx"],
-							&goast.Ident{
-								Name: "_stop",
-							},
-						},
-						Tok: gotoken.DEFINE,
-						Rhs: []goast.Expr{
-							&goast.CallExpr{
-								Fun: &goast.SelectorExpr{
-									X: &goast.Ident{
-										Name: "signal",
-									},
-									Sel: &goast.Ident{
-										Name: "NotifyContext",
-									},
-								},
-								Args: []goast.Expr{
-									&goast.CallExpr{
-										Fun: &goast.SelectorExpr{
-											X: &goast.Ident{
-												Name: "context",
-											},
-											Sel: &goast.Ident{
-												Name: "Background",
-											},
-										},
-									},
-									&goast.SelectorExpr{
-										X: &goast.Ident{
-											Name: "os",
-										},
-										Sel: &goast.Ident{
-											Name: "Interrupt",
-										},
-									},
-									&goast.SelectorExpr{
-										X: &goast.Ident{
-											Name: "os",
-										},
-										Sel: &goast.Ident{
-											Name: "Kill",
-										},
-									},
-								},
-							},
-						},
-					},
-					// defer stop()
-					&goast.DeferStmt{
-						Call: &goast.CallExpr{
-							Fun: &goast.Ident{
-								Name: "_stop",
-							},
-						},
-					},
-				},
-			}
-
-			// Define imports
-			_, ok := t.imports["ctx"]
-			if !ok {
-				t.imports["ctx"] = &goast.ImportSpec{
-					Path: &goast.BasicLit{
-						Kind:  gotoken.STRING,
-						Value: `"context"`,
-					},
-				}
-			}
-
-			_, ok = t.imports["os"]
-			if !ok {
-				t.imports["os"] = &goast.ImportSpec{
-					Path: &goast.BasicLit{
-						Kind:  gotoken.STRING,
-						Value: `"os"`,
-					},
-				}
-			}
-
-			_, ok = t.imports["os/signal"]
-			if !ok {
-				t.imports["os/signal"] = &goast.ImportSpec{
-					Path: &goast.BasicLit{
-						Kind:  gotoken.STRING,
-						Value: `"os/signal"`,
-					},
-				}
-			}
-		}
-
-		for _, param := range n.ReturnParameters {
-			field := &goast.Field{
-				Type: t.convertType(param.ValueType),
-			}
-
-			if param.Identifier != nil {
-				field.Names = []*goast.Ident{param.Identifier.Go()}
-			}
-
-			gofunc.Type.Results.List = append(gofunc.Type.Results.List, field)
-		}
-
-		if n.Body != nil {
-			stmts := make([]goast.Stmt, 0, len(n.Body.Statements))
-
-			for _, stmt := range n.Body.Statements {
-				s, err := t.convertStmt(stmt)
-				if err != nil {
-					return nil, err
-				}
-
-				stmts = append(stmts, s...)
-			}
-
-			if gofunc.Body != nil && gofunc.Body.List != nil {
-				// Add to statement list if some statements already exist.
-				gofunc.Body.List = append(gofunc.Body.List, stmts...)
-			} else {
-				gofunc.Body = &goast.BlockStmt{
-					List: stmts,
-				}
-			}
-		}
-
-		return []goast.Decl{gofunc}, nil
 	case *ast.Type:
 		if n.Alias.Underlying().Kind() == types.EnumKind {
 			return t.convertEnumDecl(n)
@@ -246,7 +106,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 }
 
 func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
-	_, ok := n.Alias.(*types.Enum)
+	enumType, ok := n.Alias.(*types.Enum)
 	if !ok {
 		panic(fmt.Sprintf("cannot convert type %q to enum", n.Alias))
 	}
@@ -257,20 +117,22 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 
 	enumTypeIdent := gotypes.Typ[gotypes.Uint8].String()
 
-	if len(n.Literal.Values) > math.MaxUint8 {
+	if len(enumType.Values) > math.MaxUint8 {
 		enumTypeIdent = gotypes.Typ[gotypes.Uint16].String()
 	}
 
-	specs := make([]goast.Spec, 0, len(n.Literal.Values))
-	exprs := make([]goast.Expr, 0, len(n.Literal.Values))
+	specs := make([]goast.Spec, 0, len(enumType.Values))
+	exprs := make([]goast.Expr, 0, len(enumType.Values))
 
-	for i, val := range n.Literal.Values {
-		expr, err := t.convertExpr(val.Value)
+	for i, enumVal := range enumType.Values {
+		val := enumVal.Value.(ast.Expression)
+
+		expr, err := t.convertExpr(val)
 		if err != nil {
 			return nil, fmt.Errorf("converting expression %d in enum literal: %w", i, err)
 		}
 
-		if val.Value.Type().Underlying().Kind() == types.StructKind {
+		if val.Type().Underlying().Kind() == types.StructKind {
 			compositeLit, ok := expr.(*goast.CompositeLit)
 			if !ok {
 				panic("cannot cast struct literal as composite literal")
@@ -281,7 +143,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		}
 
 		spec := &goast.ValueSpec{
-			Names: []*goast.Ident{{Name: identifier + titleCaser.String(val.Identifier.Name)}},
+			Names: []*goast.Ident{{Name: identifier + titleCaser.String(enumVal.Name)}},
 		}
 
 		if i == 0 {
@@ -317,7 +179,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 			Specs: []goast.Spec{
 				&goast.TypeSpec{
 					Name: typeName,
-					Type: t.convertType(n.Literal.ValueType),
+					Type: t.convertType(enumType.ValueType),
 				},
 			},
 		},

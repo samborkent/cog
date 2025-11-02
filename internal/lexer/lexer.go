@@ -68,9 +68,6 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 				case '=':
 					t.Type = tokens.Declaration
 					s.Next()
-				case '?':
-					t.Type = tokens.Optional
-					s.Next()
 				}
 			case tokens.GT:
 				if s.Peek() == '=' {

@@ -6,6 +6,7 @@ import (
 	gotypes "go/types"
 	"strconv"
 
+	"github.com/samborkent/cog/internal/transpiler/comp"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -32,11 +33,6 @@ func (t *Transpiler) convertType(typ types.Type) goast.Expr {
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex64], nil)}
 	case types.Complex128:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex128], nil)}
-	case types.Context:
-		return &goast.SelectorExpr{
-			X:   &goast.Ident{Name: "context"},
-			Sel: &goast.Ident{Name: "Context"},
-		}
 	case types.Float32:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Float32], nil)}
 	case types.Float64:
@@ -66,6 +62,38 @@ func (t *Transpiler) convertType(typ types.Type) goast.Expr {
 			},
 			Index: valueType,
 		}
+	case types.ProcedureKind:
+		procType, ok := typ.(*types.Procedure)
+		if !ok {
+			panic("unable to assert procedure type")
+		}
+
+		inputParams := make([]*goast.Field, 0, len(procType.Parameters))
+
+		if !procType.Function {
+			// All procedures take context.
+			inputParams = append(inputParams, comp.ContextArg())
+		}
+
+		for _, param := range procType.Parameters {
+			inputParams = append(inputParams, &goast.Field{
+				Names: []*goast.Ident{{Name: param.Name}},
+				Type:  t.convertType(param.Type),
+			})
+		}
+
+		// TODO: handle error types (add second error return type)
+		funcType := &goast.FuncType{
+			Params: &goast.FieldList{List: inputParams},
+		}
+
+		if procType.ReturnType != nil {
+			funcType.Results = &goast.FieldList{List: []*goast.Field{
+				{Type: t.convertType(procType.ReturnType)},
+			}}
+		}
+
+		return funcType
 	case types.Uint8:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint8], nil)}
 	case types.Uint16:

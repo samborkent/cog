@@ -8,6 +8,7 @@ import (
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
+	"github.com/samborkent/cog/internal/transpiler/comp"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -20,7 +21,12 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Builtin:
 		return t.convertBuiltin(n)
 	case *ast.Call:
-		args := make([]goast.Expr, 0, len(n.Arguments))
+		procType, ok := n.Identifier.ValueType.(*types.Procedure)
+		if !ok {
+			panic("failed to assert porcedure type")
+		}
+
+		args := make([]goast.Expr, 0, len(procType.Parameters))
 
 		for _, arg := range n.Arguments {
 			expr, err := t.convertExpr(arg)
@@ -30,6 +36,26 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 			args = append(args, expr)
 		}
+
+		if len(procType.Parameters) > len(n.Arguments) {
+			// The number of input parameters is greater than the number of arguments, so there are optional parameters.
+			for i := len(args); i < len(procType.Parameters); i++ {
+				if procType.Parameters[i].Default == nil {
+					// Add zero value of parameter type.
+					args = append(args, comp.ZeroValue(t.convertType(procType.Parameters[i].Type)))
+					continue
+				}
+
+				defaultExpr, err := t.convertExpr(procType.Parameters[i].Default.(ast.Expression))
+				if err != nil {
+					return nil, fmt.Errorf("parsing default value of input parameter in call expression: %w", err)
+				}
+
+				args = append(args, defaultExpr)
+			}
+		}
+
+		t.symbols.MarkUsed(n.Identifier.Name)
 
 		return &goast.CallExpr{
 			Fun:  n.Identifier.Go(),
@@ -43,12 +69,12 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		expr := &goast.CallExpr{
 			Fun: &goast.SelectorExpr{
 				X:   n.Import.Go(),
-				Sel: &goast.Ident{Name: n.Call.Identifier.Name},
+				Sel: &goast.Ident{Name: n.CallIdentifier.Name},
 			},
-			Args: make([]goast.Expr, 0, len(n.Call.Arguments)),
+			Args: make([]goast.Expr, 0, len(n.Arguments)),
 		}
 
-		for _, arg := range n.Call.Arguments {
+		for _, arg := range n.Arguments {
 			goarg, err := t.convertExpr(arg)
 			if err != nil {
 				return nil, fmt.Errorf("converting call argument: %w", err)
@@ -59,13 +85,17 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		return expr, nil
 	case *ast.Identifier:
-		if _, ok := identifiers[n.Name]; ok {
-			// Mark identifier as used.
-			identifiers[n.Name].Name = n.Name
-			return identifiers[n.Name], nil
-		} else {
+		name := convertExport(n.Name, n.Exported)
+
+		ident, ok := t.symbols.Resolve(name)
+		if !ok {
+			// New identifier
 			return n.Go(), nil
 		}
+
+		t.symbols.MarkUsed(name)
+
+		return ident, nil
 	case *ast.Infix:
 		lhs, err := t.convertExpr(n.Left)
 		if err != nil {
@@ -116,11 +146,62 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Op: convertUnaryOperator(n.Operator.Type),
 			X:  right,
 		}, nil
-	case *ast.Selector:
-		if ident, ok := identifiers[n.Identifier.Name]; ok {
-			// Mark identifier as used.
-			ident.Name = convertExport(n.Identifier.Name, n.Identifier.Exported)
+	case *ast.ProcedureLiteral:
+		// procType, ok := n.ProcdureType.(*types.Procedure)
+		// if !ok {
+		// 	panic("unable to assert procedure type")
+		// }
+
+		stmts := make([]goast.Stmt, 0, len(n.Body.Statements))
+
+		// if len(procType.Parameters) > 0 {
+		// 	// Enter parameter scope.
+		// 	t.symbols = NewEnclosedSymbolTable(t.symbols)
+
+		// 	for _, param := range procType.Parameters {
+		// 		_ = t.symbols.Define(param.Name)
+		// 	}
+		// }
+
+		if len(n.Body.Statements) > 0 {
+			// Enter body scope.
+			t.symbols = NewEnclosedSymbolTable(t.symbols)
 		}
+
+		for _, s := range n.Body.Statements {
+			stmt, err := t.convertStmt(s)
+			if err != nil {
+				return nil, err
+			}
+
+			stmts = append(stmts, stmt...)
+		}
+
+		if len(n.Body.Statements) > 0 {
+			// Leave body scope.
+			t.symbols = t.symbols.Outer
+		}
+
+		// if len(procType.Parameters) > 0 {
+		// 	// Leave parameter scope.
+		// 	t.symbols = t.symbols.Outer
+		// }
+
+		return &goast.FuncLit{
+			Type: t.convertType(n.ProcdureType).(*goast.FuncType),
+			Body: &goast.BlockStmt{
+				List: stmts,
+			},
+		}, nil
+	case *ast.Selector:
+		name := convertExport(n.Identifier.Name, n.Identifier.Exported)
+
+		ident, ok := t.symbols.Resolve(name)
+		if !ok {
+			return nil, fmt.Errorf("%s: unknown selector identifier", n.Identifier.Token)
+		}
+
+		t.symbols.MarkUsed(name)
 
 		var exported bool
 
@@ -131,7 +212,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				panic("unable to assert enum type")
 			}
 
-			enumName := n.Identifier.Go()
+			enumName := ident
 			enumName.Name = enumName.Name + titleCaser.String(n.Field.Name)
 
 			return enumName, nil
@@ -220,11 +301,18 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			panic("suffix operator applied to non-identifier")
 		}
 
+		name := convertExport(ident.Name, ident.Exported)
+
 		// Mark identifier as used.
-		identifiers[ident.Name].Name = convertExport(ident.Name, ident.Exported)
+		symbol, ok := t.symbols.Resolve(name)
+		if !ok {
+			return nil, fmt.Errorf("identifier %q not found", name)
+		}
+
+		t.symbols.MarkUsed(name)
 
 		return &goast.SelectorExpr{
-			X:   ident.Go(),
+			X:   symbol,
 			Sel: &goast.Ident{Name: "Set"},
 		}, nil
 	case *ast.TupleLiteral:

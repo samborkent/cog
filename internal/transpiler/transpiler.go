@@ -24,6 +24,8 @@ type Transpiler struct {
 
 	nodes   map[uint64]ast.Node
 	imports map[string]*goast.ImportSpec // Key: import name
+
+	symbols *SymbolTable
 }
 
 func NewTranspiler(f *ast.File) *Transpiler {
@@ -37,9 +39,10 @@ func NewTranspiler(f *ast.File) *Transpiler {
 	}
 
 	return &Transpiler{
-		file:  f,
-		fset:  gotoken.NewFileSet(),
-		nodes: nodes,
+		file:    f,
+		fset:    gotoken.NewFileSet(),
+		nodes:   nodes,
+		symbols: NewSymbolTable(),
 	}
 }
 
@@ -50,21 +53,13 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	}
 	errs := make([]error, 0)
 
-	// Predeclare constants
+	// Predeclare globals
 	for _, stmt := range t.file.Statements {
 		switch s := stmt.(type) {
 		case *ast.Declaration:
-			if !s.Constant {
-				continue
-			}
-
-			name := convertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported)
-
-			// Create a copy.
-			ident := *s.Assignment.Identifier
-			ident.Name = "_" // Start off as unused.
-
-			identifiers[name] = ident.Go()
+			t.symbols.Define(convertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported))
+		case *ast.Type:
+			t.symbols.Define(convertExport(s.Identifier.Name, s.Identifier.Exported))
 		}
 	}
 

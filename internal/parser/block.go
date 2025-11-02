@@ -7,7 +7,7 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-func (p *Parser) parseBlock(ctx context.Context) *ast.Block {
+func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
 	node := &ast.Block{
 		Start:      p.this(),
 		Statements: make([]ast.Statement, 0),

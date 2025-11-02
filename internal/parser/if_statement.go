@@ -28,7 +28,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 
 	node.Condition = expr
 
-	consequence := p.parseBlock(ctx)
+	consequence := p.parseBlockStatement(ctx)
 	if consequence == nil {
 		p.error(p.this(), "unable to parse if block", "parseIfStatement")
 		return nil
@@ -43,7 +43,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 
 		p.advance("parseIfStatement else") // consume 'else'
 
-		alternative := p.parseBlock(ctx)
+		alternative := p.parseBlockStatement(ctx)
 		if alternative == nil {
 			p.error(p.this(), "unable to parse else block", "parseIfStatement")
 			return nil

@@ -40,6 +40,10 @@ func IsString(t Type) bool {
 	return kind == ASCII || kind == UTF8
 }
 
+func IsSummable(t Type) bool {
+	return IsNumber(t) || IsString(t)
+}
+
 func IsUint(t Type) bool {
 	kind := t.Underlying().Kind()
 	return kind == Uint8 || kind == Uint16 || kind == Uint32 || kind == Uint64 || kind == Uint128

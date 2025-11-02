@@ -32,8 +32,6 @@ var Basics = []*Basic{
 	{kind: Uint64, name: "uint64"},
 	{kind: Uint128, name: "uint128"},
 	{kind: UTF8, name: "utf8"},
-	// Special types
-	{kind: Context, name: "context"},
 }
 
 var _ Type = &Basic{}

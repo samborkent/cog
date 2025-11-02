@@ -10,7 +10,6 @@ type Declaration struct {
 	statement
 
 	Assignment *Assignment
-	Type       types.Type
 	Constant   bool
 }
 
@@ -34,12 +33,12 @@ func (d *Declaration) String() string {
 	}
 
 	if d.Assignment.Expression == nil {
-		return prefix + d.Assignment.Identifier.String() + " : " + d.Type.String()
+		return prefix + d.Assignment.Identifier.String() + " : " + d.Assignment.Identifier.ValueType.String()
 	}
 
-	if d.Type == nil || d.Type == types.None {
+	if d.Assignment.Identifier.ValueType == nil || d.Assignment.Identifier.ValueType == types.None {
 		return prefix + d.Assignment.Identifier.String() + " := " + d.Assignment.Expression.String()
 	}
 
-	return prefix + d.Assignment.Identifier.String() + " : " + d.Type.String() + " = " + d.Assignment.Expression.String()
+	return prefix + d.Assignment.Identifier.String() + " : " + d.Assignment.Identifier.ValueType.String() + " = " + d.Assignment.Expression.String()
 }

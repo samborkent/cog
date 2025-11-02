@@ -85,13 +85,14 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 					return nil
 				}
 
-				if proc := p.parseProcedure(ctx, ident, true); proc != nil {
-					return proc
+				decl := p.parseTypedDeclaration(ctx, ident, false)
+				if decl != nil {
+					return decl
 				}
 
 				return nil
 			case tokens.Tilde:
-				typeDecl := p.parseTypeAlias(ctx, ident)
+				typeDecl := p.parseTypeAlias(ctx, ident, false)
 				if typeDecl != nil {
 					return typeDecl
 				}
@@ -155,23 +156,17 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			}
 
 			_, ok := tokens.FuncTypes[p.this().Type]
-			if ok {
-				if proc := p.parseProcedure(ctx, ident, false); proc != nil {
-					return proc
-				}
-
-				return nil
-			} else {
+			if !ok {
 				if p.symbols.Outer == nil {
 					p.error(ident.Token, "global variable declarations are not allowed", "parseStatement")
 				}
-
-				if d := p.parseTypedDeclaration(ctx, ident, false); d != nil {
-					return d
-				}
-
-				return nil
 			}
+
+			if d := p.parseTypedDeclaration(ctx, ident, false); d != nil {
+				return d
+			}
+
+			return nil
 		case tokens.Declaration: // Untyped declaration
 			if p.symbols.Outer == nil {
 				p.error(p.this(), "global variable declarations are not allowed", "parseStatement")
@@ -183,7 +178,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 
 			return nil
 		case tokens.Tilde: // Type declaration
-			typeDecl := p.parseTypeAlias(ctx, ident)
+			typeDecl := p.parseTypeAlias(ctx, ident, false)
 			if typeDecl != nil {
 				return typeDecl
 			}

@@ -4,6 +4,8 @@ cog is a Go-based hobby programming language that brings some additional feature
 
 The following basic features are missing that need to be implemented before Cog can be used to write useful programs:
 
+- for-loops
+- slices, arrays, maps
 - Go-to-Cog type conversions
 - Multi-file programs
 - Cog packages / imports
@@ -30,6 +32,7 @@ The following basic features are missing that need to be implemented before Cog 
 - Call Go std library functions
     - Import using `goimport`
     - Call using `@go` namespace prefix (e.g. `@go.strings.ToUpper("call me"))
+- Break from if-statements
 
 ### Planned
 
@@ -48,6 +51,9 @@ The following basic features are missing that need to be implemented before Cog 
 - Additional safety regarding mutability and ownership.
 - Metaprogramming through equivalent of Zig's `comptime`
     - `const func` can be evaluated at compile time
+- Value switch and type switch
+    - `switch var { case val: ... }`
+    - `switch var { type uint64: ... }`
 - Generics with additional builtin generic constraints:
     - `string ~ ascii | utf8`
     - `int ~ int8 | int16 | int32 | int64 | int128`
@@ -65,7 +71,7 @@ The following basic features are missing that need to be implemented before Cog 
         - It must panic if casting cannot be done without overflow or precision loss.
         - Also implement `@convert[A, B any](x A) B`, which will perform best-effort conversion, allowing some precision loss and handling overflows.
 - Additional types:
-    - `int128`
+    - `int128` (usine [github.com/ryanavella/wide](github.com/ryanavella/wide))
     - `uint128` (using [lukechampine.com/uint128](lukechampine.com/uint128))
     - `float16` (using [github.com/x448/float16](github.com/x448/float16))
     - `complex32` (using `float16`)
@@ -85,7 +91,8 @@ The following basic features are missing that need to be implemented before Cog 
     - Files without package declaration will be parsed as script.
     - This is basically just a `main` package, and script gets inserted in `main()` body.
     - Pre-defined `ctx` variable?
-- Cog LSP
+- Canonical syntax highlighting
+- LSP
 
 ## Syntax
 
@@ -100,6 +107,7 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Short-term
 
+- Get rid of `Go()` methods in `ast`. Instead create functions in `transpiler/comp` package.
 - Handle set type parsing in `parseType`.
 - Refactor `parseTypedDeclaration` to use same logic as `parseCombinedType`
 - Fix global type definition ordering bug for complex type (e.g. enum[planet] before planet)
@@ -112,6 +120,7 @@ The following basic features are missing that need to be implemented before Cog 
     - These files cannot be imported, and will be excuted as if wrapped in a main function.
     - Should `ctx` be predefined in a script?
 - Disallow `main` in declarations besides `main : proc(ctx: context)`.
+- Fork and rework float16, uint128 and int128 imported packages.
 
 ## Example code
 
@@ -236,6 +245,10 @@ caseSwitch:
 
     upperCaseString := upper(language)
     @print(upperCaseString)
+
+    @print(upper("foo", "bar"))
+
+    // _ = Planets.Earth.mass
 }
 
 const definedHere := "defined globally!"
@@ -263,13 +276,13 @@ Planets ~ enum[planet] {
     },
 }
 
-Tuple ~ utf8, uint64, bool
+Tuple ~ utf8 & uint64 & bool
 
 Either ~ utf8 | uint64
 
 Option ~ utf8?
 
-upper : func(str : utf8) utf8 = {
-    return @go.strings.ToUpper(str)
+upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8 = {
+    return @go.strings.ToUpper(str) + optional + alsoOptional
 }
 ```

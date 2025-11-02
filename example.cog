@@ -13,7 +13,7 @@ String ~ utf8
 export notExported ~ uint64
 export ExportedString ~ String
 
-main : proc(ctx: context) = {
+main : proc() = {
     str := @go.strings.ToUpper("str")
 
     b : float32 = 0.0
@@ -94,8 +94,6 @@ caseSwitch:
 
     tuple : Tuple = {"hello", 10, false}
 
-    either : Either = "hello"
-
     utf : utf8?  = "hello"
     // option : Option? // not allowed
     utf = "option"
@@ -118,6 +116,8 @@ caseSwitch:
 
     upperCaseString := upper(language)
     @print(upperCaseString)
+
+    @print(upper("foo", "bar"))
 
     // _ = Planets.Earth.mass
 }
@@ -147,14 +147,14 @@ Planets ~ enum[planet] {
     },
 }
 
-Tuple ~ utf8, uint64, bool
+Tuple ~ utf8 & uint64 & bool
 
 Either ~ utf8 | uint64
 
 Option ~ utf8?
 
-upper : func(str : utf8) utf8 = {
-    return @go.strings.ToUpper(str)
+upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8 = {
+    return @go.strings.ToUpper(str) + optional + alsoOptional
 }
 
 /*

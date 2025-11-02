@@ -3,7 +3,6 @@ package ast
 import (
 	"strings"
 
-	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -12,9 +11,9 @@ var _ Expression = &Call{}
 type Call struct {
 	expression
 
-	Token      tokens.Token // The '(' token
 	Identifier *Identifier
 	Arguments  []Expression
+	ReturnType types.Type
 }
 
 func (c *Call) Pos() (uint32, uint16) {
@@ -46,9 +45,9 @@ func (c *Call) String() string {
 
 // TODO: return a proper return type here
 func (c *Call) Type() types.Type {
-	if c.Identifier.ValueType == nil {
-		panic("call with nil type detected")
+	if c.ReturnType == nil {
+		panic("call with nil return type detected")
 	}
 
-	return c.Identifier.ValueType
+	return c.ReturnType
 }

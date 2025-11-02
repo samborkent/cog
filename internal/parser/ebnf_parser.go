@@ -3,7 +3,6 @@ package parser
 import (
 	"context"
 	"fmt"
-	"math"
 	"slices"
 
 	"github.com/samborkent/cog/internal/ast"
@@ -121,9 +120,20 @@ func (p *Parser) term(ctx context.Context, typeToken types.Type) ast.Expression 
 			return nil
 		}
 
-		if !types.IsNumber(expr.Type()) {
-			p.error(p.this(), "operator requires numeric type", "term")
-			return nil
+		// TODO: this is a hack due to lack of known Go typing at compile time, figure out a better solution.
+		if expr.Type() != types.None {
+			if p.this().Type == tokens.Plus {
+				if !types.IsSummable(expr.Type()) {
+					p.error(p.this(), fmt.Sprintf("operator requires numeric or string type, got %q", expr.Type()), "term")
+					return nil
+				}
+			} else {
+				// Minus
+				if !types.IsNumber(expr.Type()) {
+					p.error(p.this(), fmt.Sprintf("operator requires numeric type, got %q", expr.Type()), "term")
+					return nil
+				}
+			}
 		}
 
 		operator := p.this()
@@ -351,10 +361,15 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 		switch p.this().Type {
 		case tokens.LParen:
 			// Function call
+			procType, ok := symbol.Identifier.ValueType.(*types.Procedure)
+			if !ok {
+				panic("unable to cast to procedure type")
+			}
+
 			return &ast.Call{
-				Token:      p.this(),
 				Identifier: symbol.Identifier,
-				Arguments:  p.parseCallArguments(ctx),
+				Arguments:  p.parseCallArguments(ctx, procType),
+				ReturnType: procType.ReturnType,
 			}
 		case tokens.Dot:
 			// TODO: recursive selector expression
@@ -409,9 +424,6 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			// Place back type alias
 			switch literal := expr.(type) {
-			case *ast.EnumLiteral:
-				literal.ValueType = t
-				return literal
 			case *ast.SetLiteral:
 				literal.ValueType = t
 				return literal
@@ -427,76 +439,107 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			return expr
-		case *types.Enum:
-			enumLiteral := &ast.EnumLiteral{
-				Token:     p.this(),
-				ValueType: t.Value,
-				Values:    []*ast.EnumValue{},
+		// case *types.Enum:
+		// 	enumLiteral := &ast.EnumLiteral{
+		// 		Token:     p.this(),
+		// 		ValueType: t.Value,
+		// 		Values:    []*ast.EnumValue{},
+		// 	}
+
+		// 	p.advance("primary enum {") // consume {
+
+		// enumLiteralLoop:
+		// 	for {
+		// 		if p.this().Type != tokens.Identifier {
+		// 			p.error(p.this(), "expected identifier after { in enum literal", "primary")
+		// 			return nil
+		// 		}
+
+		// 		enumValue := &ast.EnumValue{
+		// 			Identifier: &ast.Identifier{
+		// 				Token: p.this(),
+		// 				Name:  p.this().Literal,
+		// 			},
+		// 		}
+
+		// 		p.advance("primary enum identifier") // consume identifier
+
+		// 		if p.this().Type != tokens.Declaration {
+		// 			p.error(p.this(), "expected := after identifier in enum literal", "primary")
+		// 			return nil
+		// 		}
+
+		// 		p.advance("primary enum :=") // consume :=
+
+		// 		startToken := p.this()
+
+		// 		value := p.expression(ctx, t.Value)
+		// 		if value == nil {
+		// 			p.error(startToken, "unable to parse expression in enum literal", "primary")
+		// 			return nil
+		// 		}
+
+		// 		enumValue.Value = value
+		// 		enumValue.Identifier.ValueType = value.Type()
+
+		// 		enumLiteral.Values = append(enumLiteral.Values, enumValue)
+
+		// 		switch p.this().Type {
+		// 		case tokens.Comma:
+		// 			p.advance("primary enum ,") // consume ','
+
+		// 			if p.this().Type == tokens.RBrace {
+		// 				break enumLiteralLoop
+		// 			}
+
+		// 			continue
+		// 		case tokens.RBrace, tokens.EOF:
+		// 			break enumLiteralLoop
+		// 		default:
+		// 			p.error(p.this(), "unexpected token in enum literal", "primary")
+		// 			return nil
+		// 		}
+		// 	}
+
+		// 	if len(enumLiteral.Values) > math.MaxUint16 {
+		// 		p.error(p.this(), "enum may not contain more than 65535 values", "primary")
+		// 		return nil
+		// 	}
+
+		// 	p.advance("primary enum }") // consume }
+
+		// 	return enumLiteral
+		case *types.Procedure:
+			procLiteral := &ast.ProcedureLiteral{
+				ProcdureType: t,
 			}
 
-			p.advance("primary enum {") // consume {
+			if len(t.Parameters) > 0 {
+				// Enter parameter scope
+				p.symbols = NewEnclosedSymbolTable(p.symbols)
 
-		enumLiteralLoop:
-			for {
-				if p.this().Type != tokens.Identifier {
-					p.error(p.this(), "expected identifier after { in enum literal", "primary")
-					return nil
-				}
-
-				enumValue := &ast.EnumValue{
-					Identifier: &ast.Identifier{
-						Token: p.this(),
-						Name:  p.this().Literal,
-					},
-				}
-
-				p.advance("primary enum identifier") // consume identifier
-
-				if p.this().Type != tokens.Declaration {
-					p.error(p.this(), "expected := after identifier in enum literal", "primary")
-					return nil
-				}
-
-				p.advance("primary enum :=") // consume :=
-
-				startToken := p.this()
-
-				value := p.expression(ctx, t.Value)
-				if value == nil {
-					p.error(startToken, "unable to parse expression in enum literal", "primary")
-					return nil
-				}
-
-				enumValue.Value = value
-				enumValue.Identifier.ValueType = value.Type()
-
-				enumLiteral.Values = append(enumLiteral.Values, enumValue)
-
-				switch p.this().Type {
-				case tokens.Comma:
-					p.advance("primary enum ,") // consume ','
-
-					if p.this().Type == tokens.RBrace {
-						break enumLiteralLoop
-					}
-
-					continue
-				case tokens.RBrace, tokens.EOF:
-					break enumLiteralLoop
-				default:
-					p.error(p.this(), "unexpected token in enum literal", "primary")
-					return nil
+				for _, param := range t.Parameters {
+					p.symbols.Define(&ast.Identifier{
+						Name:      param.Name,
+						ValueType: param.Type,
+					}, SymbolKindConstant)
 				}
 			}
 
-			if len(enumLiteral.Values) > math.MaxUint16 {
-				p.error(p.this(), "enum may not contain more than 65535 values", "primary")
+			body := p.parseBlockStatement(ctx)
+
+			if len(t.Parameters) > 0 {
+				// Leave parameter scope
+				p.symbols = p.symbols.Outer
+			}
+
+			if body == nil {
 				return nil
 			}
 
-			p.advance("primary enum }") // consume }
+			procLiteral.Body = body
 
-			return enumLiteral
+			return procLiteral
 		case *types.Set:
 			setLiteral := &ast.SetLiteral{
 				Token:     p.this(),
