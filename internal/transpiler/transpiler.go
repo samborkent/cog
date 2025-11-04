@@ -57,10 +57,12 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	for _, stmt := range t.file.Statements {
 		switch s := stmt.(type) {
 		case *ast.Declaration:
+			name := convertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported)
+
 			if s.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
-				t.symbols.dynamics = append(t.symbols.dynamics, s.Assignment.Identifier)
+				t.symbols.DefineDynamic(s.Assignment.Identifier)
 			} else {
-				t.symbols.Define(convertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported))
+				t.symbols.Define(name)
 			}
 		case *ast.Type:
 			t.symbols.Define(convertExport(s.Identifier.Name, s.Identifier.Exported))

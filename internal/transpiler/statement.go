@@ -20,11 +20,12 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 			id, ok := t.symbols.Resolve(name)
 			if !ok {
-				return nil, fmt.Errorf("undefined variable '%s'", n.Identifier.Name)
-			}
+				_, ok := t.symbols.ResolveDynamic(name)
+				if !ok {
+					return nil, fmt.Errorf("undefined dynamic variable '%s'", n.Identifier.Name)
+				}
 
-			// Dynamic variable assignment, set context value instead.
-			if id == Dynamic {
+				// Dynamic variable assignment, set context value instead.
 				val, err := t.convertExpr(n.Expression)
 				if err != nil {
 					return nil, err

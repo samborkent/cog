@@ -13,8 +13,6 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var Dynamic = &goast.Ident{Name: "dyn"}
-
 const delim = "_"
 
 func joinStr(strs ...string) string {
@@ -27,11 +25,15 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		if n.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
 			name := convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported)
 
-			// Mark variable name as dynamically scoped variable.
-			t.symbols.table[name] = Dynamic
+			keyIdent, ok := t.symbols.Resolve(joinStr(name, "Key"))
+			if !ok {
+				panic("missing dynamic variable key definition")
+			}
 
-			keyIdent := t.symbols.Define(joinStr(name, "Key"))
-			valIdent := t.symbols.Define(joinStr(name, "Default"))
+			valIdent, ok := t.symbols.Resolve(joinStr(name, "Default"))
+			if !ok {
+				panic("missing dynamic variable default value definition")
+			}
 
 			tok := gotoken.CONST
 			if mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {

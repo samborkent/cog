@@ -11,14 +11,15 @@ type SymbolTable struct {
 	Outer *SymbolTable
 
 	table    map[string]*goast.Ident
-	dynamics []*ast.Identifier
+	dynamics map[string]*ast.Identifier
 }
 
 func NewSymbolTable() *SymbolTable {
 	table := make(map[string]*goast.Ident)
 
 	return &SymbolTable{
-		table: table,
+		table:    table,
+		dynamics: make(map[string]*ast.Identifier),
 	}
 }
 
@@ -38,6 +39,17 @@ func (s *SymbolTable) Define(name string) *goast.Ident {
 	s.table[name] = &goast.Ident{Name: "_"}
 
 	return s.table[name]
+}
+
+func (s *SymbolTable) DefineDynamic(ident *ast.Identifier) {
+	if s.Outer != nil {
+		panic("cannot define dynamically scoped variables outside of package scope")
+	}
+
+	name := convertExport(ident.Name, ident.Exported)
+	s.dynamics[name] = ident
+	s.Define(joinStr(name, "Key"))
+	s.Define(joinStr(name, "Default"))
 }
 
 func (s *SymbolTable) MarkUsed(name string) {
@@ -65,5 +77,14 @@ func (s *SymbolTable) Resolve(name string) (*goast.Ident, bool) {
 		return ident, true
 	}
 
+	return ident, ok
+}
+
+func (s *SymbolTable) ResolveDynamic(name string) (*ast.Identifier, bool) {
+	if s.Outer != nil {
+		return s.Outer.ResolveDynamic(name)
+	}
+
+	ident, ok := s.dynamics[name]
 	return ident, ok
 }

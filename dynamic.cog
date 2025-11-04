@@ -1,8 +1,5 @@
 package main
 
-dyn val : utf8 = "default"
-dyn other : uint64 // valid, will have zero value as default
-
 main : proc() = {
     someFunc("")
     @print(val) // default
@@ -13,3 +10,6 @@ someFunc : proc(str : utf8) = {
     val = "overwrite"
     @print(val) // overwrite
 }
+
+dyn val : utf8 = "default"
+dyn other : uint64 // valid, will have zero value as default

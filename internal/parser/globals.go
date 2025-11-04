@@ -19,6 +19,17 @@ tokenLoop:
 			exported = true
 		}
 
+		qualifier := ast.QualifierImmutable
+
+		switch p.this().Type {
+		case tokens.Dynamic:
+			qualifier = ast.QualifierDynamic
+			p.advance("findGlobals dyn") // consume dyn
+		case tokens.Variable:
+			qualifier = ast.QualifierVariable
+			p.advance("findGlobals var") // consume var
+		}
+
 		switch p.this().Type {
 		case tokens.GoImport:
 			p.advance("findGlobals goimport") // consume goimport
@@ -29,7 +40,7 @@ tokenLoop:
 		case tokens.Identifier:
 			switch p.next().Type {
 			case tokens.Colon, tokens.Declaration:
-				p.findGlobalDecl(ctx, exported)
+				p.findGlobalDecl(ctx, exported, qualifier)
 			case tokens.Tilde:
 				p.findGlobalType(ctx, exported)
 			default:
@@ -53,7 +64,7 @@ tokenLoop:
 	p.Errs = p.Errs[:0]
 }
 
-func (p *Parser) findGlobalDecl(ctx context.Context, exported bool) {
+func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier ast.Qualifier) {
 	if p.this().Type != tokens.Identifier {
 		return
 	}
@@ -68,7 +79,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool) {
 		Token:     p.this(),
 		Name:      p.this().Literal,
 		Exported:  exported,
-		Qualifier: ast.QualifierImmutable,
+		Qualifier: qualifier,
 	}
 
 	p.advance("findGlobalDecl identifier") // consume identifier

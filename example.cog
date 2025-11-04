@@ -120,6 +120,9 @@ caseSwitch:
     @print(upper("foo", "bar"))
 
     // _ = Planets.Earth.mass
+
+    someFunc("")
+    @print(val) // default
 }
 
 definedHere := "defined globally!"
@@ -155,6 +158,15 @@ Option ~ utf8?
 
 upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8 = {
     return @go.strings.ToUpper(str) + optional + alsoOptional
+}
+
+dyn val : utf8 = "default"
+dyn other : uint64 // valid, will have zero value as default
+
+someFunc : proc(str : utf8) = {
+    @print(val) // default
+    val = "overwrite"
+    @print(val) // overwrite
 }
 
 /*
