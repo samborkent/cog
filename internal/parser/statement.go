@@ -43,6 +43,16 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			Token:      t,
 			Expression: builtinParser(ctx, t, types.None),
 		}
+	case tokens.Dynamic:
+		// Skip, get it with prev in identifier case.
+		p.advance("parseStatement dyn") // consume dyn
+
+		if p.symbols.Outer != nil {
+			p.error(p.this(), "dynamic scope variable declarations are only allowed in package scope", "parseStatement")
+			return nil
+		}
+
+		return p.parseStatement(ctx)
 	case tokens.Export:
 		if p.symbols.Outer != nil {
 			p.error(p.this(), "export statements are only allowed in the global scope", "parseStatement")
@@ -54,9 +64,10 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		switch p.this().Type {
 		case tokens.Identifier:
 			ident := &ast.Identifier{
-				Token:    p.this(),
-				Name:     p.this().Literal,
-				Exported: true,
+				Token:     p.this(),
+				Name:      p.this().Literal,
+				Exported:  true,
+				Qualifier: ast.QualifierImmutable,
 			}
 
 			p.advance("parseStatement export ident") // consume identifier
@@ -65,14 +76,14 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			case tokens.Colon:
 				p.advance("parseStatement export ident :") // consume :
 
-				decl := p.parseTypedDeclaration(ctx, ident, ast.QualifierImmutable)
+				decl := p.parseTypedDeclaration(ctx, ident)
 				if decl != nil {
 					return decl
 				}
 
 				return nil
 			case tokens.Declaration:
-				decl := p.parseDeclaration(ctx, ident, ast.QualifierImmutable)
+				decl := p.parseDeclaration(ctx, ident)
 				if decl != nil {
 					return decl
 				}
@@ -96,17 +107,25 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		}
 	case tokens.Identifier:
 		qualifier := ast.QualifierImmutable
-		if p.prev().Type == tokens.Variable {
+
+		switch p.prev().Type {
+		case tokens.Variable:
 			qualifier = ast.QualifierVariable
+		case tokens.Dynamic:
+			qualifier = ast.QualifierDynamic
 		}
 
 		ident := &ast.Identifier{
-			Token:    p.this(),
-			Name:     p.this().Literal,
-			Exported: false,
+			Token:     p.this(),
+			Name:      p.this().Literal,
+			Exported:  false,
+			Qualifier: qualifier,
 		}
 
-		p.advance("parseStatement ident") // consume identifier
+		// Do not skip identifier for function call, parse as expression.
+		if p.next().Type != tokens.LParen {
+			p.advance("parseStatement ident") // consume identifier
+		}
 
 		switch p.this().Type {
 		case tokens.Assign: // Assignment
@@ -153,17 +172,29 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				return switchStatement
 			}
 
-			if d := p.parseTypedDeclaration(ctx, ident, qualifier); d != nil {
+			if d := p.parseTypedDeclaration(ctx, ident); d != nil {
 				return d
 			}
 
 			return nil
 		case tokens.Declaration: // Untyped declaration
-			if d := p.parseDeclaration(ctx, ident, qualifier); d != nil {
+			if d := p.parseDeclaration(ctx, ident); d != nil {
 				return d
 			}
 
 			return nil
+		case tokens.Identifier: // Procedure call
+			identToken := p.this()
+
+			callExpr := p.expression(ctx, types.None)
+			if callExpr == nil {
+				return nil
+			}
+
+			return &ast.ExpressionStatement{
+				Token:      identToken,
+				Expression: callExpr,
+			}
 		case tokens.Tilde: // Type declaration
 			typeDecl := p.parseTypeAlias(ctx, ident)
 			if typeDecl != nil {

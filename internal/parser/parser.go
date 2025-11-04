@@ -63,7 +63,8 @@ tokenLoop:
 		}
 
 		switch p.this().Type {
-		case tokens.Export,
+		case tokens.Dynamic,
+			tokens.Export,
 			tokens.Identifier,
 			tokens.Variable:
 			node := p.parseStatement(ctx)

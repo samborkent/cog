@@ -23,10 +23,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Call:
 		procType, ok := n.Identifier.ValueType.(*types.Procedure)
 		if !ok {
-			panic("failed to assert porcedure type")
+			panic("failed to assert procedure type")
 		}
 
 		args := make([]goast.Expr, 0, len(procType.Parameters))
+
+		if !procType.Function {
+			// Pass context variable to all procedures.
+			args = append(args, comp.ContextVar)
+		}
 
 		for _, arg := range n.Arguments {
 			expr, err := t.convertExpr(arg)
@@ -86,6 +91,23 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		return expr, nil
 	case *ast.Identifier:
 		name := convertExport(n.Name, n.Exported)
+
+		if n.Qualifier == ast.QualifierDynamic {
+			return &goast.TypeAssertExpr{
+				X: &goast.CallExpr{
+					Fun: &goast.SelectorExpr{
+						X:   comp.ContextVar,
+						Sel: &goast.Ident{Name: "Value"},
+					},
+					Args: []goast.Expr{
+						&goast.CompositeLit{
+							Type: &goast.Ident{Name: joinStr(name, "Key")},
+						},
+					},
+				},
+				Type: t.convertType(n.ValueType),
+			}, nil
+		}
 
 		ident, ok := t.symbols.Resolve(name)
 		if !ok {

@@ -6,20 +6,88 @@ import (
 	gotoken "go/token"
 	gotypes "go/types"
 	"math"
+	"strings"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/transpiler/comp"
 	"github.com/samborkent/cog/internal/types"
 )
 
+const delim = "_"
+
+func joinStr(strs ...string) string {
+	return strings.Join(strs, delim)
+}
+
 func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	switch n := node.(type) {
 	case *ast.Declaration:
+		if n.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
+			name := convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported)
+
+			keyIdent, ok := t.symbols.Resolve(joinStr(name, "Key"))
+			if !ok {
+				panic("missing dynamic variable key definition")
+			}
+
+			valIdent, ok := t.symbols.Resolve(joinStr(name, "Default"))
+			if !ok {
+				panic("missing dynamic variable default value definition")
+			}
+
+			tok := gotoken.CONST
+			if mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
+				tok = gotoken.VAR
+			}
+
+			var values []goast.Expr
+
+			if n.Assignment.Expression != nil {
+				val, err := t.convertExpr(n.Assignment.Expression)
+				if err != nil {
+					return nil, fmt.Errorf("converting dynamically variable expression: %w", err)
+				}
+
+				values = []goast.Expr{val}
+			} else if tok == gotoken.CONST {
+				// Variable has zero value.
+				tok = gotoken.VAR
+			}
+
+			return []goast.Decl{
+				&goast.GenDecl{
+					Tok: gotoken.TYPE,
+					Specs: []goast.Spec{
+						&goast.TypeSpec{
+							Name: keyIdent,
+							Type: &goast.StructType{Fields: &goast.FieldList{}},
+						},
+					},
+				},
+				&goast.GenDecl{
+					Tok: tok,
+					Specs: []goast.Spec{
+						&goast.ValueSpec{
+							Names:  []*goast.Ident{valIdent},
+							Type:   t.convertType(n.Assignment.Identifier.ValueType),
+							Values: values,
+						},
+					},
+				},
+			}, nil
+		}
+
 		ident := t.symbols.Define(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported))
+
+		tok := gotoken.CONST
+
+		if n.Assignment.Identifier.Qualifier == ast.QualifierVariable || mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
+			tok = gotoken.VAR
+		}
 
 		if n.Assignment.Expression == nil {
 			return []goast.Decl{&goast.GenDecl{
-				Tok: gotoken.CONST,
+				Tok: tok,
 				Specs: []goast.Spec{
 					&goast.ValueSpec{
 						Names: []*goast.Ident{ident},
@@ -43,8 +111,36 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 			if n.Assignment.Identifier.Name == "main" {
 				// Main func
-				ident := t.symbols.Define("ctx")
-				funcLiteral.Body.List = append([]goast.Stmt{comp.ContextMain(ident)}, funcLiteral.Body.List...)
+				ctxIdent := t.symbols.Define("ctx")
+				if len(t.symbols.dynamics) > 0 {
+					t.symbols.MarkUsed("ctx")
+				}
+
+				body := make([]goast.Stmt, 0, 1+len(t.symbols.dynamics))
+				body = append(body, comp.ContextMain(ctxIdent))
+
+				// Define dynamically scoped variables.
+				for _, dyn := range t.symbols.dynamics {
+					key := joinStr(convertExport(dyn.Name, dyn.Exported), "Key")
+					val := joinStr(convertExport(dyn.Name, dyn.Exported), "Default")
+
+					keyIdent, ok := t.symbols.Resolve(key)
+					if !ok {
+						return nil, fmt.Errorf("missing dynamic variable context key %q", key)
+					}
+
+					valIdent, ok := t.symbols.Resolve(val)
+					if !ok {
+						return nil, fmt.Errorf("missing dynamic variable default value %q", val)
+					}
+
+					t.symbols.MarkUsed(key)
+					t.symbols.MarkUsed(val)
+
+					body = append(body, comp.ContextWithValue(keyIdent, valIdent))
+				}
+
+				funcLiteral.Body.List = append(body, funcLiteral.Body.List...)
 
 				_, ok = t.imports["ctx"]
 				if !ok {
@@ -74,12 +170,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 		if n.Assignment.Identifier.ValueType != types.None {
 			valueSpec.Type = t.convertType(n.Assignment.Identifier.ValueType)
-		}
-
-		tok := gotoken.CONST
-
-		if n.Qualifier == ast.QualifierVariable || mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
-			tok = gotoken.VAR
 		}
 
 		return []goast.Decl{&goast.GenDecl{

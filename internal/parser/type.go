@@ -193,7 +193,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 	if !ok {
 		// Non-basic type, try to find in symbol table.
 		typeSymbol, ok := p.symbols.Resolve(p.this().Literal)
-		if !ok || typeSymbol.Kind != SymbolKindType {
+		if !ok || typeSymbol.Identifier.Qualifier != ast.QualifierType {
 			p.error(p.this(), "unknown type found in type declaration", "parseType")
 			return nil
 		}
@@ -336,18 +336,8 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 			return nil
 		}
 
-		ident := &ast.Identifier{
-			Token: p.this(),
-			Name:  p.this().Literal,
-		}
-
 		param := &types.Parameter{
 			Name: p.this().Literal,
-		}
-
-		if param.Name == "ctx" && (procType.Function || i > 0) {
-			p.error(p.this(), "'ctx' identifier is reserved for the first input parameter of procedures", "parseParameters")
-			return nil
 		}
 
 		p.advance("parseParameters loop identifier") // consume identifier
@@ -377,7 +367,6 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 		}
 
 		param.Type = paramType
-		ident.ValueType = paramType
 
 		if p.this().Type == tokens.Assign {
 			if !param.Optional {

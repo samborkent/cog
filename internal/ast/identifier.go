@@ -9,6 +9,16 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
+type Qualifier uint8
+
+const (
+	QualifierType Qualifier = iota
+	QualifierImmutable
+	QualifierVariable
+	QualifierDynamic
+	// QualifierConstant
+)
+
 var _ Expression = &Identifier{}
 
 type Identifier struct {
@@ -18,6 +28,7 @@ type Identifier struct {
 	Name      string
 	ValueType types.Type
 	Exported  bool
+	Qualifier Qualifier
 }
 
 func (e *Identifier) Pos() (uint32, uint16) {

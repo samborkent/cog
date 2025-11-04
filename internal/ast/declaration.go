@@ -4,22 +4,12 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-type Qualifier uint8
-
-const (
-	QualifierImmutable Qualifier = iota
-	QualifierVariable
-	// QualifierDynamic
-	// QualifierConstant
-)
-
 var _ Statement = &Declaration{}
 
 type Declaration struct {
 	statement
 
 	Assignment *Assignment
-	Qualifier  Qualifier
 }
 
 func (d *Declaration) Pos() (uint32, uint16) {
@@ -37,8 +27,11 @@ func (d *Declaration) String() string {
 		prefix = "export "
 	}
 
-	if d.Qualifier == QualifierVariable {
+	switch d.Assignment.Identifier.Qualifier {
+	case QualifierVariable:
 		prefix = prefix + "var "
+	case QualifierDynamic:
+		prefix = prefix + "dyn "
 	}
 
 	if d.Assignment.Expression == nil {

@@ -57,7 +57,13 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	for _, stmt := range t.file.Statements {
 		switch s := stmt.(type) {
 		case *ast.Declaration:
-			t.symbols.Define(convertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported))
+			name := convertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported)
+
+			if s.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
+				t.symbols.DefineDynamic(s.Assignment.Identifier)
+			} else {
+				t.symbols.Define(name)
+			}
 		case *ast.Type:
 			t.symbols.Define(convertExport(s.Identifier.Name, s.Identifier.Exported))
 		}
@@ -94,10 +100,12 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 		specs[i] = gofile.Imports[i]
 	}
 
-	gofile.Decls = append([]goast.Decl{&goast.GenDecl{
-		Tok:   gotoken.IMPORT,
-		Specs: specs,
-	}}, gofile.Decls...)
+	if len(gofile.Imports) > 0 {
+		gofile.Decls = append([]goast.Decl{&goast.GenDecl{
+			Tok:   gotoken.IMPORT,
+			Specs: specs,
+		}}, gofile.Decls...)
+	}
 
 	if err := errors.Join(errs...); err != nil {
 		return nil, fmt.Errorf("transpiler errors:\n%w", err)
