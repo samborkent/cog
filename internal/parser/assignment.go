@@ -25,6 +25,11 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 
 		return nil
 	case ast.QualifierType:
+		if ident.Name == "_" {
+			// Ignore no-op assignment
+			break
+		}
+
 		p.error(p.prev(), "cannot assign to a type identifier", "parseAssignment")
 		return nil
 	}
