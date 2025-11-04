@@ -10,6 +10,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
+// TODO: implement caching based on type string
 func (t *Transpiler) convertType(typ types.Type) goast.Expr {
 	if alias, ok := typ.(*types.Alias); ok {
 		if alias.Underlying().Kind() == types.EnumKind {
@@ -72,7 +73,7 @@ func (t *Transpiler) convertType(typ types.Type) goast.Expr {
 
 		if !procType.Function {
 			// All procedures take context.
-			inputParams = append(inputParams, comp.ContextArg())
+			inputParams = append(inputParams, comp.ContextArg)
 		}
 
 		for _, param := range procType.Parameters {

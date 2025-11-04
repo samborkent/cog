@@ -13,7 +13,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-const delim = "ç"
+const delim = "_"
 
 func joinStr(strs ...string) string {
 	return strings.Join(strs, delim)
@@ -22,8 +22,28 @@ func joinStr(strs ...string) string {
 func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	switch n := node.(type) {
 	case *ast.Declaration:
-		if n.Qualifier == ast.QualifierDynamic {
+		if n.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
 			keyIdent := t.symbols.Define(joinStr(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported), "Key"))
+			valIdent := t.symbols.Define(joinStr(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported), "Default"))
+
+			tok := gotoken.CONST
+			if mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
+				tok = gotoken.VAR
+			}
+
+			var values []goast.Expr
+
+			if n.Assignment.Expression != nil {
+				val, err := t.convertExpr(n.Assignment.Expression)
+				if err != nil {
+					return nil, fmt.Errorf("converting dynamically variable expression: %w", err)
+				}
+
+				values = []goast.Expr{val}
+			} else if tok == gotoken.CONST {
+				// Variable has zero value.
+				tok = gotoken.VAR
+			}
 
 			return []goast.Decl{
 				&goast.GenDecl{
@@ -35,6 +55,16 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 						},
 					},
 				},
+				&goast.GenDecl{
+					Tok: tok,
+					Specs: []goast.Spec{
+						&goast.ValueSpec{
+							Names:  []*goast.Ident{valIdent},
+							Type:   t.convertType(n.Assignment.Identifier.ValueType),
+							Values: values,
+						},
+					},
+				},
 			}, nil
 		}
 
@@ -42,7 +72,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 		tok := gotoken.CONST
 
-		if n.Qualifier == ast.QualifierVariable || mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
+		if n.Assignment.Identifier.Qualifier == ast.QualifierVariable || mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
 			tok = gotoken.VAR
 		}
 
@@ -72,8 +102,52 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 			if n.Assignment.Identifier.Name == "main" {
 				// Main func
-				ident := t.symbols.Define("ctx")
-				funcLiteral.Body.List = append([]goast.Stmt{comp.ContextMain(ident)}, funcLiteral.Body.List...)
+				ctxIdent := t.symbols.Define("ctx")
+				if len(t.symbols.dynamics) > 0 {
+					t.symbols.MarkUsed("ctx")
+				}
+
+				body := make([]goast.Stmt, 0, 1+len(t.symbols.dynamics))
+				body = append(body, comp.ContextMain(ctxIdent))
+
+				// Define dynamically scoped variables.
+				for _, dyn := range t.symbols.dynamics {
+					key := joinStr(convertExport(dyn.Name, dyn.Exported), "Key")
+					val := joinStr(convertExport(dyn.Name, dyn.Exported), "Default")
+
+					keyIdent, ok := t.symbols.Resolve(key)
+					if !ok {
+						return nil, fmt.Errorf("missing dynamic variable context key %q", key)
+					}
+
+					valIdent, ok := t.symbols.Resolve(val)
+					if !ok {
+						return nil, fmt.Errorf("missing dynamic variable default value %q", val)
+					}
+
+					t.symbols.MarkUsed(key)
+					t.symbols.MarkUsed(val)
+
+					body = append(body, &goast.AssignStmt{
+						Tok: gotoken.ASSIGN,
+						Lhs: []goast.Expr{ctxIdent},
+						Rhs: []goast.Expr{
+							&goast.CallExpr{
+								Fun: &goast.SelectorExpr{
+									X:   comp.ContextPackage,
+									Sel: &goast.Ident{Name: "WithValue"},
+								},
+								Args: []goast.Expr{
+									ctxIdent,
+									&goast.CompositeLit{Type: keyIdent},
+									valIdent,
+								},
+							},
+						},
+					})
+				}
+
+				funcLiteral.Body.List = append(body, funcLiteral.Body.List...)
 
 				_, ok = t.imports["ctx"]
 				if !ok {

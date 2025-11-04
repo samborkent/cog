@@ -5,19 +5,18 @@ import (
 	"go/token"
 )
 
-func ContextArg() *goast.Field {
-	return &goast.Field{
-		Names: []*goast.Ident{{Name: "ctx"}},
-		Type:  ContextType(),
+var (
+	ContextArg = &goast.Field{
+		Names: []*goast.Ident{ContextVar},
+		Type:  ContextType,
 	}
-}
-
-func ContextType() *goast.SelectorExpr {
-	return &goast.SelectorExpr{
-		X:   &goast.Ident{Name: "context"},
+	ContextPackage = &goast.Ident{Name: "context"}
+	ContextType    = &goast.SelectorExpr{
+		X:   ContextPackage,
 		Sel: &goast.Ident{Name: "Context"},
 	}
-}
+	ContextVar = &goast.Ident{Name: "ctx"}
+)
 
 func ContextMain(ident *goast.Ident) *goast.DeclStmt {
 	return &goast.DeclStmt{
@@ -26,11 +25,11 @@ func ContextMain(ident *goast.Ident) *goast.DeclStmt {
 			Specs: []goast.Spec{
 				&goast.ValueSpec{
 					Names: []*goast.Ident{ident},
-					Type:  ContextType(),
+					Type:  ContextType,
 					Values: []goast.Expr{
 						&goast.CallExpr{
 							Fun: &goast.SelectorExpr{
-								X:   &goast.Ident{Name: "context"},
+								X:   ContextPackage,
 								Sel: &goast.Ident{Name: "Background"},
 							},
 						},

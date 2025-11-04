@@ -57,7 +57,7 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	for _, stmt := range t.file.Statements {
 		switch s := stmt.(type) {
 		case *ast.Declaration:
-			if s.Qualifier == ast.QualifierDynamic {
+			if s.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
 				t.symbols.dynamics = append(t.symbols.dynamics, s.Assignment.Identifier)
 			} else {
 				t.symbols.Define(convertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported))

@@ -336,18 +336,8 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 			return nil
 		}
 
-		ident := &ast.Identifier{
-			Token: p.this(),
-			Name:  p.this().Literal,
-		}
-
 		param := &types.Parameter{
 			Name: p.this().Literal,
-		}
-
-		if param.Name == "ctx" && (procType.Function || i > 0) {
-			p.error(p.this(), "'ctx' identifier is reserved for the first input parameter of procedures", "parseParameters")
-			return nil
 		}
 
 		p.advance("parseParameters loop identifier") // consume identifier
@@ -377,7 +367,6 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 		}
 
 		param.Type = paramType
-		ident.ValueType = paramType
 
 		if p.this().Type == tokens.Assign {
 			if !param.Optional {

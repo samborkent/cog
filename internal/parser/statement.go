@@ -64,9 +64,10 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		switch p.this().Type {
 		case tokens.Identifier:
 			ident := &ast.Identifier{
-				Token:    p.this(),
-				Name:     p.this().Literal,
-				Exported: true,
+				Token:     p.this(),
+				Name:      p.this().Literal,
+				Exported:  true,
+				Qualifier: ast.QualifierImmutable,
 			}
 
 			p.advance("parseStatement export ident") // consume identifier
@@ -75,14 +76,14 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			case tokens.Colon:
 				p.advance("parseStatement export ident :") // consume :
 
-				decl := p.parseTypedDeclaration(ctx, ident, ast.QualifierImmutable)
+				decl := p.parseTypedDeclaration(ctx, ident)
 				if decl != nil {
 					return decl
 				}
 
 				return nil
 			case tokens.Declaration:
-				decl := p.parseDeclaration(ctx, ident, ast.QualifierImmutable)
+				decl := p.parseDeclaration(ctx, ident)
 				if decl != nil {
 					return decl
 				}
@@ -115,9 +116,10 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		}
 
 		ident := &ast.Identifier{
-			Token:    p.this(),
-			Name:     p.this().Literal,
-			Exported: false,
+			Token:     p.this(),
+			Name:      p.this().Literal,
+			Exported:  false,
+			Qualifier: qualifier,
 		}
 
 		p.advance("parseStatement ident") // consume identifier
@@ -167,13 +169,13 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				return switchStatement
 			}
 
-			if d := p.parseTypedDeclaration(ctx, ident, qualifier); d != nil {
+			if d := p.parseTypedDeclaration(ctx, ident); d != nil {
 				return d
 			}
 
 			return nil
 		case tokens.Declaration: // Untyped declaration
-			if d := p.parseDeclaration(ctx, ident, qualifier); d != nil {
+			if d := p.parseDeclaration(ctx, ident); d != nil {
 				return d
 			}
 
