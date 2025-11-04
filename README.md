@@ -18,6 +18,10 @@ The following basic features are missing that need to be implemented before Cog 
     - Function declaration `main : proc(ctx : context) = { ... }`
     - Typed variable declaration `foo : uint64 = 10`
     - Type alias `String ~ string`
+- Immutability by default
+- Type qualifiers
+    - `var` for mutable variables. Not allowed in package scope.
+    - `dyn` for dynamically scoped variables. Only allowed in package scope.
 - Extended types
     - Enum `enum[any]`
     - Set `set[any]` (alias for `map[any]struct{}`)
@@ -47,8 +51,6 @@ The following basic features are missing that need to be implemented before Cog 
 
 - Explicit exports using `export`
 - Type qualifiers
-    - `mut` for mutable variables. Not allowed in package scope.
-    - `dyn` for dynamically scoped variables. Only allowed in package scope.
     - `comp` for compile time constants. Similar to Zig' `comptime`. When used on variables, like C++ `constexpr`, when used for functions like C++ `consteval`.
 - Variables need to be passed to scope explicitely (no catch all closures)
     - `(foo, bar) { // foo & bar are available in this scope }
