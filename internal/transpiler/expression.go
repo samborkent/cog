@@ -23,10 +23,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Call:
 		procType, ok := n.Identifier.ValueType.(*types.Procedure)
 		if !ok {
-			panic("failed to assert porcedure type")
+			panic("failed to assert procedure type")
 		}
 
 		args := make([]goast.Expr, 0, len(procType.Parameters))
+
+		if !procType.Function {
+			// Pass context variable to all procedures.
+			args = append(args, comp.ContextVar)
+		}
 
 		for _, arg := range n.Arguments {
 			expr, err := t.convertExpr(arg)

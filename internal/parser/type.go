@@ -193,7 +193,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 	if !ok {
 		// Non-basic type, try to find in symbol table.
 		typeSymbol, ok := p.symbols.Resolve(p.this().Literal)
-		if !ok || typeSymbol.Kind != SymbolKindType {
+		if !ok || typeSymbol.Identifier.Qualifier != ast.QualifierType {
 			p.error(p.this(), "unknown type found in type declaration", "parseType")
 			return nil
 		}

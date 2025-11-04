@@ -122,7 +122,10 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			Qualifier: qualifier,
 		}
 
-		p.advance("parseStatement ident") // consume identifier
+		// Do not skip identifier for function call, parse as expression.
+		if p.next().Type != tokens.LParen {
+			p.advance("parseStatement ident") // consume identifier
+		}
 
 		switch p.this().Type {
 		case tokens.Assign: // Assignment
@@ -180,6 +183,18 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			}
 
 			return nil
+		case tokens.Identifier: // Procedure call
+			identToken := p.this()
+
+			callExpr := p.expression(ctx, types.None)
+			if callExpr == nil {
+				return nil
+			}
+
+			return &ast.ExpressionStatement{
+				Token:      identToken,
+				Expression: callExpr,
+			}
 		case tokens.Tilde: // Type declaration
 			typeDecl := p.parseTypeAlias(ctx, ident)
 			if typeDecl != nil {

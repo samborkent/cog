@@ -42,11 +42,6 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 		},
 	}
 
-	kind := SymbolKindConstant
-	if ident.Qualifier == ast.QualifierVariable {
-		kind = SymbolKindVariable
-	}
-
 	if !p.match(tokens.Assign, tokens.Declaration) {
 		if ident.Qualifier == ast.QualifierImmutable {
 			p.error(p.this(), "immutable declarations must be initialized", "parseDeclaration")
@@ -54,7 +49,7 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 		}
 
 		// Uninitialized variable
-		p.symbols.Define(ident, kind)
+		p.symbols.Define(ident)
 
 		return node
 	}
@@ -78,7 +73,7 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 		node.Assignment.Identifier.ValueType = exprType
 	}
 
-	p.symbols.Define(ident, kind)
+	p.symbols.Define(ident)
 
 	return node
 }

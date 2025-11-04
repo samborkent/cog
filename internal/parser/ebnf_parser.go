@@ -522,7 +522,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 					p.symbols.Define(&ast.Identifier{
 						Name:      param.Name,
 						ValueType: param.Type,
-					}, SymbolKindConstant)
+						Qualifier: ast.QualifierImmutable,
+					})
 				}
 			}
 

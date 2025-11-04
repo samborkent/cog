@@ -6,19 +6,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-type SymbolKind uint8
-
-const (
-	SymbolKindVariable SymbolKind = iota
-	SymbolKindConstant
-	SymbolKindType
-	SymbolKindField
-)
-
 type Symbol struct {
 	Identifier *ast.Identifier
 	Scope      Scope
-	Kind       SymbolKind
 }
 
 func (s Symbol) Type() types.Type {
@@ -48,7 +38,6 @@ func NewSymbolTable() *SymbolTable {
 	table["_"] = Symbol{
 		Identifier: None,
 		Scope:      LocalScope,
-		Kind:       SymbolKindVariable,
 	}
 
 	return &SymbolTable{
@@ -66,7 +55,7 @@ func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
 	return s
 }
 
-func (s *SymbolTable) Define(ident *ast.Identifier, kind SymbolKind) {
+func (s *SymbolTable) Define(ident *ast.Identifier) {
 	if ident.Name == "" {
 		panic("empty identifier")
 	}
@@ -78,7 +67,6 @@ func (s *SymbolTable) Define(ident *ast.Identifier, kind SymbolKind) {
 	symbol := Symbol{
 		Identifier: ident,
 		Scope:      LocalScope,
-		Kind:       kind,
 	}
 
 	if s.Outer == nil {
@@ -87,7 +75,7 @@ func (s *SymbolTable) Define(ident *ast.Identifier, kind SymbolKind) {
 
 	s.table[ident.Name] = symbol
 
-	if ident.Name != "" && (kind == SymbolKindVariable || kind == SymbolKindConstant) {
+	if ident.Name != "" && ident.Qualifier != ast.QualifierType {
 		switch ident.ValueType.Underlying().Kind() {
 		case types.StructKind:
 			structType, ok := ident.ValueType.Underlying().(*types.Struct)
@@ -110,7 +98,6 @@ func (s *SymbolTable) Define(ident *ast.Identifier, kind SymbolKind) {
 						Exported:  field.Exported,
 					},
 					Scope: StructScope,
-					Kind:  SymbolKindField,
 				}
 			}
 		}
@@ -130,12 +117,11 @@ func (s *SymbolTable) DefineEnumValue(selector string, field *ast.Identifier) {
 	s.fields[selector][field.Name] = Symbol{
 		Identifier: field,
 		Scope:      EnumScope,
-		Kind:       SymbolKindField,
 	}
 }
 
-func (s *SymbolTable) DefineGlobal(ident *ast.Identifier, kind SymbolKind) {
-	s.Define(ident, kind)
+func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
+	s.Define(ident)
 	symbol := s.table[ident.Name]
 	symbol.Scope = ScanScope
 	s.table[ident.Name] = symbol

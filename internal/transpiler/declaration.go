@@ -13,6 +13,8 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
+var Dynamic = &goast.Ident{Name: "dyn"}
+
 const delim = "_"
 
 func joinStr(strs ...string) string {
@@ -23,8 +25,13 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	switch n := node.(type) {
 	case *ast.Declaration:
 		if n.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
-			keyIdent := t.symbols.Define(joinStr(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported), "Key"))
-			valIdent := t.symbols.Define(joinStr(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported), "Default"))
+			name := convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported)
+
+			// Mark variable name as dynamically scoped variable.
+			t.symbols.table[name] = Dynamic
+
+			keyIdent := t.symbols.Define(joinStr(name, "Key"))
+			valIdent := t.symbols.Define(joinStr(name, "Default"))
 
 			tok := gotoken.CONST
 			if mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
@@ -128,23 +135,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					t.symbols.MarkUsed(key)
 					t.symbols.MarkUsed(val)
 
-					body = append(body, &goast.AssignStmt{
-						Tok: gotoken.ASSIGN,
-						Lhs: []goast.Expr{ctxIdent},
-						Rhs: []goast.Expr{
-							&goast.CallExpr{
-								Fun: &goast.SelectorExpr{
-									X:   comp.ContextPackage,
-									Sel: &goast.Ident{Name: "WithValue"},
-								},
-								Args: []goast.Expr{
-									ctxIdent,
-									&goast.CompositeLit{Type: keyIdent},
-									valIdent,
-								},
-							},
-						},
-					})
+					body = append(body, comp.ContextWithValue(keyIdent, valIdent))
 				}
 
 				funcLiteral.Body.List = append(body, funcLiteral.Body.List...)

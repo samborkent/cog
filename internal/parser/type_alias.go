@@ -34,7 +34,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 
 	// Define type if in inner scope
 	if p.symbols.Outer != nil {
-		p.symbols.Define(typeDecl.Identifier, SymbolKindType)
+		p.symbols.Define(typeDecl.Identifier)
 	}
 
 	return typeDecl

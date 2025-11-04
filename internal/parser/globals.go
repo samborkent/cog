@@ -65,9 +65,10 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool) {
 	}
 
 	ident := &ast.Identifier{
-		Token:    p.this(),
-		Name:     p.this().Literal,
-		Exported: exported,
+		Token:     p.this(),
+		Name:      p.this().Literal,
+		Exported:  exported,
+		Qualifier: ast.QualifierImmutable,
 	}
 
 	p.advance("findGlobalDecl identifier") // consume identifier
@@ -78,7 +79,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool) {
 
 		ident.ValueType = p.parseCombinedType(ctx, exported)
 
-		p.symbols.DefineGlobal(ident, SymbolKindConstant)
+		p.symbols.DefineGlobal(ident)
 
 		if p.this().Type == tokens.Assign {
 			p.advance("findGlobalDecl =") // consume =
@@ -91,7 +92,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool) {
 		}
 	case tokens.Declaration:
 		p.advance("findGlobalDecl :=") // consume :=
-		p.symbols.DefineGlobal(ident, SymbolKindConstant)
+		p.symbols.DefineGlobal(ident)
 
 		if p.this().Type == tokens.LBrace {
 			p.skipScope(ctx)
@@ -190,7 +191,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		}
 
 		ident.ValueType = enumType
-		p.symbols.DefineGlobal(ident, SymbolKindType)
+		p.symbols.DefineGlobal(ident)
 
 		return
 	}
@@ -202,7 +203,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 	ident.ValueType = alias
 
-	p.symbols.DefineGlobal(ident, SymbolKindType)
+	p.symbols.DefineGlobal(ident)
 }
 
 func (p *Parser) skipScope(ctx context.Context) {

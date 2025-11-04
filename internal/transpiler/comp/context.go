@@ -2,7 +2,7 @@ package comp
 
 import (
 	goast "go/ast"
-	"go/token"
+	gotoken "go/token"
 )
 
 var (
@@ -21,7 +21,7 @@ var (
 func ContextMain(ident *goast.Ident) *goast.DeclStmt {
 	return &goast.DeclStmt{
 		Decl: &goast.GenDecl{
-			Tok: token.VAR,
+			Tok: gotoken.VAR,
 			Specs: []goast.Spec{
 				&goast.ValueSpec{
 					Names: []*goast.Ident{ident},
@@ -34,6 +34,26 @@ func ContextMain(ident *goast.Ident) *goast.DeclStmt {
 							},
 						},
 					},
+				},
+			},
+		},
+	}
+}
+
+func ContextWithValue(keyIdent *goast.Ident, val goast.Expr) *goast.AssignStmt {
+	return &goast.AssignStmt{
+		Tok: gotoken.ASSIGN,
+		Lhs: []goast.Expr{ContextVar},
+		Rhs: []goast.Expr{
+			&goast.CallExpr{
+				Fun: &goast.SelectorExpr{
+					X:   ContextPackage,
+					Sel: &goast.Ident{Name: "WithValue"},
+				},
+				Args: []goast.Expr{
+					ContextVar,
+					&goast.CompositeLit{Type: keyIdent},
+					val,
 				},
 			},
 		},
