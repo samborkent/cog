@@ -32,9 +32,10 @@ const (
 	GenericKind
 
 	// Container types
+	EnumKind
+	MapKind
 	SetKind
 	StructKind
-	EnumKind
 
 	// Combined types
 	TupleKind
@@ -89,12 +90,14 @@ func (t Kind) String() string {
 		return "utf8"
 	case GenericKind:
 		return "generic"
+	case EnumKind:
+		return "enum"
+	case MapKind:
+		return "map"
 	case SetKind:
 		return "set"
 	case StructKind:
 		return "struct"
-	case EnumKind:
-		return "enum"
 	case TupleKind:
 		return "tuple"
 	case UnionKind:
@@ -140,9 +143,10 @@ var Lookup = map[tokens.Type]Type{
 	tokens.Uint:    Basics[Uint64],
 
 	// Container types
+	tokens.Map:    &Map{},
+	tokens.Enum:   &Enum{},
 	tokens.Set:    &Set{},
 	tokens.Struct: &Struct{},
-	tokens.Enum:   &Enum{},
 
 	// Procedure type
 	tokens.Procedure: &Procedure{},

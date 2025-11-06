@@ -46,6 +46,8 @@ The following basic features are missing that need to be implemented before Cog 
         - `proc` may be called async.
 - Optional function parameters `foo(optional :? utf8)`
     - With default values `foo(default :? utf8 = 10)`
+- Value switch
+    - `switch var { case val: ... }`
 
 ### Planned
 
@@ -55,9 +57,10 @@ The following basic features are missing that need to be implemented before Cog 
 - Variables need to be passed to scope explicitely (no catch all closures)
     - `(foo, bar) { // foo & bar are available in this scope }
 - Additional safety regarding mutability and ownership.
-- Value switch and type switch
-    - `switch var { case val: ... }`
-    - `switch var { type uint64: ... }`
+- Type switch
+    - `switch t { type uint64: ... }`
+    - For `t ~ any | interface | union`
+- Select statement
 - Generics with additional builtin generic constraints:
     - `string ~ ascii | utf8`
     - `int ~ int8 | int16 | int32 | int64 | int128`

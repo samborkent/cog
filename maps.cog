@@ -1,0 +1,7 @@
+package main
+
+main : proc() = {
+    
+}
+
+Map ~ map[utf8]uint64

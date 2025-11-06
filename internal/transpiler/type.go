@@ -46,6 +46,16 @@ func (t *Transpiler) convertType(typ types.Type) goast.Expr {
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int32], nil)}
 	case types.Int64:
 		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int64], nil)}
+	case types.MapKind:
+		mapType, ok := typ.(*types.Map)
+		if !ok {
+			panic("unable to assert map type")
+		}
+
+		return &goast.MapType{
+			Key:   t.convertType(mapType.Key),
+			Value: t.convertType(mapType.Value),
+		}
 	case types.OptionKind:
 		optionType, ok := typ.(*types.Option)
 		if !ok {
