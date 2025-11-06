@@ -158,6 +158,34 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}, nil
 	case *ast.Int64Literal:
 		return n.Go(), nil
+	case *ast.MapLiteral:
+		// TODO: handle not directly comparable types
+		exprs := make([]goast.Expr, len(n.Pairs))
+
+		for i, pair := range n.Pairs {
+			keyExpr, err := t.convertExpr(pair.Key)
+			if err != nil {
+				return nil, fmt.Errorf("converting map literal key %d: %w", i, err)
+			}
+
+			valExpr, err := t.convertExpr(pair.Value)
+			if err != nil {
+				return nil, fmt.Errorf("converting map literal value %d: %w", i, err)
+			}
+
+			exprs[i] = &goast.KeyValueExpr{
+				Key:   keyExpr,
+				Value: valExpr,
+			}
+		}
+
+		return &goast.CompositeLit{
+			Type: &goast.MapType{
+				Key:   t.convertType(n.KeyType),
+				Value: t.convertType(n.ValueType),
+			},
+			Elts: exprs,
+		}, nil
 	case *ast.Prefix:
 		right, err := t.convertExpr(n.Right)
 		if err != nil {
@@ -210,7 +238,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		// }
 
 		return &goast.FuncLit{
-			Type: t.convertType(n.ProcdureType).(*goast.FuncType),
+			Type: t.convertType(n.ProcedureType).(*goast.FuncType),
 			Body: &goast.BlockStmt{
 				List: stmts,
 			},

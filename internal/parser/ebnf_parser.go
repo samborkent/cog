@@ -439,79 +439,69 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			return expr
-		// case *types.Enum:
-		// 	enumLiteral := &ast.EnumLiteral{
-		// 		Token:     p.this(),
-		// 		ValueType: t.Value,
-		// 		Values:    []*ast.EnumValue{},
-		// 	}
+		case *types.Map:
+			mapLiteral := &ast.MapLiteral{
+				Token:     p.this(),
+				KeyType:   t.Key,
+				ValueType: t.Value,
+				Pairs:     []*ast.KeyValue{},
+			}
 
-		// 	p.advance("primary enum {") // consume {
+			p.advance("primary map {") // consume {
 
-		// enumLiteralLoop:
-		// 	for {
-		// 		if p.this().Type != tokens.Identifier {
-		// 			p.error(p.this(), "expected identifier after { in enum literal", "primary")
-		// 			return nil
-		// 		}
+		mapLiteralLoop:
+			for {
+				key := p.expression(ctx, t.Key)
+				if key != nil {
+					// TODO: optimize
+					for i := range mapLiteral.Pairs {
+						if mapLiteral.Pairs[i].Key.String() == key.String() {
+							p.error(p.prev(), "duplicate key in map literal", "primary")
+							return nil
+						}
+					}
+				}
 
-		// 		enumValue := &ast.EnumValue{
-		// 			Identifier: &ast.Identifier{
-		// 				Token: p.this(),
-		// 				Name:  p.this().Literal,
-		// 			},
-		// 		}
+				if p.this().Type != tokens.Colon {
+					p.error(p.this(), "expected colon after key in map literal", "primary")
+					return nil
+				}
 
-		// 		p.advance("primary enum identifier") // consume identifier
+				p.advance("primary map :") // consume :
 
-		// 		if p.this().Type != tokens.Declaration {
-		// 			p.error(p.this(), "expected := after identifier in enum literal", "primary")
-		// 			return nil
-		// 		}
+				val := p.expression(ctx, t.Value)
+				if val == nil {
+					return nil
+				}
 
-		// 		p.advance("primary enum :=") // consume :=
+				mapLiteral.Pairs = append(mapLiteral.Pairs, &ast.KeyValue{
+					Key:   key,
+					Value: val,
+				})
 
-		// 		startToken := p.this()
+				switch p.this().Type {
+				case tokens.Comma:
+					p.advance("primary set ,") // consume ,
 
-		// 		value := p.expression(ctx, t.Value)
-		// 		if value == nil {
-		// 			p.error(startToken, "unable to parse expression in enum literal", "primary")
-		// 			return nil
-		// 		}
+					if p.this().Type == tokens.RBrace {
+						break mapLiteralLoop
+					}
 
-		// 		enumValue.Value = value
-		// 		enumValue.Identifier.ValueType = value.Type()
+					continue
+				case tokens.RBrace, tokens.EOF:
+					break mapLiteralLoop
+				default:
+					p.error(p.this(), "unexpected token in map literal", "primary")
+					return nil
+				}
+			}
 
-		// 		enumLiteral.Values = append(enumLiteral.Values, enumValue)
+			p.advance("primary map }") // consume }
 
-		// 		switch p.this().Type {
-		// 		case tokens.Comma:
-		// 			p.advance("primary enum ,") // consume ','
-
-		// 			if p.this().Type == tokens.RBrace {
-		// 				break enumLiteralLoop
-		// 			}
-
-		// 			continue
-		// 		case tokens.RBrace, tokens.EOF:
-		// 			break enumLiteralLoop
-		// 		default:
-		// 			p.error(p.this(), "unexpected token in enum literal", "primary")
-		// 			return nil
-		// 		}
-		// 	}
-
-		// 	if len(enumLiteral.Values) > math.MaxUint16 {
-		// 		p.error(p.this(), "enum may not contain more than 65535 values", "primary")
-		// 		return nil
-		// 	}
-
-		// 	p.advance("primary enum }") // consume }
-
-		// 	return enumLiteral
+			return mapLiteral
 		case *types.Procedure:
 			procLiteral := &ast.ProcedureLiteral{
-				ProcdureType: t,
+				ProcedureType: t,
 			}
 
 			if len(t.Parameters) > 0 {
