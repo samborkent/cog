@@ -69,7 +69,9 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 
 	_, ok := p.symbols.Resolve(p.this().Literal)
 	if ok {
+		// Report redeclare error and advance past the identifier to avoid an infinite loop
 		p.error(p.this(), "cannot redeclare variable", "findGlobalDecl")
+		p.advance("findGlobalDecl redeclare") // consume identifier to make progress
 		return
 	}
 

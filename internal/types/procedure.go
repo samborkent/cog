@@ -1,11 +1,8 @@
 package types
 
 import (
-	"fmt"
 	"strings"
 )
-
-type expression = fmt.Stringer
 
 type Procedure struct {
 	Function   bool
@@ -17,7 +14,7 @@ type Parameter struct {
 	Name     string
 	Optional bool
 	Type     Type
-	Default  expression // cannot be ast.Expression due to import cycle
+	Default  Expression // cannot be ast.Expression due to import cycle
 }
 
 func (p *Procedure) Kind() Kind {

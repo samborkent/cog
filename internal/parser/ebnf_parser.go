@@ -424,6 +424,9 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			// Place back type alias
 			switch literal := expr.(type) {
+			case *ast.MapLiteral:
+				literal.ValueType = t
+				return literal
 			case *ast.SetLiteral:
 				literal.ValueType = t
 				return literal
@@ -670,13 +673,22 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			return tupleLiteral
 		default:
-			typeStr := ""
+			if typeToken == nil || typeToken == types.None {
+				p.error(p.prev(), "cannot infer type for untyped literal", "primary")
+				p.advance("primary {") // consume {
 
-			if typeToken != nil {
-				typeStr = typeToken.String()
+				for !p.match(tokens.RBrace, tokens.EOF) {
+					p.advance("primary skip token")
+				}
+
+				if p.this().Type == tokens.RBrace {
+					p.advance("primary }") // consume }
+				}
+
+				return nil
 			}
 
-			p.error(p.this(), fmt.Sprintf("unexpected type %q for expression starting with {", typeStr), "primary")
+			p.error(p.this(), fmt.Sprintf("unexpected type %q for expression starting with {", typeToken.String()), "primary")
 			return nil
 		}
 	default:

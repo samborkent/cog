@@ -1,6 +1,6 @@
 module github.com/samborkent/cog
 
-go 1.25.3
+go 1.25.4
 
 require (
 	github.com/ryanavella/wide v0.0.0-20190709032049-e93517939246 // TODO: fork implementation of wide.Int128

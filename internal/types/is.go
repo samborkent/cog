@@ -13,6 +13,10 @@ func IsComplex(t Type) bool {
 	return kind == Complex32 || kind == Complex64 || kind == Complex128
 }
 
+func IsFixed(t Type) bool {
+	return IsInt(t) || IsUint(t)
+}
+
 func IsFloat(t Type) bool {
 	kind := t.Underlying().Kind()
 	return kind == Float16 || kind == Float32 || kind == Float64

@@ -56,11 +56,8 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 
 	p.advance("parseDeclaration") // consume := or =
 
-	startToken := p.this()
-
 	expr := p.expression(ctx, ident.ValueType)
 	if expr == nil {
-		p.error(startToken, "unable to parse expression", "parseDeclaration")
 		return nil
 	}
 

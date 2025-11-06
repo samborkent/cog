@@ -150,6 +150,64 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 
 func (p *Parser) parseType(ctx context.Context) types.Type {
 	switch p.this().Type {
+	case tokens.LBracket:
+		p.advance("parseType [") // consume [
+
+		if p.this().Type == tokens.RBracket {
+			// Slice type
+			if p.this().Type != tokens.RBracket {
+				p.error(p.this(), "expected closing ] in slice type", "parseCombinedType")
+				return nil
+			}
+
+			p.advance("parseType ]") // consume ]
+
+			elemType := p.parseType(ctx)
+			if elemType == nil {
+				return nil
+			}
+
+			return &types.Slice{
+				Element: elemType,
+			}
+		}
+
+		// Array type
+		switch p.this().Type {
+		case tokens.IntLiteral:
+		case tokens.Identifier:
+			symbol, ok := p.symbols.Resolve(p.this().Literal)
+			if ok && types.IsFixed(symbol.Identifier.ValueType) {
+				break
+			}
+
+			fallthrough
+		default:
+			p.error(p.this(), "expected fixed-point number type as array length", "parseCombinedType")
+			return nil
+		}
+
+		lenExpr := p.expression(ctx, types.None)
+		if lenExpr == nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.RBracket {
+			p.error(p.this(), "expected closing ] in array type", "parseCombinedType")
+			return nil
+		}
+
+		p.advance("parseType ]") // consume ]
+
+		elemType := p.parseType(ctx)
+		if elemType == nil {
+			return nil
+		}
+
+		return &types.Array{
+			Element: elemType,
+			Length:  lenExpr,
+		}
 	case tokens.Map:
 		p.advance("parseType map") // consume map
 

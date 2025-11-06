@@ -1,0 +1,6 @@
+package main
+
+// compile error, cannot infer type
+// array := {}
+
+array : [3]uint64 = {}

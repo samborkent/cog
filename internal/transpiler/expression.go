@@ -93,6 +93,9 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		name := convertExport(n.Name, n.Exported)
 
 		if n.Qualifier == ast.QualifierDynamic {
+			if t.inFunc {
+				return nil, fmt.Errorf("func cannot reference dynamically scoped variable %q", n.Name)
+			}
 			return &goast.TypeAssertExpr{
 				X: &goast.CallExpr{
 					Fun: &goast.SelectorExpr{
@@ -218,6 +221,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			t.symbols = NewEnclosedSymbolTable(t.symbols)
 		}
 
+		// Track whether we're inside a pure function (`func`). When inside a func,
+		// referencing dynamically scoped variables is disallowed.
+		prevInFunc := t.inFunc
+		if procType, ok := n.ProcedureType.(*types.Procedure); ok {
+			t.inFunc = procType.Function
+		} else {
+			t.inFunc = false
+		}
+
 		for _, s := range n.Body.Statements {
 			stmt, err := t.convertStmt(s)
 			if err != nil {
@@ -231,6 +243,9 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			// Leave body scope.
 			t.symbols = t.symbols.Outer
 		}
+
+		// Restore previous func-context flag.
+		t.inFunc = prevInFunc
 
 		// if len(procType.Parameters) > 0 {
 		// 	// Leave parameter scope.
