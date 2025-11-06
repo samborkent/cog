@@ -2,7 +2,6 @@ package parser
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
@@ -45,7 +44,6 @@ tokenLoop:
 				p.findGlobalType(ctx, exported)
 			default:
 				p.advance("findGlobals") // consume token
-				fmt.Printf("??? %q\n", p.this())
 			}
 		case tokens.Package:
 			p.advance("findGlobals package") // consume package

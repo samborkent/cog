@@ -150,8 +150,39 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 
 func (p *Parser) parseType(ctx context.Context) types.Type {
 	switch p.this().Type {
+	case tokens.Map:
+		p.advance("parseType map") // consume map
+
+		if p.this().Type != tokens.LBracket {
+			p.error(p.this(), "expected [ after map type", "parseType")
+			return nil
+		}
+
+		p.advance("parseType map [") // consume [
+
+		keyType := p.parseType(ctx)
+		if keyType == nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.RBracket {
+			p.error(p.this(), "expected ] after map key type", "parseType")
+			return nil
+		}
+
+		p.advance("parseType map ]") // consume ]
+
+		valType := p.parseType(ctx)
+		if valType == nil {
+			return nil
+		}
+
+		return &types.Map{
+			Key:   keyType,
+			Value: valType,
+		}
 	case tokens.Set:
-		p.advance("parseType set") // sonsume set
+		p.advance("parseType set") // consume set
 
 		if p.this().Type != tokens.LBracket {
 			p.error(p.this(), "expected [ after set type", "parseType")
@@ -160,22 +191,10 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 		p.advance("parseType set [") // consume [
 
-		elemType, ok := types.Lookup[p.this().Type]
-		if !ok {
-			symbol, ok := p.symbols.Resolve(p.this().Literal)
-			if !ok {
-				p.error(p.this(), "expected set element type", "parseType")
-				return nil
-			}
-
-			elemType = &types.Alias{
-				Name:     p.this().Literal,
-				Derived:  symbol.Type(),
-				Exported: symbol.Identifier.Exported,
-			}
+		elemType := p.parseType(ctx)
+		if elemType == nil {
+			return nil
 		}
-
-		p.advance("parseType set element type") // consume elem type
 
 		if p.this().Type != tokens.RBracket {
 			p.error(p.this(), "expected ] after set element type", "parseType")

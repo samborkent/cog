@@ -123,6 +123,18 @@ caseSwitch:
 
     someFunc("")
     @print(val) // default
+
+    m : Map = {
+        "hello": 420,
+        "world": 69,
+    }
+
+    @print(m)
+
+    otherMap : map[uint64]ascii = {
+        10: "ten",
+        20: "twenty",
+    }
 }
 
 definedHere := "defined globally!"
@@ -169,6 +181,8 @@ someFunc : proc(str : utf8) = {
     @print(val) // overwrite
 }
 
+Map ~ map[utf8]uint64
+
 /*
 switch variable { // value type
 case "value 1":
@@ -196,7 +210,7 @@ async {
 
 }
 
-handleRequest : proc(ctx: context, req: Request) (res: Response, err: error) {
+handleRequest : proc(req: Request) Response ! RequestError {
     return error.none
 }
 

@@ -42,6 +42,6 @@ func Print(msg any) {
 			fmt.Println(msg.(fmt.Stringer).String())
 		}
 
-		panic(fmt.Sprintf("Print: type unsupported %q", val.Type()))
+		fmt.Println(msg)
 	}
 }

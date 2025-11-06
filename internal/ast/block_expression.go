@@ -11,8 +11,8 @@ var _ Expression = &ProcedureLiteral{}
 type ProcedureLiteral struct {
 	expression
 
-	Body         *Block
-	ProcdureType types.Type
+	Body          *Block
+	ProcedureType types.Type
 }
 
 func (l *ProcedureLiteral) Pos() (uint32, uint16) {
@@ -44,9 +44,9 @@ func (l *ProcedureLiteral) String() string {
 }
 
 func (l *ProcedureLiteral) Type() types.Type {
-	if l.ProcdureType == nil {
+	if l.ProcedureType == nil {
 		panic("procedure literal with nil type detected")
 	}
 
-	return l.ProcdureType
+	return l.ProcedureType
 }

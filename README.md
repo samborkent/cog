@@ -5,7 +5,7 @@ cog is a Go-based hobby programming language that brings some additional feature
 The following basic features are missing that need to be implemented before Cog can be used to write useful programs:
 
 - for-loops
-- slices, arrays, maps
+- slices & arrays
 - Go-to-Cog type conversions
 - Multi-file programs
 - Cog packages / imports
@@ -15,7 +15,7 @@ The following basic features are missing that need to be implemented before Cog 
 ### Implemented
 
 - Refined syntax
-    - Function declaration `main : proc(ctx : context) = { ... }`
+    - Function declaration `main : proc() = { ... }`
     - Typed variable declaration `foo : uint64 = 10`
     - Type alias `String ~ string`
 - Immutability by default
@@ -24,15 +24,14 @@ The following basic features are missing that need to be implemented before Cog 
     - `dyn` for dynamically scoped variables. Only allowed in package scope.
 - Extended types
     - Enum `enum[any]`
-    - Set `set[any]` (alias for `map[any]struct{}`)
+    - Map `map[comparable]any`
+    - Set `set[comparable]` (alias for `map[comparable]struct{}`)
     - Either `this | that`
     - Tuple `this, and, that`
     - Option `foo : uint64?; if (foo?) { ... }`
 - Clear builtin functions with `@` prefix
     - `@print(msg any)` print to std out
     - `@if[T any](if : bool, then : T, else :? T)`
-- `context` included as base type
-- `main` takes a `ctx` argument to control lifetime of application
 - Call Go std library functions
     - Import using `goimport`
     - Call using `@go` namespace prefix (e.g. `@go.strings.ToUpper("call me"))
@@ -46,6 +45,8 @@ The following basic features are missing that need to be implemented before Cog 
         - `proc` may be called async.
 - Optional function parameters `foo(optional :? utf8)`
     - With default values `foo(default :? utf8 = 10)`
+- Value switch
+    - `switch var { case val: ... }`
 
 ### Planned
 
@@ -55,9 +56,10 @@ The following basic features are missing that need to be implemented before Cog 
 - Variables need to be passed to scope explicitely (no catch all closures)
     - `(foo, bar) { // foo & bar are available in this scope }
 - Additional safety regarding mutability and ownership.
-- Value switch and type switch
-    - `switch var { case val: ... }`
-    - `switch var { type uint64: ... }`
+- Type switch
+    - `switch t { type uint64: ... }`
+    - For `t ~ any | interface | union`
+- Select statement
 - Generics with additional builtin generic constraints:
     - `string ~ ascii | utf8`
     - `int ~ int8 | int16 | int32 | int64 | int128`
@@ -86,9 +88,8 @@ The following basic features are missing that need to be implemented before Cog 
         - Error can be extracted with `err!`
         - E.g `res := someFunc(); if res! { @print(res) }`
 - Arena based allocations (using `arena` experiment)
-    - Allocations are handled through an arena contained within `context`.
     - A new arena is created when entering a new `proc` scope.
-    - Arena is cleared when leaving `proc` scope.\
+    - Arena is cleared when leaving `proc` scope.
 - Builtin operations for 2D / 3D / 4D slices.
 - Builtin `upx` binary packer for smaller binaries.
 - Script mode
@@ -121,8 +122,7 @@ The following basic features are missing that need to be implemented before Cog 
 - Audit all uses of `types.Underlying().Kind()`
 - Allow package-less files (scripts)
     - These files cannot be imported, and will be excuted as if wrapped in a main function.
-    - Should `ctx` be predefined in a script?
-- Disallow `main` in declarations besides `main : proc(ctx: context)`.
+- Disallow `main` in declarations besides `main : proc()`.
 - Fork and rework float16, uint128 and int128 imported packages.
 
 ## Example code

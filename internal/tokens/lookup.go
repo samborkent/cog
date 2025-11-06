@@ -55,6 +55,7 @@ var Keywords = map[string]Type{
 	"int32":      Int32,
 	"int64":      Int64,
 	"int128":     Int128,
+	"map":        Map,
 	"package":    Package,
 	"proc":       Procedure,
 	"return":     Return,
