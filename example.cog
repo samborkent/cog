@@ -210,7 +210,7 @@ async {
 
 }
 
-handleRequest : proc(ctx: context, req: Request) (res: Response, err: error) {
+handleRequest : proc(req: Request) Response ! RequestError {
     return error.none
 }
 
