@@ -130,6 +130,11 @@ caseSwitch:
     }
 
     @print(m)
+
+    otherMap : map[uint64]ascii = {
+        10: "ten",
+        20: "twenty",
+    }
 }
 
 definedHere := "defined globally!"

@@ -5,7 +5,7 @@ cog is a Go-based hobby programming language that brings some additional feature
 The following basic features are missing that need to be implemented before Cog can be used to write useful programs:
 
 - for-loops
-- slices, arrays, maps
+- slices, arrays
 - Go-to-Cog type conversions
 - Multi-file programs
 - Cog packages / imports
@@ -24,7 +24,8 @@ The following basic features are missing that need to be implemented before Cog 
     - `dyn` for dynamically scoped variables. Only allowed in package scope.
 - Extended types
     - Enum `enum[any]`
-    - Set `set[any]` (alias for `map[any]struct{}`)
+    - Map `map[comparable]any`
+    - Set `set[comparable]` (alias for `map[comparable]struct{}`)
     - Either `this | that`
     - Tuple `this, and, that`
     - Option `foo : uint64?; if (foo?) { ... }`
