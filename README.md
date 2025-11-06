@@ -253,6 +253,18 @@ caseSwitch:
 
     someFunc("")
     @print(val) // default
+
+    m : Map = {
+        "hello": 420,
+        "world": 69,
+    }
+
+    @print(m)
+
+    otherMap : map[uint64]ascii = {
+        10: "ten",
+        20: "twenty",
+    }
 }
 
 definedHere := "defined globally!"
@@ -298,4 +310,6 @@ someFunc : proc(str : utf8) = {
     val = "overwrite"
     @print(val) // overwrite
 }
+
+Map ~ map[utf8]uint64
 ```
