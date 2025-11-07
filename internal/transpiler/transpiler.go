@@ -11,7 +11,6 @@ import (
 	"unicode"
 
 	"github.com/samborkent/cog/internal/ast"
-	"github.com/samborkent/cog/internal/types"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -175,13 +174,6 @@ func convertExport(ident string, exported bool) string {
 	}
 
 	return str
-}
-
-func (t *Transpiler) convertField(field *types.Field) *goast.Field {
-	return &goast.Field{
-		Names: []*goast.Ident{{Name: convertExport(field.Name, field.Exported)}},
-		Type:  t.convertType(field.Type),
-	}
 }
 
 func (t *Transpiler) addCogImport() {

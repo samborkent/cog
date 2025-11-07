@@ -45,9 +45,14 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		}
 
 		if n.Identifier.ValueType.Kind() == types.OptionKind {
+			optionType, err := t.convertType(n.Identifier.ValueType)
+			if err != nil {
+				return nil, fmt.Errorf("converting option value type: %w", err)
+			}
+
 			// Wrap option type.
 			expr = &goast.CompositeLit{
-				Type: t.convertType(n.Identifier.ValueType),
+				Type: optionType,
 				Elts: []goast.Expr{
 					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
 					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
@@ -71,6 +76,11 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		typ := n.Assignment.Identifier.ValueType
 
 		if n.Assignment.Expression == nil {
+			declType, err := t.convertType(typ)
+			if err != nil {
+				return nil, fmt.Errorf("converting type in declaration: %w", err)
+			}
+
 			return []goast.Stmt{
 				&goast.DeclStmt{
 					Decl: &goast.GenDecl{
@@ -78,7 +88,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 						Specs: []goast.Spec{
 							&goast.ValueSpec{
 								Names: []*goast.Ident{ident},
-								Type:  t.convertType(typ),
+								Type:  declType,
 							},
 						},
 					},
@@ -95,7 +105,10 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		var declType goast.Expr
 
 		if typ != nil && typ != types.None {
-			declType = t.convertType(typ)
+			declType, err = t.convertType(typ)
+			if err != nil {
+				return nil, fmt.Errorf("converting type in declaration: %w", err)
+			}
 		}
 
 		if typ.Kind() == types.OptionKind {

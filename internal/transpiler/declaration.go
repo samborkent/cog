@@ -54,6 +54,11 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				tok = gotoken.VAR
 			}
 
+			declType, err := t.convertType(n.Assignment.Identifier.ValueType)
+			if err != nil {
+				return nil, fmt.Errorf("converting type in declaration: %w", err)
+			}
+
 			return []goast.Decl{
 				&goast.GenDecl{
 					Tok: gotoken.TYPE,
@@ -69,7 +74,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					Specs: []goast.Spec{
 						&goast.ValueSpec{
 							Names:  []*goast.Ident{valIdent},
-							Type:   t.convertType(n.Assignment.Identifier.ValueType),
+							Type:   declType,
 							Values: values,
 						},
 					},
@@ -86,12 +91,17 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		}
 
 		if n.Assignment.Expression == nil {
+			declType, err := t.convertType(n.Assignment.Identifier.ValueType)
+			if err != nil {
+				return nil, fmt.Errorf("converting type in declaration: %w", err)
+			}
+
 			return []goast.Decl{&goast.GenDecl{
 				Tok: tok,
 				Specs: []goast.Spec{
 					&goast.ValueSpec{
 						Names: []*goast.Ident{ident},
-						Type:  t.convertType(n.Assignment.Identifier.ValueType),
+						Type:  declType,
 					},
 				},
 			}}, nil
@@ -169,7 +179,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		}
 
 		if n.Assignment.Identifier.ValueType != types.None {
-			valueSpec.Type = t.convertType(n.Assignment.Identifier.ValueType)
+			valType, err := t.convertType(n.Assignment.Identifier.ValueType)
+			if err != nil {
+				return nil, fmt.Errorf("converting type in declaration: %w", err)
+			}
+
+			valueSpec.Type = valType
 		}
 
 		return []goast.Decl{&goast.GenDecl{
@@ -181,12 +196,17 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			return t.convertEnumDecl(n)
 		}
 
+		aliasType, err := t.convertType(n.Alias)
+		if err != nil {
+			return nil, fmt.Errorf("converting alias type: %w", err)
+		}
+
 		return []goast.Decl{&goast.GenDecl{
 			Tok: gotoken.TYPE,
 			Specs: []goast.Spec{
 				&goast.TypeSpec{
 					Name: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported)},
-					Type: t.convertType(n.Alias),
+					Type: aliasType,
 				},
 			},
 		}}, nil
@@ -247,6 +267,11 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 
 	typeName := &goast.Ident{Name: identifier + "Type"}
 
+	enumValType, err := t.convertType(enumType.ValueType)
+	if err != nil {
+		return nil, fmt.Errorf("converting enum value type: %w", err)
+	}
+
 	return []goast.Decl{
 		// Enum type declaration
 		&goast.GenDecl{
@@ -269,7 +294,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 			Specs: []goast.Spec{
 				&goast.TypeSpec{
 					Name: typeName,
-					Type: t.convertType(enumType.ValueType),
+					Type: enumValType,
 				},
 			},
 		},
@@ -295,7 +320,11 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 
 func mustBeVariable(t types.Kind) bool {
 	switch t {
-	case types.ProcedureKind:
+	case types.ArrayKind,
+		types.MapKind,
+		types.ProcedureKind,
+		types.SetKind,
+		types.SliceKind:
 		return true
 	default:
 		return false

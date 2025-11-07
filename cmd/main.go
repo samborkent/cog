@@ -138,7 +138,7 @@ func run(ctx context.Context, r io.Reader) {
 	<-done
 
 	if !write {
-		fmt.Printf("\nparsed nodes:\n\n")
+		fmt.Printf("parsed nodes:\n\n")
 
 		ln, col := f.Package.Pos()
 		fmt.Printf("%d - ln %d, col %d: %s\n", 0, ln, col, f.Package)
