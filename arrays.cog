@@ -5,4 +5,14 @@ package main
 
 array : [3]uint64 = {1, 2, 3}
 
+// compile error, literal too long
+//tooLong : [3]uint64 = {1, 2, 3, 4}
+
 slice : []utf8 = {"foo", "bar", "baz", "qux"}
+
+main : proc() = {
+    // TODO: fix line number
+    var local : []utf8
+    local = {"hello", "world"}
+    _=local
+}

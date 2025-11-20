@@ -11,6 +11,8 @@ import (
 )
 
 func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
+	var returnStmts []goast.Stmt
+
 	switch n := node.(type) {
 	case *ast.Assignment:
 		ident := &goast.Ident{Name: "_"}
@@ -60,20 +62,23 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			}
 		}
 
-		return []goast.Stmt{&goast.AssignStmt{
+		returnStmts = []goast.Stmt{&goast.AssignStmt{
 			Lhs: []goast.Expr{ident},
 			Tok: gotoken.ASSIGN,
 			Rhs: []goast.Expr{expr},
-		}}, nil
+		}}
 	case *ast.Break:
-		return []goast.Stmt{&goast.BranchStmt{
+		returnStmts = []goast.Stmt{&goast.BranchStmt{
 			Tok:   gotoken.BREAK,
 			Label: n.Label.Go(),
-		}}, nil
+		}}
 	case *ast.Declaration:
 		// Define as unused variable.
 		ident := t.symbols.Define(n.Assignment.Identifier.Name)
 		typ := n.Assignment.Identifier.ValueType
+
+		ln, _ := node.Pos()
+		comment := &goast.Comment{Text: fmt.Sprintf("\n//line %s:%d", t.file.Name, ln)}
 
 		if n.Assignment.Expression == nil {
 			declType, err := t.convertType(typ)
@@ -81,9 +86,12 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 				return nil, fmt.Errorf("converting type in declaration: %w", err)
 			}
 
-			return []goast.Stmt{
+			returnStmts = []goast.Stmt{
 				&goast.DeclStmt{
 					Decl: &goast.GenDecl{
+						Doc: &goast.CommentGroup{
+							List: []*goast.Comment{comment},
+						},
 						Tok: gotoken.VAR,
 						Specs: []goast.Spec{
 							&goast.ValueSpec{
@@ -93,7 +101,8 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 						},
 					},
 				},
-			}, nil
+			}
+			break
 		}
 
 		expr, err := t.convertExpr(n.Assignment.Expression)
@@ -128,8 +137,11 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			compositeLiteral.Type = &goast.Ident{Name: convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)}
 		}
 
-		return []goast.Stmt{&goast.DeclStmt{
+		returnStmts = []goast.Stmt{&goast.DeclStmt{
 			Decl: &goast.GenDecl{
+				Doc: &goast.CommentGroup{
+					List: []*goast.Comment{comment},
+				},
 				Tok: gotoken.VAR,
 				Specs: []goast.Spec{
 					&goast.ValueSpec{
@@ -139,16 +151,16 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 					},
 				},
 			},
-		}}, nil
+		}}
 	case *ast.ExpressionStatement:
 		expr, err := t.convertExpr(n.Expression)
 		if err != nil {
 			return nil, err
 		}
 
-		return []goast.Stmt{&goast.ExprStmt{
+		returnStmts = []goast.Stmt{&goast.ExprStmt{
 			X: expr,
-		}}, nil
+		}}
 	case *ast.IfStatement:
 		cond, err := t.convertExpr(n.Condition)
 		if err != nil {
@@ -191,7 +203,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			})
 		}
 
-		return stmts, nil
+		returnStmts = stmts
 	case *ast.Return:
 		if len(n.Values) == 0 {
 			return []goast.Stmt{&goast.ReturnStmt{}}, nil
@@ -208,9 +220,9 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			exprs = append(exprs, expr)
 		}
 
-		return []goast.Stmt{&goast.ReturnStmt{
+		returnStmts = []goast.Stmt{&goast.ReturnStmt{
 			Results: exprs,
-		}}, nil
+		}}
 	case *ast.Switch:
 		cases := make([]goast.Stmt, 0, len(n.Cases))
 
@@ -298,8 +310,12 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			}}, nil
 		}
 
-		return []goast.Stmt{switchStmt}, nil
+		returnStmts = []goast.Stmt{switchStmt}
 	default:
 		return nil, fmt.Errorf("unknown statement type '%T'", n)
 	}
+
+	// TODO: find out how to attach line directives to all statements.
+
+	return returnStmts, nil
 }

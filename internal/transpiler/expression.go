@@ -26,7 +26,13 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			exprs = append(exprs, expr)
 		}
 
+		arrayType, err := t.convertType(n.ArrayType)
+		if err != nil {
+			return nil, fmt.Errorf("converting array type: %w", err)
+		}
+
 		return &goast.CompositeLit{
+			Type: arrayType,
 			Elts: exprs,
 		}, nil
 	case *ast.ASCIILiteral:
@@ -364,7 +370,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			exprs = append(exprs, expr)
 		}
 
+		elemType, err := t.convertType(n.ElementType)
+		if err != nil {
+			return nil, fmt.Errorf("converting array type: %w", err)
+		}
+
 		return &goast.CompositeLit{
+			Type: &goast.ArrayType{
+				Elt: elemType,
+			},
 			Elts: exprs,
 		}, nil
 	case *ast.StructLiteral:

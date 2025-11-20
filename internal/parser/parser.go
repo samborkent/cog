@@ -34,7 +34,7 @@ func NewParser(tokens []tokens.Token, debug bool) (*Parser, error) {
 	return p, nil
 }
 
-func (p *Parser) Parse(ctx context.Context) (*ast.File, error) {
+func (p *Parser) Parse(ctx context.Context, fileName string) (*ast.File, error) {
 	p.findGlobals(ctx)
 
 	// Reset errors, so they're only printed once.
@@ -51,6 +51,7 @@ func (p *Parser) Parse(ctx context.Context) (*ast.File, error) {
 	}
 
 	f := &ast.File{
+		Name:       fileName,
 		Package:    p.parsePackage(),
 		Statements: []ast.Statement{},
 	}

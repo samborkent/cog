@@ -24,7 +24,7 @@ func transpileSource(t *testing.T, src string) string {
 	t.Helper()
 
 	l := lexer.NewLexer(strings.NewReader(src))
-	toks, err := l.Parse(context.Background())
+	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
 	}
@@ -34,7 +34,7 @@ func transpileSource(t *testing.T, src string) string {
 		t.Fatalf("parser init error: %v", err)
 	}
 
-	f, err := p.Parse(context.Background())
+	f, err := p.Parse(t.Context(), "")
 	if err != nil {
 		t.Fatalf("parser parse error: %v", err)
 	}
@@ -46,6 +46,7 @@ func transpileSource(t *testing.T, src string) string {
 	}
 
 	var buf bytes.Buffer
+
 	fset := gotoken.NewFileSet()
 	if err := goprinter.Fprint(&buf, fset, gofile); err != nil {
 		t.Fatalf("printing go ast: %v", err)
@@ -66,7 +67,7 @@ func runGenerated(t *testing.T, code string) (string, error) {
 		t.Fatalf("write generated file: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
 	defer cancel()
 
 	// run `go run <tmpdir>/integration_test_gen.go` with cwd = repo root (test runs from repo root)
@@ -78,9 +79,10 @@ func runGenerated(t *testing.T, code string) (string, error) {
 }
 
 // tryTranspile attempts to run the full pipeline and returns generated code or an error.
-func tryTranspile(src string) (string, error) {
+func tryTranspile(ctx context.Context, src string) (string, error) {
 	l := lexer.NewLexer(strings.NewReader(src))
-	toks, err := l.Parse(context.Background())
+
+	toks, err := l.Parse(ctx)
 	if err != nil {
 		return "", fmt.Errorf("lexer: %w", err)
 	}
@@ -90,18 +92,20 @@ func tryTranspile(src string) (string, error) {
 		return "", fmt.Errorf("parser init: %w", err)
 	}
 
-	f, err := p.Parse(context.Background())
+	f, err := p.Parse(ctx, "")
 	if err != nil {
 		return "", fmt.Errorf("parser parse: %w", err)
 	}
 
 	tr := transpiler.NewTranspiler(f)
+
 	gofile, err := tr.Transpile()
 	if err != nil {
 		return "", fmt.Errorf("transpile: %w", err)
 	}
 
 	var buf bytes.Buffer
+
 	fset := gotoken.NewFileSet()
 	if err := goprinter.Fprint(&buf, fset, gofile); err != nil {
 		return "", fmt.Errorf("printing go ast: %w", err)
@@ -136,7 +140,7 @@ main : proc() = {
 	@print(@if(true, "str", 10))
 }`
 
-	_, err := tryTranspile(src)
+	_, err := tryTranspile(t.Context(), src)
 	if err == nil {
 		t.Fatalf("expected parser/transpile error for @if type mismatch, got nil")
 	}
@@ -151,7 +155,7 @@ main : proc() = {
 	dyn inner : utf8 = "nope"
 }`
 
-	_, err := tryTranspile(src)
+	_, err := tryTranspile(t.Context(), src)
 	if err == nil {
 		t.Fatalf("expected parser error for dyn inside proc, got nil")
 	}
@@ -169,7 +173,7 @@ Status ~ enum[utf8] {
 main : proc() = {}
 `
 
-	_, err := tryTranspile(src)
+	_, err := tryTranspile(t.Context(), src)
 	if err == nil {
 		t.Fatalf("expected parser error for malformed enum literal (missing :=), got nil")
 	}
@@ -182,7 +186,7 @@ func TestMissingPackageProducesError(t *testing.T) {
 	src := `main : proc() = {}`
 
 	l := lexer.NewLexer(strings.NewReader(src))
-	toks, err := l.Parse(context.Background())
+	toks, err := l.Parse(t.Context())
 	if err != nil {
 		// If lexer fails that's also acceptable for this malformed input
 		t.Logf("lexer error (expected for malformed input): %v", err)
@@ -194,7 +198,7 @@ func TestMissingPackageProducesError(t *testing.T) {
 		t.Fatalf("parser init error: %v", err)
 	}
 
-	_, err = p.Parse(context.Background())
+	_, err = p.Parse(t.Context(), "")
 	if err == nil {
 		t.Fatalf("expected parser error for missing package, got nil")
 	}
@@ -257,7 +261,7 @@ main : proc() = {}`
 
 	// Run with parser debug enabled to surface where the parser may hang.
 	l := lexer.NewLexer(strings.NewReader(src))
-	toks, err := l.Parse(context.Background())
+	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
 	}
@@ -270,7 +274,7 @@ main : proc() = {}`
 	done := make(chan struct{})
 	var perr error
 	go func() {
-		_, perr = p.Parse(context.Background())
+		_, perr = p.Parse(t.Context(), "")
 		close(done)
 	}()
 
@@ -292,7 +296,7 @@ main : proc() = {
 	@print(@if(true, 1, 2)
 }`
 
-	_, err := tryTranspile(src)
+	_, err := tryTranspile(t.Context(), src)
 	if err == nil {
 		t.Fatalf("expected parser error for missing paren in @if, got nil")
 	}
@@ -307,7 +311,7 @@ main : proc() = {
 	x := y
 }`
 
-	_, err := tryTranspile(src)
+	_, err := tryTranspile(t.Context(), src)
 	if err == nil {
 		t.Fatalf("expected parser error for undefined identifier, got nil")
 	}
@@ -327,7 +331,7 @@ upper : func() utf8 = {
 main : proc() = {}
 `
 
-	_, err := tryTranspile(src)
+	_, err := tryTranspile(t.Context(), src)
 	if err == nil {
 		t.Fatalf("expected transpile error for func referencing dyn variable, got nil")
 	}
