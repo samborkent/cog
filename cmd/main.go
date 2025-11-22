@@ -1,15 +1,12 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
 	goprinter "go/printer"
 	gotoken "go/token"
-	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -37,47 +34,9 @@ func main() {
 	defer stop()
 
 	if fileName == "" {
-		runPromt(ctx)
+		panic("missing file name")
 	} else {
 		runFile(ctx, fileName)
-	}
-}
-
-func runPromt(ctx context.Context) {
-	scanner := bufio.NewScanner(os.Stdin)
-
-	lines := make(chan []byte, 1)
-
-	go func() {
-		for scanner.Scan() {
-			if ctx.Err() != nil {
-				return
-			}
-
-			_, err := fmt.Print("> ")
-			if err != nil {
-				panic(err)
-			}
-
-			line := scanner.Bytes()
-			if len(line) == 0 {
-				continue
-			}
-
-			lines <- line
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		close(lines)
-		break
-	case line := <-lines:
-		run(ctx, bytes.NewReader(line))
-	}
-
-	if err := scanner.Err(); err != nil {
-		panic(err)
 	}
 }
 
@@ -96,8 +55,8 @@ func runFile(ctx context.Context, fileName string) {
 	run(ctx, file)
 }
 
-func run(ctx context.Context, r io.Reader) {
-	l := lexer.NewLexer(r)
+func run(ctx context.Context, file *os.File) {
+	l := lexer.NewLexer(file)
 
 	tokens, err := l.Parse(ctx)
 	if err != nil {
@@ -127,7 +86,7 @@ func run(ctx context.Context, r io.Reader) {
 			}
 		}()
 
-		f, err = p.Parse(ctx)
+		f, err = p.Parse(ctx, file.Name())
 		if err != nil {
 			fmt.Println(err.Error())
 		}
@@ -138,7 +97,7 @@ func run(ctx context.Context, r io.Reader) {
 	<-done
 
 	if !write {
-		fmt.Printf("\nparsed nodes:\n\n")
+		fmt.Printf("parsed nodes:\n\n")
 
 		ln, col := f.Package.Pos()
 		fmt.Printf("%d - ln %d, col %d: %s\n", 0, ln, col, f.Package)

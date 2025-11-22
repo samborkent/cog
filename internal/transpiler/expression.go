@@ -14,6 +14,27 @@ import (
 
 func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	switch n := node.(type) {
+	case *ast.ArrayLiteral:
+		exprs := make([]goast.Expr, 0, len(n.Values))
+
+		for _, val := range n.Values {
+			expr, err := t.convertExpr(val)
+			if err != nil {
+				return nil, fmt.Errorf("converting expression in slice literal: %w", err)
+			}
+
+			exprs = append(exprs, expr)
+		}
+
+		arrayType, err := t.convertType(n.ArrayType)
+		if err != nil {
+			return nil, fmt.Errorf("converting array type: %w", err)
+		}
+
+		return &goast.CompositeLit{
+			Type: arrayType,
+			Elts: exprs,
+		}, nil
 	case *ast.ASCIILiteral:
 		return n.Go(), nil
 	case *ast.BoolLiteral:
@@ -46,8 +67,13 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			// The number of input parameters is greater than the number of arguments, so there are optional parameters.
 			for i := len(args); i < len(procType.Parameters); i++ {
 				if procType.Parameters[i].Default == nil {
+					argType, err := t.convertType(procType.Parameters[i].Type)
+					if err != nil {
+						return nil, fmt.Errorf("converting call argument %d type: %w", i, err)
+					}
+
 					// Add zero value of parameter type.
-					args = append(args, comp.ZeroValue(t.convertType(procType.Parameters[i].Type)))
+					args = append(args, comp.ZeroValue(argType))
 					continue
 				}
 
@@ -93,6 +119,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		name := convertExport(n.Name, n.Exported)
 
 		if n.Qualifier == ast.QualifierDynamic {
+			if t.inFunc {
+				return nil, fmt.Errorf("func cannot reference dynamically scoped variable %q", n.Name)
+			}
+
+			dynType, err := t.convertType(n.ValueType)
+			if err != nil {
+				return nil, fmt.Errorf("converting dynamically scope variable type: %w", err)
+			}
+
 			return &goast.TypeAssertExpr{
 				X: &goast.CallExpr{
 					Fun: &goast.SelectorExpr{
@@ -105,7 +140,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 						},
 					},
 				},
-				Type: t.convertType(n.ValueType),
+				Type: dynType,
 			}, nil
 		}
 
@@ -118,6 +153,21 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		t.symbols.MarkUsed(name)
 
 		return ident, nil
+	case *ast.Index:
+		ident, err := t.convertExpr(n.Identifier)
+		if err != nil {
+			return nil, fmt.Errorf("converting identifier: %w", err)
+		}
+
+		index, err := t.convertExpr(n.Index)
+		if err != nil {
+			return nil, fmt.Errorf("converting index: %w", err)
+		}
+
+		return &goast.IndexExpr{
+			X:     ident,
+			Index: index,
+		}, nil
 	case *ast.Infix:
 		lhs, err := t.convertExpr(n.Left)
 		if err != nil {
@@ -179,10 +229,20 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 		}
 
+		keyType, err := t.convertType(n.KeyType)
+		if err != nil {
+			return nil, fmt.Errorf("converting map key type: %w", err)
+		}
+
+		valType, err := t.convertType(n.ValueType)
+		if err != nil {
+			return nil, fmt.Errorf("converting map value type: %w", err)
+		}
+
 		return &goast.CompositeLit{
 			Type: &goast.MapType{
-				Key:   t.convertType(n.KeyType),
-				Value: t.convertType(n.ValueType),
+				Key:   keyType,
+				Value: valType,
 			},
 			Elts: exprs,
 		}, nil
@@ -197,25 +257,20 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			X:  right,
 		}, nil
 	case *ast.ProcedureLiteral:
-		// procType, ok := n.ProcdureType.(*types.Procedure)
-		// if !ok {
-		// 	panic("unable to assert procedure type")
-		// }
-
 		stmts := make([]goast.Stmt, 0, len(n.Body.Statements))
-
-		// if len(procType.Parameters) > 0 {
-		// 	// Enter parameter scope.
-		// 	t.symbols = NewEnclosedSymbolTable(t.symbols)
-
-		// 	for _, param := range procType.Parameters {
-		// 		_ = t.symbols.Define(param.Name)
-		// 	}
-		// }
 
 		if len(n.Body.Statements) > 0 {
 			// Enter body scope.
 			t.symbols = NewEnclosedSymbolTable(t.symbols)
+		}
+
+		// Track whether we're inside a func. When inside a func,
+		// referencing dynamically scoped variables is disallowed.
+		prevInFunc := t.inFunc
+		if procType, ok := n.ProcedureType.(*types.Procedure); ok {
+			t.inFunc = procType.Function
+		} else {
+			t.inFunc = false
 		}
 
 		for _, s := range n.Body.Statements {
@@ -232,13 +287,16 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			t.symbols = t.symbols.Outer
 		}
 
-		// if len(procType.Parameters) > 0 {
-		// 	// Leave parameter scope.
-		// 	t.symbols = t.symbols.Outer
-		// }
+		// Restore previous func-context flag.
+		t.inFunc = prevInFunc
+
+		procType, err := t.convertType(n.ProcedureType)
+		if err != nil {
+			return nil, fmt.Errorf("converting procedure type: %w", err)
+		}
 
 		return &goast.FuncLit{
-			Type: t.convertType(n.ProcedureType).(*goast.FuncType),
+			Type: procType.(*goast.FuncType),
 			Body: &goast.BlockStmt{
 				List: stmts,
 			},
@@ -300,13 +358,41 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 		}
 
+		elemType, err := t.convertType(n.ValueType)
+		if err != nil {
+			return nil, fmt.Errorf("converting set element type: %w", err)
+		}
+
 		return &goast.CompositeLit{
 			Type: &goast.IndexExpr{
 				X: &goast.SelectorExpr{
 					X:   &goast.Ident{Name: "cog"},
 					Sel: &goast.Ident{Name: "Set"},
 				},
-				Index: t.convertType(n.ValueType),
+				Index: elemType,
+			},
+			Elts: exprs,
+		}, nil
+	case *ast.SliceLiteral:
+		exprs := make([]goast.Expr, 0, len(n.Values))
+
+		for _, val := range n.Values {
+			expr, err := t.convertExpr(val)
+			if err != nil {
+				return nil, fmt.Errorf("converting expression in slice literal: %w", err)
+			}
+
+			exprs = append(exprs, expr)
+		}
+
+		elemType, err := t.convertType(n.ElementType)
+		if err != nil {
+			return nil, fmt.Errorf("converting array type: %w", err)
+		}
+
+		return &goast.CompositeLit{
+			Type: &goast.ArrayType{
+				Elt: elemType,
 			},
 			Elts: exprs,
 		}, nil

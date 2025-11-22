@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/samborkent/cog/internal/types"
@@ -32,6 +33,9 @@ func (l *ProcedureLiteral) String() string {
 		if i == 0 {
 			_ = out.WriteByte('\n')
 		}
+
+		ln, col := stmt.Pos()
+		_, _ = out.WriteString(fmt.Sprintf("ln %d, col %d:", ln, col))
 
 		_ = out.WriteByte('\t')
 		_, _ = out.WriteString(stmt.String())

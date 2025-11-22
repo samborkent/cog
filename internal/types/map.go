@@ -6,14 +6,14 @@ type Map struct {
 	Key, Value Type
 }
 
-func (s *Map) Kind() Kind {
+func (m *Map) Kind() Kind {
 	return MapKind
 }
 
-func (s *Map) String() string {
-	return "map[" + s.Key.String() + "]" + s.Value.String()
+func (m *Map) String() string {
+	return "map[" + m.Key.String() + "]" + m.Value.String()
 }
 
-func (s *Map) Underlying() Type {
-	return s
+func (m *Map) Underlying() Type {
+	return m
 }

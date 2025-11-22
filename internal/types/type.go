@@ -5,3 +5,8 @@ type Type interface {
 	String() string
 	Underlying() Type
 }
+
+type Expression interface {
+	String() string
+	Type() Type
+}

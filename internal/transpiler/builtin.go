@@ -40,6 +40,11 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 			args = append(args, alternative)
 		}
 
+		ifType, err := t.convertType(node.Arguments[1].Type())
+		if err != nil {
+			return nil, fmt.Errorf("converting @if builtin type: %w", err)
+		}
+
 		t.addCogImport()
 
 		return &goast.CallExpr{
@@ -48,7 +53,7 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 					X:   &goast.Ident{Name: "cog"},
 					Sel: &goast.Ident{Name: "If"},
 				},
-				Index: t.convertType(node.Arguments[1].Type()),
+				Index: ifType,
 			},
 			Args: args,
 		}, nil

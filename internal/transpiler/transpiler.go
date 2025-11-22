@@ -11,7 +11,6 @@ import (
 	"unicode"
 
 	"github.com/samborkent/cog/internal/ast"
-	"github.com/samborkent/cog/internal/types"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -26,6 +25,7 @@ type Transpiler struct {
 	imports map[string]*goast.ImportSpec // Key: import name
 
 	symbols *SymbolTable
+	inFunc  bool
 }
 
 func NewTranspiler(f *ast.File) *Transpiler {
@@ -89,6 +89,9 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 				continue
 			}
 
+			// Attach a //line directive mapping generated decls back to the original Cog node.
+			t.attachLineDecl(gonodes, s)
+
 			gofile.Decls = append(gofile.Decls, gonodes...)
 		}
 	}
@@ -114,6 +117,59 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	return gofile, nil
 }
 
+func (t *Transpiler) addCogImport() {
+	_, ok := t.imports["cog"]
+	if !ok {
+		t.imports["cog"] = &goast.ImportSpec{
+			Name: &goast.Ident{Name: "cog"},
+			Path: &goast.BasicLit{
+				Kind:  gotoken.STRING,
+				Value: `"github.com/samborkent/cog"`,
+			},
+		}
+	}
+}
+
+// attachLineDecl adds a //line directive comment to the first declaration in decls
+// so that compiler errors refer back to the originating Cog source location.
+func (t *Transpiler) attachLineDecl(decls []goast.Decl, node ast.Node) {
+	if t.file.Name == "" || len(decls) == 0 || node == nil {
+		return
+	}
+
+	ln, _ := node.Pos()
+	comment := &goast.Comment{Text: fmt.Sprintf("//line %s:%d", t.file.Name, ln)}
+
+	// Attach to the first declaration where a Doc comment is applicable.
+	for i := range decls {
+		switch d := decls[i].(type) {
+		case *goast.GenDecl:
+			if d.Doc == nil {
+				d.Doc = &goast.CommentGroup{List: []*goast.Comment{comment}}
+			} else {
+				// Prepend so the line directive appears immediately before decl.
+				d.Doc.List = append([]*goast.Comment{comment}, d.Doc.List...)
+			}
+
+			return
+		case *goast.FuncDecl:
+			if d.Doc == nil {
+				d.Doc = &goast.CommentGroup{List: []*goast.Comment{comment}}
+			} else {
+				d.Doc.List = append([]*goast.Comment{comment}, d.Doc.List...)
+			}
+
+			return
+		}
+	}
+
+	// If no suitable decl found, as a fallback add a GenDecl with the comment.
+	decls[0] = &goast.GenDecl{
+		Tok: gotoken.IMPORT,
+		Doc: &goast.CommentGroup{List: []*goast.Comment{comment}},
+	}
+}
+
 func convertExport(ident string, exported bool) string {
 	r := rune(ident[0])
 	str := string(r)
@@ -131,24 +187,4 @@ func convertExport(ident string, exported bool) string {
 	}
 
 	return str
-}
-
-func (t *Transpiler) convertField(field *types.Field) *goast.Field {
-	return &goast.Field{
-		Names: []*goast.Ident{{Name: convertExport(field.Name, field.Exported)}},
-		Type:  t.convertType(field.Type),
-	}
-}
-
-func (t *Transpiler) addCogImport() {
-	_, ok := t.imports["cog"]
-	if !ok {
-		t.imports["cog"] = &goast.ImportSpec{
-			Name: &goast.Ident{Name: "cog"},
-			Path: &goast.BasicLit{
-				Kind:  gotoken.STRING,
-				Value: `"github.com/samborkent/cog"`,
-			},
-		}
-	}
 }

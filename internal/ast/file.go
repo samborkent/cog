@@ -7,6 +7,7 @@ var _ Statement = &File{}
 type File struct {
 	statement
 
+	Name       string
 	Package    *Package
 	Statements []Statement
 }
@@ -21,6 +22,9 @@ func (f *File) Hash() uint64 {
 
 func (f *File) String() string {
 	var out strings.Builder
+
+	_, _ = out.WriteString(f.Name)
+	_ = out.WriteByte('\n')
 
 	_, _ = out.WriteString(f.Package.String())
 

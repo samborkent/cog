@@ -11,6 +11,39 @@ import (
 )
 
 func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.Expression {
+	expr := p.boolean(ctx, typeToken)
+
+	for p.match(tokens.LBracket) {
+		if ctx.Err() != nil || expr == nil {
+			return nil
+		}
+
+		operator := p.this()
+		p.advance("expression index operator") // consume operator
+		index := p.boolean(ctx, types.None)
+
+		expr = &ast.Index{
+			Token:      operator,
+			Identifier: expr,
+			Index:      index,
+		}
+
+		if p.this().Type != tokens.RBracket {
+			p.error(p.this(), "expected ] after index expression", "expression")
+			return nil
+		}
+
+		p.advance("expression ]") // consume ]
+	}
+
+	if expr != nil {
+		return expr
+	}
+
+	return nil
+}
+
+func (p *Parser) boolean(ctx context.Context, typeToken types.Type) ast.Expression {
 	expr := p.equality(ctx, typeToken)
 
 	for p.match(tokens.And, tokens.Or) {
@@ -21,12 +54,12 @@ func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.Expre
 		if !types.IsBool(expr.Type()) {
 			fmt.Println(expr.String())
 
-			p.error(p.this(), "operator requires bool type", "expression")
+			p.error(p.this(), "operator requires bool type", "boolean")
 			return nil
 		}
 
 		operator := p.this()
-		p.advance("expression operator") // consume operator
+		p.advance("boolean operator") // consume operator
 		right := p.equality(ctx, types.Basics[types.Bool])
 
 		expr = &ast.Infix{
@@ -424,6 +457,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			// Place back type alias
 			switch literal := expr.(type) {
+			case *ast.ArrayLiteral:
+				literal.ArrayType = t.Derived.Underlying().(*types.Array)
+				return literal
+			case *ast.MapLiteral:
+				literal.ValueType = t
+				return literal
 			case *ast.SetLiteral:
 				literal.ValueType = t
 				return literal
@@ -439,6 +478,39 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			return expr
+		case *types.Array:
+			// TODO: see if it's possible to evaluate array length
+			arrayLiteral := &ast.ArrayLiteral{
+				Token:     p.this(),
+				ArrayType: t,
+				Values:    []ast.Expression{},
+			}
+
+			p.advance("primary array {") // consume {
+
+			for !p.match(tokens.RBrace, tokens.EOF) {
+				if ctx.Err() != nil {
+					return nil
+				}
+
+				value := p.expression(ctx, t.Element)
+				if value != nil {
+					arrayLiteral.Values = append(arrayLiteral.Values, value)
+				}
+
+				if p.this().Type == tokens.Comma {
+					p.advance("primary array ,") // consume ','
+				}
+			}
+
+			if p.this().Type != tokens.RBrace {
+				p.error(arrayLiteral.Token, "array literal is missing closing }", "primary")
+				return nil
+			}
+
+			p.advance("primary array }") // consume }
+
+			return arrayLiteral
 		case *types.Map:
 			mapLiteral := &ast.MapLiteral{
 				Token:     p.this(),
@@ -449,8 +521,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			p.advance("primary map {") // consume {
 
-		mapLiteralLoop:
-			for {
+			for !p.match(tokens.RBrace, tokens.EOF) {
+				if ctx.Err() != nil {
+					return nil
+				}
+
 				key := p.expression(ctx, t.Key)
 				if key != nil {
 					// TODO: optimize
@@ -479,21 +554,14 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 					Value: val,
 				})
 
-				switch p.this().Type {
-				case tokens.Comma:
-					p.advance("primary set ,") // consume ,
-
-					if p.this().Type == tokens.RBrace {
-						break mapLiteralLoop
-					}
-
-					continue
-				case tokens.RBrace, tokens.EOF:
-					break mapLiteralLoop
-				default:
-					p.error(p.this(), "unexpected token in map literal", "primary")
-					return nil
+				if p.this().Type == tokens.Comma {
+					p.advance("primary map ,") // consume ,
 				}
+			}
+
+			if p.this().Type != tokens.RBrace {
+				p.error(mapLiteral.Token, "map literal is missing closing }", "primary")
+				return nil
 			}
 
 			p.advance("primary map }") // consume }
@@ -540,8 +608,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			p.advance("primary set {") // consume {
 
-		setLiteralLoop:
-			for {
+			for !p.match(tokens.RBrace, tokens.EOF) {
+				if ctx.Err() != nil {
+					return nil
+				}
+
 				value := p.expression(ctx, t.Element)
 				if value != nil {
 					for i := range setLiteral.Values {
@@ -554,26 +625,51 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 					setLiteral.Values = append(setLiteral.Values, value)
 				}
 
-				switch p.this().Type {
-				case tokens.Comma:
+				if p.this().Type == tokens.Comma {
 					p.advance("primary set ,") // consume ','
-
-					if p.this().Type == tokens.RBrace {
-						break setLiteralLoop
-					}
-
-					continue
-				case tokens.RBrace, tokens.EOF:
-					break setLiteralLoop
-				default:
-					p.error(p.this(), "unexpected token in set literal", "primary")
-					return nil
 				}
+			}
+
+			if p.this().Type != tokens.RBrace {
+				p.error(setLiteral.Token, "set literal is missing closing }", "primary")
+				return nil
 			}
 
 			p.advance("primary set }") // consume }
 
 			return setLiteral
+		case *types.Slice:
+			sliceLiteral := &ast.SliceLiteral{
+				Token:       p.this(),
+				ElementType: t.Element,
+				Values:      []ast.Expression{},
+			}
+
+			p.advance("primary slice {") // consume {
+
+			for !p.match(tokens.RBrace, tokens.EOF) {
+				if ctx.Err() != nil {
+					return nil
+				}
+
+				value := p.expression(ctx, t.Element)
+				if value != nil {
+					sliceLiteral.Values = append(sliceLiteral.Values, value)
+				}
+
+				if p.this().Type == tokens.Comma {
+					p.advance("primary array ,") // consume ','
+				}
+			}
+
+			if p.this().Type != tokens.RBrace {
+				p.error(sliceLiteral.Token, "slice literal is missing closing }", "primary")
+				return nil
+			}
+
+			p.advance("primary slice }") // consume }
+
+			return sliceLiteral
 		case *types.Struct:
 			structLiteral := &ast.StructLiteral{
 				Token:      p.this(),
@@ -583,7 +679,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			p.advance("primary struct {") // consume {
 
-			for p.this().Type != tokens.RBrace {
+			for !p.match(tokens.RBrace, tokens.EOF) {
+				if ctx.Err() != nil {
+					return nil
+				}
+
 				if p.this().Type != tokens.Identifier {
 					p.error(p.this(), "expected identifier at in struct literal", "primary")
 					return nil
@@ -628,6 +728,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				structLiteral.Values = append(structLiteral.Values, fieldValue)
 			}
 
+			if p.this().Type != tokens.RBrace {
+				p.error(structLiteral.Token, "struct literal is missing closing }", "primary")
+				return nil
+			}
+
 			p.advance("primary struct }") // consume }
 
 			return structLiteral
@@ -662,7 +767,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			if p.this().Type != tokens.RBrace {
-				p.error(p.this(), "expected } after tuple literal", "primary")
+				p.error(tupleLiteral.Token, "tuple literal is missing closing }", "primary")
 				return nil
 			}
 
@@ -670,13 +775,22 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			return tupleLiteral
 		default:
-			typeStr := ""
+			if typeToken == nil || typeToken == types.None {
+				p.error(p.prev(), "cannot infer type for untyped literal", "primary")
+				p.advance("primary {") // consume {
 
-			if typeToken != nil {
-				typeStr = typeToken.String()
+				for !p.match(tokens.RBrace, tokens.EOF) {
+					p.advance("primary skip token")
+				}
+
+				if p.this().Type == tokens.RBrace {
+					p.advance("primary }") // consume }
+				}
+
+				return nil
 			}
 
-			p.error(p.this(), fmt.Sprintf("unexpected type %q for expression starting with {", typeStr), "primary")
+			p.error(p.this(), fmt.Sprintf("unexpected type %q for expression starting with {", typeToken.String()), "primary")
 			return nil
 		}
 	default:

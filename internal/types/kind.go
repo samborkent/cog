@@ -32,6 +32,8 @@ const (
 	GenericKind
 
 	// Container types
+	ArrayKind
+	SliceKind
 	EnumKind
 	MapKind
 	SetKind

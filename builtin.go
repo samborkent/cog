@@ -31,7 +31,7 @@ func Print(msg any) {
 	case reflect.String:
 		fmt.Println(val.String())
 	case reflect.Slice:
-		if val.Elem().Kind() == reflect.Uint8 {
+		if val.Index(0).Kind() == reflect.Uint8 {
 			b := val.Bytes()
 			fmt.Println(unsafe.String(&b[0], len(b)))
 		} else {
