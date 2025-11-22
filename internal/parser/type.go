@@ -156,7 +156,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		if p.this().Type == tokens.RBracket {
 			// Slice type
 			if p.this().Type != tokens.RBracket {
-				p.error(p.this(), "expected closing ] in slice type", "parseCombinedType")
+				p.error(p.this(), "expected closing ] in slice type", "parseType")
 				return nil
 			}
 
@@ -193,7 +193,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		}
 
 		if p.this().Type != tokens.RBracket {
-			p.error(p.this(), "expected closing ] in array type", "parseCombinedType")
+			p.error(p.this(), "expected closing ] in array type", "parseType")
 			return nil
 		}
 

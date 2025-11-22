@@ -153,6 +153,21 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		t.symbols.MarkUsed(name)
 
 		return ident, nil
+	case *ast.Index:
+		ident, err := t.convertExpr(n.Identifier)
+		if err != nil {
+			return nil, fmt.Errorf("converting identifier: %w", err)
+		}
+
+		index, err := t.convertExpr(n.Index)
+		if err != nil {
+			return nil, fmt.Errorf("converting index: %w", err)
+		}
+
+		return &goast.IndexExpr{
+			X:     ident,
+			Index: index,
+		}, nil
 	case *ast.Infix:
 		lhs, err := t.convertExpr(n.Left)
 		if err != nil {

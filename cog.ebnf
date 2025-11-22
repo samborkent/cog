@@ -6,8 +6,12 @@ primary
     | "false"
     | "(", expression, ")";
 
+index
+    = primary, { "[", expression, "]" };
+
 suffix
-    = prefix, "?"
+    = suffix, ( "?"
+    | "!" )
     | primary;
 
 prefix
@@ -34,6 +38,5 @@ equality
     | "==" ), comparison };
 
 expression
-    = equality, { ( "and"
-    | "or"
-    | "xor" ), equality };
+    = equality, { ( "&&"
+    | "||" ), equality };

@@ -11,6 +11,39 @@ import (
 )
 
 func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.Expression {
+	expr := p.boolean(ctx, typeToken)
+
+	for p.match(tokens.LBracket) {
+		if ctx.Err() != nil || expr == nil {
+			return nil
+		}
+
+		operator := p.this()
+		p.advance("expression index operator") // consume operator
+		index := p.boolean(ctx, types.None)
+
+		expr = &ast.Index{
+			Token:      operator,
+			Identifier: expr,
+			Index:      index,
+		}
+
+		if p.this().Type != tokens.RBracket {
+			p.error(p.this(), "expected ] after index expression", "expression")
+			return nil
+		}
+
+		p.advance("expression ]") // consume ]
+	}
+
+	if expr != nil {
+		return expr
+	}
+
+	return nil
+}
+
+func (p *Parser) boolean(ctx context.Context, typeToken types.Type) ast.Expression {
 	expr := p.equality(ctx, typeToken)
 
 	for p.match(tokens.And, tokens.Or) {
@@ -21,12 +54,12 @@ func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.Expre
 		if !types.IsBool(expr.Type()) {
 			fmt.Println(expr.String())
 
-			p.error(p.this(), "operator requires bool type", "expression")
+			p.error(p.this(), "operator requires bool type", "boolean")
 			return nil
 		}
 
 		operator := p.this()
-		p.advance("expression operator") // consume operator
+		p.advance("boolean operator") // consume operator
 		right := p.equality(ctx, types.Basics[types.Bool])
 
 		expr = &ast.Infix{

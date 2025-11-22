@@ -14,5 +14,16 @@ main : proc() = {
     // TODO: fix line number
     var local : []utf8
     local = {"hello", "world"}
-    _=local
+    _ = local
+
+    localCopy := local[0]
+
+    otherMap : map[uint64]ascii = {
+        10: "ten",
+        20: "twenty",
+    }
+
+    val := otherMap[10]
+
+    @print(val)
 }
