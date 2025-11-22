@@ -135,6 +135,12 @@ caseSwitch:
         10: "ten",
         20: "twenty",
     }
+
+    var localSlice : []utf8
+    localSlice = {"hello", "world"}
+    localCopy := localSlice[0]
+    mapVal := otherMap[10]
+    @print(mapVal)
 }
 
 definedHere := "defined globally!"
@@ -182,6 +188,10 @@ someFunc : proc(str : utf8) = {
 }
 
 Map ~ map[utf8]uint64
+
+array : [3]uint64 = {1, 2, 3}
+slice : []utf8 = {"foo", "bar", "baz", "qux"}
+SliceType ~ []uint64
 
 /*
 switch variable { // value type

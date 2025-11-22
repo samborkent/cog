@@ -3,7 +3,7 @@
 version: '3'
 
 vars:
-  FILE: arrays.cog
+  FILE: example.cog
   DEBUG: false
 
 tasks:

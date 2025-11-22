@@ -5,7 +5,6 @@ cog is a Go-based hobby programming language that brings some additional feature
 The following basic features are missing that need to be implemented before Cog can be used to write useful programs:
 
 - for-loops
-- slices & arrays
 - Go-to-Cog type conversions
 - Multi-file programs
 - Cog packages / imports
@@ -23,6 +22,8 @@ The following basic features are missing that need to be implemented before Cog 
     - `var` for mutable variables. Not allowed in package scope.
     - `dyn` for dynamically scoped variables. Only allowed in package scope.
 - Extended types
+    - Array `[const]uint64`
+    - Slice `[]uint64`
     - Enum `enum[any]`
     - Map `map[comparable]any`
     - Set `set[comparable]` (alias for `map[comparable]struct{}`)
@@ -265,6 +266,12 @@ caseSwitch:
         10: "ten",
         20: "twenty",
     }
+
+    var localSlice : []utf8
+    localSlice = {"hello", "world"}
+    localCopy := localSlice[0]
+    mapVal := otherMap[10]
+    @print(mapVal)
 }
 
 definedHere := "defined globally!"
@@ -312,4 +319,8 @@ someFunc : proc(str : utf8) = {
 }
 
 Map ~ map[utf8]uint64
+
+array : [3]uint64 = {1, 2, 3}
+slice : []utf8 = {"foo", "bar", "baz", "qux"}
+SliceType ~ []uint64
 ```
