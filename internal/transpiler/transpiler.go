@@ -1,11 +1,14 @@
 package transpiler
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	goast "go/ast"
+	goprinter "go/printer"
 	gotoken "go/token"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -26,16 +29,78 @@ type Transpiler struct {
 	imports map[string]*goast.ImportSpec // Key: import name
 
 	symbols *SymbolTable
+	// original source filename, used when emitting //line directives
+	srcName string
 }
 
-func NewTranspiler(f *ast.File) *Transpiler {
+func NewTranspiler(f *ast.File, srcName string) *Transpiler {
 	nodes := make(map[uint64]ast.Node)
 
 	nodes[f.Hash()] = f
 	nodes[f.Package.Hash()] = f.Package
 
+	// Collect all nodes (including nested statements) so we can map markers
+	// inserted during conversion back to their original source positions.
+	var collectStmt func(ast.Statement)
+
+	collectStmt = func(s ast.Statement) {
+		nodes[s.Hash()] = s
+
+		switch n := s.(type) {
+		case *ast.Block:
+			for _, st := range n.Statements {
+				collectStmt(st)
+			}
+		case *ast.IfStatement:
+			if n.Consequence != nil {
+				collectStmt(n.Consequence)
+			}
+			if n.Alternative != nil {
+				collectStmt(n.Alternative)
+			}
+		case *ast.Switch:
+			for _, c := range n.Cases {
+				nodes[c.Hash()] = c
+				for _, st := range c.Body {
+					collectStmt(st)
+				}
+			}
+			if n.Default != nil {
+				nodes[n.Default.Hash()] = n.Default
+				for _, st := range n.Default.Body {
+					collectStmt(st)
+				}
+			}
+		}
+	}
+
 	for _, stmt := range f.Statements {
-		nodes[stmt.Hash()] = stmt
+		collectStmt(stmt)
+	}
+
+	// Also traverse expressions on top-level declarations to find any
+	// procedure literals (function bodies) and collect their statements.
+	var collectExpr func(ast.Expression)
+
+	collectExpr = func(e ast.Expression) {
+		if e == nil {
+			return
+		}
+
+		switch ex := e.(type) {
+		case *ast.ProcedureLiteral:
+			if ex.Body != nil {
+				collectStmt(ex.Body)
+			}
+		}
+	}
+
+	for _, stmt := range f.Statements {
+		if d, ok := stmt.(*ast.Declaration); ok {
+			if d.Assignment != nil && d.Assignment.Expression != nil {
+				collectExpr(d.Assignment.Expression)
+			}
+		}
 	}
 
 	return &Transpiler{
@@ -43,10 +108,11 @@ func NewTranspiler(f *ast.File) *Transpiler {
 		fset:    gotoken.NewFileSet(),
 		nodes:   nodes,
 		symbols: NewSymbolTable(),
+		srcName: srcName,
 	}
 }
 
-func (t *Transpiler) Transpile() (*goast.File, error) {
+func (t *Transpiler) Transpile() (string, error) {
 	gofile := &goast.File{
 		Name:  goast.NewIdent(t.file.Package.Identifier.Name),
 		Decls: make([]goast.Decl, 0, len(t.file.Statements)),
@@ -108,10 +174,49 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	}
 
 	if err := errors.Join(errs...); err != nil {
-		return nil, fmt.Errorf("transpiler errors:\n%w", err)
+		return "", fmt.Errorf("transpiler errors:\n%w", err)
 	}
 
-	return gofile, nil
+	// Print AST to buffer and post-process markers into //line directives.
+	var buf bytes.Buffer
+	if err := goprinter.Fprint(&buf, t.fset, gofile); err != nil {
+		return "", fmt.Errorf("printing output: %w", err)
+	}
+
+	src := buf.String()
+
+	// Build mapping from node hash -> original position
+	hashMap := map[string]uint32{}
+	for h, node := range t.nodes {
+		ln, _ := node.Pos()
+		hashMap[fmt.Sprintf("%d", h)] = ln
+	}
+
+	// Replace marker assignments with //line directives. Markers look like
+	// `_ = "__COG_LINE_<hash>__"` possibly indented.
+	re := regexp.MustCompile(`(?m)^[ \t]*_ = "__COG_LINE_(\d+)__"[ \t]*\n?`)
+	fileForLine := t.srcName
+	if fileForLine == "" {
+		fileForLine = "input"
+	}
+
+	src = re.ReplaceAllStringFunc(src, func(m string) string {
+		sub := re.FindStringSubmatch(m)
+		if len(sub) < 2 {
+			return ""
+		}
+
+		h := sub[1]
+		ln, ok := hashMap[h]
+		if !ok {
+			// unknown hash, remove marker
+			return ""
+		}
+
+		return fmt.Sprintf("//line %s:%d\n", fileForLine, ln)
+	})
+
+	return src, nil
 }
 
 func convertExport(ident string, exported bool) string {

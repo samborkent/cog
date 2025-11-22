@@ -7,8 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	goprinter "go/printer"
-	gotoken "go/token"
 	"io"
 	"os"
 	"os/signal"
@@ -153,16 +151,15 @@ func run(ctx context.Context, r io.Reader) {
 		}
 	}
 
-	t := transpiler.NewTranspiler(f)
+	t := transpiler.NewTranspiler(f, fileName)
 
-	gofile, err := t.Transpile()
+	src, err := t.Transpile()
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
 
 	// TODO: implement multi file projects
-	fset := gotoken.NewFileSet()
 
 	out := os.Stdout
 	if write {
@@ -181,7 +178,7 @@ func run(ctx context.Context, r io.Reader) {
 		fmt.Printf("\ntranspiled nodes:\n\n")
 	}
 
-	if err := goprinter.Fprint(out, fset, gofile); err != nil {
-		panic(fmt.Errorf("printing output: %w", err))
+	if _, err := out.Write([]byte(src)); err != nil {
+		panic(fmt.Errorf("writing output: %w", err))
 	}
 }

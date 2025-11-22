@@ -61,10 +61,12 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			Rhs: []goast.Expr{expr},
 		}}, nil
 	case *ast.Break:
-		return []goast.Stmt{&goast.BranchStmt{
+		stm := &goast.BranchStmt{
 			Tok:   gotoken.BREAK,
 			Label: n.Label.Go(),
-		}}, nil
+		}
+
+		return prependLineMarker(n, []goast.Stmt{stm}), nil
 	case *ast.Declaration:
 		// Define as unused variable.
 		ident := t.symbols.Define(n.Assignment.Identifier.Name)
@@ -115,6 +117,9 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			compositeLiteral.Type = &goast.Ident{Name: convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)}
 		}
 
+		// Declarations are handled as Decls in the top-level transpilation
+		// and already have their own comment/doc groups where needed. Do
+		// not prepend inline line markers here.
 		return []goast.Stmt{&goast.DeclStmt{
 			Decl: &goast.GenDecl{
 				Tok: gotoken.VAR,
@@ -133,9 +138,9 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			return nil, err
 		}
 
-		return []goast.Stmt{&goast.ExprStmt{
-			X: expr,
-		}}, nil
+		stm := &goast.ExprStmt{X: expr}
+
+		return prependLineMarker(n, []goast.Stmt{stm}), nil
 	case *ast.IfStatement:
 		cond, err := t.convertExpr(n.Condition)
 		if err != nil {
@@ -178,7 +183,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			})
 		}
 
-		return stmts, nil
+		return prependLineMarker(n, stmts), nil
 	case *ast.Return:
 		if len(n.Values) == 0 {
 			return []goast.Stmt{&goast.ReturnStmt{}}, nil
@@ -195,9 +200,9 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			exprs = append(exprs, expr)
 		}
 
-		return []goast.Stmt{&goast.ReturnStmt{
-			Results: exprs,
-		}}, nil
+		stm := &goast.ReturnStmt{Results: exprs}
+
+		return prependLineMarker(n, []goast.Stmt{stm}), nil
 	case *ast.Switch:
 		cases := make([]goast.Stmt, 0, len(n.Cases))
 
@@ -262,9 +267,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		}
 
 		switchStmt := &goast.SwitchStmt{
-			Body: &goast.BlockStmt{
-				List: cases,
-			},
+			Body: &goast.BlockStmt{List: cases},
 		}
 
 		if n.Identifier != nil {
@@ -279,14 +282,35 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		}
 
 		if n.Label != nil {
-			return []goast.Stmt{&goast.LabeledStmt{
+			return prependLineMarker(n, []goast.Stmt{&goast.LabeledStmt{
 				Label: n.Label.Label.Go(),
 				Stmt:  switchStmt,
-			}}, nil
+			}}), nil
 		}
 
-		return []goast.Stmt{switchStmt}, nil
+		return prependLineMarker(n, []goast.Stmt{switchStmt}), nil
 	default:
 		return nil, fmt.Errorf("unknown statement type '%T'", n)
 	}
+}
+
+// prependLineMarker returns a new slice of statements with a marker assignment
+// prepended. The marker is later replaced with a proper //line directive in
+// the emitter (cmd/main.go). We use the node hash so we can correlate the
+// marker back to the original AST node position.
+func prependLineMarker(n ast.Node, stmts []goast.Stmt) []goast.Stmt {
+	marker := &goast.AssignStmt{
+		Lhs: []goast.Expr{&goast.Ident{Name: "_"}},
+		Tok: gotoken.ASSIGN,
+		Rhs: []goast.Expr{&goast.BasicLit{
+			Kind:  gotoken.STRING,
+			Value: fmt.Sprintf("\"__COG_LINE_%d__\"", n.Hash()),
+		}},
+	}
+
+	out := make([]goast.Stmt, 0, 1+len(stmts))
+	out = append(out, marker)
+	out = append(out, stmts...)
+
+	return out
 }
