@@ -12,14 +12,24 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-// TODO: implement caching based on type string
+var typeCache = make(map[string]goast.Expr)
+
 func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
+	// Try to retrieve type expression from cache.
+	expr, ok := typeCache[typ.String()]
+	if ok {
+		return expr, nil
+	}
+
 	if alias, ok := typ.(*types.Alias); ok {
 		if alias.Underlying().Kind() == types.EnumKind {
-			return &goast.Ident{Name: convertExport(alias.Name, alias.Exported) + "Enum"}, nil
+			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported) + "Enum"}
+		} else {
+			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
 		}
 
-		return &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}, nil
+		typeCache[typ.String()] = expr
+		return expr, nil
 	}
 
 	switch typ.Kind() {
@@ -39,35 +49,35 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			return nil, fmt.Errorf("converting array element type: %w", err)
 		}
 
-		return &goast.ArrayType{
+		expr = &goast.ArrayType{
 			Len: lenExpr,
 			Elt: elemType,
-		}, nil
+		}
 	case types.ASCII:
 		t.addCogImport()
 
-		return &goast.SelectorExpr{
+		expr = &goast.SelectorExpr{
 			X:   &goast.Ident{Name: "cog"},
 			Sel: &goast.Ident{Name: "ASCII"},
-		}, nil
+		}
 	case types.Bool:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Bool], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Bool], nil)}
 	case types.Complex64:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex64], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex64], nil)}
 	case types.Complex128:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex128], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex128], nil)}
 	case types.Float32:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Float32], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Float32], nil)}
 	case types.Float64:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Float64], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Float64], nil)}
 	case types.Int8:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int8], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int8], nil)}
 	case types.Int16:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int16], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int16], nil)}
 	case types.Int32:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int32], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int32], nil)}
 	case types.Int64:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int64], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int64], nil)}
 	case types.MapKind:
 		mapType, ok := typ.(*types.Map)
 		if !ok {
@@ -84,10 +94,10 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			return nil, fmt.Errorf("converting map value type: %w", err)
 		}
 
-		return &goast.MapType{
+		expr = &goast.MapType{
 			Key:   keyType,
 			Value: valType,
-		}, nil
+		}
 	case types.OptionKind:
 		optionType, ok := typ.(*types.Option)
 		if !ok {
@@ -101,13 +111,13 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 
 		t.addCogImport()
 
-		return &goast.IndexExpr{
+		expr = &goast.IndexExpr{
 			X: &goast.SelectorExpr{
 				X:   &goast.Ident{Name: "cog"},
 				Sel: &goast.Ident{Name: "Option"},
 			},
 			Index: valueType,
-		}, nil
+		}
 	case types.ProcedureKind:
 		procType, ok := typ.(*types.Procedure)
 		if !ok {
@@ -148,15 +158,15 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			}}
 		}
 
-		return funcType, nil
+		expr = funcType
 	case types.Uint8:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint8], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint8], nil)}
 	case types.Uint16:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint16], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint16], nil)}
 	case types.Uint32:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint32], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint32], nil)}
 	case types.Uint64:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint64], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint64], nil)}
 	case types.SetKind:
 		setType, ok := typ.(*types.Set)
 		if !ok {
@@ -170,13 +180,13 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 
 		t.addCogImport()
 
-		return &goast.IndexExpr{
+		expr = &goast.IndexExpr{
 			X: &goast.SelectorExpr{
 				X:   &goast.Ident{Name: "cog"},
 				Sel: &goast.Ident{Name: "Set"},
 			},
 			Index: elemType,
-		}, nil
+		}
 	case types.SliceKind:
 		sliceType, ok := typ.(*types.Slice)
 		if !ok {
@@ -188,9 +198,9 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			return nil, fmt.Errorf("converting slice element type: %w", err)
 		}
 
-		return &goast.ArrayType{
+		expr = &goast.ArrayType{
 			Elt: elemType,
-		}, nil
+		}
 	case types.StructKind:
 		structType, ok := typ.(*types.Struct)
 		if !ok {
@@ -208,11 +218,11 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			fields[i] = field
 		}
 
-		return &goast.StructType{
+		expr = &goast.StructType{
 			Fields: &goast.FieldList{
 				List: fields,
 			},
-		}, nil
+		}
 	case types.TupleKind:
 		tupleType, ok := typ.(*types.Tuple)
 		if !ok {
@@ -233,11 +243,11 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			})
 		}
 
-		return &goast.StructType{
+		expr = &goast.StructType{
 			Fields: &goast.FieldList{
 				List: fields,
 			},
-		}, nil
+		}
 	case types.UnionKind:
 		unionType, ok := typ.(*types.Union)
 		if !ok {
@@ -254,7 +264,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			return nil, fmt.Errorf("converting union or type: %w", err)
 		}
 
-		return &goast.StructType{
+		expr = &goast.StructType{
 			Fields: &goast.FieldList{
 				List: []*goast.Field{
 					{
@@ -271,12 +281,15 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 					},
 				},
 			},
-		}, nil
+		}
 	case types.UTF8:
-		return &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.String], nil)}, nil
+		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.String], nil)}
 	default:
 		return nil, fmt.Errorf("unknown type %q", typ)
 	}
+
+	typeCache[typ.String()] = expr
+	return expr, nil
 }
 
 func (t *Transpiler) convertField(field *types.Field) (*goast.Field, error) {

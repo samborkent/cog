@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"math"
+
 	"github.com/ryanavella/wide"
 	f16 "github.com/x448/float16"
 	u128 "lukechampine.com/uint128"
@@ -53,8 +55,8 @@ func (e *Infix) EqualizeLiteralTypes() {
 			return
 		}
 	case types.Int8:
-		if right, ok := e.Right.(*Int64Literal); ok {
-			// TODO: handle overflow
+		right, ok := e.Right.(*Int64Literal)
+		if ok && (right.Value >= math.MinInt8 && right.Value <= math.MaxInt8) {
 			e.Right = &Int8Literal{
 				Token: right.Token,
 				Value: int8(right.Value),
@@ -63,8 +65,8 @@ func (e *Infix) EqualizeLiteralTypes() {
 			return
 		}
 	case types.Int16:
-		if right, ok := e.Right.(*Int64Literal); ok {
-			// TODO: handle overflow
+		right, ok := e.Right.(*Int64Literal)
+		if ok && (right.Value >= math.MinInt16 && right.Value <= math.MaxInt16) {
 			e.Right = &Int16Literal{
 				Token: right.Token,
 				Value: int16(right.Value),
@@ -73,8 +75,8 @@ func (e *Infix) EqualizeLiteralTypes() {
 			return
 		}
 	case types.Int32:
-		if right, ok := e.Right.(*Int64Literal); ok {
-			// TODO: handle overflow
+		right, ok := e.Right.(*Int64Literal)
+		if ok && (right.Value >= math.MinInt32 && right.Value <= math.MaxInt32) {
 			e.Right = &Int32Literal{
 				Token: right.Token,
 				Value: int32(right.Value),
@@ -84,7 +86,6 @@ func (e *Infix) EqualizeLiteralTypes() {
 		}
 	case types.Int128:
 		if right, ok := e.Right.(*Int64Literal); ok {
-			// TODO: handle overflow
 			e.Right = &Int128Literal{
 				Token: right.Token,
 				Value: wide.Int128FromInt64(right.Value),
@@ -93,8 +94,8 @@ func (e *Infix) EqualizeLiteralTypes() {
 			return
 		}
 	case types.Uint8:
-		if right, ok := e.Right.(*Int64Literal); ok {
-			// TODO: handle overflow
+		right, ok := e.Right.(*Int64Literal)
+		if ok && (right.Value >= 0 && right.Value <= math.MaxUint8) {
 			e.Right = &Uint8Literal{
 				Token: right.Token,
 				Value: uint8(right.Value),
@@ -103,8 +104,8 @@ func (e *Infix) EqualizeLiteralTypes() {
 			return
 		}
 	case types.Uint16:
-		if right, ok := e.Right.(*Int64Literal); ok {
-			// TODO: handle overflow
+		right, ok := e.Right.(*Int64Literal)
+		if ok && (right.Value >= 0 && right.Value <= math.MaxUint16) {
 			e.Right = &Uint16Literal{
 				Token: right.Token,
 				Value: uint16(right.Value),
@@ -113,8 +114,8 @@ func (e *Infix) EqualizeLiteralTypes() {
 			return
 		}
 	case types.Uint32:
-		if right, ok := e.Right.(*Int64Literal); ok {
-			// TODO: handle overflow
+		right, ok := e.Right.(*Int64Literal)
+		if ok && (right.Value >= 0 && right.Value <= math.MaxUint32) {
 			e.Right = &Uint32Literal{
 				Token: right.Token,
 				Value: uint32(right.Value),
@@ -123,8 +124,8 @@ func (e *Infix) EqualizeLiteralTypes() {
 			return
 		}
 	case types.Uint64:
-		if right, ok := e.Right.(*Int64Literal); ok {
-			// TODO: handle overflow
+		right, ok := e.Right.(*Int64Literal)
+		if ok && right.Value >= 0 {
 			e.Right = &Uint64Literal{
 				Token: right.Token,
 				Value: uint64(right.Value),
@@ -133,8 +134,8 @@ func (e *Infix) EqualizeLiteralTypes() {
 			return
 		}
 	case types.Uint128:
-		if right, ok := e.Right.(*Int64Literal); ok {
-			// TODO: handle overflow
+		right, ok := e.Right.(*Int64Literal)
+		if ok && right.Value >= 0 {
 			e.Right = &Uint128Literal{
 				Token: right.Token,
 				Value: u128.From64(uint64(right.Value)),

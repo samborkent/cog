@@ -50,7 +50,7 @@ func (l *ASCIILiteral) Go() *goast.CompositeLit {
 	for i := range l.Value {
 		elems[i] = &goast.BasicLit{
 			Kind:  gotoken.CHAR,
-			Value: "'" + string(l.Value[i]) + "'", // TODO: get rid of allocations
+			Value: unsafe.String(&[]byte{'\'', l.Value[i], '\''}[0], 3),
 		}
 	}
 

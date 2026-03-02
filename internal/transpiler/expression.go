@@ -418,7 +418,6 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 
 			exprs = append(exprs, &goast.KeyValueExpr{
-				// TODO: take into account exported value
 				Key:   &goast.Ident{Name: convertExport(val.Name, structType.Fields[fieldIndex].Exported)},
 				Value: expr,
 			})

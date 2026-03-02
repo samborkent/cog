@@ -40,7 +40,6 @@ func (e *Enum) String() string {
 
 	// return out.String()
 
-	// TODO: use strings.Builder (copy ast.EnumLiteral logic, then delete)
 	var str strings.Builder
 	str.WriteString("enum[" + e.ValueType.String() + "] {")
 

@@ -30,7 +30,8 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 
 	var errs []error
 
-	toks := []tokens.Token{}
+	// TODO: determine appropriate pre-allocation size, or guess number of tokens based on file size.
+	toks := make([]tokens.Token, 0, 1024)
 
 	var (
 		ln  uint32
@@ -49,7 +50,7 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 			continue
 		}
 
-		//nolint:gosec // G115: integer overfloa conversion
+		//nolint:gosec // G115: integer overflow conversion
 		t := tokens.Token{
 			Ln:  uint32(s.Line),
 			Col: uint16(s.Column),
@@ -96,7 +97,6 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 				}
 			case tokens.Builtin:
 				t.Type = tokens.Builtin
-				// TODO: error handling
 				_ = s.Scan()
 				t.Literal = s.TokenText()
 			}
@@ -105,7 +105,6 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 				t.Type = tokenType
 			}
 
-			// TODO: avoid allocation
 			toks = append(toks, t)
 			continue
 		}
@@ -136,7 +135,6 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 			continue
 		}
 
-		// TODO: avoid allocation
 		toks = append(toks, t)
 		ln = t.Ln
 		col = t.Col

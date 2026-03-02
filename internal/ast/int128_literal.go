@@ -9,7 +9,6 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-// TODO: implement overflow and other fixed-size int behaviour
 type int128 = wide.Int128
 
 var _ Expression = &Int128Literal{}
