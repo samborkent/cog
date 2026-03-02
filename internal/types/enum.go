@@ -1,5 +1,7 @@
 package types
 
+import "strings"
+
 var _ Type = &Enum{}
 
 type Enum struct {
@@ -39,19 +41,20 @@ func (e *Enum) String() string {
 	// return out.String()
 
 	// TODO: use strings.Builder (copy ast.EnumLiteral logic, then delete)
-	str := "enum[" + e.ValueType.String() + "] {"
+	var str strings.Builder
+	str.WriteString("enum[" + e.ValueType.String() + "] {")
 
 	for i, val := range e.Values {
 		if i == 0 {
-			str += "\n"
+			str.WriteString("\n")
 		}
 
-		str += val.Name + " := " + val.Value.String() + ",\n"
+		str.WriteString(val.Name + " := " + val.Value.String() + ",\n")
 	}
 
-	str += "}"
+	str.WriteString("}")
 
-	return str
+	return str.String()
 }
 
 func (e *Enum) Underlying() Type {

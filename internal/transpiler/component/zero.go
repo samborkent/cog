@@ -1,4 +1,4 @@
-package comp
+package component
 
 import goast "go/ast"
 

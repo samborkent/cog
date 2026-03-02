@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/samborkent/cog/internal/ast"
-	"github.com/samborkent/cog/internal/transpiler/comp"
+	"github.com/samborkent/cog/internal/transpiler/component"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -118,7 +118,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 
 		if !procType.Function {
 			// All procedures take context.
-			inputParams = append(inputParams, comp.ContextArg)
+			inputParams = append(inputParams, component.ContextArg)
 		}
 
 		for i, param := range procType.Parameters {

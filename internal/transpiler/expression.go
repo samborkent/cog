@@ -8,7 +8,7 @@ import (
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
-	"github.com/samborkent/cog/internal/transpiler/comp"
+	"github.com/samborkent/cog/internal/transpiler/component"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -51,7 +51,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		if !procType.Function {
 			// Pass context variable to all procedures.
-			args = append(args, comp.ContextVar)
+			args = append(args, component.ContextVar)
 		}
 
 		for _, arg := range n.Arguments {
@@ -73,7 +73,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 					}
 
 					// Add zero value of parameter type.
-					args = append(args, comp.ZeroValue(argType))
+					args = append(args, component.ZeroValue(argType))
 					continue
 				}
 
@@ -131,7 +131,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return &goast.TypeAssertExpr{
 				X: &goast.CallExpr{
 					Fun: &goast.SelectorExpr{
-						X:   comp.ContextVar,
+						X:   component.ContextVar,
 						Sel: &goast.Ident{Name: "Value"},
 					},
 					Args: []goast.Expr{

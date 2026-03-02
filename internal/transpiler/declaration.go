@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/samborkent/cog/internal/ast"
-	"github.com/samborkent/cog/internal/transpiler/comp"
+	"github.com/samborkent/cog/internal/transpiler/component"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -127,7 +127,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				}
 
 				body := make([]goast.Stmt, 0, 1+len(t.symbols.dynamics))
-				body = append(body, comp.ContextMain(ctxIdent))
+				body = append(body, component.ContextMain(ctxIdent))
 
 				// Define dynamically scoped variables.
 				for _, dyn := range t.symbols.dynamics {
@@ -147,7 +147,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					t.symbols.MarkUsed(key)
 					t.symbols.MarkUsed(val)
 
-					body = append(body, comp.ContextWithValue(keyIdent, valIdent))
+					body = append(body, component.ContextWithValue(keyIdent, valIdent))
 				}
 
 				funcLiteral.Body.List = append(body, funcLiteral.Body.List...)

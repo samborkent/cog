@@ -6,7 +6,7 @@ import (
 	gotoken "go/token"
 
 	"github.com/samborkent/cog/internal/ast"
-	"github.com/samborkent/cog/internal/transpiler/comp"
+	"github.com/samborkent/cog/internal/transpiler/component"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -34,7 +34,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 				}
 
 				return []goast.Stmt{
-					comp.ContextWithValue(&goast.Ident{Name: joinStr(name, "Key")}, val),
+					component.ContextWithValue(&goast.Ident{Name: joinStr(name, "Key")}, val),
 				}, nil
 			}
 
