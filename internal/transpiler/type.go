@@ -15,11 +15,14 @@ import (
 var typeCache = make(map[string]goast.Expr)
 
 func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
-	// Try to retrieve type expression from cache.
-	expr, ok := typeCache[typ.String()]
-	if ok {
-		return expr, nil
-	}
+	// TODO: fix type caching
+	// // Try to retrieve type expression from cache.
+	// expr, ok := typeCache[typ.String()]
+	// if ok {
+	// 	return expr, nil
+	// }
+
+	var expr goast.Expr
 
 	if alias, ok := typ.(*types.Alias); ok {
 		if alias.Underlying().Kind() == types.EnumKind {
