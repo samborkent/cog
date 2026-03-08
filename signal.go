@@ -3,6 +3,7 @@ package cog
 import (
 	"os"
 	"os/signal"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -48,7 +49,7 @@ func NewMainSignal() *Signal {
 
 func (s *Signal) Cancel() {
 	// close in backwards order
-	for i := len(s.child) - 1; i >= 0; i-- {
+	for i := range slices.Backward(s.child) {
 		if !s.child[i].closed.Load() {
 			s.child[i].closed.Store(true)
 			close(s.child[i].sig)
