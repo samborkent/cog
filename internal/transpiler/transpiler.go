@@ -26,6 +26,8 @@ type Transpiler struct {
 
 	symbols *SymbolTable
 	inFunc  bool
+
+	typeCache map[string]goast.Expr
 }
 
 func NewTranspiler(f *ast.File) *Transpiler {
@@ -39,10 +41,11 @@ func NewTranspiler(f *ast.File) *Transpiler {
 	}
 
 	return &Transpiler{
-		file:    f,
-		fset:    gotoken.NewFileSet(),
-		nodes:   nodes,
-		symbols: NewSymbolTable(),
+		file:      f,
+		fset:      gotoken.NewFileSet(),
+		nodes:     nodes,
+		symbols:   NewSymbolTable(),
+		typeCache: make(map[string]goast.Expr),
 	}
 }
 

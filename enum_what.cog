@@ -1,0 +1,10 @@
+package main
+
+Status ~ enum[utf8] {
+    Open := "open",
+}
+
+main : proc() = {
+    v := Status.Open
+    @print(v)
+}

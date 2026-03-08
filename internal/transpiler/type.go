@@ -12,17 +12,12 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var typeCache = make(map[string]goast.Expr)
-
 func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
-	// TODO: fix type caching
-	// // Try to retrieve type expression from cache.
-	// expr, ok := typeCache[typ.String()]
-	// if ok {
-	// 	return expr, nil
-	// }
-
-	var expr goast.Expr
+	// Try to retrieve type expression from cache.
+	expr, ok := t.typeCache[typ.String()]
+	if ok {
+		return expr, nil
+	}
 
 	if alias, ok := typ.(*types.Alias); ok {
 		if alias.Underlying().Kind() == types.EnumKind {
@@ -31,7 +26,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
 		}
 
-		typeCache[typ.String()] = expr
+		t.typeCache[typ.String()] = expr
 		return expr, nil
 	}
 
@@ -291,7 +286,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		return nil, fmt.Errorf("unknown type %q", typ)
 	}
 
-	typeCache[typ.String()] = expr
+	t.typeCache[typ.String()] = expr
 	return expr, nil
 }
 
