@@ -22,4 +22,14 @@ outerLoop:
 	for 10 {
 		@print("loop")
 	}
+
+	count := 6
+	for count {
+		@print("count")
+	}
+
+	str := "hello"
+	for str {
+		@print(str)
+	}
 }

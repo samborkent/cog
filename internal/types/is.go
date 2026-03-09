@@ -31,6 +31,11 @@ func IsNumber(t Type) bool {
 	return IsComplex(t) || IsReal(t)
 }
 
+// TODO: add builtin containers and iterators
+func IsIterator(t Type) bool {
+	return IsFixed(t) || IsString(t)
+}
+
 func IsReal(t Type) bool {
 	return IsUint(t) || IsSigned(t)
 }

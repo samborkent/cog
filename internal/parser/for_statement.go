@@ -15,12 +15,20 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 
 	p.advance("parseForStatement for") // consume for
 
-	// TODO: add other types
 	// TODO: add support for in keyword
 	// TODO: add support for value and index variables
-	if p.this().Type == tokens.IntLiteral {
-		expr := p.parseLiteral(types.None)
+	switch p.this().Type {
+	case tokens.LBrace:
+		// Infinite loop, no range.
+	default:
+		expr := p.expression(ctx, types.None)
 		if expr == nil {
+			p.error(p.this(), "expected range expression or loop body", "parseForStatement")
+			return nil
+		}
+
+		if !types.IsIterator(expr.Type()) {
+			p.error(p.this(), "cannot iterate over type "+expr.Type().String(), "parseForStatement")
 			return nil
 		}
 
