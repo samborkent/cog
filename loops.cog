@@ -1,7 +1,9 @@
 package main
 
 main : proc() = {
+loopName:
 	for {
 		@print("hi")
+		break loopName
 	}
 }

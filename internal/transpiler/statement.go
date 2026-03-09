@@ -167,9 +167,18 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			return nil, err
 		}
 
-		returnStmts = []goast.Stmt{&goast.ForStmt{
+		forStmt := &goast.ForStmt{
 			Body: body,
-		}}
+		}
+
+		if n.Label != nil {
+			returnStmts = []goast.Stmt{&goast.LabeledStmt{
+				Label: n.Label.Label.Go(),
+				Stmt:  forStmt,
+			}}
+		} else {
+			returnStmts = []goast.Stmt{forStmt}
+		}
 	case *ast.IfStatement:
 		cond, err := t.convertExpr(n.Condition)
 		if err != nil {
@@ -313,13 +322,13 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		}
 
 		if n.Label != nil {
-			return []goast.Stmt{&goast.LabeledStmt{
+			returnStmts = []goast.Stmt{&goast.LabeledStmt{
 				Label: n.Label.Label.Go(),
 				Stmt:  switchStmt,
-			}}, nil
+			}}
+		} else {
+			returnStmts = []goast.Stmt{switchStmt}
 		}
-
-		returnStmts = []goast.Stmt{switchStmt}
 	default:
 		return nil, fmt.Errorf("unknown statement type '%T'", n)
 	}

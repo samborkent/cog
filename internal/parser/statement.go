@@ -148,7 +148,22 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		case tokens.Colon: // Typed declaration or label
 			p.advance("parseStatement ident :") // consume ':'
 
-			if p.this().Type == tokens.If {
+			switch p.this().Type {
+			case tokens.For:
+				// Labeled for statement
+				forStatement := p.parseForStatement(ctx)
+				if forStatement == nil {
+					return nil
+				}
+
+				ident.ValueType = types.None
+				forStatement.Label = &ast.Label{
+					Token: ident.Token,
+					Label: ident,
+				}
+
+				return forStatement
+			case tokens.If:
 				// Labeled if statement
 				ifStatement := p.parseIfStatement(ctx)
 				if ifStatement == nil {
@@ -162,7 +177,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				}
 
 				return ifStatement
-			} else if p.this().Type == tokens.Switch {
+			case tokens.Switch:
 				// Labeled switch statement
 				switchStatement := p.parseSwitch(ctx)
 				if switchStatement == nil {
