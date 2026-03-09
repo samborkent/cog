@@ -161,6 +161,15 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		returnStmts = []goast.Stmt{&goast.ExprStmt{
 			X: expr,
 		}}
+	case *ast.ForStatement:
+		body, err := t.convertForBlock(n.Loop)
+		if err != nil {
+			return nil, err
+		}
+
+		returnStmts = []goast.Stmt{&goast.ForStmt{
+			Body: body,
+		}}
 	case *ast.IfStatement:
 		cond, err := t.convertExpr(n.Condition)
 		if err != nil {

@@ -120,6 +120,7 @@ The following basic features are missing that need to be implemented before Cog 
 ### Long-term
 
 - TESTS!
+- Only add background context to main if at least one prcedure, dynamic variable, or signal is used.
 - Audit all uses of `types.Underlying().Kind()`
 - Allow package-less files (scripts)
     - These files cannot be imported, and will be excuted as if wrapped in a main function.

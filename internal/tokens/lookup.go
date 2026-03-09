@@ -46,6 +46,7 @@ var Keywords = map[string]Type{
 	"float16":    Float16,
 	"float32":    Float32,
 	"float64":    Float64,
+	"for":        For,
 	"func":       Function,
 	"goimport":   GoImport,
 	"if":         If,

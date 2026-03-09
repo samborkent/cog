@@ -3,7 +3,7 @@
 version: '3'
 
 vars:
-  FILE: example.cog
+  FILE: loops.cog
   DEBUG: false
 
 tasks:

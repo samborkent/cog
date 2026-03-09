@@ -25,7 +25,11 @@ func (b *Block) Hash() uint64 {
 
 func (b *Block) String() string {
 	var out strings.Builder
+	b.stringTo(&out)
+	return out.String()
+}
 
+func (b *Block) stringTo(out *strings.Builder) {
 	_ = out.WriteByte('{')
 
 	for i, stmt := range b.Statements {
@@ -39,6 +43,4 @@ func (b *Block) String() string {
 	}
 
 	_ = out.WriteByte('}')
-
-	return out.String()
 }

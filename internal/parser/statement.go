@@ -105,6 +105,12 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			p.error(p.this(), "unexpected token found after export", "parseStatement")
 			return nil
 		}
+	case tokens.For:
+		if node := p.parseForStatement(ctx); node != nil {
+			return node
+		}
+
+		return nil
 	case tokens.Identifier:
 		qualifier := ast.QualifierImmutable
 

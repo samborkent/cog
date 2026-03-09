@@ -1,6 +1,10 @@
 package ast
 
-import "github.com/samborkent/cog/internal/tokens"
+import (
+	"strings"
+
+	"github.com/samborkent/cog/internal/tokens"
+)
 
 var _ Statement = &IfStatement{}
 
@@ -20,5 +24,12 @@ func (s *Label) Hash() uint64 {
 }
 
 func (s *Label) String() string {
-	return s.Label.Name + ":"
+	var out strings.Builder
+	s.stringTo(&out)
+	return out.String()
+}
+
+func (s *Label) stringTo(out *strings.Builder) {
+	_, _ = out.WriteString(s.Label.Name)
+	_, _ = out.WriteString(":")
 }
