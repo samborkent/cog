@@ -31,9 +31,10 @@ func IsNumber(t Type) bool {
 	return IsComplex(t) || IsReal(t)
 }
 
-// TODO: add builtin containers and iterators
+// TODO: add iterators
 func IsIterator(t Type) bool {
-	return IsFixed(t) || IsString(t)
+	kind := t.Underlying().Kind()
+	return IsFixed(t) || IsString(t) || kind == ArrayKind || kind == SliceKind || kind == MapKind || kind == SetKind || kind == EnumKind
 }
 
 func IsReal(t Type) bool {

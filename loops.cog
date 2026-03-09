@@ -32,4 +32,9 @@ outerLoop:
 	for str {
 		@print(str)
 	}
+
+	cont : []int8 = {5, 4, 3, 2, 1}
+	for cont {
+		@print("cont")
+	}
 }
