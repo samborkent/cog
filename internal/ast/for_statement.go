@@ -13,8 +13,8 @@ type ForStatement struct {
 
 	Token tokens.Token
 	Label *Label
-	// Range   Expression
-	Loop *Block
+	Range Expression
+	Loop  *Block
 }
 
 func (s *ForStatement) Pos() (uint32, uint16) {
@@ -38,5 +38,11 @@ func (s *ForStatement) stringTo(out *strings.Builder) {
 	}
 
 	_, _ = out.WriteString("for ")
+
+	if s.Range != nil {
+		_, _ = out.WriteString(s.Range.String())
+		_ = out.WriteByte(' ')
+	}
+
 	s.Loop.stringTo(out)
 }

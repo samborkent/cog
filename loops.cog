@@ -18,4 +18,8 @@ outerLoop:
 			break outerLoop
 		}
 	}
+
+	for 10 {
+		@print("loop")
+	}
 }

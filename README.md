@@ -128,6 +128,7 @@ The following basic features are missing that need to be implemented before Cog 
     - These files cannot be imported, and will be excuted as if wrapped in a main function.
 - Disallow `main` in declarations besides `main : proc()`.
 - Fork and rework float16, uint128 and int128 imported packages.
+- Implement flat AST.
 
 ## Example code
 

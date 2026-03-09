@@ -179,17 +179,34 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			return nil, err
 		}
 
-		forStmt := &goast.ForStmt{
-			Body: body,
+		var stmt goast.Stmt
+
+		if n.Range == nil {
+			// C-style for loop.
+			stmt = &goast.ForStmt{
+				Body: body,
+			}
+		} else {
+			// Range based for loop.
+			rangeExpr, err := t.convertExpr(n.Range)
+			if err != nil {
+				return nil, err
+			}
+
+			stmt = &goast.RangeStmt{
+				Body: body,
+				Tok:  gotoken.ILLEGAL,
+				X:    rangeExpr,
+			}
 		}
 
 		if n.Label != nil {
 			returnStmts = []goast.Stmt{&goast.LabeledStmt{
 				Label: n.Label.Label.Go(),
-				Stmt:  forStmt,
+				Stmt:  stmt,
 			}}
 		} else {
-			returnStmts = []goast.Stmt{forStmt}
+			returnStmts = []goast.Stmt{stmt}
 		}
 	case *ast.IfStatement:
 		cond, err := t.convertExpr(n.Condition)
