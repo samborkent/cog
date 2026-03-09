@@ -206,7 +206,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Op: convertBinaryOperator(n.Operator.Type),
 			Y:  rhs,
 		}, nil
+	case *ast.Int8Literal:
+		return n.Go(), nil
+	case *ast.Int16Literal:
+		return n.Go(), nil
+	case *ast.Int32Literal:
+		return n.Go(), nil
 	case *ast.Int64Literal:
+		return n.Go(), nil
+	case *ast.Int128Literal:
 		return n.Go(), nil
 	case *ast.MapLiteral:
 		// TODO: handle not directly comparable types
@@ -465,7 +473,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		return &goast.CompositeLit{
 			Elts: values,
 		}, nil
+	case *ast.Uint8Literal:
+		return n.Go(), nil
+	case *ast.Uint16Literal:
+		return n.Go(), nil
+	case *ast.Uint32Literal:
+		return n.Go(), nil
 	case *ast.Uint64Literal:
+		return n.Go(), nil
+	case *ast.Uint128Literal:
 		return n.Go(), nil
 	case *ast.UnionLiteral:
 		unionType, ok := n.UnionType.Underlying().(*types.Union)

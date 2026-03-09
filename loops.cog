@@ -37,4 +37,12 @@ outerLoop:
 	for cont {
 		@print("cont")
 	}
+
+	mappie : map[utf8]ascii = {
+		"hello": "world",
+	}
+
+	for mappie {
+		@print("klappie")
+	}
 }
