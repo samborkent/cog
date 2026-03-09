@@ -13,6 +13,7 @@ type ForStatement struct {
 
 	Token tokens.Token
 	Label *Label
+	Value *Identifier
 	Range Expression
 	Loop  *Block
 }
@@ -38,6 +39,11 @@ func (s *ForStatement) stringTo(out *strings.Builder) {
 	}
 
 	_, _ = out.WriteString("for ")
+
+	if s.Value != nil {
+		_, _ = out.WriteString(s.Value.Name)
+		_, _ = out.WriteString(" in ")
+	}
 
 	if s.Range != nil {
 		_, _ = out.WriteString(s.Range.String())

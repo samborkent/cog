@@ -19,7 +19,7 @@ outerLoop:
 		}
 	}
 
-	for 10 {
+	for v in 10 {
 		@print("loop")
 	}
 

@@ -16,7 +16,8 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 
 	p.advance("parseForStatement for") // consume for
 
-	// TODO: add support for in keyword
+	var valueVar *ast.Identifier
+
 	// TODO: add support for value and index variables
 	switch p.this().Type {
 	case tokens.LBrace:
@@ -25,6 +26,17 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 		p.error(p.this(), "cannot iterate over container literal, assign to identifier first", "parseForStatement")
 		return nil
 	default:
+		if p.next().Type == tokens.In {
+			valueVar = &ast.Identifier{
+				Token:     p.this(),
+				Name:      p.this().Literal,
+				Qualifier: ast.QualifierImmutable,
+			}
+
+			p.advance("parseForStatement value") // consume value variable
+			p.advance("parseForStatement in")    // consume in keyword
+		}
+
 		expr := p.expression(ctx, types.None)
 		if expr == nil {
 			p.error(p.this(), "expected range expression or loop body", "parseForStatement")
@@ -36,7 +48,17 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 			return nil
 		}
 
+		if valueVar != nil {
+			valueVar.ValueType = expr.Type()
+		}
+
 		node.Range = expr
+	}
+
+	if valueVar != nil {
+		// Add value variable to scope.
+		p.symbols = NewEnclosedSymbolTable(p.symbols)
+		p.symbols.Define(valueVar)
 	}
 
 	prevErrorCount := len(p.Errs)
@@ -45,6 +67,14 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 	if loop == nil {
 		p.error(p.this(), "unable to parse for block", "parseIfStatement")
 		return nil
+	}
+
+	if valueVar != nil {
+		// Restore scope.
+		p.symbols = p.symbols.Outer
+
+		// Add value to AST node.
+		node.Value = valueVar
 	}
 
 	// Logic for specific error when a untyped container literal is passed in loop range expression.

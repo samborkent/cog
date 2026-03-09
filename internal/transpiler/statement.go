@@ -193,10 +193,23 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 				return nil, err
 			}
 
+			var key goast.Expr
+			var val goast.Expr
+
+			tok := gotoken.ILLEGAL
+
+			if n.Value != nil {
+				tok = gotoken.DEFINE
+				key = &goast.Ident{Name: "_"}
+				val = &goast.Ident{Name: n.Value.Name}
+			}
+
 			stmt = &goast.RangeStmt{
-				Body: body,
-				Tok:  gotoken.ILLEGAL,
-				X:    rangeExpr,
+				Key:   key,
+				Value: val,
+				Tok:   tok,
+				X:     rangeExpr,
+				Body:  body,
 			}
 		}
 

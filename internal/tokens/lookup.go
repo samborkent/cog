@@ -52,6 +52,7 @@ var Keywords = map[string]Type{
 	GoImport.String():   GoImport,
 	If.String():         If,
 	Import.String():     Import,
+	In.String():         In,
 	Int8.String():       Int8,
 	Int16.String():      Int16,
 	Int32.String():      Int32,
