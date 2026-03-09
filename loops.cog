@@ -1,9 +1,21 @@
 package main
 
 main : proc() = {
-loopName:
+	var i := 0
+
+outerLoop:
 	for {
-		@print("hi")
-		break loopName
+	innerLoop:
+		for {
+			i = i + 1
+
+			if (i < 5) {
+				@print("continue")
+				continue innerLoop
+			}
+
+			@print("break")
+			break outerLoop
+		}
 	}
 }

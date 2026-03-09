@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/tokens"
 )
 
 var ifLabelCounter = 0
@@ -26,8 +27,8 @@ func (t *Transpiler) convertIfBlock(node *ast.Block) (*goast.BlockStmt, *goast.L
 	}
 
 	for i, stmt := range node.Statements {
-		breakExpr, ok := stmt.(*ast.Break)
-		if ok {
+		breakExpr, ok := stmt.(*ast.Branch)
+		if ok && breakExpr.Token.Type == tokens.Break {
 			if breakExpr.Label != nil {
 				block.List = append(block.List, &goast.BranchStmt{
 					Tok:   gotoken.GOTO,

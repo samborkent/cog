@@ -6,6 +6,7 @@ import (
 	gotoken "go/token"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/transpiler/component"
 	"github.com/samborkent/cog/internal/types"
 )
@@ -67,9 +68,20 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			Tok: gotoken.ASSIGN,
 			Rhs: []goast.Expr{expr},
 		}}
-	case *ast.Break:
+	case *ast.Branch:
+		var goTok gotoken.Token
+
+		switch n.Token.Type {
+		case tokens.Break:
+			goTok = gotoken.BREAK
+		case tokens.Continue:
+			goTok = gotoken.CONTINUE
+		default:
+			return nil, fmt.Errorf("unknown branch token '%s'", n.Token.Literal)
+		}
+
 		returnStmts = []goast.Stmt{&goast.BranchStmt{
-			Tok:   gotoken.BREAK,
+			Tok:   goTok,
 			Label: n.Label.Go(),
 		}}
 	case *ast.Declaration:

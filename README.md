@@ -5,6 +5,7 @@ cog is a Go-based hobby programming language that brings some additional feature
 The following basic features are missing that need to be implemented before Cog can be used to write useful programs:
 
 - for-loops
+- fallthrough (also for if?)
 - Go-to-Cog type conversions
 - Multi-file programs
 - Cog packages / imports
@@ -121,6 +122,7 @@ The following basic features are missing that need to be implemented before Cog 
 
 - TESTS!
 - Only add background context to main if at least one prcedure, dynamic variable, or signal is used.
+- Add `StringTo(*string.Builder)` method to all objects implementing `fmt.Stringer`.
 - Audit all uses of `types.Underlying().Kind()`
 - Allow package-less files (scripts)
     - These files cannot be imported, and will be excuted as if wrapped in a main function.

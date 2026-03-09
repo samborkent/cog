@@ -10,12 +10,12 @@ import (
 
 func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 	switch p.this().Type {
-	case tokens.Break:
-		node := &ast.Break{
+	case tokens.Break, tokens.Continue:
+		node := &ast.Branch{
 			Token: p.this(),
 		}
 
-		p.advance("parseStatement break") // consume break
+		p.advance("parseStatement branch") // consume break or continue
 
 		if p.this().Type == tokens.Identifier {
 			node.Label = &ast.Identifier{
@@ -24,7 +24,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				ValueType: types.None,
 			}
 
-			p.advance("parseStatement break label") // consume label
+			p.advance("parseStatement branch label") // consume label
 		}
 
 		return node
