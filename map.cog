@@ -1,0 +1,33 @@
+package cog
+
+Integer ~ int | uint
+Number ~ Integer | float | complex
+Summable ~ Number | string
+
+Operator<T any> ~ func(a, b T) T // +, -, *, /, %
+Indexer<C any, K Summable, V any> ~ func(c C, k K) V // []
+
+Map<K comparable, V any> ~ struct {
+	keys []K
+	values []V
+} {
+	+: func(a, b Map<K, V>) Map<K, V> {
+		..
+	},
+	[]: func(m Map<K, V>, key K) V {
+		index : uint64 = 0
+
+		for k, i in m.keys {
+			if k == key {
+				index = i
+				break
+			}
+		}
+
+		return m.values[index]
+	},
+}
+
+Map<K, V>.getVal : func(key K) V = {
+	return m[key]
+}

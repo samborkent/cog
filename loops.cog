@@ -19,18 +19,13 @@ outerLoop:
 		}
 	}
 
-	for v in 10 {
-		@print("loop")
-	}
+	// Loop over int not allowed.
+	//for v in 10 {
+	//	@print("loop")
+	//}
 
-	count := 6
-	for count {
-		@print("count")
-	}
-
-	str := "hello"
-	for str {
-		@print(str)
+	for "hello" {
+		@print("hello")
 	}
 
 	cont : []int8 = {5, 4, 3, 2, 1}
