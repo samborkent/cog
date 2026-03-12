@@ -20,9 +20,10 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 	}
 
 	if alias, ok := typ.(*types.Alias); ok {
-		if alias.Underlying().Kind() == types.EnumKind {
+		switch alias.Kind() {
+		case types.EnumKind:
 			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported) + "Enum"}
-		} else {
+		default:
 			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
 		}
 
@@ -82,9 +83,26 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			return nil, errors.New("unable to assert map type")
 		}
 
-		keyType, err := t.convertType(mapType.Key)
-		if err != nil {
-			return nil, fmt.Errorf("converting map key type: %w", err)
+		var keyExpr goast.Expr
+
+		if mapType.Key.Kind() == types.ASCII {
+			// ASCII is an alias of []byte, which is not a valid map key type in Go. Use string instead.
+			aliasType, ok := mapType.Key.(*types.Alias)
+			if ok {
+				keyExpr = &goast.Ident{Name: convertExport(aliasType.Name, aliasType.Exported) + "Hash"}
+			} else {
+				keyExpr = &goast.SelectorExpr{
+					X:   &goast.Ident{Name: "cog"},
+					Sel: &goast.Ident{Name: "ASCIIHash"},
+				}
+			}
+		} else {
+			keyType, err := t.convertType(mapType.Key)
+			if err != nil {
+				return nil, fmt.Errorf("converting map key type: %w", err)
+			}
+
+			keyExpr = keyType
 		}
 
 		valType, err := t.convertType(mapType.Value)
@@ -93,7 +111,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		}
 
 		expr = &goast.MapType{
-			Key:   keyType,
+			Key:   keyExpr,
 			Value: valType,
 		}
 	case types.OptionKind:
@@ -171,9 +189,26 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			return nil, errors.New("unable to assert set type")
 		}
 
-		elemType, err := t.convertType(setType.Element)
-		if err != nil {
-			return nil, fmt.Errorf("converting set element type: %w", err)
+		var indexExpr goast.Expr
+
+		if setType.Element.Kind() == types.ASCII {
+			// ASCII is an alias of []byte, which is not a valid map key type in Go. Use hash of ASCII instead.
+			aliasType, ok := setType.Element.(*types.Alias)
+			if ok {
+				indexExpr = &goast.Ident{Name: convertExport(aliasType.Name, aliasType.Exported) + "Hash"}
+			} else {
+				indexExpr = &goast.SelectorExpr{
+					X:   &goast.Ident{Name: "cog"},
+					Sel: &goast.Ident{Name: "ASCIIHash"},
+				}
+			}
+		} else {
+			elemType, err := t.convertType(setType.Element)
+			if err != nil {
+				return nil, fmt.Errorf("converting set element type: %w", err)
+			}
+
+			indexExpr = elemType
 		}
 
 		t.addCogImport()
@@ -183,7 +218,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 				X:   &goast.Ident{Name: "cog"},
 				Sel: &goast.Ident{Name: "Set"},
 			},
-			Index: elemType,
+			Index: indexExpr,
 		}
 	case types.SliceKind:
 		sliceType, ok := typ.(*types.Slice)

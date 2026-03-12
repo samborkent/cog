@@ -283,7 +283,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			typeToken = aliasType.Underlying()
 		}
 
-		if typeToken.Kind() == types.OptionKind {
+		switch typeToken.Kind() {
+		case types.OptionKind:
 			// Handle option literal.
 			optionType, ok := typeToken.(*types.Option)
 			if !ok {
@@ -293,9 +294,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			// TODO: handle none type
 
 			typeToken = optionType.Value
-		}
-
-		if typeToken.Kind() == types.UnionKind {
+		case types.UnionKind:
 			// Handle union literal.
 			unionType, ok := typeToken.(*types.Union)
 			if !ok {
@@ -325,6 +324,18 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				Tag:       isOr,
 			}
 		}
+	}
+
+	if p.match(tokens.LBracket, tokens.Map, tokens.Set) {
+		// Literal with type annotation.
+		literalType := p.parseType(ctx)
+
+		if typeToken != types.None && literalType.String() != typeToken.String() {
+			p.error(p.this(), fmt.Sprintf("literal type %q does not match expected type %q", literalType.String(), typeToken.String()), "primary")
+			return nil
+		}
+
+		typeToken = literalType
 	}
 
 	switch p.this().Type {
@@ -461,10 +472,10 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				literal.ArrayType = t.Derived.Underlying().(*types.Array)
 				return literal
 			case *ast.MapLiteral:
-				literal.ValueType = t
+				literal.MapType = t
 				return literal
 			case *ast.SetLiteral:
-				literal.ValueType = t
+				literal.SetType = t
 				return literal
 			case *ast.StructLiteral:
 				literal.StructType = t
@@ -513,10 +524,9 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			return arrayLiteral
 		case *types.Map:
 			mapLiteral := &ast.MapLiteral{
-				Token:     p.this(),
-				KeyType:   t.Key,
-				ValueType: t.Value,
-				Pairs:     []*ast.KeyValue{},
+				Token:   p.this(),
+				MapType: t,
+				Pairs:   []*ast.KeyValue{},
 			}
 
 			p.advance("primary map {") // consume {
@@ -601,9 +611,9 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			return procLiteral
 		case *types.Set:
 			setLiteral := &ast.SetLiteral{
-				Token:     p.this(),
-				ValueType: t.Element,
-				Values:    []ast.Expression{},
+				Token:   p.this(),
+				SetType: t,
+				Values:  []ast.Expression{},
 			}
 
 			p.advance("primary set {") // consume {

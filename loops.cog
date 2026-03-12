@@ -40,4 +40,22 @@ outerLoop:
 	for mappie {
 		@print("klappie")
 	}
+
+	a := []int8{
+		5, 4, 3, 2, 1,
+	}
+	b := [5]int8{
+		5, 4, 3, 2, 1,
+	}
+	c := map[ascii]int8{
+		"hello": 5,
+	}
+	d := set[ascii]{
+		"hello",
+	}
+	e := set[A]{
+		"hello",
+	}
 }
+
+A ~ ascii

@@ -12,9 +12,9 @@ var _ Expression = &SetLiteral{}
 type SetLiteral struct {
 	expression
 
-	Token     tokens.Token
-	ValueType types.Type
-	Values    []Expression
+	Token   tokens.Token
+	SetType types.Type
+	Values  []Expression
 }
 
 func (l *SetLiteral) Pos() (uint32, uint16) {
@@ -46,11 +46,13 @@ func (l *SetLiteral) String() string {
 }
 
 func (l *SetLiteral) Type() types.Type {
-	if l.ValueType == nil {
-		panic("set with nil value type detected")
+	if l.SetType == nil {
+		panic("set with nil set type detected")
 	}
 
-	return &types.Set{
-		Element: l.ValueType,
+	if l.SetType.Kind() != types.SetKind {
+		panic("set with non-set type detected")
 	}
+
+	return l.SetType
 }

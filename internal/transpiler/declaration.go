@@ -162,8 +162,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					}
 				}
 
-				// fmt.Println(funcLiteral)
-
 				// Remove context argument for main func.
 				funcLiteral.Type.Params.List = funcLiteral.Type.Params.List[1:]
 
@@ -203,7 +201,8 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			return nil, fmt.Errorf("converting alias type: %w", err)
 		}
 
-		return []goast.Decl{&goast.GenDecl{
+		decls := make([]goast.Decl, 0, 2)
+		decls = append(decls, &goast.GenDecl{
 			Tok: gotoken.TYPE,
 			Specs: []goast.Spec{
 				&goast.TypeSpec{
@@ -211,7 +210,22 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					Type: aliasType,
 				},
 			},
-		}}, nil
+		})
+
+		if n.Alias.Kind() == types.ASCII {
+			// Generate hash type for ASCII alias, to allow usage of ASCII as map keys.
+			decls = append(decls, &goast.GenDecl{
+				Tok: gotoken.TYPE,
+				Specs: []goast.Spec{
+					&goast.TypeSpec{
+						Name: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported) + "Hash"},
+						Type: &goast.Ident{Name: gotypes.Typ[gotypes.Uint64].String()},
+					},
+				},
+			})
+		}
+
+		return decls, nil
 	default:
 		return nil, fmt.Errorf("unknown declaration type '%T'", n)
 	}

@@ -113,8 +113,7 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Short-term
 
-
-
+- Fix local type definitions
 - Get rid of `Go()` methods in `ast`. Instead create functions in `transpiler/comp` package.
 - Handle set type parsing in `parseType`.
 - Refactor `parseTypedDeclaration` to use same logic as `parseCombinedType`
