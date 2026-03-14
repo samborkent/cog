@@ -1,6 +1,9 @@
 package cog
 
-import "hash/maphash"
+import (
+	"bytes"
+	"hash/maphash"
+)
 
 type (
 	ASCII             []byte
@@ -8,9 +11,13 @@ type (
 	Set[T comparable] map[T]struct{}
 )
 
+func (a ASCII) Equal(b ASCII) bool {
+	return bytes.Equal(a, b)
+}
+
 var seed = maphash.MakeSeed()
 
-// HashASCII
+// HashASCII hashes an ASCII value to a uint64 to use for map and set keys.
 func HashASCII[Out ~uint64, In ~[]byte](in In) Out {
 	return Out(maphash.Bytes(seed, in))
 }

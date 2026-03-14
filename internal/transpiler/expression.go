@@ -182,22 +182,12 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		// Use bytes.Equal for ascii type.
 		switch n.Left.Type().Underlying().Kind() {
 		case types.ASCII:
-			_, ok := t.imports["bytes"]
-			if !ok {
-				t.imports["bytes"] = &goast.ImportSpec{
-					Path: &goast.BasicLit{
-						Kind:  gotoken.STRING,
-						Value: `"bytes"`,
-					},
-				}
-			}
-
 			return &goast.CallExpr{
 				Fun: &goast.SelectorExpr{
-					X:   &goast.Ident{Name: "bytes"},
+					X:   lhs,
 					Sel: &goast.Ident{Name: "Equal"},
 				},
-				Args: []goast.Expr{lhs, rhs},
+				Args: []goast.Expr{rhs},
 			}, nil
 		}
 
