@@ -198,8 +198,16 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 			tok := gotoken.ILLEGAL
 
-			if n.Value != nil {
+			if n.Index != nil || n.Value != nil {
 				tok = gotoken.DEFINE
+			}
+
+			if n.Index != nil && n.Value != nil {
+				key = &goast.Ident{Name: n.Index.Name}
+				val = &goast.Ident{Name: n.Value.Name}
+			} else if n.Index != nil && n.Value == nil {
+				key = &goast.Ident{Name: n.Index.Name}
+			} else if n.Index == nil && n.Value != nil {
 				key = &goast.Ident{Name: "_"}
 				val = &goast.Ident{Name: n.Value.Name}
 			}

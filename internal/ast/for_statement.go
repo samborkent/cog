@@ -14,6 +14,7 @@ type ForStatement struct {
 	Token tokens.Token
 	Label *Label
 	Value *Identifier
+	Index *Identifier
 	Range Expression
 	Loop  *Block
 }

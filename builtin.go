@@ -35,13 +35,19 @@ func Print(msg any) {
 			b := val.Bytes()
 			fmt.Println(unsafe.String(&b[0], len(b)))
 		} else {
-			panic(fmt.Sprintf("Print: slice type unsupported %q", val.Elem().Type()))
+			fmt.Printf("%v\n", msg)
+		}
+	case reflect.Struct:
+		fmt.Printf("%+v\n", msg)
+	case reflect.Int32:
+		if r, ok := msg.(rune); ok {
+			fmt.Printf("%c\n", r)
 		}
 	default:
 		if val.Type().Implements(reflectStringer) {
 			fmt.Println(msg.(fmt.Stringer).String())
+		} else {
+			fmt.Printf("%v\n", msg)
 		}
-
-		fmt.Println(msg)
 	}
 }

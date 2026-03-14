@@ -141,7 +141,64 @@ caseSwitch:
     localCopy := localSlice[0]
     mapVal := otherMap[10]
     @print(mapVal)
+
+    typedLiteralA := []int8{
+		5, 4, 3, 2, 1,
+	}
+	typedLiteralB := [5]int8{
+		5, 4, 3, 2, 1,
+	}
+	typedLiteralC := map[ascii]int8{
+		"hello": 5,
+	}
+	typedLiteralD := set[ascii]{
+		"hello",
+	}
+	typedLiteralE := set[ASC]{
+		"hello",
+	}
+
+    var index := 0
+
+outerLoop:
+	for {
+	innerLoop:
+		for {
+			index = index + 1
+
+			if (index < 5) {
+				@print("continue")
+				continue innerLoop
+			}
+
+			@print("break")
+			break outerLoop
+		}
+	}
+
+	// Loop over int not allowed.
+	//for v in 10 {
+	//	@print("loop")
+	//}
+
+	for _, i in "hello" {
+		@print(i)
+	}
+
+	cont : []int8 = {5, 4, 3, 2, 1}
+	for cont {
+		@print("cont")
+	}
+
+	for v, k in map[utf8]ascii{
+		"hello": "world",
+	} {
+		@print(k)
+		@print(v)
+	}
 }
+
+ASC ~ ascii
 
 definedHere := "defined globally!"
 

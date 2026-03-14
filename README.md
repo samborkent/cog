@@ -4,7 +4,6 @@ cog is a Go-based hobby programming language that brings some additional feature
 
 The following basic features are missing that need to be implemented before Cog can be used to write useful programs:
 
-- for-loops
 - fallthrough (also for if?)
 - Go-to-Cog type conversions
 - Multi-file programs
@@ -41,7 +40,7 @@ The following basic features are missing that need to be implemented before Cog 
 - Distinction between `func` and `proc`
     - `func` is a function without any side-effects with at least 1 return value.
         - It cannot reference dynamically scoped variables.
-        - `func` cannot be called async
+        - `func` cannot be called async.
     - `proc` is a function that may have side-effects, where return values are optional.
         - It can reference dynamically scoped variables.
         - `proc` may be called async.
@@ -49,10 +48,12 @@ The following basic features are missing that need to be implemented before Cog 
     - With default values `foo(default :? utf8 = 10)`
 - Value switch
     - `switch var { case val: ... }`
+- Explicit exports using `export`
+- For-loops with `in` range expression.
+    - Loop over sting, slice, array, map, and set.
 
 ### Planned
 
-- Explicit exports using `export`
 - Type qualifiers
     - `comp` for compile time constants. Similar to Zig' `comptime`. When used on variables, like C++ `constexpr`, when used for functions like C++ `consteval`.
 - Variables need to be passed to scope explicitely (no catch all closures)
@@ -99,6 +100,7 @@ The following basic features are missing that need to be implemented before Cog 
     - This is basically just a `main` package, and script gets inserted in `main()` body.
 - Canonical syntax highlighting
 - LSP
+- Adaptive GC (https://github.com/samborkent/adaptive-gc)
 
 ## Syntax
 
