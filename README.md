@@ -4,7 +4,6 @@ cog is a Go-based hobby programming language that brings some additional feature
 
 The following basic features are missing that need to be implemented before Cog can be used to write useful programs:
 
-- fallthrough (also for if?)
 - Go-to-Cog type conversions
 - Multi-file programs
 - Cog packages / imports
@@ -115,10 +114,7 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Short-term
 
-- Fix local type definitions
 - Get rid of `Go()` methods in `ast`. Instead create functions in `transpiler/comp` package.
-- Handle set type parsing in `parseType`.
-- Refactor `parseTypedDeclaration` to use same logic as `parseCombinedType`
 - Fix global type definition ordering bug for complex type (e.g. enum[planet] before planet)
 
 ### Long-term

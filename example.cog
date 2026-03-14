@@ -196,6 +196,9 @@ outerLoop:
 		@print(k)
 		@print(v)
 	}
+
+    Stringy ~ ascii
+    stringSet ~ set[utf8]
 }
 
 ASC ~ ascii

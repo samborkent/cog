@@ -379,6 +379,23 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		} else {
 			returnStmts = []goast.Stmt{switchStmt}
 		}
+	case *ast.Type:
+		typ, err := t.convertType(n.Alias)
+		if err != nil {
+			return nil, fmt.Errorf("converting type alias: %w", err)
+		}
+
+		returnStmts = []goast.Stmt{&goast.DeclStmt{
+			Decl: &goast.GenDecl{
+				Tok: gotoken.TYPE,
+				Specs: []goast.Spec{
+					&goast.TypeSpec{
+						Name: n.Identifier.Go(),
+						Type: typ,
+					},
+				},
+			},
+		}}
 	default:
 		return nil, fmt.Errorf("unknown statement type '%T'", n)
 	}
