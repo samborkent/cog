@@ -206,16 +206,60 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Op: convertBinaryOperator(n.Operator.Type),
 			Y:  rhs,
 		}, nil
+	case *ast.Int8Literal:
+		return n.Go(), nil
+	case *ast.Int16Literal:
+		return n.Go(), nil
+	case *ast.Int32Literal:
+		return n.Go(), nil
 	case *ast.Int64Literal:
+		return n.Go(), nil
+	case *ast.Int128Literal:
 		return n.Go(), nil
 	case *ast.MapLiteral:
 		// TODO: handle not directly comparable types
 		exprs := make([]goast.Expr, len(n.Pairs))
 
+		mType := n.MapType.(*types.Map)
+		hasASCIIKey := mType.Key.Kind() == types.ASCII
+
 		for i, pair := range n.Pairs {
 			keyExpr, err := t.convertExpr(pair.Key)
 			if err != nil {
 				return nil, fmt.Errorf("converting map literal key %d: %w", i, err)
+			}
+
+			if hasASCIIKey {
+				// Convert ascii literal keys to utf8 literals, since Go map keys must be comparable and byte slices are not.
+				var indexExpr goast.Expr
+
+				keyAlias, ok := pair.Key.Type().(*types.Alias)
+				if ok {
+					indexExpr = &goast.Ident{Name: convertExport(keyAlias.Name, keyAlias.Exported) + "Hash"}
+				} else {
+					indexExpr = &goast.SelectorExpr{
+						X:   &goast.Ident{Name: "cog"},
+						Sel: &goast.Ident{Name: "ASCIIHash"},
+					}
+				}
+
+				keyExpr = &goast.CallExpr{
+					Fun: &goast.IndexExpr{
+						X: &goast.SelectorExpr{
+							X:   &goast.Ident{Name: "cog"},
+							Sel: &goast.Ident{Name: "HashASCII"},
+						},
+						Index: indexExpr,
+					},
+					Args: []goast.Expr{keyExpr},
+				}
+			} else {
+				kExpr, err := t.convertExpr(pair.Key)
+				if err != nil {
+					return nil, fmt.Errorf("converting map literal key %d: %w", i, err)
+				}
+
+				keyExpr = kExpr
 			}
 
 			valExpr, err := t.convertExpr(pair.Value)
@@ -229,21 +273,13 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 		}
 
-		keyType, err := t.convertType(n.KeyType)
+		mapType, err := t.convertType(n.MapType)
 		if err != nil {
 			return nil, fmt.Errorf("converting map key type: %w", err)
 		}
 
-		valType, err := t.convertType(n.ValueType)
-		if err != nil {
-			return nil, fmt.Errorf("converting map value type: %w", err)
-		}
-
 		return &goast.CompositeLit{
-			Type: &goast.MapType{
-				Key:   keyType,
-				Value: valType,
-			},
+			Type: mapType,
 			Elts: exprs,
 		}, nil
 	case *ast.Prefix:
@@ -346,10 +382,39 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		// TODO: handle not directly comparable types
 		exprs := make([]goast.Expr, len(n.Values))
 
+		setType := n.SetType.(*types.Set)
+		isASCII := setType.Element.Kind() == types.ASCII
+
 		for i, v := range n.Values {
 			goExpr, err := t.convertExpr(v)
 			if err != nil {
 				return nil, fmt.Errorf("converting set literal value %d: %w", i, err)
+			}
+
+			if isASCII {
+				// Convert ascii literal keys to hash, since Go map keys must be comparable and byte slices are not.
+				var indexExpr goast.Expr
+
+				elemAlias, ok := setType.Element.(*types.Alias)
+				if ok {
+					indexExpr = &goast.Ident{Name: convertExport(elemAlias.Name, elemAlias.Exported) + "Hash"}
+				} else {
+					indexExpr = &goast.SelectorExpr{
+						X:   &goast.Ident{Name: "cog"},
+						Sel: &goast.Ident{Name: "ASCIIHash"},
+					}
+				}
+
+				goExpr = &goast.CallExpr{
+					Fun: &goast.IndexExpr{
+						X: &goast.SelectorExpr{
+							X:   &goast.Ident{Name: "cog"},
+							Sel: &goast.Ident{Name: "HashASCII"},
+						},
+						Index: indexExpr,
+					},
+					Args: []goast.Expr{goExpr},
+				}
 			}
 
 			exprs[i] = &goast.KeyValueExpr{
@@ -358,10 +423,28 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 		}
 
-		elemType, err := t.convertType(n.ValueType)
-		if err != nil {
-			return nil, fmt.Errorf("converting set element type: %w", err)
+		var indexExpr goast.Expr
+
+		if isASCII {
+			aliasType, ok := setType.Element.(*types.Alias)
+			if ok {
+				indexExpr = &goast.Ident{Name: convertExport(aliasType.Name, aliasType.Exported) + "Hash"}
+			} else {
+				indexExpr = &goast.SelectorExpr{
+					X:   &goast.Ident{Name: "cog"},
+					Sel: &goast.Ident{Name: "ASCIIHash"},
+				}
+			}
+		} else {
+			elemType, err := t.convertType(setType.Element)
+			if err != nil {
+				return nil, fmt.Errorf("converting set element type: %w", err)
+			}
+
+			indexExpr = elemType
 		}
+
+		t.addCogImport()
 
 		return &goast.CompositeLit{
 			Type: &goast.IndexExpr{
@@ -369,7 +452,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 					X:   &goast.Ident{Name: "cog"},
 					Sel: &goast.Ident{Name: "Set"},
 				},
-				Index: elemType,
+				Index: indexExpr,
 			},
 			Elts: exprs,
 		}, nil
@@ -465,7 +548,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		return &goast.CompositeLit{
 			Elts: values,
 		}, nil
+	case *ast.Uint8Literal:
+		return n.Go(), nil
+	case *ast.Uint16Literal:
+		return n.Go(), nil
+	case *ast.Uint32Literal:
+		return n.Go(), nil
 	case *ast.Uint64Literal:
+		return n.Go(), nil
+	case *ast.Uint128Literal:
 		return n.Go(), nil
 	case *ast.UnionLiteral:
 		unionType, ok := n.UnionType.Underlying().(*types.Union)

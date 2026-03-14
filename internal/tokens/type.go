@@ -79,6 +79,7 @@ const (
 	Return
 	Break
 	Continue
+	In
 	Async
 
 	// Function keywords
@@ -247,6 +248,8 @@ func (t Type) String() string {
 		return "break"
 	case Continue:
 		return "continue"
+	case In:
+		return "in"
 	case Async:
 		return "async"
 	case Function:

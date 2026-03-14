@@ -2,6 +2,8 @@ package ast
 
 import (
 	"fmt"
+	goast "go/ast"
+	gotoken "go/token"
 	"strconv"
 
 	"github.com/samborkent/cog/internal/tokens"
@@ -31,6 +33,13 @@ func NewUint16Literal(t tokens.Token) (*Uint16Literal, error) {
 
 func (l *Uint16Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
+}
+
+func (l *Uint16Literal) Go() *goast.BasicLit {
+	return &goast.BasicLit{
+		Kind:  gotoken.INT,
+		Value: strconv.FormatUint(uint64(l.Value), 10),
+	}
 }
 
 func (l *Uint16Literal) Hash() uint64 {

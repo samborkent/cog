@@ -6,6 +6,7 @@ import (
 	gotoken "go/token"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/transpiler/component"
 	"github.com/samborkent/cog/internal/types"
 )
@@ -67,9 +68,20 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			Tok: gotoken.ASSIGN,
 			Rhs: []goast.Expr{expr},
 		}}
-	case *ast.Break:
+	case *ast.Branch:
+		var goTok gotoken.Token
+
+		switch n.Token.Type {
+		case tokens.Break:
+			goTok = gotoken.BREAK
+		case tokens.Continue:
+			goTok = gotoken.CONTINUE
+		default:
+			return nil, fmt.Errorf("unknown branch token '%s'", n.Token.Literal)
+		}
+
 		returnStmts = []goast.Stmt{&goast.BranchStmt{
-			Tok:   gotoken.BREAK,
+			Tok:   goTok,
 			Label: n.Label.Go(),
 		}}
 	case *ast.Declaration:
@@ -161,6 +173,62 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		returnStmts = []goast.Stmt{&goast.ExprStmt{
 			X: expr,
 		}}
+	case *ast.ForStatement:
+		body, err := t.convertForBlock(n.Loop)
+		if err != nil {
+			return nil, err
+		}
+
+		var stmt goast.Stmt
+
+		if n.Range == nil {
+			// C-style for loop.
+			stmt = &goast.ForStmt{
+				Body: body,
+			}
+		} else {
+			// Range based for loop.
+			rangeExpr, err := t.convertExpr(n.Range)
+			if err != nil {
+				return nil, err
+			}
+
+			var key goast.Expr
+			var val goast.Expr
+
+			tok := gotoken.ILLEGAL
+
+			if n.Index != nil || n.Value != nil {
+				tok = gotoken.DEFINE
+			}
+
+			if n.Index != nil && n.Value != nil {
+				key = &goast.Ident{Name: n.Index.Name}
+				val = &goast.Ident{Name: n.Value.Name}
+			} else if n.Index != nil && n.Value == nil {
+				key = &goast.Ident{Name: n.Index.Name}
+			} else if n.Index == nil && n.Value != nil {
+				key = &goast.Ident{Name: "_"}
+				val = &goast.Ident{Name: n.Value.Name}
+			}
+
+			stmt = &goast.RangeStmt{
+				Key:   key,
+				Value: val,
+				Tok:   tok,
+				X:     rangeExpr,
+				Body:  body,
+			}
+		}
+
+		if n.Label != nil {
+			returnStmts = []goast.Stmt{&goast.LabeledStmt{
+				Label: n.Label.Label.Go(),
+				Stmt:  stmt,
+			}}
+		} else {
+			returnStmts = []goast.Stmt{stmt}
+		}
 	case *ast.IfStatement:
 		cond, err := t.convertExpr(n.Condition)
 		if err != nil {
@@ -304,13 +372,13 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		}
 
 		if n.Label != nil {
-			return []goast.Stmt{&goast.LabeledStmt{
+			returnStmts = []goast.Stmt{&goast.LabeledStmt{
 				Label: n.Label.Label.Go(),
 				Stmt:  switchStmt,
-			}}, nil
+			}}
+		} else {
+			returnStmts = []goast.Stmt{switchStmt}
 		}
-
-		returnStmts = []goast.Stmt{switchStmt}
 	default:
 		return nil, fmt.Errorf("unknown statement type '%T'", n)
 	}

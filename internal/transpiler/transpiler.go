@@ -133,6 +133,18 @@ func (t *Transpiler) addCogImport() {
 	}
 }
 
+func (t *Transpiler) addStdLibImport(name string) {
+	_, ok := t.imports[name]
+	if !ok {
+		t.imports[name] = &goast.ImportSpec{
+			Path: &goast.BasicLit{
+				Kind:  gotoken.STRING,
+				Value: `"` + name + `"`,
+			},
+		}
+	}
+}
+
 // attachLineDecl adds a //line directive comment to the first declaration in decls
 // so that compiler errors refer back to the originating Cog source location.
 func (t *Transpiler) attachLineDecl(decls []goast.Decl, node ast.Node) {

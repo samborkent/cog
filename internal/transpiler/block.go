@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/tokens"
 )
 
 var ifLabelCounter = 0
@@ -26,8 +27,8 @@ func (t *Transpiler) convertIfBlock(node *ast.Block) (*goast.BlockStmt, *goast.L
 	}
 
 	for i, stmt := range node.Statements {
-		breakExpr, ok := stmt.(*ast.Break)
-		if ok {
+		breakExpr, ok := stmt.(*ast.Branch)
+		if ok && breakExpr.Token.Type == tokens.Break {
 			if breakExpr.Label != nil {
 				block.List = append(block.List, &goast.BranchStmt{
 					Tok:   gotoken.GOTO,
@@ -66,4 +67,31 @@ func (t *Transpiler) convertIfBlock(node *ast.Block) (*goast.BlockStmt, *goast.L
 	}
 
 	return block, label, nil
+}
+
+func (t *Transpiler) convertForBlock(node *ast.Block) (*goast.BlockStmt, error) {
+	block := &goast.BlockStmt{
+		List: make([]goast.Stmt, 0, len(node.Statements)),
+	}
+
+	if len(node.Statements) > 0 {
+		// Enter for block scope.
+		t.symbols = NewEnclosedSymbolTable(t.symbols)
+	}
+
+	for i, stmt := range node.Statements {
+		goStmts, err := t.convertStmt(stmt)
+		if err != nil {
+			return nil, fmt.Errorf("converting statement %d in block: %w", i, err)
+		}
+
+		block.List = append(block.List, goStmts...)
+	}
+
+	if len(node.Statements) > 0 {
+		// Leave for block scope.
+		t.symbols = t.symbols.Outer
+	}
+
+	return block, nil
 }

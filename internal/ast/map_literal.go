@@ -12,10 +12,9 @@ var _ Expression = &MapLiteral{}
 type MapLiteral struct {
 	expression
 
-	Token     tokens.Token
-	KeyType   types.Type
-	ValueType types.Type
-	Pairs     []*KeyValue
+	Token   tokens.Token
+	MapType types.Type
+	Pairs   []*KeyValue
 }
 
 type KeyValue struct {
@@ -54,12 +53,13 @@ func (l *MapLiteral) String() string {
 }
 
 func (l *MapLiteral) Type() types.Type {
-	if l.ValueType == nil {
+	if l.MapType == nil {
 		panic("map with nil value type detected")
 	}
 
-	return &types.Map{
-		Key:   l.KeyType,
-		Value: l.ValueType,
+	if l.MapType.Kind() != types.MapKind {
+		panic("map literal with non-map type detected")
 	}
+
+	return l.MapType
 }

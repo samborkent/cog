@@ -2,24 +2,24 @@ package ast
 
 import "github.com/samborkent/cog/internal/tokens"
 
-var _ Statement = &Break{}
+var _ Statement = &Branch{}
 
-type Break struct {
+type Branch struct {
 	statement
 
-	Token tokens.Token
+	Token tokens.Token // break or continue token
 	Label *Identifier
 }
 
-func (b *Break) Pos() (uint32, uint16) {
+func (b *Branch) Pos() (uint32, uint16) {
 	return b.Token.Ln, b.Token.Col
 }
 
-func (b *Break) Hash() uint64 {
+func (b *Branch) Hash() uint64 {
 	return hash(b)
 }
 
-func (b *Break) String() string {
+func (b *Branch) String() string {
 	if b.Label != nil {
 		return b.Token.Type.String() + " " + b.Label.Name
 	}

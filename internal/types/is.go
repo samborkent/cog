@@ -31,6 +31,11 @@ func IsNumber(t Type) bool {
 	return IsComplex(t) || IsReal(t)
 }
 
+func IsIterator(t Type) bool {
+	kind := t.Underlying().Kind()
+	return IsString(t) || kind == ArrayKind || kind == SliceKind || kind == MapKind || kind == SetKind || kind == EnumKind
+}
+
 func IsReal(t Type) bool {
 	return IsUint(t) || IsSigned(t)
 }
