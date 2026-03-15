@@ -16,24 +16,24 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 
 		p.advance("parseCombinedType enum") // consume enum
 
-		if p.this().Type != tokens.LBracket {
-			p.error(p.this(), "expected [ after enum type", "parseCombinedType")
+		if p.this().Type != tokens.LT {
+			p.error(p.this(), "expected < after enum type", "parseCombinedType")
 			return nil
 		}
 
-		p.advance("parseCombinedType enum [") // consume [
+		p.advance("parseCombinedType enum <") // consume <
 
 		valType := p.parseType(ctx)
 		if valType == nil {
 			return nil
 		}
 
-		if p.this().Type != tokens.RBracket {
-			p.error(p.this(), "expected ] after enum value type", "parseCombinedType")
+		if p.this().Type != tokens.GT {
+			p.error(p.this(), "expected > after enum value type", "parseCombinedType")
 			return nil
 		}
 
-		p.advance("parseCombinedType enum ]") // consume ]
+		p.advance("parseCombinedType enum >") // consume >
 
 		if p.this().Type != tokens.LBrace {
 			p.error(p.this(), "expected { after enum type", "parseCombinedType")
@@ -211,29 +211,36 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 	case tokens.Map:
 		p.advance("parseType map") // consume map
 
-		if p.this().Type != tokens.LBracket {
-			p.error(p.this(), "expected [ after map type", "parseType")
+		if p.this().Type != tokens.LT {
+			p.error(p.this(), "expected < after map type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType map [") // consume [
+		p.advance("parseType map <") // consume <
 
 		keyType := p.parseType(ctx)
 		if keyType == nil {
 			return nil
 		}
 
-		if p.this().Type != tokens.RBracket {
-			p.error(p.this(), "expected ] after map key type", "parseType")
+		if p.this().Type != tokens.Comma {
+			p.error(p.this(), "expected , after map key type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType map ]") // consume ]
+		p.advance("parseType map ,") // consume ,
 
 		valType := p.parseType(ctx)
 		if valType == nil {
 			return nil
 		}
+
+		if p.this().Type != tokens.GT {
+			p.error(p.this(), "expected > after map value type", "parseType")
+			return nil
+		}
+
+		p.advance("parseType map >") // consume >
 
 		return &types.Map{
 			Key:   keyType,
@@ -242,24 +249,24 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 	case tokens.Set:
 		p.advance("parseType set") // consume set
 
-		if p.this().Type != tokens.LBracket {
-			p.error(p.this(), "expected [ after set type", "parseType")
+		if p.this().Type != tokens.LT {
+			p.error(p.this(), "expected < after set type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType set [") // consume [
+		p.advance("parseType set <") // consume <
 
 		elemType := p.parseType(ctx)
 		if elemType == nil {
 			return nil
 		}
 
-		if p.this().Type != tokens.RBracket {
-			p.error(p.this(), "expected ] after set element type", "parseType")
+		if p.this().Type != tokens.GT {
+			p.error(p.this(), "expected > after set element type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType set ]") // consume ]
+		p.advance("parseType set >") // consume >
 
 		return &types.Set{Element: elemType}
 	case tokens.Struct:

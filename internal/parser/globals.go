@@ -135,23 +135,23 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 	if p.this().Type == tokens.Enum {
 		p.advance("findGlobalType enum") // consume enum
 
-		if p.this().Type != tokens.LBracket {
-			p.error(p.this(), "expected [ in enum declaration", "findGlobalType")
+		if p.this().Type != tokens.LT {
+			p.error(p.this(), "expected < in enum declaration", "findGlobalType")
 			return
 		}
 
-		p.advance("findGlobalType enum [") // consume [
+		p.advance("findGlobalType enum <") // consume <
 
 		enumValType := p.parseCombinedType(ctx, exported)
 
 		enumType := &types.Enum{ValueType: enumValType}
 
-		if p.this().Type != tokens.RBracket {
-			p.error(p.this(), "expected ] in enum declaration", "findGlobalType")
+		if p.this().Type != tokens.GT {
+			p.error(p.this(), "expected > in enum declaration", "findGlobalType")
 			return
 		}
 
-		p.advance("findGlobalType enum ]") // consume ]
+		p.advance("findGlobalType enum >") // consume >
 
 		if p.this().Type != tokens.LBrace {
 			p.error(p.this(), "expected { in enum literal", "findGlobalType")

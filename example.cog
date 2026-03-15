@@ -47,7 +47,7 @@ main : proc() = {
 
     fl := -0.6e-7
 
-    collection : set[string] = { "hello1", "hello2" }
+    collection : set<string> = { "hello1", "hello2" }
 
     maths := 5 * 6 / (2 + 3)
 
@@ -131,7 +131,7 @@ caseSwitch:
 
     @print(m)
 
-    otherMap : map[uint64]ascii = {
+    otherMap : map<uint64, ascii> = {
         10: "ten",
         20: "twenty",
     }
@@ -148,13 +148,13 @@ caseSwitch:
 	typedLiteralB := [5]int8{
 		5, 4, 3, 2, 1,
 	}
-	typedLiteralC := map[ascii]int8{
+	typedLiteralC := map<ascii, int8>{
 		"hello": 5,
 	}
-	typedLiteralD := set[ascii]{
+	typedLiteralD := set<ascii>{
 		"hello",
 	}
-	typedLiteralE := set[ASC]{
+	typedLiteralE := set<ASC>{
 		"hello",
 	}
 
@@ -166,7 +166,7 @@ outerLoop:
 		for {
 			index = index + 1
 
-			if (index < 5) {
+			if index < 5 {
 				@print("continue")
 				continue innerLoop
 			}
@@ -190,7 +190,7 @@ outerLoop:
 		@print("cont")
 	}
 
-	for v, k in map[utf8]ascii{
+	for v, k in map<utf8, ascii>{
 		"hello": "world",
 	} {
 		@print(k)
@@ -198,7 +198,7 @@ outerLoop:
 	}
 
     Stringy ~ ascii
-    stringSet ~ set[utf8]
+    stringSet ~ set<utf8>
 }
 
 ASC ~ ascii
@@ -216,12 +216,12 @@ planet ~ struct {
     )
 }
 
-Status ~ enum[utf8] {
+Status ~ enum<utf8> {
     Open := "open",
     Closed := "closed",
 }
 
-Planets ~ enum[planet] {
+Planets ~ enum<planet> {
     Earth := {
         radius = 0.5,
         mass = 0.1,
@@ -247,7 +247,7 @@ someFunc : proc(str : utf8) = {
     @print(val) // overwrite
 }
 
-Map ~ map[utf8]uint64
+Map ~ map<utf8, uint64>
 
 array : [3]uint64 = {1, 2, 3}
 slice : []utf8 = {"foo", "bar", "baz", "qux"}
