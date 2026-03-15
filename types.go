@@ -30,3 +30,7 @@ type Option[T any] struct {
 type String interface {
 	~[]byte | ~string
 }
+
+type Index interface {
+	~uint8 | ~uint16 | ~uint32 | ~uint64
+}

@@ -85,9 +85,9 @@ The following basic features are missing that need to be implemented before Cog 
     - `@slice[T any, I uint](len : I, cap :? I = len) []T`
     - `@map[K comparable, V any, I uint](cap :? I = 8) map[K]V`
     - `@set[K comparable, I uint](cap :? I = 8) set[K]`
-    - `@cast[A, B any](x A) B` to cast types instead of `float32()`, etc.
-        - It must panic if casting cannot be done without overflow or precision loss.
-        - Also implement `@convert[A, B any](x A) B`, which will perform best-effort conversion, allowing some precision loss and handling overflows.
+    - `@convert[A, B any](x A) B` to cast types instead of `float32()`, etc.
+        - Will perform best-effort conversion, allowing some precision loss and handling overflows.
+        - Also implement `@cast[A, B any](x A) B`, which must panic if casting cannot be done without overflow or precision loss.
 - Additional types:
     - `signal[T any]` alias of `chan[T any]struct{}`
     - `any!` result type (alias of `any | error`)

@@ -5,12 +5,24 @@ import (
 	goast "go/ast"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/transpiler/component"
 	"github.com/samborkent/cog/internal/types"
 )
 
+type Builtins string
+
+const (
+	BuiltinIf    Builtins = "if"
+	BuiltinMap   Builtins = "map"
+	BuiltinPrint Builtins = "print"
+	BuiltinPtr   Builtins = "ptr"
+	BuiltinSet   Builtins = "set"
+	BuiltinSlice Builtins = "slice"
+)
+
 func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) {
-	switch node.Name {
-	case "if":
+	switch Builtins(node.Name) {
+	case BuiltinIf:
 		if len(node.Arguments) == 0 || len(node.Arguments) > 3 {
 			return nil, fmt.Errorf("wrong number of arguments, got %d", len(node.Arguments))
 		}
@@ -45,19 +57,12 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 			return nil, fmt.Errorf("converting @if builtin type: %w", err)
 		}
 
-		t.addCogImport()
+		t.addBuiltinImport()
 
-		return &goast.CallExpr{
-			Fun: &goast.IndexExpr{
-				X: &goast.SelectorExpr{
-					X:   &goast.Ident{Name: "cog"},
-					Sel: &goast.Ident{Name: "If"},
-				},
-				Index: ifType,
-			},
-			Args: args,
-		}, nil
-	case "print":
+		return component.BuiltinIf(ifType, args...), nil
+	case BuiltinMap:
+		panic("TODO: implement @map transpilation")
+	case BuiltinPrint:
 		if len(node.Arguments) != 1 {
 			return nil, fmt.Errorf("print expects 1 argument, got %d", len(node.Arguments))
 		}
@@ -80,15 +85,15 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 			}
 		}
 
-		t.addCogImport()
+		t.addBuiltinImport()
 
-		return &goast.CallExpr{
-			Fun: &goast.SelectorExpr{
-				X:   &goast.Ident{Name: "cog"},
-				Sel: &goast.Ident{Name: "Print"},
-			},
-			Args: []goast.Expr{arg},
-		}, nil
+		return component.BuiltinPrint(arg), nil
+	case BuiltinPtr:
+		panic("TODO: implement @ptr transpilation")
+	case BuiltinSet:
+		panic("TODO: implement @set transpilation")
+	case BuiltinSlice:
+		panic("TODO: implement @slice transpilation")
 	default:
 		return nil, fmt.Errorf("unknown builtin function '%s'", node.Name)
 	}
