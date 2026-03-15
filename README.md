@@ -29,6 +29,8 @@ The following basic features are missing that need to be implemented before Cog 
     - Either `this | that`
     - Tuple `this, and, that`
     - Option `foo : uint64?; if (foo?) { ... }`
+    - `ascii` string where every character is a single byte
+    - `utf8` alias for Go `string`
 - Clear builtin functions with `@` prefix
     - `@print(msg any)` print to std out
     - `@if[T any](if : bool, then : T, else :? T)`
@@ -47,9 +49,17 @@ The following basic features are missing that need to be implemented before Cog 
     - With default values `foo(default :? utf8 = 10)`
 - Value switch
     - `switch var { case val: ... }`
-- Explicit exports using `export`
 - For-loops with `in` range expression.
     - Loop over sting, slice, array, map, and set.
+
+### Partly implemented
+
+- Explicit exports using `export`
+- Additional types:
+    - `int128` (usine [github.com/ryanavella/wide](github.com/ryanavella/wide))
+    - `uint128` (using [lukechampine.com/uint128](lukechampine.com/uint128))
+    - `float16` (using [github.com/x448/float16](github.com/x448/float16))
+    - `complex32` (using `float16`)
 
 ### Planned
 
@@ -79,12 +89,6 @@ The following basic features are missing that need to be implemented before Cog 
         - It must panic if casting cannot be done without overflow or precision loss.
         - Also implement `@convert[A, B any](x A) B`, which will perform best-effort conversion, allowing some precision loss and handling overflows.
 - Additional types:
-    - `int128` (usine [github.com/ryanavella/wide](github.com/ryanavella/wide))
-    - `uint128` (using [lukechampine.com/uint128](lukechampine.com/uint128))
-    - `float16` (using [github.com/x448/float16](github.com/x448/float16))
-    - `complex32` (using `float16`)
-    - `ascii` string where every character is a single byte
-    - `utf8` alias for Go `string`
     - `signal[T any]` alias of `chan[T any]struct{}`
     - `any!` result type (alias of `any | error`)
         - Error can be extracted with `err!`
@@ -100,6 +104,7 @@ The following basic features are missing that need to be implemented before Cog 
 - Canonical syntax highlighting
 - LSP
 - Adaptive GC (https://github.com/samborkent/adaptive-gc)
+- Automatic struct alignment?
 
 ## Syntax
 
@@ -279,7 +284,67 @@ caseSwitch:
     localCopy := localSlice[0]
     mapVal := otherMap[10]
     @print(mapVal)
+
+    typedLiteralA := []int8{
+		5, 4, 3, 2, 1,
+	}
+	typedLiteralB := [5]int8{
+		5, 4, 3, 2, 1,
+	}
+	typedLiteralC := map[ascii]int8{
+		"hello": 5,
+	}
+	typedLiteralD := set[ascii]{
+		"hello",
+	}
+	typedLiteralE := set[ASC]{
+		"hello",
+	}
+
+    var index := 0
+
+outerLoop:
+	for {
+	innerLoop:
+		for {
+			index = index + 1
+
+			if (index < 5) {
+				@print("continue")
+				continue innerLoop
+			}
+
+			@print("break")
+			break outerLoop
+		}
+	}
+
+	// Loop over int not allowed.
+	//for v in 10 {
+	//	@print("loop")
+	//}
+
+	for _, i in "hello" {
+		@print(i)
+	}
+
+	cont : []int8 = {5, 4, 3, 2, 1}
+	for cont {
+		@print("cont")
+	}
+
+	for v, k in map[utf8]ascii{
+		"hello": "world",
+	} {
+		@print(k)
+		@print(v)
+	}
+
+    Stringy ~ ascii
+    stringSet ~ set[utf8]
 }
+
+ASC ~ ascii
 
 definedHere := "defined globally!"
 

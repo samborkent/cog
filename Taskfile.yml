@@ -9,16 +9,16 @@ vars:
 tasks:
   compile:
     cmds:
-    - go run cmd/main.go -file={{.FILE}} -debug={{.DEBUG}} -write=false
+    - GOEXPERIMENT=arenas go run cmd/main.go -file={{.FILE}} -debug={{.DEBUG}} -write=false
     silent: true
 
   transpile:
     cmds:
-    - go run cmd/main.go -file={{.FILE}} -debug=false -write=true
+    - GOEXPERIMENT=arenas go run cmd/main.go -file={{.FILE}} -debug=false -write=true
     silent: true
 
   run:
     cmds:
     - task transpile
-    - go run tmp/{{.FILE | trimSuffix ".cog"}}.go -asan -ldflags="-asan -race -s -w"
+    - GOEXPERIMENT=arenas go run tmp/{{.FILE | trimSuffix ".cog"}}.go -asan -ldflags="-asan -race -s -w"
     silent: true
