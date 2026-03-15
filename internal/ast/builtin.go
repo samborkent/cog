@@ -11,10 +11,12 @@ var _ Expression = &Builtin{}
 
 type Builtin struct {
 	expression
-	Token      tokens.Token
-	Name       string
-	ReturnType types.Type
-	Arguments  []Expression
+
+	Token         tokens.Token
+	Name          string
+	TypeArguments []types.Type
+	Arguments     []Expression
+	ReturnType    types.Type
 }
 
 func (b *Builtin) Pos() (uint32, uint16) {
@@ -30,6 +32,21 @@ func (b *Builtin) String() string {
 
 	_ = out.WriteByte('@')
 	_, _ = out.WriteString(b.Name)
+
+	for i, arg := range b.TypeArguments {
+		if i == 0 {
+			_ = out.WriteByte('<')
+		}
+
+		_, _ = out.WriteString(arg.String())
+
+		if i < len(b.TypeArguments)-1 {
+			_, _ = out.WriteString(", ")
+		} else {
+			_ = out.WriteByte('>')
+		}
+	}
+
 	_ = out.WriteByte('(')
 
 	for i, arg := range b.Arguments {

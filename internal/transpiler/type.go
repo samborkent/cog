@@ -175,6 +175,18 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		}
 
 		expr = funcType
+	case types.PointerKind:
+		pointerType, ok := typ.(*types.Pointer)
+		if !ok {
+			return nil, errors.New("unable to assert pointer type")
+		}
+
+		valueType, err := t.convertType(pointerType.Value)
+		if err != nil {
+			return nil, fmt.Errorf("converting pointer value type: %w", err)
+		}
+
+		expr = &goast.StarExpr{X: valueType}
 	case types.Uint8:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint8], nil)}
 	case types.Uint16:

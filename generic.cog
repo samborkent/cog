@@ -1,0 +1,16 @@
+package main
+
+main : proc() = {
+	_ = @map<uint8, uint64>()
+	_ = @map<utf8, ascii>(1)
+
+	settie := @set<utf8>(1000)
+
+	what := @if<uint64>(5 != 6, 10, 6)
+
+	ptr := @ptr<utf8>()
+	_ = ptr
+
+	a : uint64 = 10
+	_ = @slice<int32>(a)
+}

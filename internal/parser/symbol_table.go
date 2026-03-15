@@ -22,6 +22,7 @@ var None = &ast.Identifier{
 	},
 	Name:      "_",
 	ValueType: types.None,
+	Qualifier: ast.QualifierVariable,
 }
 
 type SymbolTable struct {
