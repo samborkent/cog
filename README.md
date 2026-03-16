@@ -15,8 +15,9 @@ The following basic features are missing that need to be implemented before Cog 
 - Refined syntax
     - Function declaration `main : proc() = { ... }`
     - Typed variable declaration `foo : uint64 = 10`
-    - Type alias `String ~ string`
+    - Type alias `String ~ utf8`
 - Immutability by default
+- `main` can only be declared as `proc()`
 - Type qualifiers
     - `var` for mutable variables. Not allowed in package scope.
     - `dyn` for dynamically scoped variables. Only allowed in package scope.
@@ -24,25 +25,28 @@ The following basic features are missing that need to be implemented before Cog 
     - Array `[const]uint64`
     - Slice `[]uint64`
     - Enum `enum[any]`
-    - Map `map[comparable]any`
-    - Set `set[comparable]` (alias for `map[comparable]struct{}`)
+    - Map `map<comparable, any>`
+    - Set `set<comparable>` (alias for `map<comparable, struct{}>`)
     - Either `this | that`
-    - Tuple `this, and, that`
-    - Option `foo : uint64?; if (foo?) { ... }`
+    - Tuple `this & that & other`
+    - Option `foo : uint64?; if foo? { ... }`
     - `ascii` string where every character is a single byte
     - `utf8` alias for Go `string`
+    - Struct with explicit field exports
+- Typed composite literals: `[]int8{5, 4, 3}`, `[5]int8{...}`, `map<ascii, int8>{...}`, `set<ascii>{...}`
 - Clear builtin functions with `@` prefix
     - `@print(msg any)` print to std out
-    - `@if[T any](if : bool, then : T, else :? T)`
-- Allocation builtins:
-    - `@ptr[T valueType]() *T`
-    - `@slice[T any, I uint](len : I, cap :? I = len) []T`
-    - `@map[K comparable, V any, I uint](cap :? I = 8) map[K]V`
-    - `@set[K comparable, I uint](cap :? I = 8) set[K]`
+    - `@if<T any>(if : bool, then : T, else :? T)` conditional expression
+- Allocation builtins with generic type arguments:
+    - `@ptr<T valueType>() *T`
+    - `@slice<T any, I uint>(len : I, cap :? I = len) []T`
+    - `@map<K comparable, V any, I uint>(cap :? I = 8) map<K, V>`
+    - `@set<K comparable, I uint>(cap :? I = 8) set<K>`
 - Call Go std library functions
     - Import using `goimport`
-    - Call using `@go` namespace prefix (e.g. `@go.strings.ToUpper("call me"))
+    - Call using `@go` namespace prefix (e.g. `@go.strings.ToUpper("call me")`)
 - Break from if-statements
+- Labeled control flow (`break label`, `continue label`)
 - Distinction between `func` and `proc`
     - `func` is a function without any side-effects with at least 1 return value.
         - It cannot reference dynamically scoped variables.
@@ -50,18 +54,24 @@ The following basic features are missing that need to be implemented before Cog 
     - `proc` is a function that may have side-effects, where return values are optional.
         - It can reference dynamically scoped variables.
         - `proc` may be called async.
-- Optional function parameters `foo(optional :? utf8)`
-    - With default values `foo(default :? utf8 = 10)`
+    - Context is only injected into `main` when the program uses procedures or dynamic variables.
+- Optional function parameters `foo(optional? : utf8)`
+    - With default values `foo(default? : utf8 = "wassup")`
 - Value switch
     - `switch var { case val: ... }`
-- For-loops with `in` range expression.
-    - Loop over sting, slice, array, map, and set.
+- Conditional switch
+    - `switch { case expr: ... }`
+- For-loops
+    - Infinite loop: `for { ... }`
+    - Container loop: `for container { ... }`
+    - Range with `in`: `for v, k in container { ... }`
+    - Loop over string, slice, array, map, and set.
 
 ### Partly implemented
 
 - Explicit exports using `export`
 - Additional types:
-    - `int128` (usine [github.com/ryanavella/wide](github.com/ryanavella/wide))
+    - `int128` (using [github.com/ryanavella/wide](github.com/ryanavella/wide))
     - `uint128` (using [lukechampine.com/uint128](lukechampine.com/uint128))
     - `float16` (using [github.com/x448/float16](github.com/x448/float16))
     - `complex32` (using `float16`)
@@ -86,11 +96,11 @@ The following basic features are missing that need to be implemented before Cog 
     - `signed ~ int | float | complex`
     - `number ~ signed | uint`
 - Conversion builtins:
-    - `@convert[A, B any](x A) B` to cast types instead of `float32()`, etc.
+    - `@convert<A, B any>(x A) B` to cast types instead of `float32()`, etc.
         - Will perform best-effort conversion, allowing some precision loss and handling overflows.
-        - Also implement `@cast[A, B any](x A) B`, which must panic if casting cannot be done without overflow or precision loss.
+        - Also implement `@cast<A, B any>(x A) B`, which must panic if casting cannot be done without overflow or precision loss.
 - Additional types:
-    - `signal[T any]` alias of `chan[T any]struct{}`
+    - `signal<T any>` alias of `chan<T any>struct{}`
     - `any!` result type (alias of `any | error`)
         - Error can be extracted with `err!`
         - E.g `res := someFunc(); if res! { @print(res) }`
@@ -140,7 +150,7 @@ The following basic features are missing that need to be implemented before Cog 
 
 ## Example code
 
-```go
+```cog
 package main
 
 goimport (
@@ -190,7 +200,7 @@ main : proc() = {
 
     fl := -0.6e-7
 
-    collection : set[string] = { "hello1", "hello2" }
+    collection : set<string> = { "hello1", "hello2" }
 
     maths := 5 * 6 / (2 + 3)
 
@@ -274,7 +284,7 @@ caseSwitch:
 
     @print(m)
 
-    otherMap : map[uint64]ascii = {
+    otherMap : map<uint64, ascii> = {
         10: "ten",
         20: "twenty",
     }
@@ -291,13 +301,13 @@ caseSwitch:
 	typedLiteralB := [5]int8{
 		5, 4, 3, 2, 1,
 	}
-	typedLiteralC := map[ascii]int8{
+	typedLiteralC := map<ascii, int8>{
 		"hello": 5,
 	}
-	typedLiteralD := set[ascii]{
+	typedLiteralD := set<ascii>{
 		"hello",
 	}
-	typedLiteralE := set[ASC]{
+	typedLiteralE := set<ASC>{
 		"hello",
 	}
 
@@ -309,7 +319,7 @@ outerLoop:
 		for {
 			index = index + 1
 
-			if (index < 5) {
+			if index < 5 {
 				@print("continue")
 				continue innerLoop
 			}
@@ -318,11 +328,6 @@ outerLoop:
 			break outerLoop
 		}
 	}
-
-	// Loop over int not allowed.
-	//for v in 10 {
-	//	@print("loop")
-	//}
 
 	for _, i in "hello" {
 		@print(i)
@@ -333,7 +338,7 @@ outerLoop:
 		@print("cont")
 	}
 
-	for v, k in map[utf8]ascii{
+	for v, k in map<utf8, ascii>{
 		"hello": "world",
 	} {
 		@print(k)
@@ -341,7 +346,21 @@ outerLoop:
 	}
 
     Stringy ~ ascii
-    stringSet ~ set[utf8]
+    stringSet ~ set<utf8>
+
+    _ = @map<uint8, uint64>()
+	_ = @map<utf8, ascii, uint32>(1)
+
+	settie := @set<utf8, uint16>(1000)
+
+	what := @if<uint64, bool>(5 != 6, 10, 6)
+
+	ptr := @ptr<utf8>()
+	_ = ptr
+
+	arg : uint64 = 10
+	_ = @slice<int32>(arg)
+	_ = @slice<int32, uint8>(10)
 }
 
 ASC ~ ascii
@@ -390,7 +409,7 @@ someFunc : proc(str : utf8) = {
     @print(val) // overwrite
 }
 
-Map ~ map[utf8]uint64
+Map ~ map<utf8, uint64>
 
 array : [3]uint64 = {1, 2, 3}
 slice : []utf8 = {"foo", "bar", "baz", "qux"}
