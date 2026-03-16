@@ -124,10 +124,21 @@ func (t *Transpiler) addCogImport() {
 	_, ok := t.imports["cog"]
 	if !ok {
 		t.imports["cog"] = &goast.ImportSpec{
-			Name: &goast.Ident{Name: "cog"},
 			Path: &goast.BasicLit{
 				Kind:  gotoken.STRING,
 				Value: `"github.com/samborkent/cog"`,
+			},
+		}
+	}
+}
+
+func (t *Transpiler) addBuiltinImport() {
+	_, ok := t.imports["builtin"]
+	if !ok {
+		t.imports["builtin"] = &goast.ImportSpec{
+			Path: &goast.BasicLit{
+				Kind:  gotoken.STRING,
+				Value: `"github.com/samborkent/cog/builtin"`,
 			},
 		}
 	}

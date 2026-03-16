@@ -34,6 +34,11 @@ The following basic features are missing that need to be implemented before Cog 
 - Clear builtin functions with `@` prefix
     - `@print(msg any)` print to std out
     - `@if[T any](if : bool, then : T, else :? T)`
+- Allocation builtins:
+    - `@ptr[T valueType]() *T`
+    - `@slice[T any, I uint](len : I, cap :? I = len) []T`
+    - `@map[K comparable, V any, I uint](cap :? I = 8) map[K]V`
+    - `@set[K comparable, I uint](cap :? I = 8) set[K]`
 - Call Go std library functions
     - Import using `goimport`
     - Call using `@go` namespace prefix (e.g. `@go.strings.ToUpper("call me"))
@@ -80,14 +85,10 @@ The following basic features are missing that need to be implemented before Cog 
     - `complex ~ complex32 | complex64 | complex128`
     - `signed ~ int | float | complex`
     - `number ~ signed | uint`
-- Allocation builtins:
-    - `@ptr[T valueType]() *T`
-    - `@slice[T any, I uint](len : I, cap :? I = len) []T`
-    - `@map[K comparable, V any, I uint](cap :? I = 8) map[K]V`
-    - `@set[K comparable, I uint](cap :? I = 8) set[K]`
-    - `@cast[A, B any](x A) B` to cast types instead of `float32()`, etc.
-        - It must panic if casting cannot be done without overflow or precision loss.
-        - Also implement `@convert[A, B any](x A) B`, which will perform best-effort conversion, allowing some precision loss and handling overflows.
+- Conversion builtins:
+    - `@convert[A, B any](x A) B` to cast types instead of `float32()`, etc.
+        - Will perform best-effort conversion, allowing some precision loss and handling overflows.
+        - Also implement `@cast[A, B any](x A) B`, which must panic if casting cannot be done without overflow or precision loss.
 - Additional types:
     - `signal[T any]` alias of `chan[T any]struct{}`
     - `any!` result type (alias of `any | error`)
@@ -119,6 +120,7 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Short-term
 
+- Fix infinite loop when import is used, but not defined.
 - Get rid of `Go()` methods in `ast`. Instead create functions in `transpiler/comp` package.
 - Fix global type definition ordering bug for complex type (e.g. enum[planet] before planet)
 

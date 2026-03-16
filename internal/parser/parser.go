@@ -42,7 +42,11 @@ func (p *Parser) Parse(ctx context.Context, fileName string) (*ast.File, error) 
 
 	p.builtins = map[string]BuiltinParser{
 		"if":    p.parseBuiltinIf,
+		"map":   p.parseBuiltinMap,
 		"print": p.parseBuiltinPrint,
+		"ptr":   p.parseBuiltinPtr,
+		"set":   p.parseBuiltinSet,
+		"slice": p.parseBuiltinSlice,
 	}
 
 	// Static checks.

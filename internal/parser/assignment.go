@@ -25,11 +25,6 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 
 		return nil
 	case ast.QualifierType:
-		if ident.Name == "_" {
-			// Ignore no-op assignment
-			break
-		}
-
 		p.error(p.prev(), "cannot assign to a type identifier", "parseAssignment")
 		return nil
 	}
@@ -53,11 +48,11 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 		return nil
 	}
 
-	if node.Identifier.ValueType == nil || node.Identifier.ValueType == types.None {
+	if symbol.Identifier.Name != "_" && (node.Identifier.ValueType == nil || node.Identifier.ValueType == types.None) {
 		node.Identifier.ValueType = expr.Type()
 	}
 
-	if symbol.Type() == types.None {
+	if symbol.Identifier.Name != "_" && symbol.Type() == types.None {
 		p.symbols.Update(ident.Name, expr.Type())
 	}
 
