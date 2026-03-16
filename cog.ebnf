@@ -1,42 +1,232 @@
-primary
-    = INT
-    | FLOAT
-    | STRING
-    | "true"
-    | "false"
-    | "(", expression, ")";
+(* Cog Language Grammar - EBNF *)
+(* Based on the implemented parser as of March 2026. *)
 
-index
-    = primary, { "[", expression, "]" };
 
-suffix
-    = suffix, ( "?"
-    | "!" )
-    | primary;
+(* === Program Structure === *)
 
-prefix
-    = ( "!"
-    | "-" ), prefix
-    | primary;
+file
+    = package, { top_level_statement }, EOF;
 
-factor
-    = prefix, { ( "/"
-    | "*" ), prefix };
+package
+    = "package", IDENTIFIER;
 
-term
-    = factor, { ( "-"
-    | "+" ), factor };
+top_level_statement
+    = go_import
+    | statement;
 
-comparison
-    = term, { ( ">"
-    | ">="
-    | "<"
-    | "<=" ), term };
 
-equality
-    = comparison, { ( "!="
-    | "==" ), comparison };
+(* === Imports === *)
+
+go_import
+    = "goimport", "(", { STRING }, ")";
+
+
+(* === Statements === *)
+
+statement
+    = "break", [ IDENTIFIER ]
+    | "continue", [ IDENTIFIER ]
+    | "dyn", statement
+    | "export", exported_statement
+    | "var", statement
+    | for_statement
+    | if_statement
+    | switch_statement
+    | "return", [ expression, { ",", expression } ]
+    | builtin_statement
+    | identifier_statement;
+
+exported_statement
+    = IDENTIFIER, ( ":", typed_declaration
+                   | ":=", declaration
+                   | "~", combined_type );
+
+identifier_statement
+    = IDENTIFIER, ( "=", expression                              (* assignment *)
+                  | ":", ( labeled_statement | typed_declaration ) (* typed decl or label *)
+                  | ":=", expression                              (* inferred decl *)
+                  | "~", combined_type                            (* type alias *)
+                  | "(", call_arguments, ")" );                   (* procedure call *)
+
+labeled_statement
+    = IDENTIFIER, ":", ( for_statement | if_statement | switch_statement );
+
+
+(* === Declarations === *)
+
+typed_declaration
+    = combined_type, [ ( ":=" | "=" ), expression ];
+
+declaration
+    = expression;
+
+
+(* === If Statement === *)
+
+if_statement
+    = "if", expression, block, [ "else", block ];
+
+
+(* === Switch Statement === *)
+
+switch_statement
+    = "switch", ( IDENTIFIER, "{", { case_clause }, [ default_clause ], "}"   (* value switch *)
+                | "{", { case_clause }, [ default_clause ], "}" );            (* conditional switch *)
+
+case_clause
+    = "case", expression, ":", { statement };
+
+default_clause
+    = "default", ":", { statement };
+
+
+(* === For Statement === *)
+
+for_statement
+    = "for", ( block                                              (* infinite loop *)
+             | IDENTIFIER, ",", IDENTIFIER, "in", expression, block  (* range with index *)
+             | IDENTIFIER, "in", expression, block                   (* range *)
+             | expression, block );                                  (* container loop *)
+
+
+(* === Block === *)
+
+block
+    = "{", { statement }, "}";
+
+
+(* === Types === *)
+
+combined_type
+    = enum_type
+    | procedure_type
+    | type, "&", type, { "&", type }     (* tuple *)
+    | type, "|", type                    (* union, exactly 2 types *)
+    | type;
+
+enum_type
+    = "enum", "<", type, ">", "{", { enum_value, [ "," ] }, "}";
+
+enum_value
+    = IDENTIFIER, ":=", expression;
+
+procedure_type
+    = ( "proc" | "func" ), "(", [ parameter_list ], ")", [ combined_type ];
+
+parameter_list
+    = parameter, { ",", parameter };
+
+parameter
+    = IDENTIFIER, [ "?" ], ":", combined_type, [ "=", expression ];
+
+type
+    = "[", "]", type                                   (* slice *)
+    | "[", ( INT | IDENTIFIER ), "]", type             (* array *)
+    | "map", "<", type, ",", type, ">"                 (* map *)
+    | "set", "<", type, ">"                            (* set *)
+    | struct_type
+    | basic_type
+    | IDENTIFIER                                       (* type alias reference *)
+    | type, "?"                                        (* option type *);
+
+struct_type
+    = "struct", "{", { struct_field }, "}";
+
+struct_field
+    = "export", ( "(", { field }, ")" | field )        (* exported field(s) *)
+    | field;                                           (* private field *)
+
+field
+    = IDENTIFIER, ":", combined_type;
+
+basic_type
+    = "bool" | "ascii" | "utf8"
+    | "int8" | "int16" | "int32" | "int64" | "int128"
+    | "uint8" | "uint16" | "uint32" | "uint64" | "uint128"
+    | "float16" | "float32" | "float64"
+    | "complex32" | "complex64" | "complex128";
+
+
+(* === Expressions === *)
+(* Precedence from lowest to highest. *)
 
 expression
-    = equality, { ( "&&"
-    | "||" ), equality };
+    = boolean, { "[", expression, "]" };               (* index *)
+
+boolean
+    = equality, { ( "&&" | "||" ), equality };
+
+equality
+    = comparison, { ( "==" | "!=" ), comparison };
+
+comparison
+    = term, { ( ">" | ">=" | "<" | "<=" ), term };
+
+term
+    = factor, { ( "+" | "-" ), factor };
+
+factor
+    = unary, { ( "*" | "/" ), unary };
+
+unary
+    = ( "!" | "-" ), unary
+    | primary, [ "?" ];                                (* suffix option unwrap *)
+
+primary
+    = INT | FLOAT | STRING
+    | "true" | "false"
+    | "(", expression, ")"                             (* grouped expression *)
+    | builtin_expression
+    | IDENTIFIER, ( "(", call_arguments, ")"           (* function call *)
+                  | ".", IDENTIFIER                     (* selector *)
+                  | )                                   (* variable reference *)
+    | typed_literal
+    | composite_literal;
+
+
+(* === Builtin Expressions === *)
+
+builtin_expression
+    = "@go", ".", IDENTIFIER, ".", IDENTIFIER, "(", call_arguments, ")"
+    | "@", IDENTIFIER, [ type_arguments ], "(", call_arguments, ")";
+
+type_arguments
+    = "<", combined_type, { ",", combined_type }, ">";
+
+
+(* === Literals === *)
+
+typed_literal
+    = ( "[", "]", type                                 (* typed slice literal *)
+      | "[", ( INT | IDENTIFIER ), "]", type           (* typed array literal *)
+      | "map", "<", type, ",", type, ">"               (* typed map literal *)
+      | "set", "<", type, ">" ),                       (* typed set literal *)
+      "{", literal_body, "}";
+
+composite_literal
+    = "{", literal_body, "}";
+
+literal_body
+    = (* determined by enclosing type context: *)
+    (* array/slice/set: *)  [ expression, { ",", expression }, [ "," ] ]
+    (* map: *)              | [ expression, ":", expression, { ",", expression, ":", expression }, [ "," ] ]
+    (* struct: *)           | [ IDENTIFIER, "=", expression, { ",", IDENTIFIER, "=", expression }, [ "," ] ]
+    (* tuple: *)            | expression, { ",", expression };
+
+
+(* === Call Arguments === *)
+
+call_arguments
+    = [ expression, { ",", expression } ];
+
+
+(* === Terminals === *)
+
+IDENTIFIER = letter, { letter | digit | "_" };
+INT        = digit, { digit };
+FLOAT      = digit, { digit }, ".", { digit }, [ ( "e" | "E" ), [ "+" | "-" ], digit, { digit } ];
+STRING     = '"', { character }, '"'
+           | '`', { character }, '`';
+
+letter     = "a" | ... | "z" | "A" | ... | "Z" | "_";
+digit      = "0" | ... | "9";
