@@ -338,3 +338,91 @@ main : proc() = {}
 
 	t.Logf("error as expected: %v", err)
 }
+
+func TestMainAsIntShouldError(t *testing.T) {
+	src := `package main
+
+main : int64 = 5
+`
+
+	_, err := tryTranspile(t.Context(), src)
+	if err == nil {
+		t.Fatalf("expected parser error for main declared as int64, got nil")
+	}
+
+	if !strings.Contains(err.Error(), `"main" can only be declared as proc()`) {
+		t.Fatalf("expected error about main declaration, got: %v", err)
+	}
+}
+
+func TestMainAsShortDeclShouldError(t *testing.T) {
+	src := `package main
+
+main := 5
+`
+
+	_, err := tryTranspile(t.Context(), src)
+	if err == nil {
+		t.Fatalf("expected parser error for main := 5, got nil")
+	}
+
+	if !strings.Contains(err.Error(), `"main" can only be declared as proc()`) {
+		t.Fatalf("expected error about main declaration, got: %v", err)
+	}
+}
+
+func TestMainAsFuncShouldError(t *testing.T) {
+	src := `package main
+
+main : func() utf8 = {
+	return "hello"
+}
+`
+
+	_, err := tryTranspile(t.Context(), src)
+	if err == nil {
+		t.Fatalf("expected parser error for main declared as func, got nil")
+	}
+
+	if !strings.Contains(err.Error(), `"main" can only be declared as proc()`) {
+		t.Fatalf("expected error about main declaration, got: %v", err)
+	}
+}
+
+func TestMainAsProcWithParamsShouldError(t *testing.T) {
+	src := `package main
+
+main : proc(x : utf8) = {
+	@print(x)
+}
+`
+
+	_, err := tryTranspile(t.Context(), src)
+	if err == nil {
+		t.Fatalf("expected parser error for main declared with parameters, got nil")
+	}
+
+	if !strings.Contains(err.Error(), `"main" can only be declared as proc()`) {
+		t.Fatalf("expected error about main declaration, got: %v", err)
+	}
+}
+
+func TestMainAsProcIsValid(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+	@print("valid main")
+}
+`
+
+	code := transpileSource(t, src)
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "valid main") {
+		t.Fatalf("expected output to contain 'valid main', got:\n%s", out)
+	}
+}

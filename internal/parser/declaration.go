@@ -31,6 +31,14 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 		return nil
 	}
 
+	if ident.Name == "main" {
+		procType, isProc := ident.ValueType.(*types.Procedure)
+		if !isProc || procType.Function || len(procType.Parameters) != 0 || procType.ReturnType != nil {
+			p.error(ident.Token, `"main" can only be declared as proc()`, "parseDeclaration")
+			return nil
+		}
+	}
+
 	if ident.ValueType == nil {
 		ident.ValueType = types.None
 	}
