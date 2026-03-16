@@ -1,6 +1,6 @@
 package builtin
 
-func If[T any](condition bool, consequence T, alternative ...T) T {
+func If[T any, B ~bool](condition B, consequence T, alternative ...T) T {
 	if condition {
 		return consequence
 	}
