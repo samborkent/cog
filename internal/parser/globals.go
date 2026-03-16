@@ -9,6 +9,9 @@ import (
 )
 
 func (p *Parser) findGlobals(ctx context.Context) {
+	// Pre-register all type names so forward references can be resolved.
+	p.preRegisterTypeNames(ctx)
+
 tokenLoop:
 	for p.this().Type != tokens.EOF {
 		exported := false
@@ -56,6 +59,42 @@ tokenLoop:
 		default:
 			p.advance("findGlobals") // consume token
 		}
+	}
+
+	p.i = 0
+	p.Errs = p.Errs[:0]
+}
+
+func (p *Parser) preRegisterTypeNames(ctx context.Context) {
+	for p.this().Type != tokens.EOF {
+		if ctx.Err() != nil {
+			return
+		}
+
+		exported := false
+
+		if p.this().Type == tokens.Export {
+			p.advance("preRegister export") // consume export
+			exported = true
+		}
+
+		// Skip qualifiers (types can't have dyn/var but scan past them)
+		if p.this().Type == tokens.Dynamic || p.this().Type == tokens.Variable {
+			p.advance("preRegister qualifier") // consume qualifier
+		}
+
+		if p.this().Type == tokens.Identifier && p.next().Type == tokens.Tilde {
+			ident := &ast.Identifier{
+				Token:    p.this(),
+				Name:     p.this().Literal,
+				Exported: exported,
+				// Qualifier defaults to QualifierType (zero value)
+			}
+
+			p.symbols.DefineGlobal(ident)
+		}
+
+		p.advance("preRegister") // consume token
 	}
 
 	p.i = 0
@@ -137,10 +176,20 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 	p.advance("findGlobalType identifier") // consume identifier
 
-	_, ok := p.symbols.Resolve(ident.Name)
+	preRegistered := false
+
+	existing, ok := p.symbols.Resolve(ident.Name)
 	if ok {
-		p.error(p.this(), "cannot redeclare type", "findGlobalType")
-		return
+		// Allow pre-registered forward-declared types to be resolved.
+		if existing.Scope == ScanScope &&
+			existing.Identifier.Qualifier == ast.QualifierType &&
+			types.IsNone(existing.Identifier.ValueType) {
+			preRegistered = true
+			ident = existing.Identifier
+		} else {
+			p.error(p.this(), "cannot redeclare type", "findGlobalType")
+			return
+		}
 	}
 
 	p.advance("findGlobalType ~") // consume ~
@@ -215,7 +264,10 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		}
 
 		ident.ValueType = enumType
-		p.symbols.DefineGlobal(ident)
+
+		if !preRegistered {
+			p.symbols.DefineGlobal(ident)
+		}
 
 		return
 	}
@@ -227,7 +279,9 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 	ident.ValueType = alias
 
-	p.symbols.DefineGlobal(ident)
+	if !preRegistered {
+		p.symbols.DefineGlobal(ident)
+	}
 }
 
 func (p *Parser) skipScope(ctx context.Context) {

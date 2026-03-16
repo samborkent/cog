@@ -219,17 +219,6 @@ ASC ~ ascii
 
 definedHere := "defined globally!"
 
-planet ~ struct {
-    name : ascii
-
-    export pressure : float64
-
-    export (
-        radius : float64
-        mass : float64
-    )
-}
-
 Status ~ enum<utf8> {
     Open := "open",
     Closed := "closed",
@@ -240,6 +229,17 @@ Planets ~ enum<planet> {
         radius = 0.5,
         mass = 0.1,
     },
+}
+
+planet ~ struct {
+    name : ascii
+
+    export pressure : float64
+
+    export (
+        radius : float64
+        mass : float64
+    )
 }
 
 Tuple ~ utf8 & uint64 & bool

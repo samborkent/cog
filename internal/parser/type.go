@@ -282,10 +282,20 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 			return nil
 		}
 
-		typ = &types.Alias{
-			Name:     typeSymbol.Identifier.Name,
-			Derived:  typeSymbol.Identifier.ValueType,
-			Exported: typeSymbol.Identifier.Exported,
+		ident := typeSymbol.Identifier
+
+		if types.IsNone(ident.ValueType) {
+			// Forward reference: type name is pre-registered but not yet resolved.
+			// Create a lazy alias that resolves when the type is accessed.
+			typ = types.NewForwardAlias(ident.Name, ident.Exported, func() types.Type {
+				return ident.ValueType
+			})
+		} else {
+			typ = &types.Alias{
+				Name:     ident.Name,
+				Derived:  ident.ValueType,
+				Exported: ident.Exported,
+			}
 		}
 	}
 

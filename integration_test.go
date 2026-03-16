@@ -585,3 +585,59 @@ main : proc() = {
 		t.Fatal("expected error for undefined go import, got nil")
 	}
 }
+
+func TestEnumBeforeStructType(t *testing.T) {
+	src := `package main
+
+Planets ~ enum<planet> {
+    Earth := {
+        radius = 0.5,
+        mass = 0.1,
+    },
+}
+
+planet ~ struct {
+    export (
+        radius : float64
+        mass : float64
+    )
+}
+
+main : proc() = {
+    @print("ok")
+}`
+
+	code := transpileSource(t, src)
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "ok") {
+		t.Fatalf("expected 'ok', got:\n%s", out)
+	}
+}
+
+func TestTypeAliasBeforeTarget(t *testing.T) {
+	src := `package main
+
+MyString ~ BaseString
+BaseString ~ utf8
+
+main : proc() = {
+    s : MyString = "hello"
+    @print(s)
+}`
+
+	code := transpileSource(t, src)
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "hello") {
+		t.Fatalf("expected 'hello', got:\n%s", out)
+	}
+}
