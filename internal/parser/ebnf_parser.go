@@ -459,8 +459,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			if symbol.Identifier.ValueType != nil &&
 				typeToken.Kind() != types.Invalid &&
 				symbol.Identifier.ValueType.Kind() != typeToken.Kind() {
-				p.error(p.this(), fmt.Sprintf("type of identifier %q (%s) does not match expected type (%s)", symbol.Identifier.Name, symbol.Identifier.ValueType, typeToken), "primary")
-				return nil
+				// Allow option-typed identifiers when the inner type matches the expected type.
+				optType, isOption := symbol.Identifier.ValueType.(*types.Option)
+				if !isOption || optType.Value.Kind() != typeToken.Kind() {
+					p.error(p.this(), fmt.Sprintf("type of identifier %q (%s) does not match expected type (%s)", symbol.Identifier.Name, symbol.Identifier.ValueType, typeToken), "primary")
+					return nil
+				}
 			}
 
 			return symbol.Identifier
