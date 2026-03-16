@@ -532,3 +532,56 @@ main : proc() = {
 		t.Fatalf("expected output to contain 'world', got:\n%s", out)
 	}
 }
+
+func TestUndefinedGoImportInGlobal(t *testing.T) {
+	src := `package main
+
+result := @go.strings.ToUpper("hello")
+
+main : proc() = {
+    @print(result)
+}`
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+
+	_, err := tryTranspile(ctx, src)
+	if err == nil {
+		t.Fatal("expected error for undefined go import, got nil")
+	}
+}
+
+func TestUndefinedGoImportInProc(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+    str := @go.strings.ToUpper("hello")
+    @print(str)
+}`
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+
+	_, err := tryTranspile(ctx, src)
+	if err == nil {
+		t.Fatal("expected error for undefined go import, got nil")
+	}
+}
+
+func TestDefinedGoImportButWrongName(t *testing.T) {
+	src := `package main
+
+goimport (
+    "fmt"
+)
+
+main : proc() = {
+    str := @go.strings.ToUpper("hello")
+    @print(str)
+}`
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+
+	_, err := tryTranspile(ctx, src)
+	if err == nil {
+		t.Fatal("expected error for undefined go import, got nil")
+	}
+}

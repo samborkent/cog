@@ -130,7 +130,6 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Short-term
 
-- Fix infinite loop when import is used, but not defined.
 - Get rid of `Go()` methods in `ast`. Instead create functions in `transpiler/comp` package.
 - Fix global type definition ordering bug for complex type (e.g. enum<planet> before planet)
 
@@ -150,7 +149,7 @@ The following basic features are missing that need to be implemented before Cog 
 
 ## Example code
 
-```cog
+```go
 package main
 
 goimport (

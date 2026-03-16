@@ -71,7 +71,6 @@ func (p *Parser) parseGoCallExpression(ctx context.Context) *ast.GoCallExpressio
 	_, ok := p.symbols.ResolveGoImport(p.this().Literal)
 	if !ok {
 		p.error(p.this(), "undefined Go import", "parseGoCallExpression")
-		return nil
 	}
 
 	node.Import = &ast.Identifier{
@@ -109,6 +108,10 @@ func (p *Parser) parseGoCallExpression(ctx context.Context) *ast.GoCallExpressio
 
 	node.CallIdentifier = callIdent
 	node.Arguments = p.parseCallArguments(ctx, nil)
+
+	if !ok {
+		return nil
+	}
 
 	return node
 }
