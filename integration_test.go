@@ -166,7 +166,7 @@ main : proc() = {
 func TestEnumMissingAssignmentShouldError(t *testing.T) {
 	src := `package main
 
-Status ~ enum[utf8] {
+Status ~ enum<utf8> {
 	Open,
 }
 
@@ -207,7 +207,7 @@ func TestMissingPackageProducesError(t *testing.T) {
 func TestEnumPrintsUnderlyingValue(t *testing.T) {
 	src := `package main
 
-Status ~ enum[utf8] {
+Status ~ enum<utf8> {
     Open := "open",
 }
 

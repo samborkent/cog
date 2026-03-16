@@ -11,12 +11,12 @@ main : proc() = {
     _ = Planets.Earth.mass
 }
 
-Status ~ enum[utf8] {
+Status ~ enum<utf8> {
     Open := "open",
     Closed := "closed",
 }
 
-Planets ~ enum[planet] {
+Planets ~ enum<planet> {
     Earth := {
         radius = 0.5,
         mass = 0.1,

@@ -2,7 +2,7 @@ package cog
 
 string ~ ascii | utf8
 stringer ~ string | interface{ String() string }
-error[E string | interface{ comparable; Error() string }] ~ enum[E]
+error[E string | interface{ comparable; Error() string }] ~ enum<E>
 
 HTTPStatus ~ struct {
     code : uint16

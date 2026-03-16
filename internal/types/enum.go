@@ -41,7 +41,7 @@ func (e *Enum) String() string {
 	// return out.String()
 
 	var str strings.Builder
-	str.WriteString("enum[" + e.ValueType.String() + "] {")
+	str.WriteString("enum<" + e.ValueType.String() + "> {")
 
 	for i, val := range e.Values {
 		if i == 0 {

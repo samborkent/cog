@@ -24,7 +24,7 @@ The following basic features are missing that need to be implemented before Cog 
 - Extended types
     - Array `[const]uint64`
     - Slice `[]uint64`
-    - Enum `enum[any]`
+    - Enum `enum<any>`
     - Map `map<comparable, any>`
     - Set `set<comparable>` (alias for `map<comparable, struct{}>`)
     - Either `this | that`
@@ -132,7 +132,7 @@ The following basic features are missing that need to be implemented before Cog 
 
 - Fix infinite loop when import is used, but not defined.
 - Get rid of `Go()` methods in `ast`. Instead create functions in `transpiler/comp` package.
-- Fix global type definition ordering bug for complex type (e.g. enum[planet] before planet)
+- Fix global type definition ordering bug for complex type (e.g. enum<planet> before planet)
 
 ### Long-term
 
@@ -378,12 +378,12 @@ planet ~ struct {
     )
 }
 
-Status ~ enum[utf8] {
+Status ~ enum<utf8> {
     Open := "open",
     Closed := "closed",
 }
 
-Planets ~ enum[planet] {
+Planets ~ enum<planet> {
     Earth := {
         radius = 0.5,
         mass = 0.1,
