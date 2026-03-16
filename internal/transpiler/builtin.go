@@ -54,21 +54,36 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 			args = append(args, alternative)
 		}
 
-		ifType, err := t.convertType(node.Arguments[1].Type())
+		expectedIfType := node.Arguments[1].Type()
+
+		if len(node.TypeArguments) >= 1 {
+			expectedIfType = node.TypeArguments[0]
+		}
+
+		ifType, err := t.convertType(expectedIfType)
 		if err != nil {
-			return nil, fmt.Errorf("converting @if builtin type: %w", err)
+			return nil, fmt.Errorf("converting @if return type: %w", err)
+		}
+
+		var boolType goast.Expr
+
+		if len(node.TypeArguments) == 2 {
+			boolType, err = t.convertType(node.TypeArguments[1])
+			if err != nil {
+				return nil, fmt.Errorf("converting @if bool type: %w", err)
+			}
 		}
 
 		t.addBuiltinImport()
 
-		return component.BuiltinIf(ifType, args...), nil
+		return component.BuiltinIf(ifType, boolType, args...), nil
 	case BuiltinMap:
-		if len(node.TypeArguments) != 2 {
-			return nil, fmt.Errorf("map expects 2 type arguments, got %d", len(node.TypeArguments))
+		if len(node.TypeArguments) < 2 || len(node.TypeArguments) > 3 {
+			return nil, fmt.Errorf("@set expects 2 or 3 type arguments, got %d", len(node.TypeArguments))
 		}
 
 		if len(node.Arguments) > 1 {
-			return nil, fmt.Errorf("map at most 1 argument, got %d", len(node.Arguments))
+			return nil, fmt.Errorf("@set expects at most 1 argument, got %d", len(node.Arguments))
 		}
 
 		keyType, err := t.convertType(node.TypeArguments[0])
@@ -81,10 +96,21 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 			return nil, fmt.Errorf("converting @map builtin value type: %w", err)
 		}
 
+		var capType goast.Expr
+
+		if len(node.TypeArguments) == 3 {
+			capType, err = t.convertType(node.TypeArguments[2])
+			if err != nil {
+				return nil, fmt.Errorf("converting @map capacity type: %w", err)
+			}
+		}
+
 		t.addBuiltinImport()
 
+		var size goast.Expr
+
 		if len(node.Arguments) == 1 {
-			size, err := t.convertExpr(node.Arguments[0])
+			size, err = t.convertExpr(node.Arguments[0])
 			if err != nil {
 				return nil, fmt.Errorf("converting @map builtin size argument: %w", err)
 			}
@@ -109,11 +135,9 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 					Args: []goast.Expr{size},
 				}
 			}
-
-			return component.BuiltinMap(keyType, valueType, size), nil
 		}
 
-		return component.BuiltinMap(keyType, valueType, nil), nil
+		return component.BuiltinMap(keyType, valueType, capType, size), nil
 	case BuiltinPrint:
 		if len(node.Arguments) != 1 {
 			return nil, fmt.Errorf("print expects 1 argument, got %d", len(node.Arguments))
@@ -156,8 +180,8 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 
 		return component.BuiltinPtr(valueType), nil
 	case BuiltinSet:
-		if len(node.TypeArguments) != 1 {
-			return nil, fmt.Errorf("@set expects 1 type arguments, got %d", len(node.TypeArguments))
+		if len(node.TypeArguments) < 1 || len(node.TypeArguments) > 2 {
+			return nil, fmt.Errorf("@set expects 1 or 2 type arguments, got %d", len(node.TypeArguments))
 		}
 
 		if len(node.Arguments) > 1 {
@@ -169,10 +193,21 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 			return nil, fmt.Errorf("converting @set builtin key type: %w", err)
 		}
 
+		var capType goast.Expr
+
+		if len(node.TypeArguments) == 2 {
+			capType, err = t.convertType(node.TypeArguments[1])
+			if err != nil {
+				return nil, fmt.Errorf("converting @set capacity type: %w", err)
+			}
+		}
+
 		t.addBuiltinImport()
 
+		var size goast.Expr
+
 		if len(node.Arguments) == 1 {
-			size, err := t.convertExpr(node.Arguments[0])
+			size, err = t.convertExpr(node.Arguments[0])
 			if err != nil {
 				return nil, fmt.Errorf("converting @set builtin size argument: %w", err)
 			}
@@ -197,14 +232,12 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 					Args: []goast.Expr{size},
 				}
 			}
-
-			return component.BuiltinSet(keyType, size), nil
 		}
 
-		return component.BuiltinSet(keyType, nil), nil
+		return component.BuiltinSet(keyType, capType, size), nil
 	case BuiltinSlice:
-		if len(node.TypeArguments) != 1 {
-			return nil, fmt.Errorf("@slice expects 1 type arguments, got %d", len(node.TypeArguments))
+		if len(node.TypeArguments) < 1 || len(node.TypeArguments) > 2 {
+			return nil, fmt.Errorf("@slice expects 1 or 2 type arguments, got %d", len(node.TypeArguments))
 		}
 
 		if len(node.Arguments) < 1 {
@@ -214,6 +247,15 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 		elemType, err := t.convertType(node.TypeArguments[0])
 		if err != nil {
 			return nil, fmt.Errorf("converting @slice element type: %w", err)
+		}
+
+		var lenType goast.Expr
+
+		if len(node.TypeArguments) == 2 {
+			lenType, err = t.convertType(node.TypeArguments[1])
+			if err != nil {
+				return nil, fmt.Errorf("converting @slice length type: %w", err)
+			}
 		}
 
 		length, err := t.convertExpr(node.Arguments[0])
@@ -272,7 +314,7 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 			}
 		}
 
-		return component.BuiltinSlice(elemType, length, capacity), nil
+		return component.BuiltinSlice(elemType, lenType, length, capacity), nil
 	default:
 		return nil, fmt.Errorf("unknown builtin function '%s'", node.Name)
 	}

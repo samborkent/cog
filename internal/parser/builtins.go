@@ -12,20 +12,27 @@ import (
 type BuiltinParser func(ctx context.Context, t tokens.Token, tokenType types.Type) *ast.Builtin
 
 func (p *Parser) parseBuiltinIf(ctx context.Context, t tokens.Token, tokenType types.Type) *ast.Builtin {
+	var typArgs []types.Type
+
 	if p.this().Type == tokens.LT {
-		typArgs := p.parseTypeArguments(ctx)
+		typArgs = p.parseTypeArguments(ctx)
 		if typArgs == nil {
 			return nil
 		}
 
-		if len(typArgs) > 1 {
-			p.error(p.this(), "expected at most 1 type argument", "parseBuiltinIf")
+		if len(typArgs) > 2 {
+			p.error(p.this(), "@if expected at most 2 type arguments", "parseBuiltinIf")
 			return nil
 		}
 
 		// If a type argument if provided, check it's the same as the expected type if any.
-		if len(typArgs) == 1 && tokenType.Kind() != types.Invalid && typArgs[0].Kind() != tokenType.Kind() {
-			p.error(p.this(), "type argument does not match expected type", "parseBuiltinIf")
+		if len(typArgs) >= 1 && tokenType.Kind() != types.Invalid && typArgs[0].Kind() != tokenType.Kind() {
+			p.error(p.this(), "@if type argument does not match expected type", "parseBuiltinIf")
+			return nil
+		}
+
+		if len(typArgs) == 2 && typArgs[1].Kind() != types.Bool {
+			p.error(p.this(), "@if second type argument must be of type ~bool", "parseBuiltinIf")
 			return nil
 		}
 
@@ -83,10 +90,11 @@ func (p *Parser) parseBuiltinIf(ctx context.Context, t tokens.Token, tokenType t
 	p.advance("parseIf )") // consume ')'
 
 	return &ast.Builtin{
-		Token:      t,
-		Name:       "if",
-		ReturnType: thenExpr.Type(),
-		Arguments:  args,
+		Token:         t,
+		Name:          "if",
+		TypeArguments: typArgs,
+		Arguments:     args,
+		ReturnType:    thenExpr.Type(),
 	}
 }
 
@@ -102,8 +110,8 @@ func (p *Parser) parseBuiltinMap(ctx context.Context, t tokens.Token, tokenType 
 		return nil
 	}
 
-	if len(typArgs) != 2 {
-		p.error(p.this(), "@map requirs two type arguments", "parseBuiltinMap")
+	if len(typArgs) < 2 || len(typArgs) > 3 {
+		p.error(p.this(), "@map wrong number of type arguments", "parseBuiltinMap")
 		return nil
 	}
 
@@ -135,7 +143,13 @@ func (p *Parser) parseBuiltinMap(ctx context.Context, t tokens.Token, tokenType 
 	var args []ast.Expression
 
 	if p.this().Type != tokens.RParen {
-		capArg := p.expression(ctx, types.None)
+		var capType types.Type = types.None
+
+		if len(typArgs) == 3 {
+			capType = typArgs[2]
+		}
+
+		capArg := p.expression(ctx, capType)
 		if capArg == nil {
 			return nil
 		}
@@ -253,8 +267,8 @@ func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType 
 		return nil
 	}
 
-	if len(typArgs) != 1 {
-		p.error(p.this(), "@set requires one type argument", "parseBuiltinSet")
+	if len(typArgs) == 0 || len(typArgs) > 2 {
+		p.error(p.this(), "@set wrong number of type arguments", "parseBuiltinSet")
 		return nil
 	}
 
@@ -281,7 +295,13 @@ func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType 
 	var args []ast.Expression
 
 	if p.this().Type != tokens.RParen {
-		capArg := p.expression(ctx, types.None)
+		var capType types.Type = types.None
+
+		if len(typArgs) > 1 {
+			capType = typArgs[1]
+		}
+
+		capArg := p.expression(ctx, capType)
 		if capArg == nil {
 			return nil
 		}
@@ -317,8 +337,8 @@ func (p *Parser) parseBuiltinSlice(ctx context.Context, t tokens.Token, tokenTyp
 		return nil
 	}
 
-	if len(typArgs) != 1 {
-		p.error(p.this(), "@slice requires one type argument", "parseBuiltinSlice")
+	if len(typArgs) < 1 || len(typArgs) > 2 {
+		p.error(p.this(), "@slice requires one or two type arguments", "parseBuiltinSlice")
 		return nil
 	}
 
@@ -342,7 +362,13 @@ func (p *Parser) parseBuiltinSlice(ctx context.Context, t tokens.Token, tokenTyp
 
 	p.advance("parseBuiltinSlice (") // consume (
 
-	lenArg := p.expression(ctx, types.None)
+	var lenType types.Type = types.None
+
+	if len(typArgs) == 2 {
+		lenType = typArgs[1]
+	}
+
+	lenArg := p.expression(ctx, lenType)
 	if lenArg == nil {
 		return nil
 	}
@@ -350,7 +376,7 @@ func (p *Parser) parseBuiltinSlice(ctx context.Context, t tokens.Token, tokenTyp
 	args := []ast.Expression{lenArg}
 
 	if p.this().Type == tokens.Comma {
-		capArg := p.expression(ctx, types.None)
+		capArg := p.expression(ctx, lenType)
 		if capArg == nil {
 			return nil
 		}

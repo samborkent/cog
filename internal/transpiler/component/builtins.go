@@ -15,20 +15,26 @@ const (
 	builtinSlice   = "Slice"
 )
 
-func BuiltinIf(ifType goast.Expr, args ...goast.Expr) *goast.CallExpr {
+func BuiltinIf(ifType, boolType goast.Expr, args ...goast.Expr) *goast.CallExpr {
+	indices := []goast.Expr{ifType}
+
+	if boolType != nil {
+		indices = append(indices, boolType)
+	}
+
 	return &goast.CallExpr{
-		Fun: &goast.IndexExpr{
+		Fun: &goast.IndexListExpr{
 			X: &goast.SelectorExpr{
 				X:   &goast.Ident{Name: builtinPackage},
 				Sel: &goast.Ident{Name: builtinIf},
 			},
-			Index: ifType,
+			Indices: indices,
 		},
 		Args: args,
 	}
 }
 
-func BuiltinMap(keyType, valueType, capacity goast.Expr) *goast.CallExpr {
+func BuiltinMap(keyType, valueType, capType, capacity goast.Expr) *goast.CallExpr {
 	var args []goast.Expr
 
 	if capacity != nil {
@@ -37,7 +43,9 @@ func BuiltinMap(keyType, valueType, capacity goast.Expr) *goast.CallExpr {
 
 	indices := []goast.Expr{keyType, valueType}
 
-	if capacity == nil {
+	if capType != nil {
+		indices = append(indices, capType)
+	} else if capacity == nil {
 		indices = append(indices, &goast.Ident{Name: gotypes.Typ[gotypes.Uint8].String()})
 	}
 
@@ -75,7 +83,7 @@ func BuiltinPtr(valueType goast.Expr) *goast.CallExpr {
 	}
 }
 
-func BuiltinSet(keyType, capacity goast.Expr) *goast.CallExpr {
+func BuiltinSet(keyType, capType, capacity goast.Expr) *goast.CallExpr {
 	var args []goast.Expr
 
 	if capacity != nil {
@@ -84,7 +92,9 @@ func BuiltinSet(keyType, capacity goast.Expr) *goast.CallExpr {
 
 	indices := []goast.Expr{keyType}
 
-	if capacity == nil {
+	if capType != nil {
+		indices = append(indices, capType)
+	} else if capacity == nil {
 		indices = append(indices, &goast.Ident{Name: gotypes.Typ[gotypes.Uint8].String()})
 	}
 
@@ -100,20 +110,25 @@ func BuiltinSet(keyType, capacity goast.Expr) *goast.CallExpr {
 	}
 }
 
-func BuiltinSlice(elemType, length, capacity goast.Expr) *goast.CallExpr {
+func BuiltinSlice(elemType, lenType, length, capacity goast.Expr) *goast.CallExpr {
 	args := []goast.Expr{length}
 
 	if capacity != nil {
 		args = append(args, capacity)
 	}
 
+	indices := []goast.Expr{elemType}
+	if lenType != nil {
+		indices = append(indices, lenType)
+	}
+
 	return &goast.CallExpr{
-		Fun: &goast.IndexExpr{
+		Fun: &goast.IndexListExpr{
 			X: &goast.SelectorExpr{
 				X:   &goast.Ident{Name: builtinPackage},
 				Sel: &goast.Ident{Name: builtinSlice},
 			},
-			Index: elemType,
+			Indices: indices,
 		},
 		Args: args,
 	}
