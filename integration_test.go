@@ -641,3 +641,34 @@ main : proc() = {
 		t.Fatalf("expected 'hello', got:\n%s", out)
 	}
 }
+
+func TestGlobalStructLiteral(t *testing.T) {
+	src := `package main
+
+Point ~ struct {
+    export (
+        x : float64
+        y : float64
+    )
+}
+
+val : Point = {
+    x = 1.5,
+    y = 2.5,
+}
+
+main : proc() = {
+    @print(val.x)
+}`
+
+	code := transpileSource(t, src)
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "1.5") {
+		t.Fatalf("expected '1.5', got:\n%s", out)
+	}
+}

@@ -170,6 +170,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			}
 		}
 
+		// Replace type string with type name if missing (for structs, tuples, unions).
+		compositeLiteral, ok := expr.(*goast.CompositeLit)
+		if ok && compositeLiteral.Type == nil {
+			compositeLiteral.Type = &goast.Ident{Name: convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)}
+		}
+
 		valueSpec := &goast.ValueSpec{
 			Names:  []*goast.Ident{ident},
 			Values: []goast.Expr{expr},
@@ -337,7 +343,10 @@ func mustBeVariable(t types.Kind) bool {
 		types.MapKind,
 		types.ProcedureKind,
 		types.SetKind,
-		types.SliceKind:
+		types.SliceKind,
+		types.StructKind,
+		types.TupleKind,
+		types.UnionKind:
 		return true
 	default:
 		return false
