@@ -55,25 +55,29 @@ func transpileSource(t *testing.T, src string) string {
 	return buf.String()
 }
 
-// runGenerated writes the generated code into ./tmp/ and runs `go run` on it (cwd is repo root)
+// runGenerated compiles and runs generated Go code, returning its output.
 func runGenerated(t *testing.T, code string) (string, error) {
 	t.Helper()
 
-	// Use testing-managed temp dir to avoid file collisions and ensure cleanup by the testing framework.
 	tmpDir := t.TempDir()
 
-	path := filepath.Join(tmpDir, "integration_test_gen.go")
-	if err := os.WriteFile(path, []byte(code), 0o600); err != nil {
+	srcPath := filepath.Join(tmpDir, "main.go")
+	if err := os.WriteFile(srcPath, []byte(code), 0o600); err != nil {
 		t.Fatalf("write generated file: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
 	defer cancel()
 
-	// run `go run <tmpdir>/integration_test_gen.go` with cwd = repo root (test runs from repo root)
-	cmd := exec.CommandContext(ctx, "go", "run", path)
-	cmd.Dir = "."
-	out, err := cmd.CombinedOutput()
+	binPath := filepath.Join(tmpDir, "bin")
+
+	build := exec.CommandContext(ctx, "go", "build", "-ldflags=-s -w", "-o", binPath, srcPath)
+	if out, err := build.CombinedOutput(); err != nil {
+		return string(out), err
+	}
+
+	run := exec.CommandContext(ctx, binPath)
+	out, err := run.CombinedOutput()
 
 	return string(out), err
 }
@@ -123,6 +127,8 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
+	t.Parallel()
+
 	out, err := runGenerated(t, code)
 	if err != nil {
 		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
@@ -134,6 +140,8 @@ main : proc() = {
 }
 
 func TestIfBuiltinTypeMismatch(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 main : proc() = {
@@ -149,6 +157,8 @@ main : proc() = {
 }
 
 func TestDynDeclarationInsideProcShouldError(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 main : proc() = {
@@ -164,6 +174,8 @@ main : proc() = {
 }
 
 func TestEnumMissingAssignmentShouldError(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 Status ~ enum<utf8> {
@@ -182,6 +194,8 @@ main : proc() = {}
 }
 
 func TestMissingPackageProducesError(t *testing.T) {
+	t.Parallel()
+
 	// No package declaration -> parser should return an error
 	src := `main : proc() = {}`
 
@@ -218,6 +232,8 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
+	t.Parallel()
+
 	out, err := runGenerated(t, code)
 	if err != nil {
 		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
@@ -241,6 +257,8 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
+	t.Parallel()
+
 	out, err := runGenerated(t, code)
 	if err != nil {
 		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
@@ -252,6 +270,8 @@ main : proc() = {
 }
 
 func TestDuplicateGlobalDeclarationShouldError(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 a := 1
@@ -290,6 +310,8 @@ main : proc() = {}`
 }
 
 func TestMissingParenInIfShouldError(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 main : proc() = {
@@ -305,6 +327,8 @@ main : proc() = {
 }
 
 func TestUndefinedIdentifierShouldError(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 main : proc() = {
@@ -320,6 +344,8 @@ main : proc() = {
 }
 
 func TestFuncReferencingDynShouldError(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 dyn val : utf8 = "def"
@@ -340,6 +366,8 @@ main : proc() = {}
 }
 
 func TestMainAsIntShouldError(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 main : int64 = 5
@@ -356,6 +384,8 @@ main : int64 = 5
 }
 
 func TestMainAsShortDeclShouldError(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 main := 5
@@ -372,6 +402,8 @@ main := 5
 }
 
 func TestMainAsFuncShouldError(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 main : func() utf8 = {
@@ -390,6 +422,8 @@ main : func() utf8 = {
 }
 
 func TestMainAsProcWithParamsShouldError(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 main : proc(x : utf8) = {
@@ -417,6 +451,8 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
+	t.Parallel()
+
 	out, err := runGenerated(t, code)
 	if err != nil {
 		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
@@ -440,6 +476,8 @@ main : proc() = {
 	if strings.Contains(code, "\"context\"") {
 		t.Fatalf("expected no context import for simple main, got:\n%s", code)
 	}
+
+	t.Parallel()
 
 	out, err := runGenerated(t, code)
 	if err != nil {
@@ -469,6 +507,8 @@ main : proc() = {
 		t.Fatalf("expected no context for program with only func (no proc), got:\n%s", code)
 	}
 
+	t.Parallel()
+
 	out, err := runGenerated(t, code)
 	if err != nil {
 		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
@@ -494,6 +534,8 @@ main : proc() = {
 	if !strings.Contains(code, "context") {
 		t.Fatalf("expected context import for program with dyn var, got:\n%s", code)
 	}
+
+	t.Parallel()
 
 	out, err := runGenerated(t, code)
 	if err != nil {
@@ -523,6 +565,8 @@ main : proc() = {
 		t.Fatalf("expected context import for program with proc declaration, got:\n%s", code)
 	}
 
+	t.Parallel()
+
 	out, err := runGenerated(t, code)
 	if err != nil {
 		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
@@ -534,6 +578,8 @@ main : proc() = {
 }
 
 func TestUndefinedGoImportInGlobal(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 result := @go.strings.ToUpper("hello")
@@ -551,6 +597,8 @@ main : proc() = {
 }
 
 func TestUndefinedGoImportInProc(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 main : proc() = {
@@ -567,6 +615,8 @@ main : proc() = {
 }
 
 func TestDefinedGoImportButWrongName(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 goimport (
@@ -609,6 +659,8 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
+	t.Parallel()
+
 	out, err := runGenerated(t, code)
 	if err != nil {
 		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
@@ -631,6 +683,8 @@ main : proc() = {
 }`
 
 	code := transpileSource(t, src)
+
+	t.Parallel()
 
 	out, err := runGenerated(t, code)
 	if err != nil {
@@ -662,6 +716,8 @@ main : proc() = {
 }`
 
 	code := transpileSource(t, src)
+
+	t.Parallel()
 
 	out, err := runGenerated(t, code)
 	if err != nil {
