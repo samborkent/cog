@@ -127,7 +127,6 @@ The following basic features are missing that need to be implemented before Cog 
 ### Long-term
 
 - TESTS!
-- Only add background context to main if at least one prcedure, dynamic variable, or signal is used.
 - Range operator `0..4 == [0, 1, 2, 3]`
 - Design how iterators should work.
     - Range over int (or other literal) should not be possible.

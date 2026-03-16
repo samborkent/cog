@@ -426,3 +426,109 @@ main : proc() = {
 		t.Fatalf("expected output to contain 'valid main', got:\n%s", out)
 	}
 }
+
+func TestNoContextWithoutProcsOrDyn(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+	@print("no context needed")
+}
+`
+
+	code := transpileSource(t, src)
+
+	if strings.Contains(code, "\"context\"") {
+		t.Fatalf("expected no context import for simple main, got:\n%s", code)
+	}
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "no context needed") {
+		t.Fatalf("expected output to contain 'no context needed', got:\n%s", out)
+	}
+}
+
+func TestNoContextWithFuncOnly(t *testing.T) {
+	src := `package main
+
+add : func(a : int64, b : int64) int64 = {
+	return a + b
+}
+
+main : proc() = {
+	@print(add(1, 2))
+}
+`
+
+	code := transpileSource(t, src)
+
+	if strings.Contains(code, "\"context\"") {
+		t.Fatalf("expected no context for program with only func (no proc), got:\n%s", code)
+	}
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "3") {
+		t.Fatalf("expected output to contain '3', got:\n%s", out)
+	}
+}
+
+func TestContextWithDynVar(t *testing.T) {
+	src := `package main
+
+dyn val : utf8 = "hello"
+
+main : proc() = {
+	@print(val)
+}
+`
+
+	code := transpileSource(t, src)
+
+	if !strings.Contains(code, "context") {
+		t.Fatalf("expected context import for program with dyn var, got:\n%s", code)
+	}
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "hello") {
+		t.Fatalf("expected output to contain 'hello', got:\n%s", out)
+	}
+}
+
+func TestContextWithProcDecl(t *testing.T) {
+	src := `package main
+
+greet : proc(name : utf8) = {
+	@print(name)
+}
+
+main : proc() = {
+	greet("world")
+}
+`
+
+	code := transpileSource(t, src)
+
+	if !strings.Contains(code, "context") {
+		t.Fatalf("expected context import for program with proc declaration, got:\n%s", code)
+	}
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "world") {
+		t.Fatalf("expected output to contain 'world', got:\n%s", out)
+	}
+}

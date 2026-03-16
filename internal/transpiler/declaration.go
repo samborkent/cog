@@ -120,50 +120,47 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			}
 
 			if n.Assignment.Identifier.Name == "main" {
-				// Main func
-				ctxIdent := t.symbols.Define("ctx")
-				if len(t.symbols.dynamics) > 0 {
+				if t.needsContext {
+					// Main func with context
+					ctxIdent := t.symbols.Define("ctx")
 					t.symbols.MarkUsed("ctx")
-				}
 
-				body := make([]goast.Stmt, 0, 1+len(t.symbols.dynamics))
-				body = append(body, component.ContextMain(ctxIdent))
+					body := make([]goast.Stmt, 0, 1+len(t.symbols.dynamics))
+					body = append(body, component.ContextMain(ctxIdent))
 
-				// Define dynamically scoped variables.
-				for _, dyn := range t.symbols.dynamics {
-					key := joinStr(convertExport(dyn.Name, dyn.Exported), "Key")
-					val := joinStr(convertExport(dyn.Name, dyn.Exported), "Default")
+					// Define dynamically scoped variables.
+					for _, dyn := range t.symbols.dynamics {
+						key := joinStr(convertExport(dyn.Name, dyn.Exported), "Key")
+						val := joinStr(convertExport(dyn.Name, dyn.Exported), "Default")
 
-					keyIdent, ok := t.symbols.Resolve(key)
-					if !ok {
-						return nil, fmt.Errorf("missing dynamic variable context key %q", key)
+						keyIdent, ok := t.symbols.Resolve(key)
+						if !ok {
+							return nil, fmt.Errorf("missing dynamic variable context key %q", key)
+						}
+
+						valIdent, ok := t.symbols.Resolve(val)
+						if !ok {
+							return nil, fmt.Errorf("missing dynamic variable default value %q", val)
+						}
+
+						t.symbols.MarkUsed(key)
+						t.symbols.MarkUsed(val)
+
+						body = append(body, component.ContextWithValue(keyIdent, valIdent))
 					}
 
-					valIdent, ok := t.symbols.Resolve(val)
-					if !ok {
-						return nil, fmt.Errorf("missing dynamic variable default value %q", val)
-					}
+					funcLiteral.Body.List = append(body, funcLiteral.Body.List...)
 
-					t.symbols.MarkUsed(key)
-					t.symbols.MarkUsed(val)
-
-					body = append(body, component.ContextWithValue(keyIdent, valIdent))
-				}
-
-				funcLiteral.Body.List = append(body, funcLiteral.Body.List...)
-
-				_, ok = t.imports["ctx"]
-				if !ok {
 					t.imports["ctx"] = &goast.ImportSpec{
 						Path: &goast.BasicLit{
 							Kind:  gotoken.STRING,
 							Value: `"context"`,
 						},
 					}
-				}
 
-				// Remove context argument for main func.
-				funcLiteral.Type.Params.List = funcLiteral.Type.Params.List[1:]
+					// Remove context argument for main func.
+					funcLiteral.Type.Params.List = funcLiteral.Type.Params.List[1:]
+				}
 
 				return []goast.Decl{&goast.FuncDecl{
 					Name: &goast.Ident{Name: "main"},

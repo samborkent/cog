@@ -49,7 +49,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		args := make([]goast.Expr, 0, len(procType.Parameters))
 
-		if !procType.Function {
+		if !procType.Function && t.needsContext {
 			// Pass context variable to all procedures.
 			args = append(args, component.ContextVar)
 		}
