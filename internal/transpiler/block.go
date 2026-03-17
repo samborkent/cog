@@ -8,6 +8,7 @@ import (
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
+	"github.com/samborkent/cog/internal/transpiler/component"
 )
 
 var ifLabelCounter = 0
@@ -32,7 +33,7 @@ func (t *Transpiler) convertIfBlock(node *ast.Block) (*goast.BlockStmt, *goast.L
 			if breakExpr.Label != nil {
 				block.List = append(block.List, &goast.BranchStmt{
 					Tok:   gotoken.GOTO,
-					Label: breakExpr.Label.Go(),
+					Label: component.Ident(breakExpr.Label),
 				})
 
 				continue

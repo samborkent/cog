@@ -2,7 +2,6 @@ package ast
 
 import (
 	"fmt"
-	goast "go/ast"
 
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
@@ -36,12 +35,6 @@ func NewBoolLiteral(t tokens.Token) (*BoolLiteral, error) {
 
 func (l *BoolLiteral) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
-}
-
-func (l *BoolLiteral) Go() *goast.Ident {
-	return &goast.Ident{
-		Name: l.Token.Type.String(),
-	}
 }
 
 func (l *BoolLiteral) Hash() uint64 {

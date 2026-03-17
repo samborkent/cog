@@ -2,8 +2,6 @@ package ast
 
 import (
 	"fmt"
-	goast "go/ast"
-	gotoken "go/token"
 	"unicode"
 	"unsafe"
 
@@ -42,25 +40,6 @@ func NewASCIILiteral(t tokens.Token) (*ASCIILiteral, error) {
 
 func (l *ASCIILiteral) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
-}
-
-func (l *ASCIILiteral) Go() *goast.CompositeLit {
-	elems := make([]goast.Expr, len(l.Value))
-
-	for i := range l.Value {
-		elems[i] = &goast.BasicLit{
-			Kind:  gotoken.CHAR,
-			Value: unsafe.String(&[]byte{'\'', l.Value[i], '\''}[0], 3),
-		}
-	}
-
-	return &goast.CompositeLit{
-		Type: &goast.SelectorExpr{
-			X:   &goast.Ident{Name: "cog"},
-			Sel: &goast.Ident{Name: "ASCII"},
-		},
-		Elts: elems,
-	}
 }
 
 func (l *ASCIILiteral) Hash() uint64 {

@@ -2,8 +2,6 @@ package ast
 
 import (
 	"fmt"
-	goast "go/ast"
-	gotoken "go/token"
 	"strconv"
 
 	"github.com/samborkent/cog/internal/tokens"
@@ -33,13 +31,6 @@ func NewFloat64Literal(t tokens.Token) (*Float64Literal, error) {
 
 func (l *Float64Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
-}
-
-func (l *Float64Literal) Go() *goast.BasicLit {
-	return &goast.BasicLit{
-		Kind:  gotoken.FLOAT,
-		Value: strconv.FormatFloat(l.Value, 'g', -1, 64),
-	}
 }
 
 func (l *Float64Literal) Hash() uint64 {

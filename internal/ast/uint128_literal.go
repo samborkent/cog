@@ -2,8 +2,6 @@ package ast
 
 import (
 	"fmt"
-	goast "go/ast"
-	gotoken "go/token"
 
 	u128 "lukechampine.com/uint128"
 
@@ -36,13 +34,6 @@ func NewUint128Literal(t tokens.Token) (*Uint128Literal, error) {
 
 func (l *Uint128Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
-}
-
-func (l *Uint128Literal) Go() *goast.BasicLit {
-	return &goast.BasicLit{
-		Kind:  gotoken.INT,
-		Value: l.Value.String(),
-	}
 }
 
 func (l *Uint128Literal) Hash() uint64 {

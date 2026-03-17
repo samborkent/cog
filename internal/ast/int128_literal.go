@@ -2,8 +2,6 @@ package ast
 
 import (
 	"errors"
-	goast "go/ast"
-	gotoken "go/token"
 	"math/big"
 
 	"github.com/ryanavella/wide"
@@ -38,13 +36,6 @@ func NewInt128Literal(t tokens.Token) (*Int128Literal, error) {
 
 func (l *Int128Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
-}
-
-func (l *Int128Literal) Go() *goast.BasicLit {
-	return &goast.BasicLit{
-		Kind:  gotoken.INT,
-		Value: l.Value.String(),
-	}
 }
 
 func (l *Int128Literal) Hash() uint64 {

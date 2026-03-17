@@ -128,11 +128,6 @@ The following basic features are missing that need to be implemented before Cog 
 
 ## TODO
 
-### Short-term
-
-- Get rid of `Go()` methods in `ast`. Instead create functions in `transpiler/comp` package.
-
-
 ### Long-term
 
 - TESTS!
