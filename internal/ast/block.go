@@ -38,7 +38,7 @@ func (b *Block) stringTo(out *strings.Builder) {
 		}
 
 		_ = out.WriteByte('\t')
-		_, _ = out.WriteString(stmt.String())
+		stmt.stringTo(out)
 		_ = out.WriteByte('\n')
 	}
 

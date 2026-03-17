@@ -30,9 +30,7 @@ func (e *StructLiteral) Hash() uint64 {
 	return hash(e)
 }
 
-func (e *StructLiteral) String() string {
-	var out strings.Builder
-
+func (e *StructLiteral) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString("({")
 
 	for i, val := range e.Values {
@@ -42,14 +40,18 @@ func (e *StructLiteral) String() string {
 
 		_, _ = out.WriteString(val.Name)
 		_, _ = out.WriteString(" = ")
-		_, _ = out.WriteString(val.Value.String())
+		val.Value.stringTo(out)
 		_, _ = out.WriteString(",\n")
 	}
 
 	_, _ = out.WriteString("} : ")
 	_, _ = out.WriteString(e.Type().String())
 	_ = out.WriteByte(')')
+}
 
+func (e *StructLiteral) String() string {
+	var out strings.Builder
+	e.stringTo(&out)
 	return out.String()
 }
 

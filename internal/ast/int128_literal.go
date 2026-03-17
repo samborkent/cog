@@ -3,6 +3,7 @@ package ast
 import (
 	"errors"
 	"math/big"
+	"strings"
 
 	"github.com/ryanavella/wide"
 	"github.com/samborkent/cog/internal/tokens"
@@ -42,8 +43,16 @@ func (l *Int128Literal) Hash() uint64 {
 	return hash(l)
 }
 
+func (l *Int128Literal) stringTo(out *strings.Builder) {
+	_ = out.WriteByte('(')
+	_, _ = out.WriteString(l.Value.String())
+	_, _ = out.WriteString(" : int128)")
+}
+
 func (l *Int128Literal) String() string {
-	return "(" + l.Value.String() + " : int128)"
+	var out strings.Builder
+	l.stringTo(&out)
+	return out.String()
 }
 
 func (l *Int128Literal) Type() types.Type {

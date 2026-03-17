@@ -25,13 +25,11 @@ func (l *ArrayLiteral) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *ArrayLiteral) String() string {
-	var out strings.Builder
-
+func (l *ArrayLiteral) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString("({")
 
 	for i, v := range l.Values {
-		_, _ = out.WriteString(v.String())
+		v.stringTo(out)
 
 		if i < len(l.Values)-1 {
 			_, _ = out.WriteString(", ")
@@ -41,7 +39,11 @@ func (l *ArrayLiteral) String() string {
 	_, _ = out.WriteString("} : ")
 	_, _ = out.WriteString(l.Type().String())
 	_ = out.WriteByte(')')
+}
 
+func (l *ArrayLiteral) String() string {
+	var out strings.Builder
+	l.stringTo(&out)
 	return out.String()
 }
 

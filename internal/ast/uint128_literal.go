@@ -2,6 +2,7 @@ package ast
 
 import (
 	"fmt"
+	"strings"
 
 	u128 "lukechampine.com/uint128"
 
@@ -40,8 +41,16 @@ func (l *Uint128Literal) Hash() uint64 {
 	return hash(l)
 }
 
+func (l *Uint128Literal) stringTo(out *strings.Builder) {
+	_ = out.WriteByte('(')
+	_, _ = out.WriteString(l.Value.String())
+	_, _ = out.WriteString(" : uint128)")
+}
+
 func (l *Uint128Literal) String() string {
-	return "(" + l.Value.String() + " : uint128)"
+	var out strings.Builder
+	l.stringTo(&out)
+	return out.String()
 }
 
 func (l *Uint128Literal) Type() types.Type {

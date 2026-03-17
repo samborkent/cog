@@ -1,6 +1,10 @@
 package ast
 
-import "github.com/samborkent/cog/internal/tokens"
+import (
+	"strings"
+
+	"github.com/samborkent/cog/internal/tokens"
+)
 
 var _ Statement = &Package{}
 
@@ -19,6 +23,14 @@ func (p *Package) Hash() uint64 {
 	return hash(p)
 }
 
+func (p *Package) stringTo(out *strings.Builder) {
+	_, _ = out.WriteString(p.Token.Type.String())
+	_ = out.WriteByte(' ')
+	p.Identifier.stringTo(out)
+}
+
 func (p *Package) String() string {
-	return p.Token.Type.String() + " " + p.Identifier.String()
+	var out strings.Builder
+	p.stringTo(&out)
+	return out.String()
 }

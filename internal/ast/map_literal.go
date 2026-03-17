@@ -30,15 +30,13 @@ func (l *MapLiteral) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *MapLiteral) String() string {
-	var out strings.Builder
-
+func (l *MapLiteral) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString("({")
 
 	for i, pair := range l.Pairs {
-		_, _ = out.WriteString(pair.Key.String())
+		pair.Key.stringTo(out)
 		_, _ = out.WriteString(": ")
-		_, _ = out.WriteString(pair.Value.String())
+		pair.Value.stringTo(out)
 
 		if i < len(l.Pairs)-1 {
 			_, _ = out.WriteString(", ")
@@ -48,7 +46,11 @@ func (l *MapLiteral) String() string {
 	_, _ = out.WriteString("} : ")
 	_, _ = out.WriteString(l.Type().String())
 	_ = out.WriteByte(')')
+}
 
+func (l *MapLiteral) String() string {
+	var out strings.Builder
+	l.stringTo(&out)
 	return out.String()
 }
 

@@ -24,9 +24,7 @@ func (l *ProcedureLiteral) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *ProcedureLiteral) String() string {
-	var out strings.Builder
-
+func (l *ProcedureLiteral) stringTo(out *strings.Builder) {
 	_ = out.WriteByte('{')
 
 	for i, stmt := range l.Body.Statements {
@@ -35,15 +33,19 @@ func (l *ProcedureLiteral) String() string {
 		}
 
 		ln, col := stmt.Pos()
-		_, _ = out.WriteString(fmt.Sprintf("ln %d, col %d:", ln, col))
+		fmt.Fprintf(out, "ln %d, col %d:", ln, col)
 
 		_ = out.WriteByte('\t')
-		_, _ = out.WriteString(stmt.String())
+		stmt.stringTo(out)
 		_ = out.WriteByte('\n')
 	}
 
 	_ = out.WriteByte('}')
+}
 
+func (l *ProcedureLiteral) String() string {
+	var out strings.Builder
+	l.stringTo(&out)
 	return out.String()
 }
 

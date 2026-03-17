@@ -33,12 +33,24 @@ func (l *UTF8Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *UTF8Literal) String() string {
+func (l *UTF8Literal) stringTo(out *strings.Builder) {
 	if strings.ContainsAny(l.Value, "\n\t") {
-		return "(`" + l.Value + "` : utf8)"
+		_, _ = out.WriteString("(`")
+		_, _ = out.WriteString(l.Value)
+		_, _ = out.WriteString("` : utf8)")
+
+		return
 	}
 
-	return "(\"" + l.Value + "\" : utf8)"
+	_, _ = out.WriteString("(\"")
+	_, _ = out.WriteString(l.Value)
+	_, _ = out.WriteString("\" : utf8)")
+}
+
+func (l *UTF8Literal) String() string {
+	var out strings.Builder
+	l.stringTo(&out)
+	return out.String()
 }
 
 func (l *UTF8Literal) Type() types.Type {

@@ -6,7 +6,7 @@ type Type interface {
 	Underlying() Type
 }
 
-type Expression interface {
+type expression interface {
 	String() string
 	Type() Type
 }

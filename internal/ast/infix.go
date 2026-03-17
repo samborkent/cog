@@ -2,6 +2,7 @@ package ast
 
 import (
 	"math"
+	"strings"
 
 	"github.com/ryanavella/wide"
 	f16 "github.com/x448/float16"
@@ -157,8 +158,20 @@ func (e *Infix) Hash() uint64 {
 	return hash(e)
 }
 
+func (e *Infix) stringTo(out *strings.Builder) {
+	_ = out.WriteByte('(')
+	e.Left.stringTo(out)
+	_ = out.WriteByte(' ')
+	_, _ = out.WriteString(e.Operator.Type.String())
+	_ = out.WriteByte(' ')
+	e.Right.stringTo(out)
+	_ = out.WriteByte(')')
+}
+
 func (e *Infix) String() string {
-	return "(" + e.Left.String() + " " + e.Operator.Type.String() + " " + e.Right.String() + ")"
+	var out strings.Builder
+	e.stringTo(&out)
+	return out.String()
 }
 
 func (e *Infix) Type() types.Type {

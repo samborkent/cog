@@ -2,6 +2,7 @@ package ast
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
@@ -39,6 +40,10 @@ func (l *BoolLiteral) Pos() (uint32, uint16) {
 
 func (l *BoolLiteral) Hash() uint64 {
 	return hash(l)
+}
+
+func (l *BoolLiteral) stringTo(out *strings.Builder) {
+	_, _ = out.WriteString(l.Token.Type.String())
 }
 
 func (l *BoolLiteral) String() string {

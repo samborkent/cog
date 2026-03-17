@@ -2,6 +2,7 @@ package ast
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
@@ -30,8 +31,14 @@ func (l *Complex32Literal) Hash() uint64 {
 	return hash(l)
 }
 
+func (l *Complex32Literal) stringTo(out *strings.Builder) {
+	fmt.Fprintf(out, "(%g, %g : complex32)", float32(l.Value[0]), float32(l.Value[1]))
+}
+
 func (l *Complex32Literal) String() string {
-	return fmt.Sprintf("(%g, %g : complex32)", float32(l.Value[0]), float32(l.Value[1]))
+	var out strings.Builder
+	l.stringTo(&out)
+	return out.String()
 }
 
 func (l *Complex32Literal) Type() types.Type {

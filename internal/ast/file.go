@@ -20,18 +20,20 @@ func (f *File) Hash() uint64 {
 	return hash(f)
 }
 
-func (f *File) String() string {
-	var out strings.Builder
-
+func (f *File) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString(f.Name)
 	_ = out.WriteByte('\n')
 
-	_, _ = out.WriteString(f.Package.String())
+	f.Package.stringTo(out)
 
 	for _, stmt := range f.Statements {
-		_, _ = out.WriteString(stmt.String())
+		stmt.stringTo(out)
 		_ = out.WriteByte('\n')
 	}
+}
 
+func (f *File) String() string {
+	var out strings.Builder
+	f.stringTo(&out)
 	return out.String()
 }

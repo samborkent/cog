@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"strings"
+
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
@@ -24,8 +26,14 @@ func (e *UnionLiteral) Hash() uint64 {
 	return hash(e)
 }
 
+func (e *UnionLiteral) stringTo(out *strings.Builder) {
+	e.Value.stringTo(out)
+}
+
 func (e *UnionLiteral) String() string {
-	return e.Value.String()
+	var out strings.Builder
+	e.stringTo(&out)
+	return out.String()
 }
 
 func (e *UnionLiteral) Type() types.Type {

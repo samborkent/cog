@@ -3,6 +3,7 @@ package ast
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
@@ -37,8 +38,16 @@ func (l *Float64Literal) Hash() uint64 {
 	return hash(l)
 }
 
+func (l *Float64Literal) stringTo(out *strings.Builder) {
+	_ = out.WriteByte('(')
+	_, _ = out.WriteString(strconv.FormatFloat(l.Value, 'g', -1, 64))
+	_, _ = out.WriteString(" : float64)")
+}
+
 func (l *Float64Literal) String() string {
-	return "(" + strconv.FormatFloat(l.Value, 'g', -1, 64) + " : float64)"
+	var out strings.Builder
+	l.stringTo(&out)
+	return out.String()
 }
 
 func (l *Float64Literal) Type() types.Type {

@@ -23,9 +23,7 @@ func (g *GoImport) Hash() uint64 {
 	return hash(g)
 }
 
-func (g *GoImport) String() string {
-	var out strings.Builder
-
+func (g *GoImport) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString(g.Token.Type.String())
 	_, _ = out.WriteString(" (\n")
 
@@ -36,6 +34,10 @@ func (g *GoImport) String() string {
 	}
 
 	_ = out.WriteByte(')')
+}
 
+func (g *GoImport) String() string {
+	var out strings.Builder
+	g.stringTo(&out)
 	return out.String()
 }

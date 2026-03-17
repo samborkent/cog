@@ -2,8 +2,8 @@ package ast
 
 import (
 	"fmt"
+	"strings"
 	"unicode"
-	"unsafe"
 
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
@@ -46,9 +46,16 @@ func (l *ASCIILiteral) Hash() uint64 {
 	return hash(l)
 }
 
+func (l *ASCIILiteral) stringTo(out *strings.Builder) {
+	_, _ = out.WriteString("(\"")
+	out.Write(l.Value)
+	_, _ = out.WriteString("\" : ascii)")
+}
+
 func (l *ASCIILiteral) String() string {
-	//nolint:gosec // G103: unsafe use
-	return "(\"" + unsafe.String(&l.Value[0], len(l.Value)) + "\" : ascii)"
+	var out strings.Builder
+	l.stringTo(&out)
+	return out.String()
 }
 
 func (l *ASCIILiteral) Type() types.Type {

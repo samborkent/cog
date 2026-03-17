@@ -1,6 +1,10 @@
 package ast
 
-import "github.com/samborkent/cog/internal/tokens"
+import (
+	"strings"
+
+	"github.com/samborkent/cog/internal/tokens"
+)
 
 var _ Statement = &Branch{}
 
@@ -19,10 +23,17 @@ func (b *Branch) Hash() uint64 {
 	return hash(b)
 }
 
-func (b *Branch) String() string {
-	if b.Label != nil {
-		return b.Token.Type.String() + " " + b.Label.Name
-	}
+func (b *Branch) stringTo(out *strings.Builder) {
+	_, _ = out.WriteString(b.Token.Type.String())
 
-	return b.Token.Type.String()
+	if b.Label != nil {
+		_ = out.WriteByte(' ')
+		_, _ = out.WriteString(b.Label.Name)
+	}
+}
+
+func (b *Branch) String() string {
+	var out strings.Builder
+	b.stringTo(&out)
+	return out.String()
 }

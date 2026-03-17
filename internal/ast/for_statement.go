@@ -47,7 +47,7 @@ func (s *ForStatement) stringTo(out *strings.Builder) {
 	}
 
 	if s.Range != nil {
-		_, _ = out.WriteString(s.Range.String())
+		s.Range.stringTo(out)
 		_ = out.WriteByte(' ')
 	}
 
