@@ -11,49 +11,55 @@ import (
 	"github.com/samborkent/cog/internal/ast"
 )
 
-// Ident converts a Cog identifier name into a Go *ast.Ident,
+// Pre-allocated boolean identifiers.
+var (
+	goTrue  = &goast.Ident{Name: "true"}
+	goFalse = &goast.Ident{Name: "false"}
+)
+
+// Pre-allocated cog.ASCII composite literal type.
+var asciiType = &goast.SelectorExpr{
+	X:   &goast.Ident{Name: "cog"},
+	Sel: &goast.Ident{Name: "ASCII"},
+}
+
+// Ident converts a Cog identifier name into a cached Go *ast.Ident,
 // adjusting the casing based on the export flag.
 func Ident(ident *ast.Identifier) *goast.Ident {
 	if ident == nil {
 		return nil
 	}
 
-	return &goast.Ident{
-		Name: ConvertExport(ident.Name, ident.Exported),
-	}
+	return cachedIdent(ConvertExport(ident.Name, ident.Exported))
 }
 
 // ConvertExport adjusts identifier casing for Go export rules.
 func ConvertExport(ident string, exported bool) string {
 	r := rune(ident[0])
-	str := string(r)
 
 	if exported {
-		str = strings.ToUpper(str)
-	} else if unicode.IsUpper(r) {
-		str = "_" + str
+		upper := unicode.ToUpper(r)
+		if upper == r {
+			return ident
+		}
+
+		return string(upper) + ident[1:]
 	}
 
-	if len(ident) > 1 {
-		str += ident[1:]
+	if unicode.IsUpper(r) {
+		return "_" + ident
 	}
 
-	return str
+	return ident
 }
 
-const (
-	falseIdent = "false"
-	trueIdent  = "true"
-)
-
-// BoolLit converts a boolean value into a Go *ast.Ident ("true"/"false").
+// BoolLit returns a pre-allocated Go *ast.Ident for "true" or "false".
 func BoolLit(value bool) *goast.Ident {
-	name := falseIdent
 	if value {
-		name = trueIdent
+		return goTrue
 	}
 
-	return &goast.Ident{Name: name}
+	return goFalse
 }
 
 // UTF8Lit converts a UTF-8 string value into a Go *ast.BasicLit.
@@ -71,11 +77,6 @@ func UTF8Lit(value string) *goast.BasicLit {
 	}
 }
 
-const (
-	cogIdent   = "cog"
-	asciiIdent = "ASCII"
-)
-
 // ASCIILit converts an ASCII byte slice into a Go *ast.CompositeLit (cog.ASCII{...}).
 func ASCIILit(value []byte) *goast.CompositeLit {
 	elems := make([]goast.Expr, len(value))
@@ -88,10 +89,7 @@ func ASCIILit(value []byte) *goast.CompositeLit {
 	}
 
 	return &goast.CompositeLit{
-		Type: &goast.SelectorExpr{
-			X:   &goast.Ident{Name: cogIdent},
-			Sel: &goast.Ident{Name: asciiIdent},
-		},
+		Type: asciiType,
 		Elts: elems,
 	}
 }

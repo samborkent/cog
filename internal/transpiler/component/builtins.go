@@ -5,14 +5,36 @@ import (
 	gotypes "go/types"
 )
 
-const (
-	builtinPackage = "builtin"
-	builtinIf      = "If"
-	builtinMap     = "Map"
-	builtinPrint   = "Print"
-	builtinPtr     = "Ptr"
-	builtinSet     = "Set"
-	builtinSlice   = "Slice"
+// Pre-allocated builtin selectors.
+var (
+	builtinPkg = &goast.Ident{Name: "builtin"}
+
+	builtinIfSel = &goast.SelectorExpr{
+		X:   builtinPkg,
+		Sel: &goast.Ident{Name: "If"},
+	}
+	builtinMapSel = &goast.SelectorExpr{
+		X:   builtinPkg,
+		Sel: &goast.Ident{Name: "Map"},
+	}
+	builtinPrintSel = &goast.SelectorExpr{
+		X:   builtinPkg,
+		Sel: &goast.Ident{Name: "Print"},
+	}
+	builtinPtrSel = &goast.SelectorExpr{
+		X:   builtinPkg,
+		Sel: &goast.Ident{Name: "Ptr"},
+	}
+	builtinSetSel = &goast.SelectorExpr{
+		X:   builtinPkg,
+		Sel: &goast.Ident{Name: "Set"},
+	}
+	builtinSliceSel = &goast.SelectorExpr{
+		X:   builtinPkg,
+		Sel: &goast.Ident{Name: "Slice"},
+	}
+
+	defaultCapType = &goast.Ident{Name: gotypes.Typ[gotypes.Uint8].String()}
 )
 
 func BuiltinIf(ifType, boolType goast.Expr, args ...goast.Expr) *goast.CallExpr {
@@ -24,10 +46,7 @@ func BuiltinIf(ifType, boolType goast.Expr, args ...goast.Expr) *goast.CallExpr 
 
 	return &goast.CallExpr{
 		Fun: &goast.IndexListExpr{
-			X: &goast.SelectorExpr{
-				X:   &goast.Ident{Name: builtinPackage},
-				Sel: &goast.Ident{Name: builtinIf},
-			},
+			X:       builtinIfSel,
 			Indices: indices,
 		},
 		Args: args,
@@ -46,15 +65,12 @@ func BuiltinMap(keyType, valueType, capType, capacity goast.Expr) *goast.CallExp
 	if capType != nil {
 		indices = append(indices, capType)
 	} else if capacity == nil {
-		indices = append(indices, &goast.Ident{Name: gotypes.Typ[gotypes.Uint8].String()})
+		indices = append(indices, defaultCapType)
 	}
 
 	return &goast.CallExpr{
 		Fun: &goast.IndexListExpr{
-			X: &goast.SelectorExpr{
-				X:   &goast.Ident{Name: builtinPackage},
-				Sel: &goast.Ident{Name: builtinMap},
-			},
+			X:       builtinMapSel,
 			Indices: indices,
 		},
 		Args: args,
@@ -63,10 +79,7 @@ func BuiltinMap(keyType, valueType, capType, capacity goast.Expr) *goast.CallExp
 
 func BuiltinPrint(arg goast.Expr) *goast.CallExpr {
 	return &goast.CallExpr{
-		Fun: &goast.SelectorExpr{
-			X:   &goast.Ident{Name: builtinPackage},
-			Sel: &goast.Ident{Name: builtinPrint},
-		},
+		Fun:  builtinPrintSel,
 		Args: []goast.Expr{arg},
 	}
 }
@@ -74,10 +87,7 @@ func BuiltinPrint(arg goast.Expr) *goast.CallExpr {
 func BuiltinPtr(valueType goast.Expr) *goast.CallExpr {
 	return &goast.CallExpr{
 		Fun: &goast.IndexExpr{
-			X: &goast.SelectorExpr{
-				X:   &goast.Ident{Name: builtinPackage},
-				Sel: &goast.Ident{Name: builtinPtr},
-			},
+			X:     builtinPtrSel,
 			Index: valueType,
 		},
 	}
@@ -95,15 +105,12 @@ func BuiltinSet(keyType, capType, capacity goast.Expr) *goast.CallExpr {
 	if capType != nil {
 		indices = append(indices, capType)
 	} else if capacity == nil {
-		indices = append(indices, &goast.Ident{Name: gotypes.Typ[gotypes.Uint8].String()})
+		indices = append(indices, defaultCapType)
 	}
 
 	return &goast.CallExpr{
 		Fun: &goast.IndexListExpr{
-			X: &goast.SelectorExpr{
-				X:   &goast.Ident{Name: builtinPackage},
-				Sel: &goast.Ident{Name: builtinSet},
-			},
+			X:       builtinSetSel,
 			Indices: indices,
 		},
 		Args: args,
@@ -124,10 +131,7 @@ func BuiltinSlice(elemType, lenType, length, capacity goast.Expr) *goast.CallExp
 
 	return &goast.CallExpr{
 		Fun: &goast.IndexListExpr{
-			X: &goast.SelectorExpr{
-				X:   &goast.Ident{Name: builtinPackage},
-				Sel: &goast.Ident{Name: builtinSlice},
-			},
+			X:       builtinSliceSel,
 			Indices: indices,
 		},
 		Args: args,
