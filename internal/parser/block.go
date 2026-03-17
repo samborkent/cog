@@ -28,9 +28,19 @@ func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
 			break
 		}
 
+		prev := p.i
+
 		stmt := p.parseStatement(ctx)
 		if stmt != nil {
 			node.Statements = append(node.Statements, stmt)
+		} else {
+			// Synchronize to recover from errors within a block.
+			p.synchronize()
+		}
+
+		// Guard against infinite loops: if no progress was made, force advance.
+		if p.i == prev {
+			p.advance("parseBlock recovery")
 		}
 	}
 

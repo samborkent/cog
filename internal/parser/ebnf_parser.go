@@ -288,7 +288,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			// Handle option literal.
 			optionType, ok := typeToken.(*types.Option)
 			if !ok {
-				panic("unable to assert option type")
+				p.error(p.this(), "unable to assert option type", "primary")
+				return nil
 			}
 
 			// TODO: handle none type
@@ -298,7 +299,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			// Handle union literal.
 			unionType, ok := typeToken.(*types.Union)
 			if !ok {
-				panic("unable to assert union type")
+				p.error(p.this(), "unable to assert union type", "primary")
+				return nil
 			}
 
 			token := p.this()
@@ -407,7 +409,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			// Function call
 			procType, ok := symbol.Identifier.ValueType.(*types.Procedure)
 			if !ok {
-				panic("unable to cast to procedure type")
+				p.error(p.this(), "identifier is not callable", "primary")
+				return nil
 			}
 
 			return &ast.Call{
@@ -453,7 +456,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 		default:
 			// Variable reference
 			if symbol.Identifier == nil {
-				panic("nil identifier in variable reference")
+				p.error(p.this(), "nil identifier in variable reference", "primary")
+				return nil
 			}
 
 			if symbol.Identifier.ValueType != nil &&

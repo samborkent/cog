@@ -35,6 +35,11 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 				return nil
 			}
 		} else {
+			if i >= len(procType.Parameters) {
+				p.error(p.this(), "too many arguments in function call", "parseCallArguments")
+				return nil
+			}
+
 			arg = p.expression(ctx, procType.Parameters[i].Type)
 			if arg == nil {
 				return nil
