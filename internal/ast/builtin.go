@@ -27,9 +27,7 @@ func (b *Builtin) Hash() uint64 {
 	return hash(b)
 }
 
-func (b *Builtin) String() string {
-	var out strings.Builder
-
+func (b *Builtin) stringTo(out *strings.Builder) {
 	_ = out.WriteByte('@')
 	_, _ = out.WriteString(b.Name)
 
@@ -50,7 +48,7 @@ func (b *Builtin) String() string {
 	_ = out.WriteByte('(')
 
 	for i, arg := range b.Arguments {
-		_, _ = out.WriteString(arg.String())
+		arg.stringTo(out)
 
 		if i < len(b.Arguments)-1 {
 			_, _ = out.WriteString(", ")
@@ -58,7 +56,11 @@ func (b *Builtin) String() string {
 	}
 
 	_ = out.WriteByte(')')
+}
 
+func (b *Builtin) String() string {
+	var out strings.Builder
+	b.stringTo(&out)
 	return out.String()
 }
 

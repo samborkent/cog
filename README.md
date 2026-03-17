@@ -128,14 +128,11 @@ The following basic features are missing that need to be implemented before Cog 
 
 ## TODO
 
-### Long-term
-
 - TESTS!
 - Range operator `0..4 == [0, 1, 2, 3]`
 - Design how iterators should work.
     - Range over int (or other literal) should not be possible.
     - Instead we should range over an iterator function which takes literal as argument.
-- Add `StringTo(*string.Builder)` method to all objects implementing `fmt.Stringer`.
 - Audit all uses of `types.Underlying().Kind()`
 - Allow package-less files (scripts)
     - These files cannot be imported, and will be excuted as if wrapped in a main function.

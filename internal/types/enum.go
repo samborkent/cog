@@ -11,7 +11,7 @@ type Enum struct {
 
 type EnumValue struct {
 	Name  string
-	Value Expression
+	Value expression
 }
 
 func (*Enum) Kind() Kind {

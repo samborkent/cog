@@ -25,21 +25,23 @@ func (e *TupleLiteral) Hash() uint64 {
 	return hash(e)
 }
 
-func (e *TupleLiteral) String() string {
-	var out strings.Builder
-
-	_, _ = out.WriteString("{")
+func (e *TupleLiteral) stringTo(out *strings.Builder) {
+	_ = out.WriteByte('{')
 
 	for i, val := range e.Values {
-		_, _ = out.WriteString(val.String())
+		val.stringTo(out)
 
 		if i < len(e.Values)-1 {
 			_, _ = out.WriteString(", ")
 		}
 	}
 
-	_, _ = out.WriteString("}")
+	_ = out.WriteByte('}')
+}
 
+func (e *TupleLiteral) String() string {
+	var out strings.Builder
+	e.stringTo(&out)
 	return out.String()
 }
 

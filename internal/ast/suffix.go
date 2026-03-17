@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"strings"
+
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
@@ -22,8 +24,17 @@ func (p *Suffix) Hash() uint64 {
 	return hash(p)
 }
 
+func (p *Suffix) stringTo(out *strings.Builder) {
+	_ = out.WriteByte('(')
+	p.Left.stringTo(out)
+	_, _ = out.WriteString(p.Operator.Type.String())
+	_ = out.WriteByte(')')
+}
+
 func (p *Suffix) String() string {
-	return "(" + p.Left.String() + p.Operator.Type.String() + ")"
+	var out strings.Builder
+	p.stringTo(&out)
+	return out.String()
 }
 
 func (p *Suffix) Type() types.Type {

@@ -24,14 +24,12 @@ func (c *Call) Hash() uint64 {
 	return hash(c)
 }
 
-func (c *Call) String() string {
-	var out strings.Builder
-
-	_, _ = out.WriteString(c.Identifier.String())
+func (c *Call) stringTo(out *strings.Builder) {
+	c.Identifier.stringTo(out)
 	_ = out.WriteByte('(')
 
 	for i, arg := range c.Arguments {
-		_, _ = out.WriteString(arg.String())
+		arg.stringTo(out)
 
 		if i < len(c.Arguments)-1 {
 			_, _ = out.WriteString(", ")
@@ -39,7 +37,11 @@ func (c *Call) String() string {
 	}
 
 	_ = out.WriteByte(')')
+}
 
+func (c *Call) String() string {
+	var out strings.Builder
+	c.stringTo(&out)
 	return out.String()
 }
 

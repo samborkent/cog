@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"strings"
+
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
@@ -24,8 +26,17 @@ func (e *GoCallExpression) Hash() uint64 {
 	return hash(e)
 }
 
+func (e *GoCallExpression) stringTo(out *strings.Builder) {
+	_, _ = out.WriteString("@go.")
+	_, _ = out.WriteString(e.Import.Name)
+	_ = out.WriteByte('.')
+	_, _ = out.WriteString(e.CallIdentifier.Name)
+}
+
 func (e *GoCallExpression) String() string {
-	return "@go" + "." + e.Import.Name + "." + e.CallIdentifier.Name
+	var out strings.Builder
+	e.stringTo(&out)
+	return out.String()
 }
 
 // TODO: figure out how to infer Go types and how to convert between Cog and Go types

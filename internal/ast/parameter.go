@@ -1,6 +1,10 @@
 package ast
 
-import "github.com/samborkent/cog/internal/types"
+import (
+	"strings"
+
+	"github.com/samborkent/cog/internal/types"
+)
 
 var _ Statement = &Parameter{}
 
@@ -21,20 +25,27 @@ func (p *Parameter) Hash() uint64 {
 	return hash(p)
 }
 
-func (p *Parameter) String() string {
-	str := p.ValueType.String()
-
+func (p *Parameter) stringTo(out *strings.Builder) {
 	if p.Identifier != nil && p.Identifier.Name != "" {
+		_, _ = out.WriteString(p.Identifier.Name)
+
 		if p.Optional {
-			str = p.Identifier.Name + "? : " + str
+			_, _ = out.WriteString("? : ")
 		} else {
-			str = p.Identifier.Name + " : " + str
+			_, _ = out.WriteString(" : ")
 		}
 	}
 
-	if p.Default == nil {
-		return str
-	}
+	_, _ = out.WriteString(p.ValueType.String())
 
-	return str + " = " + p.Default.String()
+	if p.Default != nil {
+		_, _ = out.WriteString(" = ")
+		p.Default.stringTo(out)
+	}
+}
+
+func (p *Parameter) String() string {
+	var out strings.Builder
+	p.stringTo(&out)
+	return out.String()
 }

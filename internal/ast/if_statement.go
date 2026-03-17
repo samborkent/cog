@@ -26,23 +26,25 @@ func (s *IfStatement) Hash() uint64 {
 	return hash(s)
 }
 
-func (s *IfStatement) String() string {
-	var out strings.Builder
-
+func (s *IfStatement) stringTo(out *strings.Builder) {
 	if s.Label != nil {
-		_, _ = out.WriteString(s.Label.String())
+		s.Label.stringTo(out)
 		_ = out.WriteByte(' ')
 	}
 
 	_, _ = out.WriteString("if (")
-	_, _ = out.WriteString(s.Condition.String())
+	s.Condition.stringTo(out)
 	_, _ = out.WriteString(") ")
-	_, _ = out.WriteString(s.Consequence.String())
+	s.Consequence.stringTo(out)
 
 	if s.Alternative != nil {
 		_, _ = out.WriteString(" else ")
-		_, _ = out.WriteString(s.Alternative.String())
+		s.Alternative.stringTo(out)
 	}
+}
 
+func (s *IfStatement) String() string {
+	var out strings.Builder
+	s.stringTo(&out)
 	return out.String()
 }

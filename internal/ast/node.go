@@ -3,6 +3,7 @@ package ast
 import (
 	"encoding/binary"
 	"hash/maphash"
+	"strings"
 
 	"github.com/samborkent/cog/internal/types"
 )
@@ -11,6 +12,7 @@ type Node interface {
 	Pos() (ln uint32, col uint16)
 	Hash() uint64
 	String() string
+	stringTo(out *strings.Builder)
 }
 
 type Statement interface {

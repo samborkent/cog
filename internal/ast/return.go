@@ -22,12 +22,21 @@ func (r *Return) Hash() uint64 {
 	return hash(r)
 }
 
-func (r *Return) String() string {
-	values := make([]string, 0, len(r.Values))
+func (r *Return) stringTo(out *strings.Builder) {
+	_, _ = out.WriteString(r.Token.Type.String())
+	_ = out.WriteByte(' ')
 
-	for _, v := range r.Values {
-		values = append(values, v.String())
+	for i, v := range r.Values {
+		v.stringTo(out)
+
+		if i < len(r.Values)-1 {
+			_, _ = out.WriteString(", ")
+		}
 	}
+}
 
-	return r.Token.Type.String() + " " + strings.Join(values, ", ")
+func (r *Return) String() string {
+	var out strings.Builder
+	r.stringTo(&out)
+	return out.String()
 }

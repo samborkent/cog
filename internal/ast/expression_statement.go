@@ -1,6 +1,10 @@
 package ast
 
-import "github.com/samborkent/cog/internal/tokens"
+import (
+	"strings"
+
+	"github.com/samborkent/cog/internal/tokens"
+)
 
 var _ Statement = &ExpressionStatement{}
 
@@ -19,6 +23,12 @@ func (s *ExpressionStatement) Pos() (uint32, uint16) {
 	return s.Token.Ln, s.Token.Col
 }
 
+func (s *ExpressionStatement) stringTo(out *strings.Builder) {
+	s.Expression.stringTo(out)
+}
+
 func (s *ExpressionStatement) String() string {
-	return s.Expression.String()
+	var out strings.Builder
+	s.stringTo(&out)
+	return out.String()
 }

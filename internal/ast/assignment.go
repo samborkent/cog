@@ -1,6 +1,10 @@
 package ast
 
-import "github.com/samborkent/cog/internal/tokens"
+import (
+	"strings"
+
+	"github.com/samborkent/cog/internal/tokens"
+)
 
 var _ Statement = &Assignment{}
 
@@ -20,6 +24,16 @@ func (a *Assignment) Hash() uint64 {
 	return hash(a)
 }
 
+func (a *Assignment) stringTo(out *strings.Builder) {
+	a.Identifier.stringTo(out)
+	_ = out.WriteByte(' ')
+	_, _ = out.WriteString(a.Token.Type.String())
+	_ = out.WriteByte(' ')
+	a.Expression.stringTo(out)
+}
+
 func (a *Assignment) String() string {
-	return a.Identifier.String() + " " + a.Token.Type.String() + " " + a.Expression.String()
+	var out strings.Builder
+	a.stringTo(&out)
+	return out.String()
 }

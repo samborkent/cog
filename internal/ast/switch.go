@@ -27,33 +27,35 @@ func (s *Switch) Hash() uint64 {
 	return hash(s)
 }
 
-func (s *Switch) String() string {
-	var out strings.Builder
-
+func (s *Switch) stringTo(out *strings.Builder) {
 	if s.Label != nil {
-		_, _ = out.WriteString(s.Label.String())
+		s.Label.stringTo(out)
 		_ = out.WriteByte(' ')
 	}
 
 	_, _ = out.WriteString(s.Token.Type.String())
-	_, _ = out.WriteString(" ")
+	_ = out.WriteByte(' ')
 
 	if s.Identifier != nil {
-		_, _ = out.WriteString(s.Identifier.String())
+		s.Identifier.stringTo(out)
 	}
 
 	_, _ = out.WriteString(" {\n")
 
 	for _, c := range s.Cases {
-		_, _ = out.WriteString(c.String())
+		c.stringTo(out)
 	}
 
 	if s.Default != nil {
-		_, _ = out.WriteString(s.Default.String())
+		s.Default.stringTo(out)
 	}
 
-	_, _ = out.WriteString("}")
+	_ = out.WriteByte('}')
+}
 
+func (s *Switch) String() string {
+	var out strings.Builder
+	s.stringTo(&out)
 	return out.String()
 }
 
@@ -75,20 +77,22 @@ func (c *Case) Hash() uint64 {
 	return hash(c)
 }
 
-func (c *Case) String() string {
-	var out strings.Builder
-
+func (c *Case) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString(c.Token.Type.String())
 	_ = out.WriteByte(' ')
-	_, _ = out.WriteString(c.Condition.String())
+	c.Condition.stringTo(out)
 	_, _ = out.WriteString(":\n")
 
 	for _, stmt := range c.Body {
 		_ = out.WriteByte('\t')
-		_, _ = out.WriteString(stmt.String())
+		stmt.stringTo(out)
 		_ = out.WriteByte('\n')
 	}
+}
 
+func (c *Case) String() string {
+	var out strings.Builder
+	c.stringTo(&out)
 	return out.String()
 }
 
@@ -109,17 +113,19 @@ func (d *Default) Hash() uint64 {
 	return hash(d)
 }
 
-func (d *Default) String() string {
-	var out strings.Builder
-
+func (d *Default) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString(d.Token.Type.String())
 	_, _ = out.WriteString(":\n")
 
 	for _, stmt := range d.Body {
 		_ = out.WriteByte('\t')
-		_, _ = out.WriteString(stmt.String())
+		stmt.stringTo(out)
 		_ = out.WriteByte('\n')
 	}
+}
 
+func (d *Default) String() string {
+	var out strings.Builder
+	d.stringTo(&out)
 	return out.String()
 }

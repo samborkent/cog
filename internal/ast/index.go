@@ -25,14 +25,16 @@ func (e *Index) Hash() uint64 {
 	return hash(e)
 }
 
+func (e *Index) stringTo(out *strings.Builder) {
+	e.Identifier.stringTo(out)
+	_ = out.WriteByte('[')
+	e.Index.stringTo(out)
+	_ = out.WriteByte(']')
+}
+
 func (e *Index) String() string {
 	var out strings.Builder
-
-	_, _ = out.WriteString(e.Identifier.String())
-	_ = out.WriteByte('[')
-	_, _ = out.WriteString(e.Index.String())
-	_ = out.WriteByte(']')
-
+	e.stringTo(&out)
 	return out.String()
 }
 

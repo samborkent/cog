@@ -14,7 +14,7 @@ type Parameter struct {
 	Name     string
 	Optional bool
 	Type     Type
-	Default  Expression // cannot be ast.Expression due to import cycle
+	Default  expression // cannot be ast.Expression due to import cycle
 }
 
 func (p *Procedure) Kind() Kind {

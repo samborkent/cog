@@ -2,7 +2,7 @@ package types
 
 type Array struct {
 	Element Type
-	Length  Expression
+	Length  expression
 }
 
 func (a *Array) Kind() Kind {

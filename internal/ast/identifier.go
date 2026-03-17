@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"strings"
+
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
@@ -33,6 +35,10 @@ func (e *Identifier) Pos() (uint32, uint16) {
 
 func (e *Identifier) Hash() uint64 {
 	return hash(e)
+}
+
+func (e *Identifier) stringTo(out *strings.Builder) {
+	_, _ = out.WriteString(e.Name)
 }
 
 func (e *Identifier) String() string {

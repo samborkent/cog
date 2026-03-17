@@ -3,6 +3,7 @@ package ast
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	f16 "github.com/x448/float16"
 
@@ -41,8 +42,16 @@ func (l *Float16Literal) Hash() uint64 {
 	return hash(l)
 }
 
+func (l *Float16Literal) stringTo(out *strings.Builder) {
+	_ = out.WriteByte('(')
+	_, _ = out.WriteString(l.Value.String())
+	_, _ = out.WriteString(" : float16)")
+}
+
 func (l *Float16Literal) String() string {
-	return "(" + l.Value.String() + " : float16)"
+	var out strings.Builder
+	l.stringTo(&out)
+	return out.String()
 }
 
 func (l *Float16Literal) Type() types.Type {

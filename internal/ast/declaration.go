@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"strings"
+
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -20,27 +22,43 @@ func (d *Declaration) Hash() uint64 {
 	return hash(d)
 }
 
-func (d *Declaration) String() string {
-	var prefix string
-
+func (d *Declaration) stringTo(out *strings.Builder) {
 	if d.Assignment.Identifier.Exported {
-		prefix = "export "
+		_, _ = out.WriteString("export ")
 	}
 
 	switch d.Assignment.Identifier.Qualifier {
 	case QualifierVariable:
-		prefix = prefix + "var "
+		_, _ = out.WriteString("var ")
 	case QualifierDynamic:
-		prefix = prefix + "dyn "
+		_, _ = out.WriteString("dyn ")
 	}
 
 	if d.Assignment.Expression == nil {
-		return prefix + d.Assignment.Identifier.String() + " : " + d.Assignment.Identifier.ValueType.String()
+		d.Assignment.Identifier.stringTo(out)
+		_, _ = out.WriteString(" : ")
+		_, _ = out.WriteString(d.Assignment.Identifier.ValueType.String())
+
+		return
 	}
 
 	if d.Assignment.Identifier.ValueType == nil || d.Assignment.Identifier.ValueType == types.None {
-		return prefix + d.Assignment.Identifier.String() + " := " + d.Assignment.Expression.String()
+		d.Assignment.Identifier.stringTo(out)
+		_, _ = out.WriteString(" := ")
+		d.Assignment.Expression.stringTo(out)
+
+		return
 	}
 
-	return prefix + d.Assignment.Identifier.String() + " : " + d.Assignment.Identifier.ValueType.String() + " = " + d.Assignment.Expression.String()
+	d.Assignment.Identifier.stringTo(out)
+	_, _ = out.WriteString(" : ")
+	_, _ = out.WriteString(d.Assignment.Identifier.ValueType.String())
+	_, _ = out.WriteString(" = ")
+	d.Assignment.Expression.stringTo(out)
+}
+
+func (d *Declaration) String() string {
+	var out strings.Builder
+	d.stringTo(&out)
+	return out.String()
 }
