@@ -2,12 +2,12 @@ package component
 
 import goast "go/ast"
 
-const newFunc = "new"
+var newIdent = &goast.Ident{Name: "new"}
 
 func ZeroValue(t goast.Expr) *goast.StarExpr {
 	return &goast.StarExpr{
 		X: &goast.CallExpr{
-			Fun:  &goast.Ident{Name: newFunc},
+			Fun:  newIdent,
 			Args: []goast.Expr{t},
 		},
 	}

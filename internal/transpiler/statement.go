@@ -82,7 +82,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 		returnStmts = []goast.Stmt{&goast.BranchStmt{
 			Tok:   goTok,
-			Label: n.Label.Go(),
+			Label: component.Ident(n.Label),
 		}}
 	case *ast.Declaration:
 		// Define as unused variable.
@@ -223,7 +223,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 		if n.Label != nil {
 			returnStmts = []goast.Stmt{&goast.LabeledStmt{
-				Label: n.Label.Label.Go(),
+				Label: component.Ident(n.Label.Label),
 				Stmt:  stmt,
 			}}
 		} else {
@@ -373,7 +373,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 		if n.Label != nil {
 			returnStmts = []goast.Stmt{&goast.LabeledStmt{
-				Label: n.Label.Label.Go(),
+				Label: component.Ident(n.Label.Label),
 				Stmt:  switchStmt,
 			}}
 		} else {
@@ -390,7 +390,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 				Tok: gotoken.TYPE,
 				Specs: []goast.Spec{
 					&goast.TypeSpec{
-						Name: n.Identifier.Go(),
+						Name: component.Ident(n.Identifier),
 						Type: typ,
 					},
 				},

@@ -36,9 +36,9 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Elts: exprs,
 		}, nil
 	case *ast.ASCIILiteral:
-		return n.Go(), nil
+		return component.ASCIILit(n.Value), nil
 	case *ast.BoolLiteral:
-		return n.Go(), nil
+		return component.BoolLit(n.Value), nil
 	case *ast.Builtin:
 		return t.convertBuiltin(n)
 	case *ast.Call:
@@ -49,7 +49,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		args := make([]goast.Expr, 0, len(procType.Parameters))
 
-		if !procType.Function {
+		if !procType.Function && t.needsContext {
 			// Pass context variable to all procedures.
 			args = append(args, component.ContextVar)
 		}
@@ -89,17 +89,17 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		t.symbols.MarkUsed(n.Identifier.Name)
 
 		return &goast.CallExpr{
-			Fun:  n.Identifier.Go(),
+			Fun:  component.Ident(n.Identifier),
 			Args: args,
 		}, nil
 	case *ast.Float32Literal:
-		return n.Go(), nil
+		return component.Float32Lit(n.Value), nil
 	case *ast.Float64Literal:
-		return n.Go(), nil
+		return component.Float64Lit(n.Value), nil
 	case *ast.GoCallExpression:
 		expr := &goast.CallExpr{
 			Fun: &goast.SelectorExpr{
-				X:   n.Import.Go(),
+				X:   component.Ident(n.Import),
 				Sel: &goast.Ident{Name: n.CallIdentifier.Name},
 			},
 			Args: make([]goast.Expr, 0, len(n.Arguments)),
@@ -147,7 +147,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		ident, ok := t.symbols.Resolve(name)
 		if !ok {
 			// New identifier
-			return n.Go(), nil
+			return component.Ident(n), nil
 		}
 
 		t.symbols.MarkUsed(name)
@@ -197,15 +197,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Y:  rhs,
 		}, nil
 	case *ast.Int8Literal:
-		return n.Go(), nil
+		return component.Int8Lit(n.Value), nil
 	case *ast.Int16Literal:
-		return n.Go(), nil
+		return component.Int16Lit(n.Value), nil
 	case *ast.Int32Literal:
-		return n.Go(), nil
+		return component.Int32Lit(n.Value), nil
 	case *ast.Int64Literal:
-		return n.Go(), nil
+		return component.Int64Lit(n.Value), nil
 	case *ast.Int128Literal:
-		return n.Go(), nil
+		return component.Int128Lit(n.Value.String()), nil
 	case *ast.MapLiteral:
 		// TODO: handle not directly comparable types
 		exprs := make([]goast.Expr, len(n.Pairs))
@@ -362,7 +362,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 
 			return &goast.SelectorExpr{
-				X:   n.Identifier.Go(),
+				X:   component.Ident(n.Identifier),
 				Sel: &goast.Ident{Name: convertExport(n.Field.Name, exported)},
 			}, nil
 		default:
@@ -539,15 +539,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Elts: values,
 		}, nil
 	case *ast.Uint8Literal:
-		return n.Go(), nil
+		return component.Uint8Lit(n.Value), nil
 	case *ast.Uint16Literal:
-		return n.Go(), nil
+		return component.Uint16Lit(n.Value), nil
 	case *ast.Uint32Literal:
-		return n.Go(), nil
+		return component.Uint32Lit(n.Value), nil
 	case *ast.Uint64Literal:
-		return n.Go(), nil
+		return component.Uint64Lit(n.Value), nil
 	case *ast.Uint128Literal:
-		return n.Go(), nil
+		return component.Uint128Lit(n.Value.String()), nil
 	case *ast.UnionLiteral:
 		unionType, ok := n.UnionType.Underlying().(*types.Union)
 		if !ok {
@@ -582,7 +582,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}},
 		}, nil
 	case *ast.UTF8Literal:
-		return n.Go(), nil
+		return component.UTF8Lit(n.Value), nil
 	default:
 		return nil, fmt.Errorf("unknown expression type '%T'", n)
 	}

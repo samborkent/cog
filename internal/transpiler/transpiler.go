@@ -7,10 +7,10 @@ import (
 	gotoken "go/token"
 	"maps"
 	"slices"
-	"strings"
-	"unicode"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/transpiler/component"
+	"github.com/samborkent/cog/internal/types"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -24,8 +24,9 @@ type Transpiler struct {
 	nodes   map[uint64]ast.Node
 	imports map[string]*goast.ImportSpec // Key: import name
 
-	symbols *SymbolTable
-	inFunc  bool
+	symbols      *SymbolTable
+	inFunc       bool
+	needsContext bool
 
 	typeCache map[string]goast.Expr
 }
@@ -56,7 +57,7 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	}
 	errs := make([]error, 0)
 
-	// Predeclare globals
+	// Predeclare globals and determine whether context is needed.
 	for _, stmt := range t.file.Statements {
 		switch s := stmt.(type) {
 		case *ast.Declaration:
@@ -64,8 +65,16 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 
 			if s.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
 				t.symbols.DefineDynamic(s.Assignment.Identifier)
+				t.needsContext = true
 			} else {
 				t.symbols.Define(name)
+			}
+
+			// A non-main procedure requires context propagation.
+			if s.Assignment.Identifier.Name != "main" && s.Assignment.Expression != nil {
+				if procType, ok := s.Assignment.Expression.Type().(*types.Procedure); ok && !procType.Function {
+					t.needsContext = true
+				}
 			}
 		case *ast.Type:
 			t.symbols.Define(convertExport(s.Identifier.Name, s.Identifier.Exported))
@@ -197,20 +206,5 @@ func (t *Transpiler) attachLineDecl(decls []goast.Decl, node ast.Node) {
 }
 
 func convertExport(ident string, exported bool) string {
-	r := rune(ident[0])
-	str := string(r)
-
-	if exported {
-		// If exported, ensure first letter is uppercase.
-		str = strings.ToUpper(str)
-	} else if unicode.IsUpper(r) {
-		// If not exported, but first letter is uppercase, prefix it with underscore.
-		str = "_" + str
-	}
-
-	if len(ident) > 1 {
-		str += ident[1:]
-	}
-
-	return str
+	return component.ConvertExport(ident, exported)
 }
