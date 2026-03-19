@@ -7,6 +7,11 @@ vars:
   DEBUG: false
 
 tasks:
+  test:
+    cmds:
+    - GOEXPERIMENT=arenas go test ./...
+    silent: false
+
   compile:
     cmds:
     - GOEXPERIMENT=arenas go run cmd/main.go -file={{.FILE}} -debug={{.DEBUG}} -write=false

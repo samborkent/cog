@@ -67,6 +67,8 @@ tokenLoop:
 			return f, fmt.Errorf("parser error:\n%w", errors.Join(p.Errs...))
 		}
 
+		prev := p.i
+
 		switch p.this().Type {
 		case tokens.Dynamic,
 			tokens.Export,
@@ -75,17 +77,26 @@ tokenLoop:
 			node := p.parseStatement(ctx)
 			if node != nil {
 				f.Statements = append(f.Statements, node)
+			} else {
+				p.synchronize()
 			}
 		case tokens.GoImport:
 			node := p.parseGoImport()
 			if node != nil {
 				f.Statements = append(f.Statements, node)
+			} else {
+				p.synchronize()
 			}
 		case tokens.EOF:
 			break tokenLoop
 		default:
 			p.error(p.this(), "unknown token", "Parse")
-			return f, fmt.Errorf("parser error:\n%w", errors.Join(p.Errs...))
+			p.synchronize()
+		}
+
+		// Guard against infinite loops: if no progress was made, force advance.
+		if p.i == prev {
+			p.advance("Parse recovery")
 		}
 
 		// Check for EOF again, in case it was reached during parsing.
@@ -123,7 +134,7 @@ func (p *Parser) next() tokens.Token {
 
 func (p *Parser) advance(scope string) {
 	if p.i >= len(p.tokens)-1 {
-		panic("reached end of token stream")
+		return
 	}
 
 	if p.debug {
@@ -131,6 +142,31 @@ func (p *Parser) advance(scope string) {
 	}
 
 	p.i++
+}
+
+// synchronize advances tokens until it finds a token that can begin a new statement.
+// This enables error recovery by skipping malformed input.
+func (p *Parser) synchronize() {
+	for p.this().Type != tokens.EOF {
+		switch p.this().Type {
+		case tokens.Identifier,
+			tokens.Builtin,
+			tokens.If,
+			tokens.For,
+			tokens.Switch,
+			tokens.Return,
+			tokens.Export,
+			tokens.Dynamic,
+			tokens.Variable,
+			tokens.GoImport,
+			tokens.RBrace,
+			tokens.Break,
+			tokens.Continue:
+			return
+		default:
+			p.advance("synchronize")
+		}
+	}
 }
 
 func (p *Parser) error(t tokens.Token, msg string, scope ...string) {
