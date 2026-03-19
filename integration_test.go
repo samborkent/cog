@@ -152,8 +152,6 @@ main : proc() = {
 	if err == nil {
 		t.Fatalf("expected parser/transpile error for @if type mismatch, got nil")
 	}
-
-	t.Logf("error as expected: %v", err)
 }
 
 func TestDynDeclarationInsideProcShouldError(t *testing.T) {
@@ -169,8 +167,6 @@ main : proc() = {
 	if err == nil {
 		t.Fatalf("expected parser error for dyn inside proc, got nil")
 	}
-
-	t.Logf("error as expected: %v", err)
 }
 
 func TestEnumMissingAssignmentShouldError(t *testing.T) {
@@ -189,8 +185,6 @@ main : proc() = {}
 	if err == nil {
 		t.Fatalf("expected parser error for malformed enum literal (missing :=), got nil")
 	}
-
-	t.Logf("error as expected: %v", err)
 }
 
 func TestMissingPackageProducesError(t *testing.T) {
@@ -202,9 +196,7 @@ func TestMissingPackageProducesError(t *testing.T) {
 	l := lexer.NewLexer(strings.NewReader(src))
 	toks, err := l.Parse(t.Context())
 	if err != nil {
-		// If lexer fails that's also acceptable for this malformed input
-		t.Logf("lexer error (expected for malformed input): %v", err)
-		return
+		t.Fatalf("lexer error: %v", err)
 	}
 
 	p, err := parser.NewParser(toks, false)
@@ -278,8 +270,6 @@ a := 1
 a := 2
 
 main : proc() = {}`
-
-	// Run with parser debug enabled to surface where the parser may hang.
 	l := lexer.NewLexer(strings.NewReader(src))
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -291,21 +281,9 @@ main : proc() = {}`
 		t.Fatalf("parser init error: %v", err)
 	}
 
-	done := make(chan struct{})
-	var perr error
-	go func() {
-		_, perr = p.Parse(t.Context(), "")
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		if perr == nil {
-			t.Fatalf("expected error for duplicate global declaration, got nil")
-		}
-		t.Logf("error as expected: %v", perr)
-	case <-time.After(5 * time.Second):
-		t.Fatalf("parser hung while parsing duplicate globals — observed possible infinite loop")
+	_, err = p.Parse(t.Context(), "")
+	if err == nil {
+		t.Fatalf("expected error for duplicate global declaration, got nil")
 	}
 }
 
@@ -322,8 +300,6 @@ main : proc() = {
 	if err == nil {
 		t.Fatalf("expected parser error for missing paren in @if, got nil")
 	}
-
-	t.Logf("error as expected: %v", err)
 }
 
 func TestUndefinedIdentifierShouldError(t *testing.T) {
@@ -339,8 +315,6 @@ main : proc() = {
 	if err == nil {
 		t.Fatalf("expected parser error for undefined identifier, got nil")
 	}
-
-	t.Logf("error as expected: %v", err)
 }
 
 func TestFuncReferencingDynShouldError(t *testing.T) {
@@ -361,8 +335,6 @@ main : proc() = {}
 	if err == nil {
 		t.Fatalf("expected transpile error for func referencing dyn variable, got nil")
 	}
-
-	t.Logf("error as expected: %v", err)
 }
 
 func TestMainAsIntShouldError(t *testing.T) {

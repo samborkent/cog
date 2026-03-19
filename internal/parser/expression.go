@@ -32,7 +32,7 @@ func (p *Parser) parseLiteral(tokenType types.Type) ast.Expression {
 		case tokens.StringLiteral:
 			node = ast.NewUTF8Literal(p.this())
 		default:
-			p.error(p.this(), "unexpected token found in rhs of variable declaration")
+			p.error(p.this(), "unexpected token found in rhs of variable declaration", "parseLiteral")
 			return nil
 		}
 
@@ -221,7 +221,7 @@ func (p *Parser) parseLiteral(tokenType types.Type) ast.Expression {
 
 		node = ast.NewUTF8Literal(p.this())
 	default:
-		p.error(p.this(), "unsupported type: "+tokenType.String())
+		p.error(p.this(), "unsupported type: "+tokenType.String(), "parseLiteral")
 		return nil
 	}
 

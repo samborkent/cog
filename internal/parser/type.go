@@ -410,7 +410,7 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 	p.advance("parseProcedureType proc/func")
 
 	if p.this().Type != tokens.LParen {
-		p.error(p.this(), fmt.Sprintf("expected '(' after %q in type", p.prev().Type))
+		p.error(p.this(), fmt.Sprintf("expected '(' after %q in type", p.prev().Type), "parseProcedureType")
 		return nil
 	}
 

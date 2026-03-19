@@ -258,7 +258,7 @@ func (p *Parser) parseBuiltinPtr(ctx context.Context, t tokens.Token, tokenType 
 func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType types.Type) *ast.Builtin {
 	if tokenType.Kind() != types.Invalid && tokenType.Kind() != types.SetKind {
 		// If type is supplied, check if it's a set.
-		p.error(p.this(), "expected set type", "parseBuiltinMap")
+		p.error(p.this(), "expected set type", "parseBuiltinSet")
 		return nil
 	}
 
@@ -275,12 +275,12 @@ func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType 
 	if tokenType.Kind() != types.Invalid {
 		setType, ok := tokenType.Underlying().(*types.Set)
 		if !ok {
-			p.error(p.this(), "unable to cast supplied set type", "parseBuiltinMap")
+			p.error(p.this(), "unable to cast supplied set type", "parseBuiltinSet")
 			return nil
 		}
 
 		if setType.Element.Kind() != typArgs[0].Kind() {
-			p.error(p.this(), "type mismatch in @set element", "parseBuiltinMap")
+			p.error(p.this(), "type mismatch in @set element", "parseBuiltinSet")
 			return nil
 		}
 	}

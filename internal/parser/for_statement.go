@@ -114,7 +114,7 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 
 	loop := p.parseBlockStatement(ctx)
 	if loop == nil {
-		p.error(p.this(), "unable to parse for block", "parseIfStatement")
+		p.error(p.this(), "unable to parse for block", "parseForStatement")
 		return nil
 	}
 

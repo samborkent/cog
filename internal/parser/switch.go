@@ -17,7 +17,7 @@ func (p *Parser) parseSwitch(ctx context.Context) *ast.Switch {
 	case tokens.LBrace:
 		return p.parseBoolSwitch(ctx)
 	default:
-		p.error(p.this(), "unexpected token after switch")
+		p.error(p.this(), "unexpected token after switch", "parseSwitch")
 		return nil
 	}
 }
@@ -38,14 +38,14 @@ func (p *Parser) parseBoolSwitch(ctx context.Context) *ast.Switch {
 
 		expr := p.expression(ctx, types.None)
 		if expr == nil {
-			p.error(p.this(), "unable to parse case expression")
+			p.error(p.this(), "unable to parse case expression", "parseBoolSwitch")
 			return nil
 		}
 
 		caseNode.Condition = expr
 
 		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after case condition")
+			p.error(p.this(), "expected ':' after case condition", "parseBoolSwitch")
 			return nil
 		}
 
@@ -81,7 +81,7 @@ func (p *Parser) parseBoolSwitch(ctx context.Context) *ast.Switch {
 		p.advance("parseBoolSwitch default") // consume default
 
 		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after default")
+			p.error(p.this(), "expected ':' after default", "parseBoolSwitch")
 			return nil
 		}
 
@@ -121,7 +121,7 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 
 	symbol, ok := p.symbols.Resolve(p.this().Literal)
 	if !ok {
-		p.error(p.this(), "unknown identifier in switch expression")
+		p.error(p.this(), "unknown identifier in switch expression", "parseIdentSwitch")
 		return nil
 	}
 
@@ -130,7 +130,7 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 	p.advance("parseIdentSwitch") // consume identifier
 
 	if p.this().Type != tokens.LBrace {
-		p.error(p.this(), "expected '{' after switch expression")
+		p.error(p.this(), "expected '{' after switch expression", "parseIdentSwitch")
 		return nil
 	}
 
@@ -145,19 +145,19 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 
 		cond := p.expression(ctx, symbol.Type())
 		if cond == nil {
-			p.error(p.this(), "unable to parse case expression")
+			p.error(p.this(), "unable to parse case expression", "parseIdentSwitch")
 			return nil
 		}
 
 		if cond.Type() != symbol.Type() {
-			p.error(p.this(), "case condition type does not match switch expression type")
+			p.error(p.this(), "case condition type does not match switch expression type", "parseIdentSwitch")
 			return nil
 		}
 
 		caseNode.Condition = cond
 
 		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after case condition")
+			p.error(p.this(), "expected ':' after case condition", "parseIdentSwitch")
 			return nil
 		}
 
@@ -193,7 +193,7 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 		p.advance("parseIdentSwitch default") // consume default
 
 		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after default")
+			p.error(p.this(), "expected ':' after default", "parseIdentSwitch")
 			return nil
 		}
 
