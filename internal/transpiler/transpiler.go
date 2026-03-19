@@ -24,9 +24,10 @@ type Transpiler struct {
 	nodes   map[uint64]ast.Node
 	imports map[string]*goast.ImportSpec // Key: import name
 
-	symbols      *SymbolTable
-	inFunc       bool
-	needsContext bool
+	symbols        *SymbolTable
+	inFunc         bool
+	needsContext   bool
+	ifLabelCounter uint32
 
 	typeCache map[string]goast.Expr
 }

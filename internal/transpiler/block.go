@@ -11,8 +11,6 @@ import (
 	"github.com/samborkent/cog/internal/transpiler/component"
 )
 
-var ifLabelCounter = 0
-
 var noOp = &goast.EmptyStmt{}
 
 func (t *Transpiler) convertIfBlock(node *ast.Block) (*goast.BlockStmt, *goast.LabeledStmt, error) {
@@ -39,11 +37,11 @@ func (t *Transpiler) convertIfBlock(node *ast.Block) (*goast.BlockStmt, *goast.L
 				continue
 			} else {
 				label = &goast.LabeledStmt{
-					Label: &goast.Ident{Name: "BreakIf" + strconv.Itoa(ifLabelCounter)},
+					Label: &goast.Ident{Name: "BreakIf" + strconv.FormatUint(uint64(t.ifLabelCounter), 10)},
 					Stmt:  noOp,
 				}
 
-				ifLabelCounter++
+				t.ifLabelCounter++
 			}
 
 			block.List = append(block.List, &goast.BranchStmt{
