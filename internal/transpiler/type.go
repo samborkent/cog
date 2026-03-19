@@ -14,7 +14,7 @@ import (
 
 func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 	// Try to retrieve type expression from cache.
-	expr, ok := t.typeCache[typ.String()]
+	expr, ok := t.typeCache[typ]
 	if ok {
 		return expr, nil
 	}
@@ -27,7 +27,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
 		}
 
-		t.typeCache[typ.String()] = expr
+		t.typeCache[typ] = expr
 		return expr, nil
 	}
 
@@ -333,7 +333,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		return nil, fmt.Errorf("unknown type %q", typ)
 	}
 
-	t.typeCache[typ.String()] = expr
+	t.typeCache[typ] = expr
 	return expr, nil
 }
 

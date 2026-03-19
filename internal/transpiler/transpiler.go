@@ -29,7 +29,7 @@ type Transpiler struct {
 	needsContext   bool
 	ifLabelCounter uint32
 
-	typeCache map[string]goast.Expr
+	typeCache map[types.Type]goast.Expr
 }
 
 func NewTranspiler(f *ast.File) *Transpiler {
@@ -47,7 +47,7 @@ func NewTranspiler(f *ast.File) *Transpiler {
 		fset:      gotoken.NewFileSet(),
 		nodes:     nodes,
 		symbols:   NewSymbolTable(),
-		typeCache: make(map[string]goast.Expr),
+		typeCache: make(map[types.Type]goast.Expr),
 	}
 }
 
