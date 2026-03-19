@@ -51,14 +51,22 @@ func (p *Parser) parseBoolSwitch(ctx context.Context) *ast.Switch {
 
 		p.advance("parseBoolSwitch case :") // consume :
 
-		for !p.match(tokens.Case, tokens.Default, tokens.RBrace) {
+		for !p.match(tokens.Case, tokens.Default, tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
 				return nil
 			}
 
+			prev := p.i
+
 			stmt := p.parseStatement(ctx)
 			if stmt != nil {
 				caseNode.Body = append(caseNode.Body, stmt)
+			} else {
+				p.synchronize()
+			}
+
+			if p.i == prev {
+				p.advance("parseBoolSwitch case recovery")
 			}
 		}
 
@@ -79,14 +87,22 @@ func (p *Parser) parseBoolSwitch(ctx context.Context) *ast.Switch {
 
 		p.advance("parseBoolSwitch default :") // consume :
 
-		for p.this().Type != tokens.RBrace {
+		for !p.match(tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
 				return nil
 			}
 
+			prev := p.i
+
 			stmt := p.parseStatement(ctx)
 			if stmt != nil {
 				defaultNode.Body = append(defaultNode.Body, stmt)
+			} else {
+				p.synchronize()
+			}
+
+			if p.i == prev {
+				p.advance("parseBoolSwitch default recovery")
 			}
 		}
 
@@ -147,14 +163,22 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 
 		p.advance("parseIdentSwitch case :") // consume :
 
-		for !p.match(tokens.Case, tokens.Default, tokens.RBrace) {
+		for !p.match(tokens.Case, tokens.Default, tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
 				return nil
 			}
 
+			prev := p.i
+
 			stmt := p.parseStatement(ctx)
 			if stmt != nil {
 				caseNode.Body = append(caseNode.Body, stmt)
+			} else {
+				p.synchronize()
+			}
+
+			if p.i == prev {
+				p.advance("parseIdentSwitch case recovery")
 			}
 		}
 
@@ -175,14 +199,22 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 
 		p.advance("parseIdentSwitch default :") // consume :
 
-		for p.this().Type != tokens.RBrace {
+		for !p.match(tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
 				return nil
 			}
 
+			prev := p.i
+
 			stmt := p.parseStatement(ctx)
 			if stmt != nil {
 				defaultNode.Body = append(defaultNode.Body, stmt)
+			} else {
+				p.synchronize()
+			}
+
+			if p.i == prev {
+				p.advance("parseIdentSwitch default recovery")
 			}
 		}
 

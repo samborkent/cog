@@ -16,6 +16,8 @@ tokenLoop:
 	for p.this().Type != tokens.EOF {
 		exported := false
 
+		prev := p.i
+
 		if p.this().Type == tokens.Export {
 			p.advance("findGlobals export") // consume export
 			exported = true
@@ -58,6 +60,11 @@ tokenLoop:
 			break tokenLoop
 		default:
 			p.advance("findGlobals") // consume token
+		}
+
+		// Guard against infinite loops: if no progress was made, force advance.
+		if p.i == prev {
+			p.advance("findGlobals recovery")
 		}
 	}
 
@@ -133,6 +140,16 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 			procType, isProc := ident.ValueType.(*types.Procedure)
 			if !isProc || procType.Function || len(procType.Parameters) != 0 || procType.ReturnType != nil {
 				p.error(ident.Token, `"main" can only be declared as proc()`, "findGlobalDecl")
+
+				// Skip past the function body to avoid stalling.
+				if p.this().Type == tokens.Assign {
+					p.advance("findGlobalDecl skip =") // consume =
+
+					if p.this().Type == tokens.LBrace {
+						p.skipScope(ctx)
+					}
+				}
+
 				return
 			}
 		}
@@ -151,6 +168,13 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 	case tokens.Declaration:
 		if ident.Name == "main" {
 			p.error(ident.Token, `"main" can only be declared as proc()`, "findGlobalDecl")
+
+			p.advance("findGlobalDecl skip :=") // consume :=
+
+			if p.this().Type == tokens.LBrace {
+				p.skipScope(ctx)
+			}
+
 			return
 		}
 
@@ -222,14 +246,15 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 		p.advance("findGlobalType enum literal {") // consume {
 
-		for p.this().Type != tokens.RBrace {
+		for p.this().Type != tokens.RBrace && p.this().Type != tokens.EOF {
 			if ctx.Err() != nil {
 				return
 			}
 
 			if p.this().Type != tokens.Identifier {
 				p.error(p.this(), "expected identifier in enum literal", "findGlobalType")
-				return
+				p.advance("findGlobalType enum recovery") // skip bad token
+				continue
 			}
 
 			valIdent := &ast.Identifier{

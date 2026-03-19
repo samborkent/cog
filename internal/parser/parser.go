@@ -150,6 +150,7 @@ func (p *Parser) synchronize() {
 	for p.this().Type != tokens.EOF {
 		switch p.this().Type {
 		case tokens.Identifier,
+			tokens.Builtin,
 			tokens.If,
 			tokens.For,
 			tokens.Switch,
