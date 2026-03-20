@@ -128,7 +128,6 @@ The following basic features are missing that need to be implemented before Cog 
 
 ## TODO
 
-- TESTS!
 - Range operator `0..4 == [0, 1, 2, 3]`
 - Design how iterators should work.
     - Range over int (or other literal) should not be possible.

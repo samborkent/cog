@@ -113,6 +113,9 @@ const (
 	Variable // var
 	Dynamic  // dyn
 
+	// Comment
+	Comment
+
 	EOF
 )
 
@@ -292,6 +295,8 @@ func (t Type) String() string {
 		return "var"
 	case Dynamic:
 		return "dyn"
+	case Comment:
+		return "comment"
 	case EOF:
 		return "EOF"
 	default:

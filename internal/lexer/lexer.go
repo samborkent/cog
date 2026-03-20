@@ -18,7 +18,7 @@ type Lexer struct {
 func NewLexer(r io.Reader) *Lexer {
 	var s scanner.Scanner
 	s.Init(r)
-	s.Mode = scanner.GoTokens | scanner.ScanInts
+	s.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
 
 	return &Lexer{
 		scan: s,
@@ -110,6 +110,9 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 		}
 
 		switch tok {
+		case scanner.Comment:
+			t.Type = tokens.Comment
+			t.Literal = txt
 		case scanner.Int:
 			t.Type = tokens.IntLiteral
 			t.Literal = txt

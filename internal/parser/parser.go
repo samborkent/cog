@@ -70,6 +70,12 @@ tokenLoop:
 		prev := p.i
 
 		switch p.this().Type {
+		case tokens.Comment:
+			f.Statements = append(f.Statements, &ast.Comment{
+				Token: p.this(),
+				Text:  p.this().Literal,
+			})
+			p.advance("Parse comment")
 		case tokens.Dynamic,
 			tokens.Export,
 			tokens.Identifier,
@@ -151,6 +157,7 @@ func (p *Parser) synchronize() {
 		switch p.this().Type {
 		case tokens.Identifier,
 			tokens.Builtin,
+			tokens.Comment,
 			tokens.If,
 			tokens.For,
 			tokens.Switch,

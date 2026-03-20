@@ -10,6 +10,13 @@ import (
 
 func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 	switch p.this().Type {
+	case tokens.Comment:
+		node := &ast.Comment{
+			Token: p.this(),
+			Text:  p.this().Literal,
+		}
+		p.advance("parseStatement comment")
+		return node
 	case tokens.Break, tokens.Continue:
 		node := &ast.Branch{
 			Token: p.this(),

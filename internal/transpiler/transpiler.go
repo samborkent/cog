@@ -30,7 +30,9 @@ type Transpiler struct {
 	needsContext   bool
 	ifLabelCounter uint32
 
-	typeCache map[types.Type]goast.Expr
+	typeCache    map[types.Type]goast.Expr
+	dynComments  map[string]string   // dyn field name → trailing comment text
+	skipComments map[uint64]struct{} // hashes of comments consumed by dyn fields
 }
 
 func NewTranspiler(f *ast.File) *Transpiler {
@@ -44,12 +46,14 @@ func NewTranspiler(f *ast.File) *Transpiler {
 	}
 
 	return &Transpiler{
-		file:        f,
-		fset:        gotoken.NewFileSet(),
-		nodes:       nodes,
-		symbols:     NewSymbolTable(),
-		dynDefaults: make(map[string]ast.Expression),
-		typeCache:   make(map[types.Type]goast.Expr),
+		file:         f,
+		fset:         gotoken.NewFileSet(),
+		nodes:        nodes,
+		symbols:      NewSymbolTable(),
+		dynDefaults:  make(map[string]ast.Expression),
+		typeCache:    make(map[types.Type]goast.Expr),
+		dynComments:  make(map[string]string),
+		skipComments: make(map[uint64]struct{}),
 	}
 }
 
@@ -61,7 +65,7 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	errs := make([]error, 0)
 
 	// Predeclare globals and determine whether context is needed.
-	for _, stmt := range t.file.Statements {
+	for i, stmt := range t.file.Statements {
 		switch s := stmt.(type) {
 		case *ast.Declaration:
 			name := convertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported)
@@ -71,6 +75,18 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 
 				if s.Assignment.Expression != nil {
 					t.dynDefaults[name] = s.Assignment.Expression
+				}
+
+				// Check if the next statement is a comment on the same line.
+				if i+1 < len(t.file.Statements) {
+					if comment, ok := t.file.Statements[i+1].(*ast.Comment); ok {
+						declLn, _ := s.Pos()
+						commentLn, _ := comment.Pos()
+						if commentLn == declLn {
+							t.dynComments[name] = comment.Text
+							t.skipComments[comment.Hash()] = struct{}{}
+						}
+					}
 				}
 			} else {
 				t.symbols.Define(name)
@@ -99,10 +115,18 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 				return nil, fmt.Errorf("converting dynamic variable %q type: %w", name, err)
 			}
 
-			fields = append(fields, &goast.Field{
+			field := &goast.Field{
 				Names: []*goast.Ident{{Name: name}},
 				Type:  fieldType,
-			})
+			}
+
+			if commentText, ok := t.dynComments[name]; ok {
+				field.Comment = &goast.CommentGroup{
+					List: []*goast.Comment{{Text: commentText}},
+				}
+			}
+
+			fields = append(fields, field)
 		}
 
 		gofile.Decls = append(gofile.Decls,
@@ -130,6 +154,13 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	}
 
 	for _, stmt := range t.file.Statements {
+		// Skip comments already consumed by dyn field annotations.
+		if comment, ok := stmt.(*ast.Comment); ok {
+			if _, skip := t.skipComments[comment.Hash()]; skip {
+				continue
+			}
+		}
+
 		switch s := stmt.(type) {
 		case *ast.GoImport:
 			for _, imprt := range s.Imports {
@@ -148,7 +179,11 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 			}
 
 			// Attach a //line directive mapping generated decls back to the original Cog node.
-			t.attachLineDecl(gonodes, s)
+			// Skip comments — they carry their own Doc and a //line pointing at a
+			// block comment in the .cog source would confuse the Go compiler.
+			if _, isComment := s.(*ast.Comment); !isComment {
+				t.attachLineDecl(gonodes, s)
+			}
 
 			gofile.Decls = append(gofile.Decls, gonodes...)
 		}

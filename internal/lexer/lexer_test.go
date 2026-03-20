@@ -349,28 +349,71 @@ func TestBuiltinToken(t *testing.T) {
 	}
 }
 
-func TestCommentsAreSkipped(t *testing.T) {
+func TestCommentsArePreserved(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		src  string
+		name    string
+		src     string
+		comment string
 	}{
-		{"line_comment", "// this is a comment\n42"},
-		{"block_comment", "/* block */ 42"},
+		{"line_comment", "// this is a comment\n42", "// this is a comment"},
+		{"block_comment", "/* block */ 42", "/* block */"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			toks := lex(t, tt.src)
-			if len(toks) != 2 {
-				t.Fatalf("expected 2 tokens (int + EOF), got %d: %v", len(toks), toks)
+			if len(toks) != 3 {
+				t.Fatalf("expected 3 tokens (comment + int + EOF), got %d: %v", len(toks), toks)
 			}
-			if toks[0].Type != tokens.IntLiteral {
-				t.Errorf("expected IntLiteral, got %s", toks[0].Type)
+			if toks[0].Type != tokens.Comment {
+				t.Errorf("expected Comment, got %s", toks[0].Type)
+			}
+			if toks[0].Literal != tt.comment {
+				t.Errorf("expected comment literal %q, got %q", tt.comment, toks[0].Literal)
+			}
+			if toks[1].Type != tokens.IntLiteral {
+				t.Errorf("expected IntLiteral, got %s", toks[1].Type)
 			}
 		})
+	}
+}
+
+func TestInlineComment(t *testing.T) {
+	t.Parallel()
+
+	toks := lex(t, "42 // trailing")
+	if len(toks) != 3 {
+		t.Fatalf("expected 3 tokens (int + comment + EOF), got %d: %v", len(toks), toks)
+	}
+	if toks[0].Type != tokens.IntLiteral {
+		t.Errorf("expected IntLiteral, got %s", toks[0].Type)
+	}
+	if toks[1].Type != tokens.Comment {
+		t.Errorf("expected Comment, got %s", toks[1].Type)
+	}
+	if toks[1].Literal != "// trailing" {
+		t.Errorf("expected literal %q, got %q", "// trailing", toks[1].Literal)
+	}
+}
+
+func TestMultiLineComment(t *testing.T) {
+	t.Parallel()
+
+	toks := lex(t, "/* multi\nline\ncomment */ 42")
+	if len(toks) != 3 {
+		t.Fatalf("expected 3 tokens (comment + int + EOF), got %d: %v", len(toks), toks)
+	}
+	if toks[0].Type != tokens.Comment {
+		t.Errorf("expected Comment, got %s", toks[0].Type)
+	}
+	if toks[0].Literal != "/* multi\nline\ncomment */" {
+		t.Errorf("expected multi-line comment literal, got %q", toks[0].Literal)
+	}
+	if toks[1].Type != tokens.IntLiteral {
+		t.Errorf("expected IntLiteral, got %s", toks[1].Type)
 	}
 }
 

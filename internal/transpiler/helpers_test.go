@@ -42,27 +42,33 @@ func transpile(t *testing.T, src string) string {
 	return buf.String()
 }
 
-// transpileShouldError runs the pipeline and expects a transpile error.
-func transpileShouldError(t *testing.T, src string) {
+// transpileWithPrint runs the full pipeline using Transpiler.Print,
+// which includes post-processing (stripping placeholder declarations).
+func transpileWithPrint(t *testing.T, src string) string {
 	t.Helper()
 	l := lexer.NewLexer(strings.NewReader(src))
 	toks, err := l.Parse(t.Context())
 	if err != nil {
-		return
+		t.Fatalf("lex error: %v", err)
 	}
 	p, err := parser.NewParser(toks, false)
 	if err != nil {
-		return
+		t.Fatalf("parser init error: %v", err)
 	}
 	f, err := p.Parse(t.Context(), "test.cog")
 	if err != nil {
-		return
+		t.Fatalf("parse error: %v", err)
 	}
 	tr := transpiler.NewTranspiler(f)
-	_, err = tr.Transpile()
-	if err == nil {
-		t.Fatal("expected transpile error, got nil")
+	gofile, err := tr.Transpile()
+	if err != nil {
+		t.Fatalf("transpile error: %v", err)
 	}
+	var buf bytes.Buffer
+	if err := tr.Print(&buf, gofile); err != nil {
+		t.Fatalf("print error: %v", err)
+	}
+	return buf.String()
 }
 
 // mustContain asserts that got contains the substring want.

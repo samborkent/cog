@@ -15,6 +15,8 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 	var returnStmts []goast.Stmt
 
 	switch n := node.(type) {
+	case *ast.Comment:
+		return []goast.Stmt{&goast.DeclStmt{Decl: t.commentDecl(n.Text)[0]}}, nil
 	case *ast.Assignment:
 		ident := &goast.Ident{Name: "_"}
 
