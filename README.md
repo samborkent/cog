@@ -75,6 +75,7 @@ The following basic features are missing that need to be implemented before Cog 
     - `uint128` (using [lukechampine.com/uint128](lukechampine.com/uint128))
     - `float16` (using [github.com/x448/float16](github.com/x448/float16))
     - `complex32` (using `float16`)
+- Canonical syntax highlighting
 
 ### Planned
 
@@ -112,7 +113,6 @@ The following basic features are missing that need to be implemented before Cog 
 - Script mode
     - Files without package declaration will be parsed as script.
     - This is basically just a `main` package, and script gets inserted in `main()` body.
-- Canonical syntax highlighting
 - LSP
 - Adaptive GC (https://github.com/samborkent/adaptive-gc)
 - Automatic struct alignment?
