@@ -11,9 +11,6 @@ import (
 	"testing"
 	"time"
 
-	goprinter "go/printer"
-	gotoken "go/token"
-
 	"github.com/samborkent/cog/internal/lexer"
 	"github.com/samborkent/cog/internal/parser"
 	"github.com/samborkent/cog/internal/transpiler"
@@ -47,8 +44,7 @@ func transpileSource(t *testing.T, src string) string {
 
 	var buf bytes.Buffer
 
-	fset := gotoken.NewFileSet()
-	if err := goprinter.Fprint(&buf, fset, gofile); err != nil {
+	if err := tr.Print(&buf, gofile); err != nil {
 		t.Fatalf("printing go ast: %v", err)
 	}
 
@@ -110,8 +106,7 @@ func tryTranspile(ctx context.Context, src string) (string, error) {
 
 	var buf bytes.Buffer
 
-	fset := gotoken.NewFileSet()
-	if err := goprinter.Fprint(&buf, fset, gofile); err != nil {
+	if err := tr.Print(&buf, gofile); err != nil {
 		return "", fmt.Errorf("printing go ast: %w", err)
 	}
 

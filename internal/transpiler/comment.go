@@ -37,7 +37,7 @@ func (t *Transpiler) commentDecl(text string) []goast.Decl {
 // Block comments (/* */) are split and each line is marked with blockCommentMarker
 // so post-processing can reconstruct the original /* */ form.
 func toLineComments(text string) []*goast.Comment {
-	if strings.HasPrefix(text, "//") {
+	if strings.HasPrefix(strings.TrimLeft(text, "\n"), "//") {
 		return []*goast.Comment{{Text: text}}
 	}
 

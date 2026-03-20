@@ -402,7 +402,16 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		return nil, fmt.Errorf("unknown statement type '%T'", n)
 	}
 
-	// TODO: find out how to attach line directives to all statements.
+	// Attach //line directives to statements that don't already carry one.
+	// Comments return early above; declarations embed their own //line inline.
+	switch node.(type) {
+	case *ast.Comment, *ast.Declaration:
+	default:
+		ln, _ := node.Pos()
+		lineComment := fmt.Sprintf("\n//line %s:%d", t.file.Name, ln)
+		lineDecl := &goast.DeclStmt{Decl: t.commentDecl(lineComment)[0]}
+		returnStmts = append([]goast.Stmt{lineDecl}, returnStmts...)
+	}
 
 	return returnStmts, nil
 }
