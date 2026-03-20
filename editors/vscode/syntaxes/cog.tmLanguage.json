@@ -1,0 +1,321 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Cog",
+  "scopeName": "source.cog",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#builtins" },
+    { "include": "#generics" },
+    { "include": "#declarations" },
+    { "include": "#numbers" },
+    { "include": "#qualifiers" },
+    { "include": "#function-keywords" },
+    { "include": "#type-keywords" },
+    { "include": "#control-keywords" },
+    { "include": "#package-keywords" },
+    { "include": "#builtin-types" },
+    { "include": "#boolean-constants" },
+    { "include": "#labels" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.cog",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.cog",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.cog",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.cog",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.other.raw.cog",
+          "begin": "`",
+          "end": "`"
+        }
+      ]
+    },
+
+    "builtins": {
+      "patterns": [
+        {
+          "comment": "Go interop: @go.package.Function",
+          "match": "(@go)(\\.)(\\w+)(\\.)(\\w+)",
+          "captures": {
+            "1": { "name": "support.function.builtin.cog" },
+            "2": { "name": "punctuation.accessor.cog" },
+            "3": { "name": "entity.name.namespace.cog" },
+            "4": { "name": "punctuation.accessor.cog" },
+            "5": { "name": "entity.name.function.cog" }
+          }
+        },
+        {
+          "comment": "Builtin with type arguments: @name<T,...>",
+          "begin": "(@[a-zA-Z_]\\w*)(<)",
+          "beginCaptures": {
+            "1": { "name": "support.function.builtin.cog" },
+            "2": { "name": "punctuation.definition.typeparameters.begin.cog" }
+          },
+          "end": "(>)",
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.typeparameters.end.cog" }
+          },
+          "patterns": [
+            { "include": "#builtin-types" },
+            { "include": "#generics" },
+            { "include": "#numbers" },
+            { "include": "#punctuation" }
+          ]
+        },
+        {
+          "comment": "Builtin call: @name",
+          "match": "@[a-zA-Z_]\\w*",
+          "name": "support.function.builtin.cog"
+        }
+      ]
+    },
+
+    "generics": {
+      "patterns": [
+        {
+          "comment": "Type constructor with type parameters: map<K,V>, set<T>, enum<T>",
+          "begin": "\\b(map|set|enum)(<)",
+          "beginCaptures": {
+            "1": { "name": "keyword.type.cog" },
+            "2": { "name": "punctuation.definition.typeparameters.begin.cog" }
+          },
+          "end": "(>)",
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.typeparameters.end.cog" }
+          },
+          "patterns": [
+            { "include": "#builtin-types" },
+            { "include": "#generics" },
+            { "include": "#numbers" },
+            { "include": "#punctuation" }
+          ]
+        }
+      ]
+    },
+
+    "declarations": {
+      "patterns": [
+        {
+          "comment": "Type alias: Name ~ type",
+          "match": "\\b([A-Za-z_]\\w*)\\s*(~)",
+          "captures": {
+            "1": { "name": "entity.name.type.cog" },
+            "2": { "name": "keyword.operator.alias.cog" }
+          }
+        },
+        {
+          "comment": "Function/procedure declaration: name : proc/func",
+          "match": "\\b([a-zA-Z_]\\w*)\\s*(:)\\s*(?=(?:proc|func)\\b)",
+          "captures": {
+            "1": { "name": "entity.name.function.cog" },
+            "2": { "name": "punctuation.separator.cog" }
+          }
+        }
+      ]
+    },
+
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.cog",
+          "match": "\\b\\d+\\.\\d*(?:[eE][+-]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.numeric.float.cog",
+          "match": "\\b\\d+[eE][+-]?\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.hex.cog",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.cog",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+
+    "qualifiers": {
+      "patterns": [
+        {
+          "name": "keyword.var.cog",
+          "match": "\\bvar\\b"
+        },
+        {
+          "name": "storage.modifier.cog",
+          "match": "\\bdyn\\b"
+        }
+      ]
+    },
+
+    "function-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.function.cog",
+          "match": "\\b(func|proc)\\b"
+        }
+      ]
+    },
+
+    "type-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.type.cog",
+          "match": "\\b(struct|enum|map|set)\\b"
+        }
+      ]
+    },
+
+    "control-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.cog",
+          "match": "\\b(if|else|for|switch|select|case|default|return|break|continue|in|async)\\b"
+        }
+      ]
+    },
+
+    "package-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.package.cog",
+          "match": "\\bpackage\\b"
+        },
+        {
+          "name": "keyword.import.cog",
+          "match": "\\b(goimport|import)\\b"
+        },
+        {
+          "name": "keyword.export.cog",
+          "match": "\\bexport\\b"
+        }
+      ]
+    },
+
+    "builtin-types": {
+      "patterns": [
+        {
+          "name": "support.type.cog",
+          "match": "\\b(bool|ascii|utf8|int8|int16|int32|int64|int128|uint8|uint16|uint32|uint64|uint128|float16|float32|float64|complex32|complex64|complex128|int|uint|float|complex|string|any|error)\\b"
+        }
+      ]
+    },
+
+    "boolean-constants": {
+      "patterns": [
+        {
+          "name": "constant.language.cog",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+
+    "labels": {
+      "patterns": [
+        {
+          "comment": "Label on its own line (excludes keywords)",
+          "match": "^(\\s*)(?!(?:if|else|for|switch|select|case|default|return|break|continue|in|async|var|dyn|export|func|proc|struct|enum|map|set|package|goimport|import|true|false)\\b)([a-zA-Z_]\\w*)(:)\\s*$",
+          "captures": {
+            "2": { "name": "entity.name.label.cog" },
+            "3": { "name": "punctuation.separator.label.cog" }
+          }
+        },
+        {
+          "comment": "Label before for/if/switch on same line",
+          "match": "^(\\s*)(?!(?:if|else|for|switch|select|case|default|return|break|continue|in|async|var|dyn|export|func|proc|struct|enum|map|set|package|goimport|import|true|false)\\b)([a-zA-Z_]\\w*)(:)\\s+(?=for|if|switch)",
+          "captures": {
+            "2": { "name": "entity.name.label.cog" },
+            "3": { "name": "punctuation.separator.label.cog" }
+          }
+        }
+      ]
+    },
+
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.cog",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.assignment.cog",
+          "match": ":=|(?<![<>!=])=(?!=)"
+        },
+        {
+          "name": "keyword.operator.logical.cog",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.arithmetic.cog",
+          "match": "\\+|-|\\*|/"
+        },
+        {
+          "name": "keyword.operator.alias.cog",
+          "match": "~"
+        },
+        {
+          "name": "keyword.operator.bitwise.cog",
+          "match": "&|\\^|\\|"
+        },
+        {
+          "name": "keyword.operator.option.cog",
+          "match": "\\?"
+        }
+      ]
+    },
+
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.comma.cog",
+          "match": ","
+        },
+        {
+          "name": "punctuation.accessor.cog",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.separator.cog",
+          "match": ":|;"
+        },
+        {
+          "name": "punctuation.bracket.round.cog",
+          "match": "[()]"
+        },
+        {
+          "name": "punctuation.bracket.curly.cog",
+          "match": "[{}]"
+        },
+        {
+          "name": "punctuation.bracket.square.cog",
+          "match": "[\\[\\]]"
+        }
+      ]
+    }
+  }
+}

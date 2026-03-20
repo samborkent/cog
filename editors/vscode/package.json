@@ -1,0 +1,28 @@
+{
+  "name": "cog-lang",
+  "displayName": "Cog Language",
+  "description": "Syntax highlighting for the Cog programming language",
+  "version": "0.1.0",
+  "publisher": "samborkent",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "cog",
+        "aliases": ["Cog", "cog", "coglang"],
+        "extensions": [".cog"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cog",
+        "scopeName": "source.cog",
+        "path": "./syntaxes/cog.tmLanguage.json"
+      }
+    ]
+  }
+}
