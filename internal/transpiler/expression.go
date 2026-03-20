@@ -123,25 +123,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				return nil, fmt.Errorf("func cannot reference dynamically scoped variable %q", n.Name)
 			}
 
-			dynType, err := t.convertType(n.ValueType)
-			if err != nil {
-				return nil, fmt.Errorf("converting dynamically scope variable type: %w", err)
-			}
-
-			return &goast.TypeAssertExpr{
-				X: &goast.CallExpr{
-					Fun: &goast.SelectorExpr{
-						X:   component.ContextVar,
-						Sel: &goast.Ident{Name: "Value"},
-					},
-					Args: []goast.Expr{
-						&goast.CompositeLit{
-							Type: &goast.Ident{Name: joinStr(name, "Key")},
-						},
-					},
-				},
-				Type: dynType,
-			}, nil
+			return component.DynRead(name), nil
 		}
 
 		ident, ok := t.symbols.Resolve(name)

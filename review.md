@@ -11,14 +11,6 @@ Custom operators or multi-character tokens require special-case handling (you al
 The scanner's built-in number parsing, string escaping, and comment handling may not match Cog's intended semantics
 Switching to a hand-written lexer would give you full control and isn't much more code than the current wrapper
 
-8. Dynamic variable implementation via context.WithValue
-Dynamic variables are transpiled into context.WithValue / context.Value calls with type-asserted keys. This works, but:
-
-Each dynamic variable access does a linear scan through the context chain
-The runtime cost scales with the number of dynamic variables in scope
-It conflates Cog's scoping semantics with Go's context, which has different cancellation and lifetime semantics
-This is fine for now, but for performance-comparable code, a closure-captured-variable or explicit parameter-passing approach would be cheaper.
-
 9. No source position tracking through transpilation
 The /​/line directives appended in attachLineDecl provide some mapping, but they're text comments appended after AST construction. There's no structured source map. When the user gets a Go compile error, they'll see Cog line numbers (good), but for runtime errors (stack traces), the mapping may be incomplete or misleading. This becomes critical for debugging.
 

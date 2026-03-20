@@ -6,80 +6,20 @@ import (
 	gotoken "go/token"
 	gotypes "go/types"
 	"math"
-	"strings"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/transpiler/component"
 	"github.com/samborkent/cog/internal/types"
 )
 
-const delim = "_"
-
-func joinStr(strs ...string) string {
-	return strings.Join(strs, delim)
-}
-
 func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	switch n := node.(type) {
 	case *ast.Declaration:
 		if n.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
-			name := convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported)
-
-			keyIdent, ok := t.symbols.Resolve(joinStr(name, "Key"))
-			if !ok {
-				panic("missing dynamic variable key definition")
-			}
-
-			valIdent, ok := t.symbols.Resolve(joinStr(name, "Default"))
-			if !ok {
-				panic("missing dynamic variable default value definition")
-			}
-
-			tok := gotoken.CONST
-			if mustBeVariable(n.Assignment.Identifier.ValueType.Kind()) {
-				tok = gotoken.VAR
-			}
-
-			var values []goast.Expr
-
-			if n.Assignment.Expression != nil {
-				val, err := t.convertExpr(n.Assignment.Expression)
-				if err != nil {
-					return nil, fmt.Errorf("converting dynamically variable expression: %w", err)
-				}
-
-				values = []goast.Expr{val}
-			} else if tok == gotoken.CONST {
-				// Variable has zero value.
-				tok = gotoken.VAR
-			}
-
-			declType, err := t.convertType(n.Assignment.Identifier.ValueType)
-			if err != nil {
-				return nil, fmt.Errorf("converting type in declaration: %w", err)
-			}
-
-			return []goast.Decl{
-				&goast.GenDecl{
-					Tok: gotoken.TYPE,
-					Specs: []goast.Spec{
-						&goast.TypeSpec{
-							Name: keyIdent,
-							Type: &goast.StructType{Fields: &goast.FieldList{}},
-						},
-					},
-				},
-				&goast.GenDecl{
-					Tok: tok,
-					Specs: []goast.Spec{
-						&goast.ValueSpec{
-							Names:  []*goast.Ident{valIdent},
-							Type:   declType,
-							Values: values,
-						},
-					},
-				},
-			}, nil
+			// Dynamic variable declarations are handled collectively via the
+			// cogDyn struct generated in Transpile(). Individual dyn declarations
+			// emit no Go declarations.
+			return nil, nil
 		}
 
 		ident := t.symbols.Define(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported))
@@ -120,46 +60,76 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			}
 
 			if n.Assignment.Identifier.Name == "main" {
-				if t.needsContext {
-					// Main func with context
-					ctxIdent := t.symbols.Define("ctx")
-					t.symbols.MarkUsed("ctx")
+				hasDynVars := len(t.symbols.dynamics) > 0
 
-					body := make([]goast.Stmt, 0, 1+len(t.symbols.dynamics))
-					body = append(body, component.ContextMain(ctxIdent))
+				if hasDynVars || t.needsContext {
+					if hasDynVars {
+						// Main with dynamic variables: init dyn struct.
+						dynIdent := t.symbols.Define("dyn")
+						t.symbols.MarkUsed("dyn")
 
-					// Define dynamically scoped variables.
-					for _, dyn := range t.symbols.dynamics {
-						key := joinStr(convertExport(dyn.Name, dyn.Exported), "Key")
-						val := joinStr(convertExport(dyn.Name, dyn.Exported), "Default")
+						structElts := make([]goast.Expr, 0, len(t.symbols.dynamics))
+						for name := range t.symbols.dynamics {
+							defaultExpr, hasDefault := t.dynDefaults[name]
+							if !hasDefault {
+								continue
+							}
 
-						keyIdent, ok := t.symbols.Resolve(key)
-						if !ok {
-							return nil, fmt.Errorf("missing dynamic variable context key %q", key)
+							val, err := t.convertExpr(defaultExpr)
+							if err != nil {
+								return nil, fmt.Errorf("converting dynamic variable %q default: %w", name, err)
+							}
+
+							structElts = append(structElts, &goast.KeyValueExpr{
+								Key:   &goast.Ident{Name: name},
+								Value: val,
+							})
 						}
 
-						valIdent, ok := t.symbols.Resolve(val)
-						if !ok {
-							return nil, fmt.Errorf("missing dynamic variable default value %q", val)
+						structLit := &goast.CompositeLit{
+							Type: component.DynStructType,
+							Elts: structElts,
 						}
 
-						t.symbols.MarkUsed(key)
-						t.symbols.MarkUsed(val)
+						if t.needsContext {
+							// Also seed context for proc propagation.
+							ctxIdent := t.symbols.Define("ctx")
+							t.symbols.MarkUsed("ctx")
 
-						body = append(body, component.ContextWithValue(keyIdent, valIdent))
+							body := component.DynMainInit(dynIdent, ctxIdent, structLit)
+							funcLiteral.Body.List = append(body, funcLiteral.Body.List...)
+						} else {
+							// No procs: just create dyn struct, no context needed.
+							funcLiteral.Body.List = append([]goast.Stmt{
+								&goast.AssignStmt{
+									Tok: gotoken.DEFINE,
+									Lhs: []goast.Expr{dynIdent},
+									Rhs: []goast.Expr{structLit},
+								},
+							}, funcLiteral.Body.List...)
+						}
+					} else {
+						// Main with procs but no dynamic variables: just init context.
+						ctxIdent := t.symbols.Define("ctx")
+						t.symbols.MarkUsed("ctx")
+
+						funcLiteral.Body.List = append(
+							[]goast.Stmt{component.ContextMain(ctxIdent)},
+							funcLiteral.Body.List...,
+						)
 					}
 
-					funcLiteral.Body.List = append(body, funcLiteral.Body.List...)
+					if t.needsContext {
+						t.imports["ctx"] = &goast.ImportSpec{
+							Path: &goast.BasicLit{
+								Kind:  gotoken.STRING,
+								Value: `"context"`,
+							},
+						}
 
-					t.imports["ctx"] = &goast.ImportSpec{
-						Path: &goast.BasicLit{
-							Kind:  gotoken.STRING,
-							Value: `"context"`,
-						},
+						// Remove context argument for main func.
+						funcLiteral.Type.Params.List = funcLiteral.Type.Params.List[1:]
 					}
-
-					// Remove context argument for main func.
-					funcLiteral.Type.Params.List = funcLiteral.Type.Params.List[1:]
 				}
 
 				return []goast.Decl{&goast.FuncDecl{
@@ -167,6 +137,14 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					Type: funcLiteral.Type,
 					Body: funcLiteral.Body,
 				}}, nil
+			}
+
+			// Non-main proc with dynamic variables: inject copy-on-entry preamble.
+			if len(t.symbols.dynamics) > 0 {
+				procType, ok := n.Assignment.Expression.Type().(*types.Procedure)
+				if ok && !procType.Function {
+					funcLiteral.Body.List = append(component.DynProcEntry(), funcLiteral.Body.List...)
+				}
 			}
 		}
 

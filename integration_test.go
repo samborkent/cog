@@ -491,7 +491,7 @@ main : proc() = {
 	}
 }
 
-func TestContextWithDynVar(t *testing.T) {
+func TestDynVarWithoutProcs(t *testing.T) {
 	src := `package main
 
 dyn val : utf8 = "hello"
@@ -503,8 +503,12 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
-	if !strings.Contains(code, "context") {
-		t.Fatalf("expected context import for program with dyn var, got:\n%s", code)
+	if strings.Contains(code, "\"context\"") {
+		t.Fatalf("expected no context import for dyn var without procs, got:\n%s", code)
+	}
+
+	if !strings.Contains(code, "cogDyn") {
+		t.Fatalf("expected cogDyn struct in generated code, got:\n%s", code)
 	}
 
 	t.Parallel()
@@ -546,6 +550,60 @@ main : proc() = {
 
 	if !strings.Contains(out, "world") {
 		t.Fatalf("expected output to contain 'world', got:\n%s", out)
+	}
+}
+
+func TestDynVarWithProc(t *testing.T) {
+	src := `package main
+
+dyn val : utf8 = "initial"
+
+setter : proc(s : utf8) = {
+	val = s
+	@print(val)
+}
+
+main : proc() = {
+	@print(val)
+	setter("changed")
+	@print(val)
+}
+`
+
+	code := transpileSource(t, src)
+
+	if !strings.Contains(code, "\"context\"") {
+		t.Fatalf("expected context import for dyn var with proc, got:\n%s", code)
+	}
+
+	if !strings.Contains(code, "cogDyn") {
+		t.Fatalf("expected cogDyn struct in generated code, got:\n%s", code)
+	}
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+	}
+
+	// Dynamic scoping: setter's changes to val are isolated (copy-on-entry),
+	// so main sees "initial" both before and after calling setter.
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("expected 3 lines of output, got %d:\n%s", len(lines), out)
+	}
+
+	if lines[0] != "initial" {
+		t.Fatalf("expected first line 'initial', got %q", lines[0])
+	}
+
+	if lines[1] != "changed" {
+		t.Fatalf("expected second line 'changed', got %q", lines[1])
+	}
+
+	if lines[2] != "initial" {
+		t.Fatalf("expected third line 'initial' (dynamic scoping isolation), got %q", lines[2])
 	}
 }
 

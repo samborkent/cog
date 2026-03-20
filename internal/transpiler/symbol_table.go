@@ -48,8 +48,6 @@ func (s *SymbolTable) DefineDynamic(ident *ast.Identifier) {
 
 	name := convertExport(ident.Name, ident.Exported)
 	s.dynamics[name] = ident
-	s.Define(joinStr(name, "Key"))
-	s.Define(joinStr(name, "Default"))
 }
 
 func (s *SymbolTable) MarkUsed(name string) {

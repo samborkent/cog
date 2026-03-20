@@ -28,14 +28,14 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 					return nil, fmt.Errorf("undefined dynamic variable '%s'", n.Identifier.Name)
 				}
 
-				// Dynamic variable assignment, set context value instead.
+				// Dynamic variable assignment via struct field.
 				val, err := t.convertExpr(n.Expression)
 				if err != nil {
 					return nil, err
 				}
 
 				return []goast.Stmt{
-					component.ContextWithValue(&goast.Ident{Name: joinStr(name, "Key")}, val),
+					component.DynWrite(name, val),
 				}, nil
 			}
 

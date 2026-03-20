@@ -25,6 +25,7 @@ type Transpiler struct {
 	imports map[string]*goast.ImportSpec // Key: import name
 
 	symbols        *SymbolTable
+	dynDefaults    map[string]ast.Expression // Default expressions for dynamic variables
 	inFunc         bool
 	needsContext   bool
 	ifLabelCounter uint32
@@ -43,11 +44,12 @@ func NewTranspiler(f *ast.File) *Transpiler {
 	}
 
 	return &Transpiler{
-		file:      f,
-		fset:      gotoken.NewFileSet(),
-		nodes:     nodes,
-		symbols:   NewSymbolTable(),
-		typeCache: make(map[types.Type]goast.Expr),
+		file:        f,
+		fset:        gotoken.NewFileSet(),
+		nodes:       nodes,
+		symbols:     NewSymbolTable(),
+		dynDefaults: make(map[string]ast.Expression),
+		typeCache:   make(map[types.Type]goast.Expr),
 	}
 }
 
@@ -66,7 +68,10 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 
 			if s.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
 				t.symbols.DefineDynamic(s.Assignment.Identifier)
-				t.needsContext = true
+
+				if s.Assignment.Expression != nil {
+					t.dynDefaults[name] = s.Assignment.Expression
+				}
 			} else {
 				t.symbols.Define(name)
 			}
@@ -83,6 +88,46 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	}
 
 	t.imports = make(map[string]*goast.ImportSpec)
+
+	// Generate dynamic variable struct types if needed.
+	if len(t.symbols.dynamics) > 0 {
+		fields := make([]*goast.Field, 0, len(t.symbols.dynamics))
+
+		for name, ident := range t.symbols.dynamics {
+			fieldType, err := t.convertType(ident.ValueType)
+			if err != nil {
+				return nil, fmt.Errorf("converting dynamic variable %q type: %w", name, err)
+			}
+
+			fields = append(fields, &goast.Field{
+				Names: []*goast.Ident{{Name: name}},
+				Type:  fieldType,
+			})
+		}
+
+		gofile.Decls = append(gofile.Decls,
+			&goast.GenDecl{
+				Tok: gotoken.TYPE,
+				Specs: []goast.Spec{
+					&goast.TypeSpec{
+						Name: &goast.Ident{Name: "cogDynKey"},
+						Type: &goast.StructType{Fields: &goast.FieldList{}},
+					},
+				},
+			},
+			&goast.GenDecl{
+				Tok: gotoken.TYPE,
+				Specs: []goast.Spec{
+					&goast.TypeSpec{
+						Name: &goast.Ident{Name: "cogDyn"},
+						Type: &goast.StructType{
+							Fields: &goast.FieldList{List: fields},
+						},
+					},
+				},
+			},
+		)
+	}
 
 	for _, stmt := range t.file.Statements {
 		switch s := stmt.(type) {
