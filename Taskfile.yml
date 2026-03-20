@@ -27,3 +27,18 @@ tasks:
     - task transpile
     - GOEXPERIMENT=arenas go run tmp/{{.FILE | trimSuffix ".cog"}}.go -asan -ldflags="-asan -race -s -w"
     silent: true
+
+  stats:
+    desc: Record lines of code and test coverage to stats.txt
+    cmds:
+    - |
+      commit=$(git rev-parse --short HEAD)
+      date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      loc=$(find . -name '*.go' -not -path './tmp/*' -not -path './vendor/*' | xargs cat | wc -l | tr -d ' ')
+      loc_test=$(find . -name '*_test.go' -not -path './tmp/*' -not -path './vendor/*' | xargs cat 2>/dev/null | wc -l | tr -d ' ')
+      loc_src=$((loc - loc_test))
+      cov=$(GOEXPERIMENT=arenas go test ./... -coverprofile=/tmp/cog_cov.out -count=1 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | tail -1)
+      total_cov=$(go tool cover -func=/tmp/cog_cov.out 2>/dev/null | grep total | awk '{print $NF}')
+      echo "${date} ${commit} src=${loc_src} test=${loc_test} total=${loc} coverage=${total_cov}" >> stats.txt
+      echo "Recorded: src=${loc_src} test=${loc_test} total=${loc} coverage=${total_cov}"
+    silent: false

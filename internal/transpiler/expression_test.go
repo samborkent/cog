@@ -1,0 +1,106 @@
+package transpiler_test
+
+import "testing"
+
+func TestConvertExpr(t *testing.T) {
+	t.Parallel()
+
+	t.Run("int_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x := 42
+main : proc() = {}`)
+		mustContain(t, got, "42")
+	})
+
+	t.Run("string_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+s := "hello"
+main : proc() = {}`)
+		mustContain(t, got, `"hello"`)
+	})
+
+	t.Run("bool_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+b := true
+main : proc() = {}`)
+		mustContain(t, got, "true")
+	})
+
+	t.Run("negative_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x := -1
+main : proc() = {}`)
+		mustContain(t, got, "-1")
+	})
+
+	t.Run("infix_add", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x := 1 + 2
+main : proc() = {}`)
+		mustContain(t, got, "1 + 2")
+	})
+
+	t.Run("infix_multiply", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x := 3 * 4
+main : proc() = {}`)
+		mustContain(t, got, "3 * 4")
+	})
+
+	t.Run("go_call", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+goimport (
+	"strings"
+)
+main : proc() = {
+	x := @go.strings.ToUpper("hello")
+	@print(x)
+}`)
+		mustContain(t, got, "strings.ToUpper")
+	})
+
+	t.Run("selector", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+Point ~ struct {
+	x : int32
+	y : int32
+}
+main : proc() = {
+	p : Point = {
+		x = 1,
+		y = 2,
+	}
+	@print(p.x)
+}`)
+		mustContain(t, got, "p.x")
+	})
+
+	t.Run("dyn_read", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+dyn val : utf8 = "default"
+main : proc() = {
+	@print(val)
+}`)
+		mustContain(t, got, "dyn.val")
+	})
+
+	t.Run("index_expression", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+xs : []int64 = {1, 2, 3}
+main : proc() = {
+	x := xs[0]
+	@print(x)
+}`)
+		mustContain(t, got, "xs[0]")
+	})
+}
