@@ -7,7 +7,7 @@ import (
 
 const (
 	contextVar        = "ctx"
-	contextPkg        = "context"
+	contextPkg        = "go_context"
 	contextType       = "Context"
 	contextBackground = "Background"
 	contextWithValue  = "WithValue"

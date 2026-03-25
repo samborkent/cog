@@ -24,8 +24,6 @@ var (
 	write    bool
 )
 
-const goModuleName = "cogproject"
-
 func main() {
 	flag.StringVar(&fileName, "file", "", "Name of .cog file or directory containing .cog files.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug parser mode.")
@@ -130,6 +128,9 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) {
 		return
 	}
 
+	// The Go module name for the transpiled project matches the entry package name.
+	goModuleName := entryPkgName
+
 	// Step 2: FindGlobals on the entry package (discovers globals + import paths).
 	entrySymbols := parser.NewSymbolTable()
 	entryParsers := findGlobals(ctx, entryLexed, entrySymbols)
@@ -181,7 +182,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) {
 		symbols:  entrySymbols,
 	}
 
-	outputProject(entryPkg, importedPkgs)
+	outputProject(goModuleName, entryPkg, importedPkgs)
 }
 
 // lexAndValidate lexes all files and validates they declare the same package.
@@ -291,7 +292,7 @@ func populateImportExports(imp *parser.CogImport, symbols *parser.SymbolTable) {
 }
 
 // outputProject transpiles and writes all packages.
-func outputProject(entry *compiledPackage, imported map[string]*compiledPackage) {
+func outputProject(goModuleName string, entry *compiledPackage, imported map[string]*compiledPackage) {
 	if write {
 		if err := os.MkdirAll("tmp", 0o700); err != nil {
 			panic(fmt.Errorf("creating temp dir: %w", err))
@@ -300,26 +301,21 @@ func outputProject(entry *compiledPackage, imported map[string]*compiledPackage)
 
 	// Transpile and output imported packages first.
 	for _, pkg := range imported {
-		transpileAndOutput(pkg)
+		transpileAndOutput(goModuleName, pkg)
 	}
 
 	// Transpile and output the entry package.
-	transpileAndOutput(entry)
+	transpileAndOutput(goModuleName, entry)
 
 	if write {
 		// Write go.mod so `go run .` works from tmp/.
-		// Include a replace directive so the cog runtime resolves to the local checkout.
-		cogRoot, err := os.Getwd()
-		if err != nil {
-			panic(fmt.Errorf("getting working directory: %w", err))
-		}
-
-		gomod := fmt.Sprintf("module %s\n\ngo 1.26.1\n\nrequire github.com/samborkent/cog v0.0.0\n\nreplace github.com/samborkent/cog => %s\n", goModuleName, cogRoot)
+		// Only declare the module and Go version; `go mod tidy` resolves all dependencies.
+		gomod := fmt.Sprintf("module %s\n\ngo 1.26.1\n", goModuleName)
 		if err := os.WriteFile(filepath.Join("tmp", "go.mod"), []byte(gomod), 0o600); err != nil {
 			panic(fmt.Errorf("writing go.mod: %w", err))
 		}
 
-		// Run go mod tidy to resolve transitive dependencies.
+		// Run go mod tidy to resolve all dependencies.
 		tidy := exec.Command("go", "mod", "tidy")
 		tidy.Dir = "tmp"
 		if out, err := tidy.CombinedOutput(); err != nil {
@@ -329,7 +325,7 @@ func outputProject(entry *compiledPackage, imported map[string]*compiledPackage)
 }
 
 // transpileAndOutput transpiles a single package and writes/prints its Go files.
-func transpileAndOutput(pkg *compiledPackage) {
+func transpileAndOutput(goModuleName string, pkg *compiledPackage) {
 	t := transpiler.NewTranspilerWithModule(goModuleName, pkg.astFiles...)
 
 	gofiles, err := t.TranspileFiles()

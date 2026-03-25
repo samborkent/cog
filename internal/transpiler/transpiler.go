@@ -6,6 +6,7 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"maps"
+	"path"
 	"slices"
 
 	"github.com/samborkent/cog/internal/ast"
@@ -105,7 +106,9 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 			switch s := stmt.(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
+					alias := goStdLibAlias(imprt.Name)
 					t.imports[imprt.Name] = &goast.ImportSpec{
+						Name: &goast.Ident{Name: alias},
 						Path: &goast.BasicLit{
 							Kind:  gotoken.STRING,
 							Value: `"` + imprt.Name + `"`,
@@ -180,7 +183,9 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 			switch s := stmt.(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
+					alias := goStdLibAlias(imprt.Name)
 					t.imports[imprt.Name] = &goast.ImportSpec{
+						Name: &goast.Ident{Name: alias},
 						Path: &goast.BasicLit{
 							Kind:  gotoken.STRING,
 							Value: `"` + imprt.Name + `"`,
@@ -399,13 +404,21 @@ func (t *Transpiler) addBuiltinImport() {
 func (t *Transpiler) addStdLibImport(name string) {
 	_, ok := t.imports[name]
 	if !ok {
+		alias := goStdLibAlias(name)
 		t.imports[name] = &goast.ImportSpec{
+			Name: &goast.Ident{Name: alias},
 			Path: &goast.BasicLit{
 				Kind:  gotoken.STRING,
 				Value: `"` + name + `"`,
 			},
 		}
 	}
+}
+
+// goStdLibAlias returns the aliased import name for a Go standard library package.
+// For example, "strings" becomes "go_strings" and "path/filepath" becomes "go_filepath".
+func goStdLibAlias(importPath string) string {
+	return "go_" + path.Base(importPath)
 }
 
 // attachLineDecl adds a //line directive comment to the first declaration in decls

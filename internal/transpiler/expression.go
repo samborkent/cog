@@ -146,7 +146,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.GoCallExpression:
 		expr := &goast.CallExpr{
 			Fun: &goast.SelectorExpr{
-				X:   component.Ident(n.Import),
+				X:   &goast.Ident{Name: goStdLibAlias(n.Import.Name)},
 				Sel: &goast.Ident{Name: n.CallIdentifier.Name},
 			},
 			Args: make([]goast.Expr, 0, len(n.Arguments)),

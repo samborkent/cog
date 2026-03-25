@@ -79,7 +79,7 @@ greet : proc(name : utf8) = {
 	@print(name)
 }
 main : proc() = {}`)
-		mustContain(t, got, "func(ctx context.Context, name string)")
+		mustContain(t, got, "func(ctx go_context.Context, name string)")
 	})
 
 	t.Run("func_declaration", func(t *testing.T) {
@@ -113,7 +113,7 @@ reader : proc() = {
 }
 main : proc() = {}`)
 		mustContain(t, got, "dyn := *ctx.Value(cogDynKey{}).(*cogDyn)")
-		mustContain(t, got, "ctx = context.WithValue(ctx, cogDynKey{}, &dyn)")
+		mustContain(t, got, "ctx = go_context.WithValue(ctx, cogDynKey{}, &dyn)")
 	})
 
 	t.Run("func_no_dyn_no_ctx", func(t *testing.T) {
@@ -124,6 +124,6 @@ add : func(a : int64, b : int64) int64 = {
 	return a + b
 }
 main : proc() = {}`)
-		mustNotContain(t, got, "context.Context")
+		mustNotContain(t, got, "go_context.Context")
 	})
 }
