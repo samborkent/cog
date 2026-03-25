@@ -25,12 +25,20 @@ var None = &ast.Identifier{
 	Qualifier: ast.QualifierVariable,
 }
 
+// CogImport represents an imported cog package.
+type CogImport struct {
+	Path    string            // import path (e.g. "geom")
+	Name    string            // package name (last segment of path)
+	Exports map[string]Symbol // exported symbols from the imported package
+}
+
 type SymbolTable struct {
 	Outer *SymbolTable
 
-	table     map[string]Symbol
-	goimports map[string]*ast.Identifier
-	fields    map[string]map[string]Symbol
+	table      map[string]Symbol
+	goimports  map[string]*ast.Identifier
+	cogimports map[string]*CogImport // key: package name
+	fields     map[string]map[string]Symbol
 }
 
 func NewSymbolTable() *SymbolTable {
@@ -42,9 +50,10 @@ func NewSymbolTable() *SymbolTable {
 	}
 
 	return &SymbolTable{
-		table:     table,
-		goimports: make(map[string]*ast.Identifier),
-		fields:    make(map[string]map[string]Symbol),
+		table:      table,
+		goimports:  make(map[string]*ast.Identifier),
+		cogimports: make(map[string]*CogImport),
+		fields:     make(map[string]map[string]Symbol),
 	}
 }
 
@@ -52,6 +61,7 @@ func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
 	s := NewSymbolTable()
 	s.Outer = outer
 	s.goimports = outer.goimports
+	s.cogimports = outer.cogimports
 
 	return s
 }
@@ -174,9 +184,35 @@ func (s *SymbolTable) ResolveGoImport(name string) (*ast.Identifier, bool) {
 	return ident, ok
 }
 
+// ForEachGlobal iterates over all symbols in the root (global) table.
+func (s *SymbolTable) ForEachGlobal(fn func(name string, sym Symbol)) {
+	root := s
+	for root.Outer != nil {
+		root = root.Outer
+	}
+
+	for name, sym := range root.table {
+		fn(name, sym)
+	}
+}
+
 func (s *SymbolTable) Update(name string, t types.Type) {
 	if symbol, ok := s.table[name]; ok {
 		symbol.Identifier.ValueType = t
 		s.table[name] = symbol
 	}
+}
+
+func (s *SymbolTable) DefineCogImport(imp *CogImport) {
+	s.cogimports[imp.Name] = imp
+}
+
+func (s *SymbolTable) ResolveCogImport(name string) (*CogImport, bool) {
+	imp, ok := s.cogimports[name]
+	return imp, ok
+}
+
+// CogImports returns all registered cog imports.
+func (s *SymbolTable) CogImports() map[string]*CogImport {
+	return s.cogimports
 }

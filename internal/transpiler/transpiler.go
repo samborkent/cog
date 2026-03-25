@@ -22,8 +22,9 @@ type Transpiler struct {
 	file  *ast.File // current file being processed (for line directives)
 	fset  *gotoken.FileSet
 
-	nodes   map[uint64]ast.Node
-	imports map[string]*goast.ImportSpec // Key: import name
+	nodes        map[uint64]ast.Node
+	imports      map[string]*goast.ImportSpec // Key: import name
+	goModulePath string                       // Go module path for resolving cog import paths
 
 	symbols        *SymbolTable
 	dynDefaults    map[string]ast.Expression // Default expressions for dynamic variables
@@ -39,6 +40,10 @@ type Transpiler struct {
 }
 
 func NewTranspiler(files ...*ast.File) *Transpiler {
+	return NewTranspilerWithModule("", files...)
+}
+
+func NewTranspilerWithModule(goModulePath string, files ...*ast.File) *Transpiler {
 	nodes := make(map[uint64]ast.Node)
 
 	for _, f := range files {
@@ -54,6 +59,7 @@ func NewTranspiler(files ...*ast.File) *Transpiler {
 		files:        files,
 		fset:         gotoken.NewFileSet(),
 		nodes:        nodes,
+		goModulePath: goModulePath,
 		symbols:      NewSymbolTable(),
 		dynDefaults:  make(map[string]ast.Expression),
 		typeCache:    make(map[types.Type]goast.Expr),
@@ -106,6 +112,8 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 						},
 					}
 				}
+			case *ast.Import:
+				t.addCogImports(s)
 			default:
 				gonodes, err := t.convertDecl(s)
 				if err != nil {
@@ -179,6 +187,8 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 						},
 					}
 				}
+			case *ast.Import:
+				t.addCogImports(s)
 			default:
 				gonodes, err := t.convertDecl(s)
 				if err != nil {
@@ -240,6 +250,12 @@ func (t *Transpiler) predeclareGlobals() error {
 					}
 				} else {
 					t.symbols.Define(name)
+
+					// Exported symbols must keep their Go name even when unused
+					// within the package, since other packages may reference them.
+					if s.Assignment.Identifier.Exported {
+						_ = t.symbols.MarkUsed(name)
+					}
 				}
 
 				if s.Assignment.Identifier.Name != "main" && s.Assignment.Expression != nil {
@@ -258,6 +274,32 @@ func (t *Transpiler) predeclareGlobals() error {
 	}
 
 	return nil
+}
+
+// addCogImports registers cog import paths as Go imports with the proper module prefix.
+func (t *Transpiler) addCogImports(node *ast.Import) {
+	for _, imprt := range node.Imports {
+		importPath := imprt.Name
+		goPath := importPath
+		if t.goModulePath != "" {
+			goPath = t.goModulePath + "/" + importPath
+		}
+
+		pkgName := importPath
+		if i := len(importPath) - 1; i >= 0 {
+			for i > 0 && importPath[i-1] != '/' {
+				i--
+			}
+			pkgName = importPath[i:]
+		}
+
+		t.imports[pkgName] = &goast.ImportSpec{
+			Path: &goast.BasicLit{
+				Kind:  gotoken.STRING,
+				Value: `"` + goPath + `"`,
+			},
+		}
+	}
 }
 
 // buildDynDecls generates the cogDynKey and cogDyn struct type declarations.

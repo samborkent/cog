@@ -45,6 +45,8 @@ tokenLoop:
 			if p.this().Type == tokens.LParen {
 				p.skipGrouped(ctx)
 			}
+		case tokens.Import:
+			p.parseImport() // process imports during global scan
 		case tokens.Identifier:
 			switch p.next().Type {
 			case tokens.Colon, tokens.Declaration:

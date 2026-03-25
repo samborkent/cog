@@ -1,0 +1,19 @@
+package geom
+
+export Point ~ struct {
+    export (
+        x : float64
+        y : float64
+    )
+}
+
+export Origin : Point = {
+    x = 0.0,
+    y = 0.0,
+}
+
+export Distance : func(a : Point, b : Point) float64 = {
+    dx := a.x - b.x
+    dy := a.y - b.y
+    return dx * dx + dy * dy
+}

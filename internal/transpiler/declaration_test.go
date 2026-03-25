@@ -37,7 +37,7 @@ main : proc() = {
 		got := transpile(t, `package p
 export myVal := 1
 main : proc() = {}`)
-		mustContain(t, got, "const _ int64 = 1")
+		mustContain(t, got, "const MyVal int64 = 1")
 	})
 
 	t.Run("string_const", func(t *testing.T) {

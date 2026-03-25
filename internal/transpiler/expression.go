@@ -86,12 +86,24 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 		}
 
-		if err := t.symbols.MarkUsed(n.Identifier.Name); err != nil {
-			return nil, fmt.Errorf("marking call identifier used: %w", err)
+		if n.Package == "" {
+			if err := t.symbols.MarkUsed(n.Identifier.Name); err != nil {
+				return nil, fmt.Errorf("marking call identifier used: %w", err)
+			}
+		}
+
+		var fun goast.Expr
+		if n.Package != "" {
+			fun = &goast.SelectorExpr{
+				X:   &goast.Ident{Name: n.Package},
+				Sel: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported)},
+			}
+		} else {
+			fun = component.Ident(n.Identifier)
 		}
 
 		return &goast.CallExpr{
-			Fun:  component.Ident(n.Identifier),
+			Fun:  fun,
 			Args: args,
 		}, nil
 	case *ast.Complex32Literal:
@@ -585,6 +597,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			t.symbols = NewEnclosedSymbolTable(t.symbols)
 		}
 
+		// Register function parameters in the transpiler symbol table so that
+		// selector expressions (e.g. param.field) can resolve them.
+		if procType, ok := n.ProcedureType.(*types.Procedure); ok {
+			for _, param := range procType.Parameters {
+				t.symbols.Define(param.Name)
+				_ = t.symbols.MarkUsed(param.Name)
+			}
+		}
+
 		// Track whether we're inside a func and reset usesDyn for this body.
 		prevInFunc := t.inFunc
 		prevUsesDyn := t.usesDyn
@@ -626,6 +647,14 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			},
 		}, nil
 	case *ast.Selector:
+		// Check if this is a package import selector (pkg.Symbol).
+		if types.IsNone(n.Identifier.ValueType) {
+			return &goast.SelectorExpr{
+				X:   &goast.Ident{Name: n.Identifier.Name},
+				Sel: &goast.Ident{Name: convertExport(n.Field.Name, n.Field.Exported)},
+			}, nil
+		}
+
 		name := convertExport(n.Identifier.Name, n.Identifier.Exported)
 
 		ident, ok := t.symbols.Resolve(name)

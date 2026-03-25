@@ -135,8 +135,17 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			Qualifier: qualifier,
 		}
 
-		// Do not skip identifier for function call, parse as expression.
-		if p.next().Type != tokens.LParen {
+		// Do not skip identifier for function call or imported package selector;
+		// parse as expression instead.
+		if p.next().Type == tokens.LParen {
+			// Direct function call: e.g. someFunc(...)
+		} else if p.next().Type == tokens.Dot {
+			if _, isImport := p.symbols.ResolveCogImport(p.this().Literal); isImport {
+				// Imported package selector: e.g. pkg.Func(...)
+			} else {
+				p.advance("parseStatement ident") // consume identifier
+			}
+		} else {
 			p.advance("parseStatement ident") // consume identifier
 		}
 

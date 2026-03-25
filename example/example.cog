@@ -4,6 +4,11 @@ goimport (
     "strings"
 )
 
+import (
+    "geom"
+    "geom/metric"
+)
+
 a : int64 = 0
 
 export isExported := true
@@ -248,6 +253,14 @@ outerLoop:
         lon = 4.89,
     }
     @print(formatCoord(loc))
+
+    // imported package: geom.Origin and geom.Distance from geom/ subdirectory.
+    @print(geom.Origin)
+    @print(geom.Distance(geom.Origin, geom.Origin))
+
+    // subpackage: geom/metric (imported as "metric").
+    @print(metric.Pi)
+    @print(metric.CircleArea(5.0))
 }
 
 arenaProc : proc(n : uint64) = {

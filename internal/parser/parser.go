@@ -108,6 +108,13 @@ tokenLoop:
 			} else {
 				p.synchronize()
 			}
+		case tokens.Import:
+			node := p.parseImport()
+			if node != nil {
+				f.Statements = append(f.Statements, node)
+			} else {
+				p.synchronize()
+			}
 		case tokens.EOF:
 			break tokenLoop
 		default:
@@ -181,6 +188,7 @@ func (p *Parser) synchronize() {
 			tokens.Dynamic,
 			tokens.Variable,
 			tokens.GoImport,
+			tokens.Import,
 			tokens.RBrace,
 			tokens.Break,
 			tokens.Continue:

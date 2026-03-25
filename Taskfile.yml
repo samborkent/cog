@@ -19,14 +19,14 @@ tasks:
 
   transpile:
     cmds:
-    - rm -f tmp/*.go
+    - rm -rf tmp/
     - GOEXPERIMENT=arenas go run cmd/main.go -file={{.FILE}} -debug=false -write=true
     silent: true
 
   run:
     cmds:
     - task transpile
-    - GOEXPERIMENT=arenas go run tmp/*.go -asan -ldflags="-asan -race -s -w"
+    - cd tmp && GOEXPERIMENT=arenas go run . -asan -ldflags="-asan -race -s -w"
     silent: true
 
   stats:
