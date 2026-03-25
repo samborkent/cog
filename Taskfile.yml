@@ -29,6 +29,12 @@ tasks:
     - cd tmp && GOEXPERIMENT=arenas go run . -asan -ldflags="-asan -race -s -w"
     silent: true
 
+  run_script:
+    cmds:
+    - task transpile
+    - cd tmp && GOEXPERIMENT=arenas go run ./cmd/script -asan -ldflags="-asan -race -s -w"
+    silent: true
+
   stats:
     desc: Record lines of code and test coverage to stats.txt
     cmds:

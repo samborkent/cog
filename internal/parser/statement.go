@@ -61,6 +61,12 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 
 		return p.parseStatement(ctx)
 	case tokens.Export:
+		if p.scriptMode {
+			p.error(p.this(), "export keyword not allowed in script files", "parseStatement")
+			p.advance("parseStatement export script") // consume export
+			return nil
+		}
+
 		if p.symbols.Outer != nil {
 			p.error(p.this(), "export statements are only allowed in the global scope", "parseStatement")
 			return nil

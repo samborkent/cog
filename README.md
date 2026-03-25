@@ -73,6 +73,11 @@ The following basic features are missing that need to be implemented before Cog 
 - Local package imports
     - Import using `import`
     - Access exported symbols with package selector (e.g. `geom.Distance(a, b)`)
+- Script mode (`.cogs` files)
+    - No package declaration needed
+    - No `export` keyword allowed
+    - Imports (`import`, `goimport`) are supported
+    - Transpiles to `cmd/{script_name}/` with `package main` and `func main()`
 
 ### Partly implemented
 
@@ -109,9 +114,6 @@ The following basic features are missing that need to be implemented before Cog 
         - E.g `res := someFunc(); if res! { @print(res) }`
 - Builtin operations for 2D / 3D / 4D slices.
 - Builtin `upx` binary packer for smaller binaries.
-- Script mode
-    - Files without package declaration will be parsed as script.
-    - This is basically just a `main` package, and script gets inserted in `main()` body.
 - LSP
 - Adaptive GC (https://github.com/samborkent/adaptive-gc)
 - Automatic struct alignment?
@@ -132,8 +134,6 @@ The following basic features are missing that need to be implemented before Cog 
     - Range over int (or other literal) should not be possible.
     - Instead we should range over an iterator function which takes literal as argument.
 - Audit all uses of `types.Underlying().Kind()`
-- Allow package-less files (scripts)
-    - These files cannot be imported, and will be excuted as if wrapped in a main function.
 - Fork and rework float16, uint128 and int128 imported packages.
 - Implement flat AST.
 
