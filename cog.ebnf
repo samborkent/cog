@@ -7,6 +7,9 @@
 file
     = package, { top_level_statement }, EOF;
 
+script_file
+    = { script_statement }, EOF;
+
 package
     = "package", IDENTIFIER;
 
@@ -15,6 +18,25 @@ top_level_statement
     | go_import
     | import
     | statement;
+
+script_statement
+    = comment
+    | go_import
+    | import
+    | script_only_statement;
+
+script_only_statement
+    = comment
+    | "break", [ IDENTIFIER ]
+    | "continue", [ IDENTIFIER ]
+    | "dyn", script_only_statement
+    | "var", script_only_statement
+    | for_statement
+    | if_statement
+    | switch_statement
+    | "return", [ expression, { ",", expression } ]
+    | builtin_statement
+    | identifier_statement;
 
 
 (* === Imports === *)

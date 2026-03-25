@@ -14,9 +14,10 @@ type Parser struct {
 	symbols  *SymbolTable
 	builtins map[string]BuiltinParser
 
-	Errs  []error
-	i     int
-	debug bool
+	Errs       []error
+	i          int
+	debug      bool
+	scriptMode bool
 }
 
 func NewParser(tokens []tokens.Token, debug bool) (*Parser, error) {
@@ -36,6 +37,29 @@ func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug boo
 		symbols: symbols,
 		Errs:    make([]error, 0),
 		debug:   debug,
+	}
+
+	return p, nil
+}
+
+// NewScriptParser creates a parser in script mode for .cogs files.
+// Script mode forbids package declarations and export keywords.
+func NewScriptParser(tokens []tokens.Token, debug bool) (*Parser, error) {
+	return NewScriptParserWithSymbols(tokens, NewSymbolTable(), debug)
+}
+
+// NewScriptParserWithSymbols creates a script-mode parser with a shared symbol table.
+func NewScriptParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool) (*Parser, error) {
+	if len(tokens) == 0 {
+		return nil, errors.New("no tokens provided to parser")
+	}
+
+	p := &Parser{
+		tokens:     tokens,
+		symbols:    symbols,
+		Errs:       make([]error, 0),
+		debug:      debug,
+		scriptMode: true,
 	}
 
 	return p, nil
@@ -64,14 +88,30 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.File, err
 		"slice": p.parseBuiltinSlice,
 	}
 
-	// Static checks.
-	if p.tokens[0].Type != tokens.Package {
-		p.error(p.tokens[0], "missing package declaration", "Parse")
+	var pkg *ast.Package
+
+	if p.scriptMode {
+		// Script mode: no package declaration allowed.
+		if p.tokens[0].Type == tokens.Package {
+			p.error(p.tokens[0], "package declaration not allowed in script files", "Parse")
+		}
+
+		// Synthesize package main.
+		pkg = &ast.Package{
+			Token:      tokens.Token{Type: tokens.Package, Literal: "package"},
+			Identifier: &ast.Identifier{Name: "main"},
+		}
+	} else {
+		if p.tokens[0].Type != tokens.Package {
+			p.error(p.tokens[0], "missing package declaration", "Parse")
+		}
+
+		pkg = p.parsePackage()
 	}
 
 	f := &ast.File{
 		Name:       fileName,
-		Package:    p.parsePackage(),
+		Package:    pkg,
 		Statements: []ast.Statement{},
 	}
 
@@ -94,7 +134,14 @@ tokenLoop:
 		case tokens.Dynamic,
 			tokens.Export,
 			tokens.Identifier,
-			tokens.Variable:
+			tokens.Variable,
+			tokens.Builtin,
+			tokens.If,
+			tokens.For,
+			tokens.Switch,
+			tokens.Return,
+			tokens.Break,
+			tokens.Continue:
 			node := p.parseStatement(ctx)
 			if node != nil {
 				f.Statements = append(f.Statements, node)

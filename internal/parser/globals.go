@@ -23,6 +23,11 @@ tokenLoop:
 		prev := p.i
 
 		if p.this().Type == tokens.Export {
+			if p.scriptMode {
+				p.advance("findGlobals export script") // skip export in script mode
+				continue
+			}
+
 			p.advance("findGlobals export") // consume export
 			exported = true
 		}
@@ -87,6 +92,11 @@ func (p *Parser) preRegisterTypeNames(ctx context.Context) {
 		exported := false
 
 		if p.this().Type == tokens.Export {
+			if p.scriptMode {
+				p.advance("preRegister export script") // skip export in script mode
+				continue
+			}
+
 			p.advance("preRegister export") // consume export
 			exported = true
 		}

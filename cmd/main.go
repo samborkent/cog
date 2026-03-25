@@ -25,7 +25,7 @@ var (
 )
 
 func main() {
-	flag.StringVar(&fileName, "file", "", "Name of .cog file or directory containing .cog files.")
+	flag.StringVar(&fileName, "file", "", "Name of .cog/.cogs file or directory containing .cog files.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug parser mode.")
 	flag.BoolVar(&write, "write", false, "Write to file.")
 	flag.Parse()
@@ -38,6 +38,13 @@ func main() {
 	}
 
 	files := discoverFiles(fileName)
+
+	// Script mode: single .cogs file.
+	if strings.HasSuffix(files[0], ".cogs") {
+		projectRoot := filepath.Dir(files[0])
+		runScript(ctx, projectRoot, files[0], "")
+		return
+	}
 
 	// Determine project root: the directory of the entry package.
 	// Import paths are resolved relative to this root.
@@ -59,8 +66,8 @@ func discoverFiles(input string) []string {
 
 	// Single file: return just that file.
 	if !info.IsDir() {
-		if !strings.HasSuffix(input, ".cog") {
-			panic("invalid file extension, must be .cog")
+		if !strings.HasSuffix(input, ".cog") && !strings.HasSuffix(input, ".cogs") {
+			panic("invalid file extension, must be .cog or .cogs")
 		}
 		return []string{input}
 	}
@@ -104,6 +111,118 @@ func lexFile(ctx context.Context, path string) ([]tokens.Token, error) {
 	}
 
 	return toks, nil
+}
+
+// runScript compiles a single .cogs script file.
+// Script files have no package declaration; the transpiled output is placed
+// in cmd/{scriptName}/ with package main and a func main() wrapping the body.
+// If goModuleName is empty, the script name is used and go.mod is written.
+func runScript(ctx context.Context, projectRoot string, scriptPath string, goModuleName string) {
+	toks, err := lexFile(ctx, scriptPath)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	symbols := parser.NewSymbolTable()
+
+	p, err := parser.NewScriptParserWithSymbols(toks, symbols, debug)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	p.FindGlobals(ctx)
+
+	// Process imported packages.
+	importedPkgs := make(map[string]*compiledPackage)
+
+	for _, imp := range symbols.CogImports() {
+		pkg := compileImportedPackage(ctx, projectRoot, imp.Path)
+		if pkg == nil {
+			fmt.Printf("failed to compile imported package %q\n", imp.Path)
+			return
+		}
+
+		importedPkgs[imp.Path] = pkg
+		populateImportExports(imp, pkg.symbols)
+	}
+
+	f, err := p.ParseOnly(ctx, scriptPath)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Determine script name from file name (without extension).
+	scriptName := strings.TrimSuffix(filepath.Base(scriptPath), ".cogs")
+	standalone := goModuleName == ""
+	if standalone {
+		goModuleName = scriptName
+	}
+
+	// Transpile imported packages first.
+	if write {
+		if err := os.MkdirAll("tmp", 0o700); err != nil {
+			panic(fmt.Errorf("creating temp dir: %w", err))
+		}
+	}
+
+	for _, pkg := range importedPkgs {
+		transpileAndOutput(goModuleName, pkg)
+	}
+
+	// Transpile the script file.
+	t := transpiler.NewTranspilerWithModule(goModuleName, f)
+
+	gofile, err := t.TranspileScript()
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	outDir := filepath.Join("tmp", "cmd", scriptName)
+	outName := "main.go"
+
+	if write {
+		if err := os.MkdirAll(outDir, 0o700); err != nil {
+			panic(fmt.Errorf("creating output dir: %w", err))
+		}
+
+		outFile, err := os.Create(filepath.Join(outDir, outName))
+		if err != nil {
+			panic(fmt.Errorf("creating output file: %w", err))
+		}
+
+		if err := t.Print(outFile, gofile); err != nil {
+			_ = outFile.Close()
+			panic(fmt.Errorf("printing output: %w", err))
+		}
+
+		_ = outFile.Close()
+
+		// Only write go.mod when running as a standalone script (not part of a project).
+		if standalone {
+			gomod := fmt.Sprintf("module %s\n\ngo 1.26.1\n", goModuleName)
+			if err := os.WriteFile(filepath.Join("tmp", "go.mod"), []byte(gomod), 0o600); err != nil {
+				panic(fmt.Errorf("writing go.mod: %w", err))
+			}
+
+			tidy := exec.Command("go", "mod", "tidy")
+			tidy.Dir = "tmp"
+			if out, err := tidy.CombinedOutput(); err != nil {
+				panic(fmt.Errorf("go mod tidy: %s\n%w", out, err))
+			}
+		}
+	} else {
+		fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
+
+		if err := t.Print(os.Stdout, gofile); err != nil {
+			panic(fmt.Errorf("printing output: %w", err))
+		}
+
+		fmt.Println()
+	}
 }
 
 // compiledPackage holds the output of compiling a single cog package.
@@ -189,6 +308,32 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) {
 	}
 
 	outputProject(goModuleName, entryPkg, importedPkgs)
+
+	// Step 6: Discover and compile any .cogs script files in the project root.
+	scriptFiles := discoverScripts(projectRoot)
+	for _, sf := range scriptFiles {
+		runScript(ctx, projectRoot, sf, goModuleName)
+	}
+}
+
+// discoverScripts finds all .cogs files in the given directory.
+func discoverScripts(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	var scripts []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".cogs") {
+			continue
+		}
+		scripts = append(scripts, filepath.Join(dir, entry.Name()))
+	}
+
+	sort.Strings(scripts)
+
+	return scripts
 }
 
 // lexAndValidate lexes all files and validates they declare the same package.

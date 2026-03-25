@@ -223,6 +223,81 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 	return gofiles, nil
 }
 
+// TranspileScript transpiles a script file (.cogs) into a single Go file.
+// All statements are placed inside a func main() body. Type aliases and
+// enum declarations are emitted as top-level declarations.
+func (t *Transpiler) TranspileScript() (*goast.File, error) {
+	t.imports = make(map[string]*goast.ImportSpec)
+	t.lastSourceLine = 0
+
+	gofile := &goast.File{
+		Name:  goast.NewIdent("main"),
+		Decls: make([]goast.Decl, 0),
+	}
+	errs := make([]error, 0)
+
+	// Collect statements into the main body, separating top-level type
+	// declarations and imports which stay at file level.
+	mainBody := make([]goast.Stmt, 0)
+
+	for _, f := range t.files {
+		t.file = f
+
+		for _, stmt := range f.Statements {
+			switch s := stmt.(type) {
+			case *ast.GoImport:
+				for _, imprt := range s.Imports {
+					alias := goStdLibAlias(imprt.Name)
+					t.imports[imprt.Name] = &goast.ImportSpec{
+						Name: &goast.Ident{Name: alias},
+						Path: &goast.BasicLit{
+							Kind:  gotoken.STRING,
+							Value: `"` + imprt.Name + `"`,
+						},
+					}
+				}
+			case *ast.Import:
+				t.addCogImports(s)
+			case *ast.Type:
+				gonodes, err := t.convertDecl(s)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("\t%s: %w", s.String(), err))
+					continue
+				}
+
+				gofile.Decls = append(gofile.Decls, gonodes...)
+			default:
+				goStmts, err := t.convertStmt(stmt)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("\t%s: %w", stmt.String(), err))
+					continue
+				}
+
+				mainBody = append(mainBody, goStmts...)
+			}
+		}
+	}
+
+	// Wrap everything in func main().
+	mainFunc := &goast.FuncDecl{
+		Name: &goast.Ident{Name: "main"},
+		Type: &goast.FuncType{Params: &goast.FieldList{}},
+		Body: &goast.BlockStmt{List: mainBody},
+	}
+
+	t.injectArena(mainFunc.Body)
+
+	gofile.Decls = append(gofile.Decls, mainFunc)
+
+	t.finalizeImports(gofile)
+
+	if err := errors.Join(errs...); err != nil {
+		return nil, fmt.Errorf("transpiler errors:\n%w", err)
+	}
+
+	return gofile, nil
+}
+
 // predeclareGlobals scans all files to populate symbols, dynDefaults, and needsContext.
 func (t *Transpiler) predeclareGlobals() error {
 	errs := make([]error, 0)

@@ -1,0 +1,28 @@
+goimport (
+    "strings"
+)
+
+greeting := @go.strings.ToUpper("hello, world!")
+@print(greeting)
+
+xs := @slice<int64>(5)
+
+for v, i in xs {
+    @print(i)
+    @print(v)
+}
+
+x := 42
+
+switch {
+case x > 100:
+    @print("big")
+case x > 10:
+    @print("medium")
+default:
+    @print("small")
+}
+
+if x == 42 {
+    @print("the answer")
+}

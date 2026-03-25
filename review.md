@@ -1,9 +1,5 @@
 2. # Biggest Issues
 
-Architectural gaps:
-
-2. No package/import system. Closely related to above — without this, there's no code reuse within cog.
-
 Design concerns:
 
 5. The ownership/reference capability model (your headline safety goal) has zero implementation or even concrete design yet. This is the hardest part of the language and it's entirely unspecified.
@@ -36,7 +32,6 @@ The full vision (ownership model, reference capabilities, arena lifecycle, gener
 
 My recommendation: Scope ruthlessly. The next high-impact milestones that keep the project viable and interesting as a solo effort:
 
-2. cog package imports
 4. Design and prototype the ownership model on paper before implementing — even a minimal version like "values are move-by-default, var enables borrowing within scope"
 5. Defer LSP, async, generics, and the full reference capability system
 
