@@ -12,6 +12,7 @@ type Call struct {
 	expression
 
 	Identifier *Identifier
+	Package    string // non-empty when calling an imported package's function
 	Arguments  []Expression
 	ReturnType types.Type
 }
@@ -25,6 +26,11 @@ func (c *Call) Hash() uint64 {
 }
 
 func (c *Call) stringTo(out *strings.Builder) {
+	if c.Package != "" {
+		_, _ = out.WriteString(c.Package)
+		_ = out.WriteByte('.')
+	}
+
 	c.Identifier.stringTo(out)
 	_ = out.WriteByte('(')
 

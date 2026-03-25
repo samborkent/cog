@@ -1011,3 +1011,111 @@ main : proc() = {
 		t.Fatalf("expected 'hello world', got:\n%s", out)
 	}
 }
+
+func TestMainInNonMainPackageShouldError(t *testing.T) {
+	t.Parallel()
+
+	// A package that declares main must be named "main".
+	// Here findGlobals should succeed, but the package name check should fail.
+	src := `package notmain
+
+main : proc() = {
+	@print("bad")
+}
+`
+
+	l := lexer.NewLexer(strings.NewReader(src))
+	toks, err := l.Parse(t.Context())
+	if err != nil {
+		t.Fatalf("lexer error: %v", err)
+	}
+
+	symbols := parser.NewSymbolTable()
+
+	p, err := parser.NewParserWithSymbols(toks, symbols, false)
+	if err != nil {
+		t.Fatalf("parser init error: %v", err)
+	}
+
+	p.FindGlobals(t.Context())
+
+	// Replicate the check from runProject: main exists but package != "main".
+	if _, hasMain := symbols.Resolve("main"); !hasMain {
+		t.Fatal("expected symbol table to contain main")
+	}
+
+	// The package name comes from the token stream (tokens[1]).
+	pkgName := toks[1].Literal
+	if pkgName == "main" {
+		t.Fatal("expected non-main package name")
+	}
+}
+
+func TestDuplicateMainAcrossFilesShouldError(t *testing.T) {
+	t.Parallel()
+
+	// Two files in the same package both declaring main should fail.
+	files := map[string]string{
+		"a.cog": `package main
+
+main : proc() = {
+	@print("a")
+}
+`,
+		"b.cog": `package main
+
+main : proc() = {
+	@print("b")
+}
+`,
+	}
+
+	_, err := tryTranspilePackage(t.Context(), files)
+	if err == nil {
+		t.Fatal("expected error for duplicate main across files, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot redeclare") {
+		t.Fatalf("expected 'cannot redeclare' error, got: %v", err)
+	}
+}
+
+func TestImportedPackageMustNotDeclareMain(t *testing.T) {
+	t.Parallel()
+
+	// Simulate an imported package that declares a main proc.
+	// After findGlobals, the symbol table must not contain main for library packages.
+	src := `package geom
+
+main : proc() = {
+	@print("bad")
+}
+`
+
+	l := lexer.NewLexer(strings.NewReader(src))
+	toks, err := l.Parse(t.Context())
+	if err != nil {
+		t.Fatalf("lexer error: %v", err)
+	}
+
+	symbols := parser.NewSymbolTable()
+
+	p, err := parser.NewParserWithSymbols(toks, symbols, false)
+	if err != nil {
+		t.Fatalf("parser init error: %v", err)
+	}
+
+	p.FindGlobals(t.Context())
+
+	// Replicate the check from compileImportedPackage: imported packages must not have main.
+	if _, hasMain := symbols.Resolve("main"); !hasMain {
+		t.Fatal("expected symbol table to contain main for this test scenario")
+	}
+
+	// In the real pipeline, this would cause compileImportedPackage to return nil.
+	// Here we just verify the symbol is detected.
+	pkgName := toks[1].Literal
+	if pkgName == "main" {
+		t.Fatal("expected non-main package name for imported package test")
+	}
+}

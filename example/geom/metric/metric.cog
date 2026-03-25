@@ -1,0 +1,7 @@
+package metric
+
+export Pi := 3.14159265358979
+
+export CircleArea : func(radius : float64) float64 = {
+    return Pi * radius * radius
+}

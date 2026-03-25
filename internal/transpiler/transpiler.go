@@ -6,6 +6,7 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"maps"
+	"path"
 	"slices"
 
 	"github.com/samborkent/cog/internal/ast"
@@ -22,8 +23,9 @@ type Transpiler struct {
 	file  *ast.File // current file being processed (for line directives)
 	fset  *gotoken.FileSet
 
-	nodes   map[uint64]ast.Node
-	imports map[string]*goast.ImportSpec // Key: import name
+	nodes        map[uint64]ast.Node
+	imports      map[string]*goast.ImportSpec // Key: import name
+	goModulePath string                       // Go module path for resolving cog import paths
 
 	symbols        *SymbolTable
 	dynDefaults    map[string]ast.Expression // Default expressions for dynamic variables
@@ -39,6 +41,10 @@ type Transpiler struct {
 }
 
 func NewTranspiler(files ...*ast.File) *Transpiler {
+	return NewTranspilerWithModule("", files...)
+}
+
+func NewTranspilerWithModule(goModulePath string, files ...*ast.File) *Transpiler {
 	nodes := make(map[uint64]ast.Node)
 
 	for _, f := range files {
@@ -54,6 +60,7 @@ func NewTranspiler(files ...*ast.File) *Transpiler {
 		files:        files,
 		fset:         gotoken.NewFileSet(),
 		nodes:        nodes,
+		goModulePath: goModulePath,
 		symbols:      NewSymbolTable(),
 		dynDefaults:  make(map[string]ast.Expression),
 		typeCache:    make(map[types.Type]goast.Expr),
@@ -99,13 +106,17 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 			switch s := stmt.(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
+					alias := goStdLibAlias(imprt.Name)
 					t.imports[imprt.Name] = &goast.ImportSpec{
+						Name: &goast.Ident{Name: alias},
 						Path: &goast.BasicLit{
 							Kind:  gotoken.STRING,
 							Value: `"` + imprt.Name + `"`,
 						},
 					}
 				}
+			case *ast.Import:
+				t.addCogImports(s)
 			default:
 				gonodes, err := t.convertDecl(s)
 				if err != nil {
@@ -172,13 +183,17 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 			switch s := stmt.(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
+					alias := goStdLibAlias(imprt.Name)
 					t.imports[imprt.Name] = &goast.ImportSpec{
+						Name: &goast.Ident{Name: alias},
 						Path: &goast.BasicLit{
 							Kind:  gotoken.STRING,
 							Value: `"` + imprt.Name + `"`,
 						},
 					}
 				}
+			case *ast.Import:
+				t.addCogImports(s)
 			default:
 				gonodes, err := t.convertDecl(s)
 				if err != nil {
@@ -240,6 +255,12 @@ func (t *Transpiler) predeclareGlobals() error {
 					}
 				} else {
 					t.symbols.Define(name)
+
+					// Exported symbols must keep their Go name even when unused
+					// within the package, since other packages may reference them.
+					if s.Assignment.Identifier.Exported {
+						_ = t.symbols.MarkUsed(name)
+					}
 				}
 
 				if s.Assignment.Identifier.Name != "main" && s.Assignment.Expression != nil {
@@ -258,6 +279,32 @@ func (t *Transpiler) predeclareGlobals() error {
 	}
 
 	return nil
+}
+
+// addCogImports registers cog import paths as Go imports with the proper module prefix.
+func (t *Transpiler) addCogImports(node *ast.Import) {
+	for _, imprt := range node.Imports {
+		importPath := imprt.Name
+		goPath := importPath
+		if t.goModulePath != "" {
+			goPath = t.goModulePath + "/" + importPath
+		}
+
+		pkgName := importPath
+		if i := len(importPath) - 1; i >= 0 {
+			for i > 0 && importPath[i-1] != '/' {
+				i--
+			}
+			pkgName = importPath[i:]
+		}
+
+		t.imports[pkgName] = &goast.ImportSpec{
+			Path: &goast.BasicLit{
+				Kind:  gotoken.STRING,
+				Value: `"` + goPath + `"`,
+			},
+		}
+	}
 }
 
 // buildDynDecls generates the cogDynKey and cogDyn struct type declarations.
@@ -357,13 +404,21 @@ func (t *Transpiler) addBuiltinImport() {
 func (t *Transpiler) addStdLibImport(name string) {
 	_, ok := t.imports[name]
 	if !ok {
+		alias := goStdLibAlias(name)
 		t.imports[name] = &goast.ImportSpec{
+			Name: &goast.Ident{Name: alias},
 			Path: &goast.BasicLit{
 				Kind:  gotoken.STRING,
 				Value: `"` + name + `"`,
 			},
 		}
 	}
+}
+
+// goStdLibAlias returns the aliased import name for a Go standard library package.
+// For example, "strings" becomes "go_strings" and "path/filepath" becomes "go_filepath".
+func goStdLibAlias(importPath string) string {
+	return "go_" + path.Base(importPath)
 }
 
 // attachLineDecl adds a //line directive comment to the first declaration in decls

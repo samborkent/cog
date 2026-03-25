@@ -248,11 +248,15 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		// TODO: get rid of double lookup for identifiers
 		symbol, ok := p.symbols.Resolve(p.this().Literal)
 		if !ok {
-			p.error(p.this(), "undefined identifier", "primary")
-			return nil
+			// If this is an imported package name, skip the type pre-lookup;
+			// primary() will handle it via parsePkgSelector.
+			if _, isImport := p.symbols.ResolveCogImport(p.this().Literal); !isImport {
+				p.error(p.this(), "undefined identifier", "primary")
+				return nil
+			}
+		} else {
+			typeToken = symbol.Type()
 		}
-
-		typeToken = symbol.Type()
 	}
 
 	node := p.primary(ctx, typeToken)
@@ -400,6 +404,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 	case tokens.Identifier:
 		symbol, ok := p.symbols.Resolve(p.this().Literal)
 		if !ok {
+			// Check if this is an imported cog package name.
+			imp, isImport := p.symbols.ResolveCogImport(p.this().Literal)
+			if isImport {
+				return p.parsePkgSelector(ctx, imp)
+			}
+
 			p.error(p.this(), "undefined identifier", "primary")
 			return nil
 		}
@@ -443,11 +453,15 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			p.advance("primary identifier field") // consume field identifier
 
-			// Make field type equal to selector type and wrap in alias, so we can infer enum type.
-			field.Identifier.ValueType = &types.Alias{
-				Name:     symbol.Identifier.Name,
-				Derived:  symbol.Type(),
-				Exported: symbol.Identifier.Exported,
+			// For enum selectors, wrap the field type in an alias so the enum
+			// type can be inferred downstream.  For struct fields, preserve the
+			// original field type (e.g. float64) so arithmetic works correctly.
+			if field.Scope == EnumScope {
+				field.Identifier.ValueType = &types.Alias{
+					Name:     symbol.Identifier.Name,
+					Derived:  symbol.Type(),
+					Exported: symbol.Identifier.Exported,
+				}
 			}
 
 			return &ast.Selector{

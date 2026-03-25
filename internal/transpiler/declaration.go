@@ -140,6 +140,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 					if t.needsContext {
 						t.imports["ctx"] = &goast.ImportSpec{
+							Name: &goast.Ident{Name: goStdLibAlias("context")},
 							Path: &goast.BasicLit{
 								Kind:  gotoken.STRING,
 								Value: `"context"`,

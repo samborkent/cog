@@ -275,6 +275,53 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 	typ, ok := types.Lookup[p.this().Type]
 	if !ok {
+		// Check for imported package type: pkg.Type
+		if p.this().Type == tokens.Identifier && p.next().Type == tokens.Dot {
+			if imp, isImport := p.symbols.ResolveCogImport(p.this().Literal); isImport {
+				p.advance("parseType pkg") // consume package name
+				p.advance("parseType .")   // consume '.'
+
+				if p.this().Type != tokens.Identifier {
+					p.error(p.this(), "expected type name after package selector", "parseType")
+					return nil
+				}
+
+				sym, found := imp.Exports[p.this().Literal]
+				if !found || sym.Identifier.Qualifier != ast.QualifierType {
+					p.error(p.this(), fmt.Sprintf("package %q has no exported type %q", imp.Name, p.this().Literal), "parseType")
+					return nil
+				}
+
+				ident := sym.Identifier
+				if types.IsNone(ident.ValueType) {
+					typ = types.NewForwardAlias(ident.Name, ident.Exported, func() types.Type {
+						return ident.ValueType
+					})
+				} else {
+					typ = &types.Alias{
+						Name:     ident.Name,
+						Derived:  ident.ValueType,
+						Exported: ident.Exported,
+					}
+				}
+
+				p.advance("parseType pkg type") // consume type name
+
+				if p.this().Type == tokens.Question {
+					p.advance("parseType ?") // consume ?
+
+					if typ.Kind() == types.OptionKind {
+						p.error(p.this(), "nested optional types are not allowed", "parseType")
+						return nil
+					}
+
+					return &types.Option{Value: typ}
+				}
+
+				return typ
+			}
+		}
+
 		// Non-basic type, try to find in symbol table.
 		typeSymbol, ok := p.symbols.Resolve(p.this().Literal)
 		if !ok || typeSymbol.Identifier.Qualifier != ast.QualifierType {
