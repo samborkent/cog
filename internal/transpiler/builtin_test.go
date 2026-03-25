@@ -31,7 +31,7 @@ main : proc() = {
 	xs := @slice<int64>(3)
 	@print(xs)
 }`)
-		mustContain(t, got, "builtin.Slice")
+		mustContain(t, got, "make([]int64,")
 	})
 
 	t.Run("slice with capacity", func(t *testing.T) {
@@ -41,7 +41,7 @@ main : proc() = {
 	xs := @slice<int64>(3, 10)
 	@print(xs)
 }`)
-		mustContain(t, got, "builtin.Slice")
+		mustContain(t, got, "make([]int64,")
 	})
 
 	t.Run("map", func(t *testing.T) {
@@ -51,7 +51,7 @@ main : proc() = {
 	m := @map<utf8, int64>()
 	@print(m)
 }`)
-		mustContain(t, got, "builtin.Map")
+		mustContain(t, got, "make(map[string]int64)")
 	})
 
 	t.Run("set", func(t *testing.T) {
@@ -61,7 +61,7 @@ main : proc() = {
 	s := @set<int64>()
 	@print(s)
 }`)
-		mustContain(t, got, "builtin.Set")
+		mustContain(t, got, "make(cog.Set[int64])")
 	})
 
 	t.Run("ptr", func(t *testing.T) {
@@ -71,6 +71,6 @@ main : proc() = {
 	ptr := @ptr<utf8>()
 	_ = ptr
 }`)
-		mustContain(t, got, "builtin.Ptr")
+		mustContain(t, got, "new(string)")
 	})
 }

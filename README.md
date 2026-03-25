@@ -66,6 +66,7 @@ The following basic features are missing that need to be implemented before Cog 
     - Container loop: `for container { ... }`
     - Range with `in`: `for v, k in container { ... }`
     - Loop over string, slice, array, map, and set.
+- Automatic arena based allocations (using `arena` experiment)
 
 ### Partly implemented
 
@@ -105,9 +106,6 @@ The following basic features are missing that need to be implemented before Cog 
     - `any!` result type (alias of `any | error`)
         - Error can be extracted with `err!`
         - E.g `res := someFunc(); if res! { @print(res) }`
-- Arena based allocations (using `arena` experiment)
-    - A new arena is created when entering a new `proc` scope.
-    - Arena is cleared when leaving `proc` scope.
 - Builtin operations for 2D / 3D / 4D slices.
 - Builtin `upx` binary packer for smaller binaries.
 - Script mode

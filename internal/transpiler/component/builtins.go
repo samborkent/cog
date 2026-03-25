@@ -2,7 +2,6 @@ package component
 
 import (
 	goast "go/ast"
-	gotypes "go/types"
 )
 
 // Pre-allocated builtin selectors.
@@ -13,28 +12,12 @@ var (
 		X:   builtinPkg,
 		Sel: &goast.Ident{Name: "If"},
 	}
-	builtinMapSel = &goast.SelectorExpr{
-		X:   builtinPkg,
-		Sel: &goast.Ident{Name: "Map"},
-	}
 	builtinPrintSel = &goast.SelectorExpr{
 		X:   builtinPkg,
 		Sel: &goast.Ident{Name: "Print"},
 	}
-	builtinPtrSel = &goast.SelectorExpr{
-		X:   builtinPkg,
-		Sel: &goast.Ident{Name: "Ptr"},
-	}
-	builtinSetSel = &goast.SelectorExpr{
-		X:   builtinPkg,
-		Sel: &goast.Ident{Name: "Set"},
-	}
-	builtinSliceSel = &goast.SelectorExpr{
-		X:   builtinPkg,
-		Sel: &goast.Ident{Name: "Slice"},
-	}
 
-	defaultCapType = &goast.Ident{Name: gotypes.Typ[gotypes.Uint8].String()}
+	cogPkg = &goast.Ident{Name: "cog"}
 )
 
 func BuiltinIf(ifType, boolType goast.Expr, args ...goast.Expr) *goast.CallExpr {
@@ -53,26 +36,20 @@ func BuiltinIf(ifType, boolType goast.Expr, args ...goast.Expr) *goast.CallExpr 
 	}
 }
 
-func BuiltinMap(keyType, valueType, capType, capacity goast.Expr) *goast.CallExpr {
-	var args []goast.Expr
+// BuiltinMap generates make(map[K]V) or make(map[K]V, cap).
+func BuiltinMap(keyType, valueType, capacity goast.Expr) *goast.CallExpr {
+	mapType := &goast.MapType{
+		Key:   keyType,
+		Value: valueType,
+	}
 
+	args := []goast.Expr{mapType}
 	if capacity != nil {
 		args = append(args, capacity)
 	}
 
-	indices := []goast.Expr{keyType, valueType}
-
-	if capType != nil {
-		indices = append(indices, capType)
-	} else if capacity == nil {
-		indices = append(indices, defaultCapType)
-	}
-
 	return &goast.CallExpr{
-		Fun: &goast.IndexListExpr{
-			X:       builtinMapSel,
-			Indices: indices,
-		},
+		Fun:  &goast.Ident{Name: "make"},
 		Args: args,
 	}
 }
@@ -84,56 +61,48 @@ func BuiltinPrint(arg goast.Expr) *goast.CallExpr {
 	}
 }
 
+// BuiltinPtr generates new(T).
 func BuiltinPtr(valueType goast.Expr) *goast.CallExpr {
 	return &goast.CallExpr{
-		Fun: &goast.IndexExpr{
-			X:     builtinPtrSel,
-			Index: valueType,
-		},
+		Fun:  &goast.Ident{Name: "new"},
+		Args: []goast.Expr{valueType},
 	}
 }
 
-func BuiltinSet(keyType, capType, capacity goast.Expr) *goast.CallExpr {
-	var args []goast.Expr
+// BuiltinSet generates make(cog.Set[K]) or make(cog.Set[K], cap).
+func BuiltinSet(keyType, capacity goast.Expr) *goast.CallExpr {
+	setType := &goast.IndexExpr{
+		X: &goast.SelectorExpr{
+			X:   cogPkg,
+			Sel: &goast.Ident{Name: "Set"},
+		},
+		Index: keyType,
+	}
 
+	args := []goast.Expr{setType}
 	if capacity != nil {
 		args = append(args, capacity)
 	}
 
-	indices := []goast.Expr{keyType}
-
-	if capType != nil {
-		indices = append(indices, capType)
-	} else if capacity == nil {
-		indices = append(indices, defaultCapType)
-	}
-
 	return &goast.CallExpr{
-		Fun: &goast.IndexListExpr{
-			X:       builtinSetSel,
-			Indices: indices,
-		},
+		Fun:  &goast.Ident{Name: "make"},
 		Args: args,
 	}
 }
 
-func BuiltinSlice(elemType, lenType, length, capacity goast.Expr) *goast.CallExpr {
-	args := []goast.Expr{length}
+// BuiltinSlice generates make([]T, len) or make([]T, len, cap).
+func BuiltinSlice(elemType, length, capacity goast.Expr) *goast.CallExpr {
+	sliceType := &goast.ArrayType{
+		Elt: elemType,
+	}
 
+	args := []goast.Expr{sliceType, length}
 	if capacity != nil {
 		args = append(args, capacity)
 	}
 
-	indices := []goast.Expr{elemType}
-	if lenType != nil {
-		indices = append(indices, lenType)
-	}
-
 	return &goast.CallExpr{
-		Fun: &goast.IndexListExpr{
-			X:       builtinSliceSel,
-			Indices: indices,
-		},
+		Fun:  &goast.Ident{Name: "make"},
 		Args: args,
 	}
 }

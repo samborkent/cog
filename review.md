@@ -1,14 +1,10 @@
 2. # Biggest Issues
-Correctness bugs in existing code:
-
-6. 47+ panic() callsites in transpiler/AST paths that should return errors
 
 Architectural gaps:
 
 1. No multi-file support. This is the single biggest blocker. Without it, cog can't write anything non-trivial. This touches every layer: lexer (file management), parser (cross-file symbol resolution), transpiler (package-level codegen).
 2. No package/import system. Closely related to above — without this, there's no code reuse within cog.
 3. int128/uint128/float16/complex32 are declared in the type system but have no transpiler lowering. Using them will crash.
-4. Arena allocation is scaffolded but not wired into codegen. The wrappers exist in arena.go but the transpiler never injects arena lifecycle into proc bodies.
 
 Design concerns:
 
@@ -16,12 +12,6 @@ Design concerns:
 6. Error handling strategy (any!, err!) is planned but not designed in detail.
 
 3. # Performance Goals: Partially Feasible
-
-## Arena allocation per proc — feasible with caveats.
-The arena package experiment exists in Go and your wrappers are ready. The transpiler needs to inject arena.NewArena() at proc entry and a.Free() at proc exit, and route @slice/@ptr/@map through arena methods. This is mechanical codegen work and very achievable. However:
-
-1. Go's arena package is still experimental (GOEXPERIMENT=arenas) and may never be promoted to stable.
-2. Arena-allocated values that escape the proc scope will cause use-after-free. You'd need escape analysis or runtime checks — which brings us back to the ownership model you haven't designed yet.
 
 ## Reducing heap escapes via stricter mutability — theoretically sound, practically hard.
 
@@ -48,9 +38,7 @@ The full vision (ownership model, reference capabilities, arena lifecycle, gener
 
 My recommendation: Scope ruthlessly. The next high-impact milestones that keep the project viable and interesting as a solo effort:
 
-1. Fix the existing correctness bugs (types.Equal, slice builtin, panics → errors)
 2. Multi-file support + cog package imports
-3. Wire arena allocation into proc codegen (this is your differentiating feature)
 4. Design and prototype the ownership model on paper before implementing — even a minimal version like "values are move-by-default, var enables borrowing within scope"
 5. Defer LSP, async, generics, and the full reference capability system
 

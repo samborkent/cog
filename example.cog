@@ -213,6 +213,15 @@ outerLoop:
 	arg : uint64 = 10
 	_ = @slice<int32>(arg)
 	_ = @slice<int32, uint8>(10)
+
+	arenaProc(arg)
+}
+
+arenaProc : proc(n : uint64) = {
+	xs := @slice<int64>(n)
+	ys := @slice<float64>(n)
+	@print(xs)
+	@print(ys)
 }
 
 ASC ~ ascii
