@@ -233,8 +233,8 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		if operator.Type == tokens.Not && !types.IsBool(right.Type()) {
 			p.error(p.this(), "operator requires bool type", "unary")
 			return nil
-		} else if operator.Type == tokens.Minus && !types.IsNumber(right.Type()) {
-			p.error(p.this(), "operator requires numeric type", "unary")
+		} else if operator.Type == tokens.Minus && !types.IsSigned(right.Type()) {
+			p.error(p.this(), "operator requires signed numeric type", "unary")
 			return nil
 		}
 

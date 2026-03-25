@@ -166,7 +166,7 @@ func IsReal(t Type) bool {
 }
 
 func IsSigned(t Type) bool {
-	return IsFloat(t) || IsInt(t)
+	return IsComplex(t) || IsFloat(t) || IsInt(t)
 }
 
 func IsString(t Type) bool {

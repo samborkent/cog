@@ -14,6 +14,8 @@ export notExported ~ uint64
 export ExportedString ~ String
 
 main : proc() = {
+    _ = 10 // inline comment stays inline
+
     str := @go.strings.ToUpper("str")
 
     b : float32 = 0.0
