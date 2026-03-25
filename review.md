@@ -1,7 +1,4 @@
 2. # Biggest Issues
-Correctness bugs in existing code:
-
-6. 47+ panic() callsites in transpiler/AST paths that should return errors
 
 Architectural gaps:
 
@@ -48,7 +45,6 @@ The full vision (ownership model, reference capabilities, arena lifecycle, gener
 
 My recommendation: Scope ruthlessly. The next high-impact milestones that keep the project viable and interesting as a solo effort:
 
-1. Fix the existing correctness bugs (types.Equal, slice builtin, panics → errors)
 2. Multi-file support + cog package imports
 3. Wire arena allocation into proc codegen (this is your differentiating feature)
 4. Design and prototype the ownership model on paper before implementing — even a minimal version like "values are move-by-default, var enables borrowing within scope"
