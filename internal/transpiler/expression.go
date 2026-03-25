@@ -345,6 +345,80 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			default:
 				return nil, fmt.Errorf("unsupported operator %q for uint128", n.Operator.Type)
 			}
+		case types.Int128:
+			switch n.Operator.Type {
+			case tokens.Plus:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Add"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Minus:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Sub"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Asterisk:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Mul"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Divide:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Div"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Equal:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Eq"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.NotEqual:
+				return &goast.UnaryExpr{
+					Op: gotoken.NOT,
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Eq"}},
+						Args: []goast.Expr{rhs},
+					},
+				}, nil
+			case tokens.LT:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.LSS,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.LTEqual:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.LEQ,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.GT:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.GTR,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.GTEqual:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.GEQ,
+					Y:  component.Int64Lit(0),
+				}, nil
+			default:
+				return nil, fmt.Errorf("unsupported operator %q for int128", n.Operator.Type)
+			}
 		}
 
 		binOp, err := convertBinaryOperator(n.Operator.Type)
@@ -366,7 +440,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Int64Literal:
 		return component.Int64Lit(n.Value), nil
 	case *ast.Int128Literal:
-		return component.Int128Lit(n.Value.String()), nil
+		t.addCogImport()
+
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Int128FromString"},
+			},
+			Args: []goast.Expr{component.UTF8Lit(n.Token.Literal)},
+		}, nil
 	case *ast.MapLiteral:
 		// TODO: handle not directly comparable types
 		exprs := make([]goast.Expr, len(n.Pairs))
@@ -481,6 +563,13 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 						},
 					},
 				},
+			}, nil
+		}
+
+		// Int128 uses .Neg() method for unary minus.
+		if n.Right.Type().Underlying().Kind() == types.Int128 {
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: right, Sel: &goast.Ident{Name: "Neg"}},
 			}, nil
 		}
 

@@ -105,6 +105,14 @@ x : uint128 = 1
 main : proc() = {}`)
 		mustContain(t, got, "cog.Uint128")
 	})
+
+	t.Run("int128_type", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : int128 = 1
+main : proc() = {}`)
+		mustContain(t, got, "cog.Int128")
+	})
 }
 
 func TestConvertEnumDecl(t *testing.T) {

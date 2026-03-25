@@ -235,6 +235,12 @@ outerLoop:
     bigSum := big + big
     bigMul := big * big
     bigCmp := big < bigSum
+
+    // int128: backed by ryanavella/wide, ops via methods.
+    signed : int128 = 42
+    signedNeg := -signed
+    signedSum := signed + signed
+    signedCmp := signed < signedNeg
 }
 
 arenaProc : proc(n : uint64) = {

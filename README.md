@@ -33,6 +33,10 @@ The following basic features are missing that need to be implemented before Cog 
     - `ascii` string where every character is a single byte
     - `utf8` alias for Go `string`
     - Struct with explicit field exports
+    - `int128` (using [github.com/ryanavella/wide](github.com/ryanavella/wide))
+    - `uint128` (using [lukechampine.com/uint128](lukechampine.com/uint128))
+    - `float16` (using [github.com/x448/float16](github.com/x448/float16))
+    - `complex32` (using `float16`)
 - Typed composite literals: `[]int8{5, 4, 3}`, `[5]int8{...}`, `map<ascii, int8>{...}`, `set<ascii>{...}`
 - Clear builtin functions with `@` prefix
     - `@print(msg any)` print to std out
@@ -71,11 +75,6 @@ The following basic features are missing that need to be implemented before Cog 
 ### Partly implemented
 
 - Explicit exports using `export`
-- Additional types:
-    - `int128` (using [github.com/ryanavella/wide](github.com/ryanavella/wide))
-    - `uint128` (using [lukechampine.com/uint128](lukechampine.com/uint128))
-    - `float16` (using [github.com/x448/float16](github.com/x448/float16))
-    - `complex32` (using `float16`)
 - Canonical syntax highlighting
 
 ### Planned

@@ -91,6 +91,13 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int32], nil)}
 	case types.Int64:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int64], nil)}
+	case types.Int128:
+		t.addCogImport()
+
+		expr = &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "cog"},
+			Sel: &goast.Ident{Name: "Int128"},
+		}
 	case types.MapKind:
 		mapType, ok := typ.(*types.Map)
 		if !ok {

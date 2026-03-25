@@ -3,7 +3,9 @@ package cog
 import (
 	"bytes"
 	"hash/maphash"
+	"math/big"
 
+	"github.com/ryanavella/wide"
 	f16 "github.com/x448/float16"
 	u128 "lukechampine.com/uint128"
 )
@@ -12,6 +14,7 @@ type (
 	ASCII             []byte
 	ASCIIHash         uint64
 	Float16           = f16.Float16
+	Int128            = wide.Int128
 	Set[T comparable] map[T]struct{}
 	Uint128           = u128.Uint128
 )
@@ -30,6 +33,13 @@ func Uint128From64(v uint64) Uint128 {
 func Uint128FromString(s string) Uint128 {
 	v, _ := u128.FromString(s)
 	return v
+}
+
+// Int128FromString parses a decimal string into an Int128.
+func Int128FromString(s string) Int128 {
+	v := new(big.Int)
+	v.SetString(s, 10)
+	return wide.Int128FromBigInt(v)
 }
 
 func (a ASCII) Equal(b ASCII) bool {
