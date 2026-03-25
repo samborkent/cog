@@ -140,6 +140,8 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					}
 				}
 
+				t.injectArena(funcLiteral.Body)
+
 				return []goast.Decl{&goast.FuncDecl{
 					Name: &goast.Ident{Name: "main"},
 					Type: funcLiteral.Type,
@@ -154,6 +156,8 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					funcLiteral.Body.List = append(component.DynProcEntry(), funcLiteral.Body.List...)
 				}
 			}
+
+			t.injectArena(funcLiteral.Body)
 		}
 
 		// Replace type string with type name if missing (for structs, tuples, unions).
