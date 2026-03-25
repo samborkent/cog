@@ -287,12 +287,12 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 		var capacity goast.Expr
 
 		if len(node.Arguments) == 2 {
-			capacity, err = t.convertExpr(node.Arguments[0])
+			capacity, err = t.convertExpr(node.Arguments[1])
 			if err != nil {
 				return nil, fmt.Errorf("converting @slice capacity argument: %w", err)
 			}
 
-			switch n := node.Arguments[0].(type) {
+			switch n := node.Arguments[1].(type) {
 			case *ast.Prefix:
 				return nil, errors.New("@slice capacity must be positive")
 			case *ast.Int64Literal:

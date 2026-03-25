@@ -1,0 +1,9 @@
+- Run any supported command prefixed with `rtk` (run `rtk` to see supported commands). This will reduce token usage.
+- To see source files from a dependency, or to answer questions about a dependency, run `go mod download -json MODULE` and use the returned `Dir` path to read the files.
+- Use `go doc foo.Bar` or `go doc -all foo` to read documentation for packages, types, functions, etc.
+- Verify if latest training data used lower Go version than locally installed `go version`. If so, get latest Go docs if needed.
+- Use `go run .` or `go run ./cmd/foo` instead of `go build` to run programs, to avoid leaving behind build artifacts.
+- Use `go test` to verify all changes.
+- Always add a test case to verify changes or new code.
+- If a `.golang-ci.yml` file is present, run `golangci-lint run` to verify changes are compliant.
+- If a `Makefile`, or `Taskfile.yml` is present, try to use those commands, instead of invoking CLI tools directly.

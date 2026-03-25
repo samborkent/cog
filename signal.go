@@ -22,9 +22,9 @@ func NewSignal(parent *Signal) *Signal {
 		sig: make(chan struct{}),
 	}
 
-	sig.mu.Lock()
+	parent.mu.Lock()
 	parent.child = append(parent.child, sig)
-	sig.mu.Unlock()
+	parent.mu.Unlock()
 
 	return sig
 }

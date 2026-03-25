@@ -47,6 +47,30 @@ main : proc() = {
 			t.Fatal("expected statements")
 		}
 	})
+
+	t.Run("valid with capacity", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	xs := @slice<int64>(3, 10)
+	@print(xs)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("valid with typed capacity", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	xs := @slice<int64, uint8>(3, 10)
+	@print(xs)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
 }
 
 func TestParseBuiltinMap(t *testing.T) {
