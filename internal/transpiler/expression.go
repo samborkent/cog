@@ -94,6 +94,16 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Fun:  component.Ident(n.Identifier),
 			Args: args,
 		}, nil
+	case *ast.Float16Literal:
+		t.addFloat16Import()
+
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "f16"},
+				Sel: &goast.Ident{Name: "Fromfloat32"},
+			},
+			Args: []goast.Expr{component.Float32Lit(n.Value.Float32())},
+		}, nil
 	case *ast.Float32Literal:
 		return component.Float32Lit(n.Value), nil
 	case *ast.Float64Literal:
@@ -176,6 +186,37 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				},
 				Args: []goast.Expr{rhs},
 			}, nil
+		case types.Float16:
+			t.addFloat16Import()
+
+			binOp, err := convertBinaryOperator(n.Operator.Type)
+			if err != nil {
+				return nil, err
+			}
+
+			// Promote both operands to float32 for the operation.
+			lhsF32 := &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Float32"}},
+			}
+			rhsF32 := &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: rhs, Sel: &goast.Ident{Name: "Float32"}},
+			}
+
+			binaryExpr := &goast.BinaryExpr{X: lhsF32, Op: binOp, Y: rhsF32}
+
+			// Comparisons return bool directly; arithmetic wraps result back to Float16.
+			switch n.Operator.Type {
+			case tokens.Equal, tokens.NotEqual, tokens.GT, tokens.GTEqual, tokens.LT, tokens.LTEqual:
+				return binaryExpr, nil
+			default:
+				return &goast.CallExpr{
+					Fun: &goast.SelectorExpr{
+						X:   &goast.Ident{Name: "f16"},
+						Sel: &goast.Ident{Name: "Fromfloat32"},
+					},
+					Args: []goast.Expr{binaryExpr},
+				}, nil
+			}
 		}
 
 		binOp, err := convertBinaryOperator(n.Operator.Type)
@@ -273,6 +314,26 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		unaryOp, err := convertUnaryOperator(n.Operator.Type)
 		if err != nil {
 			return nil, err
+		}
+
+		// Float16 has no native operators; promote to float32, apply, demote.
+		if n.Right.Type().Underlying().Kind() == types.Float16 {
+			t.addFloat16Import()
+
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{
+					X:   &goast.Ident{Name: "f16"},
+					Sel: &goast.Ident{Name: "Fromfloat32"},
+				},
+				Args: []goast.Expr{
+					&goast.UnaryExpr{
+						Op: unaryOp,
+						X: &goast.CallExpr{
+							Fun: &goast.SelectorExpr{X: right, Sel: &goast.Ident{Name: "Float32"}},
+						},
+					},
+				},
+			}, nil
 		}
 
 		return &goast.UnaryExpr{

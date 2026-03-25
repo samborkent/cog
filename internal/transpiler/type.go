@@ -65,6 +65,13 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex64], nil)}
 	case types.Complex128:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex128], nil)}
+	case types.Float16:
+		t.addFloat16Import()
+
+		expr = &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "f16"},
+			Sel: &goast.Ident{Name: "Float16"},
+		}
 	case types.Float32:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Float32], nil)}
 	case types.Float64:

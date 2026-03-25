@@ -81,6 +81,14 @@ Either ~ int32 | utf8
 main : proc() = {}`)
 		mustContain(t, got, "type _Either")
 	})
+
+	t.Run("float16_type", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : float16 = 1.0
+main : proc() = {}`)
+		mustContain(t, got, "f16.Float16")
+	})
 }
 
 func TestConvertEnumDecl(t *testing.T) {

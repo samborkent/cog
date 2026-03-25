@@ -103,4 +103,51 @@ main : proc() = {
 }`)
 		mustContain(t, got, "xs[0]")
 	})
+
+	t.Run("float16_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : float16 = 1.5
+main : proc() = {}`)
+		mustContain(t, got, "f16.Fromfloat32")
+		mustContain(t, got, "1.5")
+	})
+
+	t.Run("float16_add", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : float16 = 1.0
+	b : float16 = 2.0
+	c := a + b
+	@print(c)
+}`)
+		mustContain(t, got, ".Float32()")
+		mustContain(t, got, "f16.Fromfloat32")
+	})
+
+	t.Run("float16_comparison", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : float16 = 1.0
+	b : float16 = 2.0
+	c := a < b
+	@print(c)
+}`)
+		mustContain(t, got, ".Float32()")
+		mustContain(t, got, "<")
+	})
+
+	t.Run("float16_negate", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : float16 = 1.0
+	b := -a
+	@print(b)
+}`)
+		mustContain(t, got, "f16.Fromfloat32(-")
+		mustContain(t, got, ".Float32()")
+	})
 }

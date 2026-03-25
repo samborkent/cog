@@ -215,6 +215,12 @@ outerLoop:
 	_ = @slice<int32, uint8>(10)
 
 	arenaProc(arg)
+
+    // float16: backed by x448/float16 package, arithmetic promotes to float32.
+    half : float16 = 1.5
+    halfNeg := -half
+    halfSum := half + half
+    halfCmp := half < halfNeg
 }
 
 arenaProc : proc(n : uint64) = {
