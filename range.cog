@@ -1,0 +1,5 @@
+package main
+
+main : proc() = {
+    a := @range(0, 10)
+}

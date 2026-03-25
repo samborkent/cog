@@ -64,6 +64,15 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 					t.Type = tokens.Equal
 					s.Next()
 				}
+			case tokens.BitAnd:
+				if s.Peek() == '&' {
+					t.Type = tokens.And
+					s.Next()
+				}
+			case tokens.Builtin:
+				t.Type = tokens.Builtin
+				_ = s.Scan()
+				t.Literal = s.TokenText()
 			case tokens.Colon:
 				switch s.Peek() {
 				case '=':
@@ -85,20 +94,11 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 					t.Type = tokens.NotEqual
 					s.Next()
 				}
-			case tokens.BitAnd:
-				if s.Peek() == '&' {
-					t.Type = tokens.And
-					s.Next()
-				}
 			case tokens.Pipe:
 				if s.Peek() == '|' {
 					t.Type = tokens.Or
 					s.Next()
 				}
-			case tokens.Builtin:
-				t.Type = tokens.Builtin
-				_ = s.Scan()
-				t.Literal = s.TokenText()
 			}
 
 			if t.Type == 0 {
