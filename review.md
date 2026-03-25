@@ -14,11 +14,8 @@ Rating: 6/10. Architecturally sound, feature-rich for a prototype, but pre-alpha
 2. # Biggest Issues
 Correctness bugs in existing code:
 
-1. Slice builtin parser doesn't consume the comma before the optional capacity argument (builtins.go)
-2. Slice builtin transpiler reads the wrong argument index for capacity (builtin.go)
 3. types.Equal compares only Kind, not structural shape — []int8 and []int64 would be considered equal
 4. Union is hard-limited to exactly two branches, and literal inference by kind can be ambiguous
-5. Signal child registration locks the wrong mutex (signal.go)
 6. 47+ panic() callsites in transpiler/AST paths that should return errors
 
 Architectural gaps:
