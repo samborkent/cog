@@ -173,7 +173,7 @@ func TestTupleStringPanic(t *testing.T) {
 	}()
 
 	tu := &Tuple{Types: []Type{Basics[UTF8]}}
-	tu.String()
+	_ = tu.String()
 }
 
 func TestUnionString(t *testing.T) {
