@@ -27,6 +27,7 @@ type Transpiler struct {
 	symbols        *SymbolTable
 	dynDefaults    map[string]ast.Expression // Default expressions for dynamic variables
 	inFunc         bool
+	usesDyn        bool // set during body conversion when a dyn var is read or written
 	needsContext   bool
 	ifLabelCounter uint32
 

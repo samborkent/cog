@@ -92,4 +92,38 @@ main : proc() = {}`)
 		mustContain(t, got, "func(a int64, b int64) int64")
 		mustContain(t, got, "return a + b")
 	})
+
+	t.Run("proc_no_dyn_no_preamble", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+dyn val : utf8 = "default"
+noop : proc() = {
+	@print("hello")
+}
+main : proc() = {}`)
+		mustNotContain(t, got, "dyn := *ctx.Value")
+	})
+
+	t.Run("proc_uses_dyn_has_preamble", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+dyn val : utf8 = "default"
+reader : proc() = {
+	@print(val)
+}
+main : proc() = {}`)
+		mustContain(t, got, "dyn := *ctx.Value(cogDynKey{}).(*cogDyn)")
+		mustContain(t, got, "ctx = context.WithValue(ctx, cogDynKey{}, &dyn)")
+	})
+
+	t.Run("func_no_dyn_no_ctx", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+dyn val : utf8 = "default"
+add : func(a : int64, b : int64) int64 = {
+	return a + b
+}
+main : proc() = {}`)
+		mustNotContain(t, got, "context.Context")
+	})
 }

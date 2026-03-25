@@ -30,7 +30,12 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 					return nil, fmt.Errorf("undefined dynamic variable '%s'", n.Identifier.Name)
 				}
 
+				if t.inFunc {
+					return nil, fmt.Errorf("func cannot assign dynamically scoped variable %q", n.Identifier.Name)
+				}
+
 				// Dynamic variable assignment via struct field.
+				t.usesDyn = true
 				val, err := t.convertExpr(n.Expression)
 				if err != nil {
 					return nil, err

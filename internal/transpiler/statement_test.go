@@ -113,6 +113,17 @@ main : proc() = {}`)
 		mustContain(t, got, "dyn.val =")
 	})
 
+	t.Run("dyn_write_in_func_errors", func(t *testing.T) {
+		t.Parallel()
+		mustFailTranspile(t, `package p
+dyn val : utf8 = "default"
+writer : func() utf8 = {
+	val = "changed"
+	return val
+}
+main : proc() = {}`, "func cannot assign dynamically scoped variable")
+	})
+
 	t.Run("local_declaration", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p

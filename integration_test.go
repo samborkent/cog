@@ -332,6 +332,31 @@ main : proc() = {}
 	}
 }
 
+func TestFuncWritingDynShouldError(t *testing.T) {
+	t.Parallel()
+
+	src := `package main
+
+dyn val : utf8 = "def"
+
+writer : func() utf8 = {
+	val = "changed"
+	return val
+}
+
+main : proc() = {}
+`
+
+	_, err := tryTranspile(t.Context(), src)
+	if err == nil {
+		t.Fatalf("expected transpile error for func writing dyn variable, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "func cannot assign dynamically scoped variable") {
+		t.Fatalf("expected error about func assigning dyn var, got: %v", err)
+	}
+}
+
 func TestMainAsIntShouldError(t *testing.T) {
 	t.Parallel()
 

@@ -86,3 +86,29 @@ func mustNotContain(t *testing.T, got, want string) {
 		t.Errorf("output should not contain %q\ngot:\n%s", want, got)
 	}
 }
+
+// mustFailTranspile asserts that transpilation fails with an error containing want.
+func mustFailTranspile(t *testing.T, src, want string) {
+	t.Helper()
+	l := lexer.NewLexer(strings.NewReader(src))
+	toks, err := l.Parse(t.Context())
+	if err != nil {
+		t.Fatalf("lex error: %v", err)
+	}
+	p, err := parser.NewParser(toks, false)
+	if err != nil {
+		t.Fatalf("parser init error: %v", err)
+	}
+	f, err := p.Parse(t.Context(), "test.cog")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	tr := transpiler.NewTranspiler(f)
+	_, err = tr.Transpile()
+	if err == nil {
+		t.Fatalf("expected transpile error containing %q, but got no error", want)
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("expected error containing %q, got: %v", want, err)
+	}
+}

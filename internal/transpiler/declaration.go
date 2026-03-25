@@ -49,10 +49,16 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			}}, nil
 		}
 
+		prevUsesDyn := t.usesDyn
+		t.usesDyn = false
+
 		expr, err := t.convertExpr(n.Assignment.Expression)
 		if err != nil {
 			return nil, err
 		}
+
+		bodyUsesDyn := t.usesDyn
+		t.usesDyn = prevUsesDyn
 
 		if n.Assignment.Expression.Type().Kind() == types.ProcedureKind {
 			// Procedure declaration
@@ -149,8 +155,8 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				}}, nil
 			}
 
-			// Non-main proc with dynamic variables: inject copy-on-entry preamble.
-			if len(t.symbols.dynamics) > 0 {
+			// Non-main proc: inject dyn preamble only when body uses dyn.
+			if bodyUsesDyn && len(t.symbols.dynamics) > 0 {
 				procType, ok := n.Assignment.Expression.Type().(*types.Procedure)
 				if ok && !procType.Function {
 					funcLiteral.Body.List = append(component.DynProcEntry(), funcLiteral.Body.List...)

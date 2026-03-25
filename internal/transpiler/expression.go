@@ -125,6 +125,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				return nil, fmt.Errorf("func cannot reference dynamically scoped variable %q", n.Name)
 			}
 
+			t.usesDyn = true
 			return component.DynRead(name), nil
 		}
 
@@ -286,9 +287,10 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			t.symbols = NewEnclosedSymbolTable(t.symbols)
 		}
 
-		// Track whether we're inside a func. When inside a func,
-		// referencing dynamically scoped variables is disallowed.
+		// Track whether we're inside a func and reset usesDyn for this body.
 		prevInFunc := t.inFunc
+		prevUsesDyn := t.usesDyn
+		t.usesDyn = false
 		if procType, ok := n.ProcedureType.(*types.Procedure); ok {
 			t.inFunc = procType.Function
 		} else {
@@ -309,7 +311,9 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			t.symbols = t.symbols.Outer
 		}
 
-		// Restore previous func-context flag.
+		// Capture whether this body used dyn vars, then restore outer state.
+		bodyUsesDyn := t.usesDyn
+		t.usesDyn = prevUsesDyn || bodyUsesDyn
 		t.inFunc = prevInFunc
 
 		procType, err := t.convertType(n.ProcedureType)
