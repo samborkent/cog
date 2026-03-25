@@ -2,7 +2,6 @@
 
 Architectural gaps:
 
-1. No multi-file support. This is the single biggest blocker. Without it, cog can't write anything non-trivial. This touches every layer: lexer (file management), parser (cross-file symbol resolution), transpiler (package-level codegen).
 2. No package/import system. Closely related to above — without this, there's no code reuse within cog.
 
 Design concerns:
@@ -37,7 +36,7 @@ The full vision (ownership model, reference capabilities, arena lifecycle, gener
 
 My recommendation: Scope ruthlessly. The next high-impact milestones that keep the project viable and interesting as a solo effort:
 
-2. Multi-file support + cog package imports
+2. cog package imports
 4. Design and prototype the ownership model on paper before implementing — even a minimal version like "values are move-by-default, var enables borrowing within scope"
 5. Defer LSP, async, generics, and the full reference capability system
 

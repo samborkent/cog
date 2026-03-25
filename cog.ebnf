@@ -11,7 +11,8 @@ package
     = "package", IDENTIFIER;
 
 top_level_statement
-    = go_import
+    = comment
+    | go_import
     | statement;
 
 
@@ -24,7 +25,8 @@ go_import
 (* === Statements === *)
 
 statement
-    = "break", [ IDENTIFIER ]
+    = comment
+    | "break", [ IDENTIFIER ]
     | "continue", [ IDENTIFIER ]
     | "dyn", statement
     | "export", exported_statement
@@ -49,7 +51,7 @@ identifier_statement
                   | "(", call_arguments, ")" );                   (* procedure call *)
 
 labeled_statement
-    = IDENTIFIER, ":", ( for_statement | if_statement | switch_statement );
+    = for_statement | if_statement | switch_statement;
 
 
 (* === Declarations === *)
@@ -151,7 +153,7 @@ basic_type
 (* Precedence from lowest to highest. *)
 
 expression
-    = boolean, { "[", expression, "]" };               (* index *)
+    = boolean, { "[", boolean, "]" };                   (* index *)
 
 boolean
     = equality, { ( "&&" | "||" ), equality };
@@ -228,5 +230,7 @@ FLOAT      = digit, { digit }, ".", { digit }, [ ( "e" | "E" ), [ "+" | "-" ], d
 STRING     = '"', { character }, '"'
            | '`', { character }, '`';
 
+COMMENT    = "//", { character }, NEWLINE
+           | "/*", { character }, "*/";
 letter     = "a" | ... | "z" | "A" | ... | "Z" | "_";
 digit      = "0" | ... | "9";

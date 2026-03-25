@@ -5,8 +5,7 @@ cog is a Go-based hobby programming language that brings some additional feature
 The following basic features are missing that need to be implemented before Cog can be used to write useful programs:
 
 - Go-to-Cog type conversions
-- Multi-file programs
-- Cog packages / imports
+- Cross-package imports
 
 ## Features
 
@@ -71,6 +70,7 @@ The following basic features are missing that need to be implemented before Cog 
     - Range with `in`: `for v, k in container { ... }`
     - Loop over string, slice, array, map, and set.
 - Automatic arena based allocations (using `arena` experiment)
+- Multi-file support
 
 ### Partly implemented
 
