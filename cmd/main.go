@@ -138,6 +138,12 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) {
 		return
 	}
 
+	// A package that declares a main proc must be named "main".
+	if _, hasMain := entrySymbols.Resolve("main"); hasMain && entryPkgName != "main" {
+		fmt.Printf("package %q declares a main proc but is not named \"main\"\n", entryPkgName)
+		return
+	}
+
 	// Step 3: Process imported packages.
 	importedPkgs := make(map[string]*compiledPackage) // key: import path
 
@@ -260,7 +266,13 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		return nil
 	}
 
-	// TODO: handle transitive imports for imported packages.
+	// Imported packages must not declare a main proc.
+	if sym, hasMain := symbols.Resolve("main"); hasMain {
+		ln, col := sym.Identifier.Token.Ln, sym.Identifier.Token.Col
+		fmt.Printf("%s:%d:%d: imported package %q must not declare a main proc\n",
+			files[0], ln, col, pkgName)
+		return nil
+	}
 
 	astFiles := make([]*ast.File, len(lexed))
 	for i, lf := range lexed {
