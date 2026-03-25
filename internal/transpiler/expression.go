@@ -271,6 +271,80 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 					Args: []goast.Expr{binaryExpr},
 				}, nil
 			}
+		case types.Uint128:
+			switch n.Operator.Type {
+			case tokens.Plus:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Add"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Minus:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Sub"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Asterisk:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Mul"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Divide:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Div"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Equal:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Equals"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.NotEqual:
+				return &goast.UnaryExpr{
+					Op: gotoken.NOT,
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Equals"}},
+						Args: []goast.Expr{rhs},
+					},
+				}, nil
+			case tokens.LT:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.LSS,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.LTEqual:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.LEQ,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.GT:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.GTR,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.GTEqual:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.GEQ,
+					Y:  component.Int64Lit(0),
+				}, nil
+			default:
+				return nil, fmt.Errorf("unsupported operator %q for uint128", n.Operator.Type)
+			}
 		}
 
 		binOp, err := convertBinaryOperator(n.Operator.Type)
@@ -686,7 +760,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Uint64Literal:
 		return component.Uint64Lit(n.Value), nil
 	case *ast.Uint128Literal:
-		return component.Uint128Lit(n.Value.String()), nil
+		t.addCogImport()
+
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Uint128FromString"},
+			},
+			Args: []goast.Expr{component.UTF8Lit(n.Value.String())},
+		}, nil
 	case *ast.UnionLiteral:
 		unionType, ok := n.UnionType.Underlying().(*types.Union)
 		if !ok {

@@ -199,4 +199,50 @@ main : proc() = {
 		mustContain(t, got, "cog.Complex32FromComplex64(-")
 		mustContain(t, got, ".Complex64()")
 	})
+
+	t.Run("uint128_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : uint128 = 42
+main : proc() = {}`)
+		mustContain(t, got, "cog.Uint128FromString")
+		mustContain(t, got, `"42"`)
+	})
+
+	t.Run("uint128_add", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : uint128 = 1
+	b : uint128 = 2
+	c := a + b
+	@print(c)
+}`)
+		mustContain(t, got, ".Add(")
+	})
+
+	t.Run("uint128_equality", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : uint128 = 1
+	b : uint128 = 2
+	c := a == b
+	@print(c)
+}`)
+		mustContain(t, got, ".Equals(")
+	})
+
+	t.Run("uint128_comparison", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : uint128 = 1
+	b : uint128 = 2
+	c := a < b
+	@print(c)
+}`)
+		mustContain(t, got, ".Cmp(")
+		mustContain(t, got, "< 0")
+	})
 }

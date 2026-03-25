@@ -227,6 +227,12 @@ outerLoop:
     compNeg := -comp
     compSum := comp + comp
     compEq := comp == compNeg
+
+    // uint128: backed by lukechampine.com/uint128, ops via methods.
+    big : uint128 = 42
+    bigSum := big + big
+    bigMul := big * big
+    bigCmp := big < bigSum
 }
 
 arenaProc : proc(n : uint64) = {

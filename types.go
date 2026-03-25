@@ -5,6 +5,7 @@ import (
 	"hash/maphash"
 
 	f16 "github.com/x448/float16"
+	u128 "lukechampine.com/uint128"
 )
 
 type (
@@ -12,11 +13,23 @@ type (
 	ASCIIHash         uint64
 	Float16           = f16.Float16
 	Set[T comparable] map[T]struct{}
+	Uint128           = u128.Uint128
 )
 
 // Float16Fromfloat32 converts a float32 to a Float16.
 func Float16Fromfloat32(f float32) Float16 {
 	return f16.Fromfloat32(f)
+}
+
+// Uint128From64 converts a uint64 to a Uint128.
+func Uint128From64(v uint64) Uint128 {
+	return u128.From64(v)
+}
+
+// Uint128FromString parses a decimal string into a Uint128.
+func Uint128FromString(s string) Uint128 {
+	v, _ := u128.FromString(s)
+	return v
 }
 
 func (a ASCII) Equal(b ASCII) bool {

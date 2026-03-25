@@ -97,6 +97,14 @@ c : complex32 = {1.0, 0.0}
 main : proc() = {}`)
 		mustContain(t, got, "cog.Complex32")
 	})
+
+	t.Run("uint128_type", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : uint128 = 1
+main : proc() = {}`)
+		mustContain(t, got, "cog.Uint128")
+	})
 }
 
 func TestConvertEnumDecl(t *testing.T) {
