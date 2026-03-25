@@ -94,6 +94,30 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Fun:  component.Ident(n.Identifier),
 			Args: args,
 		}, nil
+	case *ast.Complex32Literal:
+		t.addCogImport()
+		t.addFloat16Import()
+
+		fromF32 := func(v float32) *goast.CallExpr {
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{
+					X:   &goast.Ident{Name: "f16"},
+					Sel: &goast.Ident{Name: "Fromfloat32"},
+				},
+				Args: []goast.Expr{component.Float32Lit(v)},
+			}
+		}
+
+		return &goast.CompositeLit{
+			Type: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Complex32"},
+			},
+			Elts: []goast.Expr{
+				&goast.KeyValueExpr{Key: &goast.Ident{Name: "Real"}, Value: fromF32(n.Value[0].Float32())},
+				&goast.KeyValueExpr{Key: &goast.Ident{Name: "Imag"}, Value: fromF32(n.Value[1].Float32())},
+			},
+		}, nil
 	case *ast.Float16Literal:
 		t.addFloat16Import()
 
@@ -186,6 +210,37 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				},
 				Args: []goast.Expr{rhs},
 			}, nil
+		case types.Complex32:
+			t.addCogImport()
+
+			binOp, err := convertBinaryOperator(n.Operator.Type)
+			if err != nil {
+				return nil, err
+			}
+
+			// Promote both operands to complex64 for the operation.
+			lhsC64 := &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Complex64"}},
+			}
+			rhsC64 := &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: rhs, Sel: &goast.Ident{Name: "Complex64"}},
+			}
+
+			binaryExpr := &goast.BinaryExpr{X: lhsC64, Op: binOp, Y: rhsC64}
+
+			// Equality comparisons return bool directly; arithmetic wraps result back to Complex32.
+			switch n.Operator.Type {
+			case tokens.Equal, tokens.NotEqual:
+				return binaryExpr, nil
+			default:
+				return &goast.CallExpr{
+					Fun: &goast.SelectorExpr{
+						X:   &goast.Ident{Name: "cog"},
+						Sel: &goast.Ident{Name: "Complex32FromComplex64"},
+					},
+					Args: []goast.Expr{binaryExpr},
+				}, nil
+			}
 		case types.Float16:
 			t.addFloat16Import()
 
@@ -330,6 +385,26 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 						Op: unaryOp,
 						X: &goast.CallExpr{
 							Fun: &goast.SelectorExpr{X: right, Sel: &goast.Ident{Name: "Float32"}},
+						},
+					},
+				},
+			}, nil
+		}
+
+		// Complex32 has no native operators; promote to complex64, apply, demote.
+		if n.Right.Type().Underlying().Kind() == types.Complex32 {
+			t.addCogImport()
+
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{
+					X:   &goast.Ident{Name: "cog"},
+					Sel: &goast.Ident{Name: "Complex32FromComplex64"},
+				},
+				Args: []goast.Expr{
+					&goast.UnaryExpr{
+						Op: unaryOp,
+						X: &goast.CallExpr{
+							Fun: &goast.SelectorExpr{X: right, Sel: &goast.Ident{Name: "Complex64"}},
 						},
 					},
 				},

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 
+	f16 "github.com/x448/float16"
+
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
@@ -799,6 +801,50 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			p.advance("primary tuple }") // consume }
 
 			return tupleLiteral
+		case *types.Basic:
+			if t.Kind() != types.Complex32 {
+				p.error(p.this(), fmt.Sprintf("unexpected basic type %q for expression starting with {", t.String()), "primary")
+				return nil
+			}
+
+			token := p.this()
+			p.advance("primary complex32 {") // consume {
+
+			realPart := p.expression(ctx, types.Basics[types.Float16])
+			if realPart == nil {
+				return nil
+			}
+
+			if p.this().Type != tokens.Comma {
+				p.error(p.this(), "expected , after real part in complex32 literal", "primary")
+				return nil
+			}
+
+			p.advance("primary complex32 ,") // consume ,
+
+			imagPart := p.expression(ctx, types.Basics[types.Float16])
+			if imagPart == nil {
+				return nil
+			}
+
+			if p.this().Type != tokens.RBrace {
+				p.error(p.this(), "expected } after imaginary part in complex32 literal", "primary")
+				return nil
+			}
+
+			p.advance("primary complex32 }") // consume }
+
+			realLit, realOk := realPart.(*ast.Float16Literal)
+			imagLit, imagOk := imagPart.(*ast.Float16Literal)
+			if !realOk || !imagOk {
+				p.error(token, "complex32 literal requires float16 literal values", "primary")
+				return nil
+			}
+
+			return &ast.Complex32Literal{
+				Token: token,
+				Value: [2]f16.Float16{realLit.Value, imagLit.Value},
+			}
 		default:
 			if typeToken == nil || typeToken == types.None {
 				p.error(p.prev(), "cannot infer type for untyped literal", "primary")

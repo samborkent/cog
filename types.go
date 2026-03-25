@@ -3,6 +3,8 @@ package cog
 import (
 	"bytes"
 	"hash/maphash"
+
+	f16 "github.com/x448/float16"
 )
 
 type (
@@ -29,4 +31,23 @@ type Option[T any] struct {
 
 type String interface {
 	~[]byte | ~string
+}
+
+// Complex32 represents a complex number with float16 real and imaginary parts.
+type Complex32 struct {
+	Real f16.Float16
+	Imag f16.Float16
+}
+
+// Complex64 promotes the Complex32 to a native complex64.
+func (c Complex32) Complex64() complex64 {
+	return complex(c.Real.Float32(), c.Imag.Float32())
+}
+
+// Complex32FromComplex64 converts a complex64 to a Complex32.
+func Complex32FromComplex64(c complex64) Complex32 {
+	return Complex32{
+		Real: f16.Fromfloat32(real(c)),
+		Imag: f16.Fromfloat32(imag(c)),
+	}
 }

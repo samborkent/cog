@@ -221,6 +221,12 @@ outerLoop:
     halfNeg := -half
     halfSum := half + half
     halfCmp := half < halfNeg
+
+    // complex32: two float16 parts, arithmetic promotes to complex64.
+    comp : complex32 = {1.0, 2.0}
+    compNeg := -comp
+    compSum := comp + comp
+    compEq := comp == compNeg
 }
 
 arenaProc : proc(n : uint64) = {

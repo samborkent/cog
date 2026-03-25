@@ -10,7 +10,7 @@ import (
 
 type complex32 = [2]float16
 
-func complex32to64(c complex32) complex64 {
+func Complex32To64(c complex32) complex64 {
 	return complex(c[0].Float32(), c[1].Float32())
 }
 

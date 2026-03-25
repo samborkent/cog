@@ -61,6 +61,13 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		}
 	case types.Bool:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Bool], nil)}
+	case types.Complex32:
+		t.addCogImport()
+
+		expr = &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "cog"},
+			Sel: &goast.Ident{Name: "Complex32"},
+		}
 	case types.Complex64:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex64], nil)}
 	case types.Complex128:

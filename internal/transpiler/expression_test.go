@@ -150,4 +150,53 @@ main : proc() = {
 		mustContain(t, got, "f16.Fromfloat32(-")
 		mustContain(t, got, ".Float32()")
 	})
+
+	t.Run("complex32_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+c : complex32 = {1.0, 2.0}
+main : proc() = {}`)
+		mustContain(t, got, "cog.Complex32{")
+		mustContain(t, got, "Real:")
+		mustContain(t, got, "Imag:")
+		mustContain(t, got, "f16.Fromfloat32")
+	})
+
+	t.Run("complex32_add", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : complex32 = {1.0, 2.0}
+	b : complex32 = {3.0, 4.0}
+	c := a + b
+	@print(c)
+}`)
+		mustContain(t, got, ".Complex64()")
+		mustContain(t, got, "cog.Complex32FromComplex64")
+	})
+
+	t.Run("complex32_equality", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : complex32 = {1.0, 2.0}
+	b : complex32 = {3.0, 4.0}
+	c := a == b
+	@print(c)
+}`)
+		mustContain(t, got, ".Complex64()")
+		mustContain(t, got, "==")
+	})
+
+	t.Run("complex32_negate", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : complex32 = {1.0, 2.0}
+	b := -a
+	@print(b)
+}`)
+		mustContain(t, got, "cog.Complex32FromComplex64(-")
+		mustContain(t, got, ".Complex64()")
+	})
 }

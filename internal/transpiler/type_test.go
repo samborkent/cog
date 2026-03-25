@@ -89,6 +89,14 @@ x : float16 = 1.0
 main : proc() = {}`)
 		mustContain(t, got, "f16.Float16")
 	})
+
+	t.Run("complex32_type", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+c : complex32 = {1.0, 0.0}
+main : proc() = {}`)
+		mustContain(t, got, "cog.Complex32")
+	})
 }
 
 func TestConvertEnumDecl(t *testing.T) {
