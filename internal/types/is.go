@@ -130,11 +130,11 @@ func AssignableTo(src, dst Type) bool {
 }
 
 func IsBool(t Type) bool {
-	return t.Underlying().Kind() == Bool
+	return t.Kind() == Bool
 }
 
 func IsComplex(t Type) bool {
-	kind := t.Underlying().Kind()
+	kind := t.Kind()
 	return kind == Complex32 || kind == Complex64 || kind == Complex128
 }
 
@@ -143,12 +143,12 @@ func IsFixed(t Type) bool {
 }
 
 func IsFloat(t Type) bool {
-	kind := t.Underlying().Kind()
+	kind := t.Kind()
 	return kind == Float16 || kind == Float32 || kind == Float64
 }
 
 func IsInt(t Type) bool {
-	kind := t.Underlying().Kind()
+	kind := t.Kind()
 	return kind == Int8 || kind == Int16 || kind == Int32 || kind == Int64 || kind == Int128
 }
 
@@ -157,7 +157,7 @@ func IsNumber(t Type) bool {
 }
 
 func IsIterator(t Type) bool {
-	kind := t.Underlying().Kind()
+	kind := t.Kind()
 	return IsString(t) || kind == ArrayKind || kind == SliceKind || kind == MapKind || kind == SetKind || kind == EnumKind
 }
 
@@ -170,7 +170,7 @@ func IsSigned(t Type) bool {
 }
 
 func IsString(t Type) bool {
-	kind := t.Underlying().Kind()
+	kind := t.Kind()
 	return kind == ASCII || kind == UTF8
 }
 
@@ -179,6 +179,6 @@ func IsSummable(t Type) bool {
 }
 
 func IsUint(t Type) bool {
-	kind := t.Underlying().Kind()
+	kind := t.Kind()
 	return kind == Uint8 || kind == Uint16 || kind == Uint32 || kind == Uint64 || kind == Uint128
 }

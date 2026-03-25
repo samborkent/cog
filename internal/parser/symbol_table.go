@@ -87,7 +87,7 @@ func (s *SymbolTable) Define(ident *ast.Identifier) {
 	s.table[ident.Name] = symbol
 
 	if ident.Name != "" && ident.Qualifier != ast.QualifierType {
-		switch ident.ValueType.Underlying().Kind() {
+		switch ident.ValueType.Kind() {
 		case types.StructKind:
 			structType, ok := ident.ValueType.Underlying().(*types.Struct)
 			if !ok {

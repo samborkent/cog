@@ -197,7 +197,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			Specs: []goast.Spec{valueSpec},
 		}}, nil
 	case *ast.Type:
-		if n.Alias.Underlying().Kind() == types.EnumKind {
+		if n.Alias.Kind() == types.EnumKind {
 			return t.convertEnumDecl(n)
 		}
 
@@ -263,7 +263,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 			return nil, fmt.Errorf("converting expression %d in enum literal: %w", i, err)
 		}
 
-		if val.Type().Underlying().Kind() == types.StructKind {
+		if val.Type().Kind() == types.StructKind {
 			compositeLit, ok := expr.(*goast.CompositeLit)
 			if !ok {
 				return nil, fmt.Errorf("cannot cast struct literal as composite literal in enum")

@@ -133,7 +133,6 @@ The following basic features are missing that need to be implemented before Cog 
 - Design how iterators should work.
     - Range over int (or other literal) should not be possible.
     - Instead we should range over an iterator function which takes literal as argument.
-- Audit all uses of `types.Underlying().Kind()`
 - Fork and rework float16, uint128 and int128 imported packages.
 - Implement flat AST.
 

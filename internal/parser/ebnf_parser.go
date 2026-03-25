@@ -96,7 +96,7 @@ func (p *Parser) equality(ctx context.Context, typeToken types.Type) ast.Express
 			Right:    right,
 		}
 
-		if infix.Left.Type().Underlying().Kind() != infix.Right.Type().Underlying().Kind() {
+		if infix.Left.Type().Kind() != infix.Right.Type().Kind() {
 			infix.EqualizeLiteralTypes()
 		}
 
@@ -133,7 +133,7 @@ func (p *Parser) comparison(ctx context.Context, typeToken types.Type) ast.Expre
 			Right:    right,
 		}
 
-		if infix.Left.Type().Underlying().Kind() != infix.Right.Type().Underlying().Kind() {
+		if infix.Left.Type().Kind() != infix.Right.Type().Kind() {
 			infix.EqualizeLiteralTypes()
 		}
 

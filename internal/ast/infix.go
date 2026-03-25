@@ -27,7 +27,7 @@ func (e *Infix) EqualizeLiteralTypes() {
 	}
 
 	// Handle default inferred literal types.
-	switch e.Left.Type().Underlying().Kind() {
+	switch e.Left.Type().Kind() {
 	case types.ASCII:
 		if right, ok := e.Right.(*UTF8Literal); ok {
 			e.Right = &ASCIILiteral{
@@ -191,9 +191,9 @@ func (e *Infix) Type() types.Type {
 }
 
 func upgradeLiteralType(expr Expression, ref Expression) Expression {
-	refType := ref.Type().Underlying().Kind()
+	refType := ref.Type().Kind()
 
-	if expr.Type().Underlying().Kind() == refType {
+	if expr.Type().Kind() == refType {
 		return expr
 	}
 

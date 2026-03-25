@@ -212,7 +212,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		// Use bytes.Equal for ascii type.
-		switch n.Left.Type().Underlying().Kind() {
+		switch n.Left.Type().Kind() {
 		case types.ASCII:
 			return &goast.CallExpr{
 				Fun: &goast.SelectorExpr{
@@ -539,7 +539,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		// Float16 has no native operators; promote to float32, apply, demote.
-		if n.Right.Type().Underlying().Kind() == types.Float16 {
+		if n.Right.Type().Kind() == types.Float16 {
 			t.addCogImport()
 
 			return &goast.CallExpr{
@@ -559,7 +559,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		// Complex32 has no native operators; promote to complex64, apply, demote.
-		if n.Right.Type().Underlying().Kind() == types.Complex32 {
+		if n.Right.Type().Kind() == types.Complex32 {
 			t.addCogImport()
 
 			return &goast.CallExpr{
@@ -579,7 +579,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		// Int128 uses .Neg() method for unary minus.
-		if n.Right.Type().Underlying().Kind() == types.Int128 {
+		if n.Right.Type().Kind() == types.Int128 {
 			return &goast.CallExpr{
 				Fun: &goast.SelectorExpr{X: right, Sel: &goast.Ident{Name: "Neg"}},
 			}, nil
@@ -668,7 +668,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		var exported bool
 
-		switch n.Identifier.ValueType.Underlying().Kind() {
+		switch n.Identifier.ValueType.Kind() {
 		case types.EnumKind:
 			_, ok := n.Identifier.ValueType.Underlying().(*types.Enum)
 			if !ok {
