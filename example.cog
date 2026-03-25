@@ -14,6 +14,8 @@ export notExported ~ uint64
 export ExportedString ~ String
 
 main : proc() = {
+    _ = 10 // inline comment stays inline
+
     str := @go.strings.ToUpper("str")
 
     b : float32 = 0.0
@@ -215,6 +217,30 @@ outerLoop:
 	_ = @slice<int32, uint8>(10)
 
 	arenaProc(arg)
+
+    // float16: backed by x448/float16 package, arithmetic promotes to float32.
+    half : float16 = 1.5
+    halfNeg := -half
+    halfSum := half + half
+    halfCmp := half < halfNeg
+
+    // complex32: two float16 parts, arithmetic promotes to complex64.
+    comp : complex32 = {1.0, 2.0}
+    compNeg := -comp
+    compSum := comp + comp
+    compEq := comp == compNeg
+
+    // uint128: backed by lukechampine.com/uint128, ops via methods.
+    big : uint128 = 42
+    bigSum := big + big
+    bigMul := big * big
+    bigCmp := big < bigSum
+
+    // int128: backed by ryanavella/wide, ops via methods.
+    signed : int128 = 42
+    signedNeg := -signed
+    signedSum := signed + signed
+    signedCmp := signed < signedNeg
 }
 
 arenaProc : proc(n : uint64) = {

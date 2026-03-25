@@ -212,13 +212,13 @@ func upgradeLiteralType(expr Expression, ref Expression) Expression {
 			// Upgrade complex32 to complex64.
 			return &Complex64Literal{
 				Token: e.Token,
-				Value: complex32to64(e.Value),
+				Value: Complex32To64(e.Value),
 			}
 		case types.Complex128:
 			// Upgrade complex32 to complex128.
 			return &Complex128Literal{
 				Token: e.Token,
-				Value: complex128(complex32to64(e.Value)),
+				Value: complex128(Complex32To64(e.Value)),
 			}
 		}
 	case *Complex64Literal:

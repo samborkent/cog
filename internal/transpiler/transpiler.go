@@ -31,9 +31,10 @@ type Transpiler struct {
 	needsContext   bool
 	ifLabelCounter uint32
 
-	typeCache    map[types.Type]goast.Expr
-	dynComments  map[string]string   // dyn field name → trailing comment text
-	skipComments map[uint64]struct{} // hashes of comments consumed by dyn fields
+	typeCache      map[types.Type]goast.Expr
+	dynComments    map[string]string   // dyn field name → trailing comment text
+	skipComments   map[uint64]struct{} // hashes of comments consumed by dyn fields
+	lastSourceLine uint32              // tracks the source line of the previous statement
 }
 
 func NewTranspiler(f *ast.File) *Transpiler {
@@ -188,6 +189,9 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 			if _, isComment := s.(*ast.Comment); !isComment {
 				t.attachLineDecl(gonodes, s)
 			}
+
+			ln, _ := s.Pos()
+			t.lastSourceLine = ln
 
 			gofile.Decls = append(gofile.Decls, gonodes...)
 		}

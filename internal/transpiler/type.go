@@ -61,10 +61,24 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		}
 	case types.Bool:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Bool], nil)}
+	case types.Complex32:
+		t.addCogImport()
+
+		expr = &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "cog"},
+			Sel: &goast.Ident{Name: "Complex32"},
+		}
 	case types.Complex64:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex64], nil)}
 	case types.Complex128:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Complex128], nil)}
+	case types.Float16:
+		t.addCogImport()
+
+		expr = &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "cog"},
+			Sel: &goast.Ident{Name: "Float16"},
+		}
 	case types.Float32:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Float32], nil)}
 	case types.Float64:
@@ -77,6 +91,13 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int32], nil)}
 	case types.Int64:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Int64], nil)}
+	case types.Int128:
+		t.addCogImport()
+
+		expr = &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "cog"},
+			Sel: &goast.Ident{Name: "Int128"},
+		}
 	case types.MapKind:
 		mapType, ok := typ.(*types.Map)
 		if !ok {
@@ -195,6 +216,13 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint32], nil)}
 	case types.Uint64:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.Uint64], nil)}
+	case types.Uint128:
+		t.addCogImport()
+
+		expr = &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "cog"},
+			Sel: &goast.Ident{Name: "Uint128"},
+		}
 	case types.SetKind:
 		setType, ok := typ.(*types.Set)
 		if !ok {

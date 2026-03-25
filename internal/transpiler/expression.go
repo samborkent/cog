@@ -94,6 +94,39 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Fun:  component.Ident(n.Identifier),
 			Args: args,
 		}, nil
+	case *ast.Complex32Literal:
+		t.addCogImport()
+
+		fromF32 := func(v float32) *goast.CallExpr {
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{
+					X:   &goast.Ident{Name: "cog"},
+					Sel: &goast.Ident{Name: "Float16Fromfloat32"},
+				},
+				Args: []goast.Expr{component.Float32Lit(v)},
+			}
+		}
+
+		return &goast.CompositeLit{
+			Type: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Complex32"},
+			},
+			Elts: []goast.Expr{
+				&goast.KeyValueExpr{Key: &goast.Ident{Name: "Real"}, Value: fromF32(n.Value[0].Float32())},
+				&goast.KeyValueExpr{Key: &goast.Ident{Name: "Imag"}, Value: fromF32(n.Value[1].Float32())},
+			},
+		}, nil
+	case *ast.Float16Literal:
+		t.addCogImport()
+
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Float16Fromfloat32"},
+			},
+			Args: []goast.Expr{component.Float32Lit(n.Value.Float32())},
+		}, nil
 	case *ast.Float32Literal:
 		return component.Float32Lit(n.Value), nil
 	case *ast.Float64Literal:
@@ -176,6 +209,216 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				},
 				Args: []goast.Expr{rhs},
 			}, nil
+		case types.Complex32:
+			t.addCogImport()
+
+			binOp, err := convertBinaryOperator(n.Operator.Type)
+			if err != nil {
+				return nil, err
+			}
+
+			// Promote both operands to complex64 for the operation.
+			lhsC64 := &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Complex64"}},
+			}
+			rhsC64 := &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: rhs, Sel: &goast.Ident{Name: "Complex64"}},
+			}
+
+			binaryExpr := &goast.BinaryExpr{X: lhsC64, Op: binOp, Y: rhsC64}
+
+			// Equality comparisons return bool directly; arithmetic wraps result back to Complex32.
+			switch n.Operator.Type {
+			case tokens.Equal, tokens.NotEqual:
+				return binaryExpr, nil
+			default:
+				return &goast.CallExpr{
+					Fun: &goast.SelectorExpr{
+						X:   &goast.Ident{Name: "cog"},
+						Sel: &goast.Ident{Name: "Complex32FromComplex64"},
+					},
+					Args: []goast.Expr{binaryExpr},
+				}, nil
+			}
+		case types.Float16:
+			t.addCogImport()
+
+			binOp, err := convertBinaryOperator(n.Operator.Type)
+			if err != nil {
+				return nil, err
+			}
+
+			// Promote both operands to float32 for the operation.
+			lhsF32 := &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Float32"}},
+			}
+			rhsF32 := &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: rhs, Sel: &goast.Ident{Name: "Float32"}},
+			}
+
+			binaryExpr := &goast.BinaryExpr{X: lhsF32, Op: binOp, Y: rhsF32}
+
+			// Comparisons return bool directly; arithmetic wraps result back to Float16.
+			switch n.Operator.Type {
+			case tokens.Equal, tokens.NotEqual, tokens.GT, tokens.GTEqual, tokens.LT, tokens.LTEqual:
+				return binaryExpr, nil
+			default:
+				return &goast.CallExpr{
+					Fun: &goast.SelectorExpr{
+						X:   &goast.Ident{Name: "cog"},
+						Sel: &goast.Ident{Name: "Float16Fromfloat32"},
+					},
+					Args: []goast.Expr{binaryExpr},
+				}, nil
+			}
+		case types.Uint128:
+			switch n.Operator.Type {
+			case tokens.Plus:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Add"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Minus:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Sub"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Asterisk:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Mul"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Divide:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Div"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Equal:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Equals"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.NotEqual:
+				return &goast.UnaryExpr{
+					Op: gotoken.NOT,
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Equals"}},
+						Args: []goast.Expr{rhs},
+					},
+				}, nil
+			case tokens.LT:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.LSS,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.LTEqual:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.LEQ,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.GT:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.GTR,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.GTEqual:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.GEQ,
+					Y:  component.Int64Lit(0),
+				}, nil
+			default:
+				return nil, fmt.Errorf("unsupported operator %q for uint128", n.Operator.Type)
+			}
+		case types.Int128:
+			switch n.Operator.Type {
+			case tokens.Plus:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Add"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Minus:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Sub"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Asterisk:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Mul"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Divide:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Div"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.Equal:
+				return &goast.CallExpr{
+					Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Eq"}},
+					Args: []goast.Expr{rhs},
+				}, nil
+			case tokens.NotEqual:
+				return &goast.UnaryExpr{
+					Op: gotoken.NOT,
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Eq"}},
+						Args: []goast.Expr{rhs},
+					},
+				}, nil
+			case tokens.LT:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.LSS,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.LTEqual:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.LEQ,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.GT:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.GTR,
+					Y:  component.Int64Lit(0),
+				}, nil
+			case tokens.GTEqual:
+				return &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun:  &goast.SelectorExpr{X: lhs, Sel: &goast.Ident{Name: "Cmp"}},
+						Args: []goast.Expr{rhs},
+					},
+					Op: gotoken.GEQ,
+					Y:  component.Int64Lit(0),
+				}, nil
+			default:
+				return nil, fmt.Errorf("unsupported operator %q for int128", n.Operator.Type)
+			}
 		}
 
 		binOp, err := convertBinaryOperator(n.Operator.Type)
@@ -197,7 +440,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Int64Literal:
 		return component.Int64Lit(n.Value), nil
 	case *ast.Int128Literal:
-		return component.Int128Lit(n.Value.String()), nil
+		t.addCogImport()
+
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Int128FromString"},
+			},
+			Args: []goast.Expr{component.UTF8Lit(n.Token.Literal)},
+		}, nil
 	case *ast.MapLiteral:
 		// TODO: handle not directly comparable types
 		exprs := make([]goast.Expr, len(n.Pairs))
@@ -273,6 +524,53 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		unaryOp, err := convertUnaryOperator(n.Operator.Type)
 		if err != nil {
 			return nil, err
+		}
+
+		// Float16 has no native operators; promote to float32, apply, demote.
+		if n.Right.Type().Underlying().Kind() == types.Float16 {
+			t.addCogImport()
+
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{
+					X:   &goast.Ident{Name: "cog"},
+					Sel: &goast.Ident{Name: "Float16Fromfloat32"},
+				},
+				Args: []goast.Expr{
+					&goast.UnaryExpr{
+						Op: unaryOp,
+						X: &goast.CallExpr{
+							Fun: &goast.SelectorExpr{X: right, Sel: &goast.Ident{Name: "Float32"}},
+						},
+					},
+				},
+			}, nil
+		}
+
+		// Complex32 has no native operators; promote to complex64, apply, demote.
+		if n.Right.Type().Underlying().Kind() == types.Complex32 {
+			t.addCogImport()
+
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{
+					X:   &goast.Ident{Name: "cog"},
+					Sel: &goast.Ident{Name: "Complex32FromComplex64"},
+				},
+				Args: []goast.Expr{
+					&goast.UnaryExpr{
+						Op: unaryOp,
+						X: &goast.CallExpr{
+							Fun: &goast.SelectorExpr{X: right, Sel: &goast.Ident{Name: "Complex64"}},
+						},
+					},
+				},
+			}, nil
+		}
+
+		// Int128 uses .Neg() method for unary minus.
+		if n.Right.Type().Underlying().Kind() == types.Int128 {
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: right, Sel: &goast.Ident{Name: "Neg"}},
+			}, nil
 		}
 
 		return &goast.UnaryExpr{
@@ -551,7 +849,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Uint64Literal:
 		return component.Uint64Lit(n.Value), nil
 	case *ast.Uint128Literal:
-		return component.Uint128Lit(n.Value.String()), nil
+		t.addCogImport()
+
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Uint128FromString"},
+			},
+			Args: []goast.Expr{component.UTF8Lit(n.Value.String())},
+		}, nil
 	case *ast.UnionLiteral:
 		unionType, ok := n.UnionType.Underlying().(*types.Union)
 		if !ok {

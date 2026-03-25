@@ -103,4 +103,203 @@ main : proc() = {
 }`)
 		mustContain(t, got, "xs[0]")
 	})
+
+	t.Run("float16_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : float16 = 1.5
+main : proc() = {}`)
+		mustContain(t, got, "cog.Float16Fromfloat32")
+		mustContain(t, got, "1.5")
+	})
+
+	t.Run("float16_add", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : float16 = 1.0
+	b : float16 = 2.0
+	c := a + b
+	@print(c)
+}`)
+		mustContain(t, got, ".Float32()")
+		mustContain(t, got, "cog.Float16Fromfloat32")
+	})
+
+	t.Run("float16_comparison", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : float16 = 1.0
+	b : float16 = 2.0
+	c := a < b
+	@print(c)
+}`)
+		mustContain(t, got, ".Float32()")
+		mustContain(t, got, "<")
+	})
+
+	t.Run("float16_negate", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : float16 = 1.0
+	b := -a
+	@print(b)
+}`)
+		mustContain(t, got, "cog.Float16Fromfloat32(-")
+		mustContain(t, got, ".Float32()")
+	})
+
+	t.Run("complex32_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+c : complex32 = {1.0, 2.0}
+main : proc() = {}`)
+		mustContain(t, got, "cog.Complex32{")
+		mustContain(t, got, "Real:")
+		mustContain(t, got, "Imag:")
+		mustContain(t, got, "cog.Float16Fromfloat32")
+	})
+
+	t.Run("complex32_add", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : complex32 = {1.0, 2.0}
+	b : complex32 = {3.0, 4.0}
+	c := a + b
+	@print(c)
+}`)
+		mustContain(t, got, ".Complex64()")
+		mustContain(t, got, "cog.Complex32FromComplex64")
+	})
+
+	t.Run("complex32_equality", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : complex32 = {1.0, 2.0}
+	b : complex32 = {3.0, 4.0}
+	c := a == b
+	@print(c)
+}`)
+		mustContain(t, got, ".Complex64()")
+		mustContain(t, got, "==")
+	})
+
+	t.Run("complex32_negate", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : complex32 = {1.0, 2.0}
+	b := -a
+	@print(b)
+}`)
+		mustContain(t, got, "cog.Complex32FromComplex64(-")
+		mustContain(t, got, ".Complex64()")
+	})
+
+	t.Run("uint128_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : uint128 = 42
+main : proc() = {}`)
+		mustContain(t, got, "cog.Uint128FromString")
+		mustContain(t, got, `"42"`)
+	})
+
+	t.Run("uint128_add", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : uint128 = 1
+	b : uint128 = 2
+	c := a + b
+	@print(c)
+}`)
+		mustContain(t, got, ".Add(")
+	})
+
+	t.Run("uint128_equality", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : uint128 = 1
+	b : uint128 = 2
+	c := a == b
+	@print(c)
+}`)
+		mustContain(t, got, ".Equals(")
+	})
+
+	t.Run("uint128_comparison", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : uint128 = 1
+	b : uint128 = 2
+	c := a < b
+	@print(c)
+}`)
+		mustContain(t, got, ".Cmp(")
+		mustContain(t, got, "< 0")
+	})
+
+	t.Run("int128_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : int128 = 42
+main : proc() = {}`)
+		mustContain(t, got, "cog.Int128FromString")
+		mustContain(t, got, `"42"`)
+	})
+
+	t.Run("int128_add", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : int128 = 1
+	b : int128 = 2
+	c := a + b
+	@print(c)
+}`)
+		mustContain(t, got, ".Add(")
+	})
+
+	t.Run("int128_equality", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : int128 = 1
+	b : int128 = 2
+	c := a == b
+	@print(c)
+}`)
+		mustContain(t, got, ".Eq(")
+	})
+
+	t.Run("int128_comparison", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : int128 = 1
+	b : int128 = 2
+	c := a < b
+	@print(c)
+}`)
+		mustContain(t, got, ".Cmp(")
+		mustContain(t, got, "< 0")
+	})
+
+	t.Run("int128_negation", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : int128 = 1
+	b := -a
+	@print(b)
+}`)
+		mustContain(t, got, ".Neg()")
+	})
 }

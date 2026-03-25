@@ -4,7 +4,6 @@ Architectural gaps:
 
 1. No multi-file support. This is the single biggest blocker. Without it, cog can't write anything non-trivial. This touches every layer: lexer (file management), parser (cross-file symbol resolution), transpiler (package-level codegen).
 2. No package/import system. Closely related to above — without this, there's no code reuse within cog.
-3. int128/uint128/float16/complex32 are declared in the type system but have no transpiler lowering. Using them will crash.
 
 Design concerns:
 

@@ -81,6 +81,38 @@ Either ~ int32 | utf8
 main : proc() = {}`)
 		mustContain(t, got, "type _Either")
 	})
+
+	t.Run("float16_type", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : float16 = 1.0
+main : proc() = {}`)
+		mustContain(t, got, "cog.Float16")
+	})
+
+	t.Run("complex32_type", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+c : complex32 = {1.0, 0.0}
+main : proc() = {}`)
+		mustContain(t, got, "cog.Complex32")
+	})
+
+	t.Run("uint128_type", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : uint128 = 1
+main : proc() = {}`)
+		mustContain(t, got, "cog.Uint128")
+	})
+
+	t.Run("int128_type", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : int128 = 1
+main : proc() = {}`)
+		mustContain(t, got, "cog.Int128")
+	})
 }
 
 func TestConvertEnumDecl(t *testing.T) {

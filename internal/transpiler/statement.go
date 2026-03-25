@@ -16,7 +16,12 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 	switch n := node.(type) {
 	case *ast.Comment:
-		return []goast.Stmt{&goast.DeclStmt{Decl: t.commentDecl(n.Text)[0]}}, nil
+		text := n.Text
+		commentLn, _ := n.Pos()
+		if commentLn != t.lastSourceLine {
+			text = "\n" + text
+		}
+		return []goast.Stmt{&goast.DeclStmt{Decl: t.commentDecl(text)[0]}}, nil
 	case *ast.Assignment:
 		ident := &goast.Ident{Name: "_"}
 
@@ -419,6 +424,9 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		lineDecl := &goast.DeclStmt{Decl: t.commentDecl(lineComment)[0]}
 		returnStmts = append([]goast.Stmt{lineDecl}, returnStmts...)
 	}
+
+	ln, _ := node.Pos()
+	t.lastSourceLine = ln
 
 	return returnStmts, nil
 }

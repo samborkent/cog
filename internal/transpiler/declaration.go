@@ -15,7 +15,12 @@ import (
 func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	switch n := node.(type) {
 	case *ast.Comment:
-		return t.commentDecl(n.Text), nil
+		text := n.Text
+		commentLn, _ := n.Pos()
+		if commentLn != t.lastSourceLine {
+			text = "\n" + text
+		}
+		return t.commentDecl(text), nil
 	case *ast.Declaration:
 		if n.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
 			// Dynamic variable declarations are handled collectively via the
