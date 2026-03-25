@@ -13,6 +13,14 @@ import (
 // called externally when multiple parsers share one symbol table, so that
 // all files' globals are visible before any file is fully parsed.
 func (p *Parser) FindGlobals(ctx context.Context) {
+	if p.scriptMode {
+		// Script files have definition scope (no forward references).
+		// Only scan for import statements so that imported packages can be
+		// compiled before the file is parsed.
+		p.findScriptImports(ctx)
+		return
+	}
+
 	// Pre-register all type names so forward references can be resolved.
 	p.preRegisterTypeNames(ctx)
 
@@ -76,6 +84,32 @@ tokenLoop:
 		// Guard against infinite loops: if no progress was made, force advance.
 		if p.i == prev {
 			p.advance("findGlobals recovery")
+		}
+	}
+
+	p.i = 0
+	p.Errs = p.Errs[:0]
+}
+
+func (p *Parser) findScriptImports(ctx context.Context) {
+	// Pre-register type names so that type aliases can be resolved during parsing.
+	p.preRegisterTypeNames(ctx)
+
+	for p.this().Type != tokens.EOF {
+		if ctx.Err() != nil {
+			return
+		}
+
+		switch p.this().Type {
+		case tokens.Import:
+			p.parseImport()
+		case tokens.GoImport:
+			p.advance("findScriptImports goimport") // consume goimport
+			if p.this().Type == tokens.LParen {
+				p.skipGrouped(ctx)
+			}
+		default:
+			p.advance("findScriptImports")
 		}
 	}
 

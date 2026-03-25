@@ -116,3 +116,10 @@ n : Name = "hello"
 @print(n)
 `)
 }
+
+func TestScriptNoForwardReferences(t *testing.T) {
+	t.Parallel()
+	parseScriptShouldError(t, `@print(x)
+x := 42
+`)
+}
