@@ -13,6 +13,7 @@ package
 top_level_statement
     = comment
     | go_import
+    | import
     | statement;
 
 
@@ -20,6 +21,9 @@ top_level_statement
 
 go_import
     = "goimport", "(", { STRING }, ")";
+
+import
+    = "import", "(", { STRING }, ")";
 
 
 (* === Statements === *)
@@ -37,6 +41,9 @@ statement
     | "return", [ expression, { ",", expression } ]
     | builtin_statement
     | identifier_statement;
+
+builtin_statement
+    = "@", IDENTIFIER, [ type_arguments ], "(", call_arguments, ")";
 
 exported_statement
     = IDENTIFIER, ( ":", typed_declaration
@@ -128,6 +135,7 @@ type
     | "set", "<", type, ">"                            (* set *)
     | struct_type
     | basic_type
+    | IDENTIFIER, ".", IDENTIFIER                      (* package-qualified type *)
     | IDENTIFIER                                       (* type alias reference *)
     | type, "?"                                        (* option type *);
 
@@ -180,7 +188,7 @@ primary
     | "(", expression, ")"                             (* grouped expression *)
     | builtin_expression
     | IDENTIFIER, ( "(", call_arguments, ")"           (* function call *)
-                  | ".", IDENTIFIER                     (* selector *)
+                  | ".", IDENTIFIER, [ "(", call_arguments, ")" ]  (* selector or package call *)
                   | )                                   (* variable reference *)
     | typed_literal
     | composite_literal;
