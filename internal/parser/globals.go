@@ -8,7 +8,11 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) findGlobals(ctx context.Context) {
+// FindGlobals scans the token stream to pre-register all top-level names
+// (types, declarations, enums) into the parser's symbol table. It can be
+// called externally when multiple parsers share one symbol table, so that
+// all files' globals are visible before any file is fully parsed.
+func (p *Parser) FindGlobals(ctx context.Context) {
 	// Pre-register all type names so forward references can be resolved.
 	p.preRegisterTypeNames(ctx)
 

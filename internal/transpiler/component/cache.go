@@ -1,24 +1,27 @@
 package component
 
-import goast "go/ast"
+import (
+	goast "go/ast"
+	"sync"
+)
 
 // Package-level cache for reusable Go AST identifier nodes.
-var idents = make(map[string]*goast.Ident)
+var idents sync.Map
 
 // cachedIdent returns a cached *goast.Ident for the given name,
 // creating and caching one if it doesn't exist yet.
 func cachedIdent(name string) *goast.Ident {
-	if ident, ok := idents[name]; ok {
-		return ident
+	if v, ok := idents.Load(name); ok {
+		return v.(*goast.Ident)
 	}
 
 	ident := &goast.Ident{Name: name}
-	idents[name] = ident
+	actual, _ := idents.LoadOrStore(name, ident)
 
-	return ident
+	return actual.(*goast.Ident)
 }
 
 // ResetCache clears the component cache. Should be called between transpilation runs.
 func ResetCache() {
-	clear(idents)
+	idents.Clear()
 }

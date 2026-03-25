@@ -1,0 +1,12 @@
+package main
+
+Coordinate ~ struct {
+    export (
+        lat : float64
+        lon : float64
+    )
+}
+
+formatCoord : func(c : Coordinate) utf8 = {
+    return "coordinate"
+}
