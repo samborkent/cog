@@ -152,7 +152,7 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 		if node.Arguments[0].Type().Underlying().Kind() == types.EnumKind {
 			enumType, ok := node.Arguments[0].Type().(*types.Alias)
 			if !ok {
-				panic("unable to cast enum to alias")
+				return nil, fmt.Errorf("unable to cast enum to alias for @print argument")
 			}
 
 			arg = &goast.IndexExpr{
@@ -287,12 +287,12 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 		var capacity goast.Expr
 
 		if len(node.Arguments) == 2 {
-			capacity, err = t.convertExpr(node.Arguments[0])
+			capacity, err = t.convertExpr(node.Arguments[1])
 			if err != nil {
 				return nil, fmt.Errorf("converting @slice capacity argument: %w", err)
 			}
 
-			switch n := node.Arguments[0].(type) {
+			switch n := node.Arguments[1].(type) {
 			case *ast.Prefix:
 				return nil, errors.New("@slice capacity must be positive")
 			case *ast.Int64Literal:

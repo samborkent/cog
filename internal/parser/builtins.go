@@ -376,6 +376,8 @@ func (p *Parser) parseBuiltinSlice(ctx context.Context, t tokens.Token, tokenTyp
 	args := []ast.Expression{lenArg}
 
 	if p.this().Type == tokens.Comma {
+		p.advance("parseBuiltinSlice ,") // consume ','
+
 		capArg := p.expression(ctx, lenType)
 		if capArg == nil {
 			return nil

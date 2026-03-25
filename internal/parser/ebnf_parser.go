@@ -311,8 +311,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				return nil
 			}
 
-			isEither := expr.Type().Kind() == unionType.Either.Kind()
-			isOr := expr.Type().Kind() == unionType.Or.Kind()
+			isEither := types.Equal(expr.Type(), unionType.Either)
+			isOr := types.Equal(expr.Type(), unionType.Or)
 
 			if !isEither && !isOr {
 				p.error(p.this(), fmt.Sprintf("expression of type %q not in union type %q", expr.Type().String(), unionType.String()), "primary")

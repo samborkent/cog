@@ -34,6 +34,16 @@ main : proc() = {
 		mustContain(t, got, "builtin.Slice")
 	})
 
+	t.Run("slice with capacity", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	xs := @slice<int64>(3, 10)
+	@print(xs)
+}`)
+		mustContain(t, got, "builtin.Slice")
+	})
+
 	t.Run("map", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p

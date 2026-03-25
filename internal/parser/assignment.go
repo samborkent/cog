@@ -43,7 +43,7 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 
 	node.Expression = expr
 
-	if symbol.Identifier.Name != "_" && !types.Equal(symbol.Type(), expr.Type()) {
+	if symbol.Identifier.Name != "_" && !types.Equal(symbol.Type(), expr.Type()) && !types.AssignableTo(expr.Type(), symbol.Type()) {
 		p.error(node.Token, fmt.Sprintf("type mismatch: cannot assign %q to variable of type %q", expr.Type(), symbol.Type()), "parseAssignment")
 		return nil
 	}

@@ -58,7 +58,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			// Procedure declaration
 			funcLiteral, ok := expr.(*goast.FuncLit)
 			if !ok {
-				panic("unable to assert function literal")
+				return nil, fmt.Errorf("unable to assert function literal for %q", n.Assignment.Identifier.Name)
 			}
 
 			if n.Assignment.Identifier.Name == "main" {
@@ -68,7 +68,9 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					if hasDynVars {
 						// Main with dynamic variables: init dyn struct.
 						dynIdent := t.symbols.Define("dyn")
-						t.symbols.MarkUsed("dyn")
+						if err := t.symbols.MarkUsed("dyn"); err != nil {
+							return nil, fmt.Errorf("marking dyn used: %w", err)
+						}
 
 						structElts := make([]goast.Expr, 0, len(t.symbols.dynamics))
 						for name := range t.symbols.dynamics {
@@ -96,7 +98,9 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 						if t.needsContext {
 							// Also seed context for proc propagation.
 							ctxIdent := t.symbols.Define("ctx")
-							t.symbols.MarkUsed("ctx")
+							if err := t.symbols.MarkUsed("ctx"); err != nil {
+								return nil, fmt.Errorf("marking ctx used: %w", err)
+							}
 
 							body := component.DynMainInit(dynIdent, ctxIdent, structLit)
 							funcLiteral.Body.List = append(body, funcLiteral.Body.List...)
@@ -113,7 +117,9 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					} else {
 						// Main with procs but no dynamic variables: just init context.
 						ctxIdent := t.symbols.Define("ctx")
-						t.symbols.MarkUsed("ctx")
+						if err := t.symbols.MarkUsed("ctx"); err != nil {
+							return nil, fmt.Errorf("marking ctx used: %w", err)
+						}
 
 						funcLiteral.Body.List = append(
 							[]goast.Stmt{component.ContextMain(ctxIdent)},
@@ -217,7 +223,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 	enumType, ok := n.Alias.(*types.Enum)
 	if !ok {
-		panic(fmt.Sprintf("cannot convert type %q to enum", n.Alias))
+		return nil, fmt.Errorf("cannot convert type %q to enum", n.Alias)
 	}
 
 	identifier := convertExport(n.Identifier.Name, n.Identifier.Exported)
@@ -244,7 +250,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		if val.Type().Underlying().Kind() == types.StructKind {
 			compositeLit, ok := expr.(*goast.CompositeLit)
 			if !ok {
-				panic("cannot cast struct literal as composite literal")
+				return nil, fmt.Errorf("cannot cast struct literal as composite literal in enum")
 			}
 
 			// Remove type for struct literals, to avoid naming issues with type aliases.

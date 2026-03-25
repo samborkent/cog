@@ -44,7 +44,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Call:
 		procType, ok := n.Identifier.ValueType.(*types.Procedure)
 		if !ok {
-			panic("failed to assert procedure type")
+			return nil, fmt.Errorf("failed to assert procedure type for %q", n.Identifier.Name)
 		}
 
 		args := make([]goast.Expr, 0, len(procType.Parameters))
@@ -86,7 +86,9 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 		}
 
-		t.symbols.MarkUsed(n.Identifier.Name)
+		if err := t.symbols.MarkUsed(n.Identifier.Name); err != nil {
+			return nil, fmt.Errorf("marking call identifier used: %w", err)
+		}
 
 		return &goast.CallExpr{
 			Fun:  component.Ident(n.Identifier),
@@ -132,7 +134,9 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return component.Ident(n), nil
 		}
 
-		t.symbols.MarkUsed(name)
+		if err := t.symbols.MarkUsed(name); err != nil {
+			return nil, fmt.Errorf("marking identifier used: %w", err)
+		}
 
 		return ident, nil
 	case *ast.Index:
@@ -173,9 +177,14 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}, nil
 		}
 
+		binOp, err := convertBinaryOperator(n.Operator.Type)
+		if err != nil {
+			return nil, err
+		}
+
 		return &goast.BinaryExpr{
 			X:  lhs,
-			Op: convertBinaryOperator(n.Operator.Type),
+			Op: binOp,
 			Y:  rhs,
 		}, nil
 	case *ast.Int8Literal:
@@ -260,8 +269,13 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, err
 		}
 
+		unaryOp, err := convertUnaryOperator(n.Operator.Type)
+		if err != nil {
+			return nil, err
+		}
+
 		return &goast.UnaryExpr{
-			Op: convertUnaryOperator(n.Operator.Type),
+			Op: unaryOp,
 			X:  right,
 		}, nil
 	case *ast.ProcedureLiteral:
@@ -317,7 +331,9 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("%s: unknown selector identifier", n.Identifier.Token)
 		}
 
-		t.symbols.MarkUsed(name)
+		if err := t.symbols.MarkUsed(name); err != nil {
+			return nil, fmt.Errorf("marking selector identifier used: %w", err)
+		}
 
 		var exported bool
 
@@ -325,7 +341,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		case types.EnumKind:
 			_, ok := n.Identifier.ValueType.Underlying().(*types.Enum)
 			if !ok {
-				panic("unable to assert enum type")
+				return nil, fmt.Errorf("unable to assert enum type for %q", n.Identifier.Name)
 			}
 
 			enumName := ident
@@ -335,7 +351,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		case types.StructKind:
 			structType, ok := n.Identifier.ValueType.Underlying().(*types.Struct)
 			if !ok {
-				panic("unable to assert struct type")
+				return nil, fmt.Errorf("unable to assert struct type for %q", n.Identifier.Name)
 			}
 
 			field := structType.Field(n.Field.Name)
@@ -456,7 +472,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		structType, ok := n.Type().Underlying().(*types.Struct)
 		if !ok {
-			panic("encountered struct literal with non-struct type")
+			return nil, fmt.Errorf("encountered struct literal with non-struct type %q", n.Type())
 		}
 
 		for _, val := range n.Values {
@@ -469,7 +485,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				return f.Name == val.Name
 			})
 			if fieldIndex == -1 {
-				panic("struct literal contains non-existing field")
+				return nil, fmt.Errorf("struct literal contains non-existing field %q", val.Name)
 			}
 
 			exprs = append(exprs, &goast.KeyValueExpr{
@@ -488,7 +504,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		ident, ok := n.Left.(*ast.Identifier)
 		if !ok {
-			panic("suffix operator applied to non-identifier")
+			return nil, fmt.Errorf("suffix operator applied to non-identifier")
 		}
 
 		name := convertExport(ident.Name, ident.Exported)
@@ -499,7 +515,9 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("identifier %q not found", name)
 		}
 
-		t.symbols.MarkUsed(name)
+		if err := t.symbols.MarkUsed(name); err != nil {
+			return nil, fmt.Errorf("marking suffix identifier used: %w", err)
+		}
 
 		return &goast.SelectorExpr{
 			X:   symbol,
@@ -533,7 +551,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.UnionLiteral:
 		unionType, ok := n.UnionType.Underlying().(*types.Union)
 		if !ok {
-			panic("unable to assert union type")
+			return nil, fmt.Errorf("unable to assert union type")
 		}
 
 		expr, err := t.convertExpr(n.Value)
@@ -570,48 +588,48 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	}
 }
 
-func convertBinaryOperator(t tokens.Type) gotoken.Token {
+func convertBinaryOperator(t tokens.Type) (gotoken.Token, error) {
 	switch t {
 	case tokens.Plus:
-		return gotoken.ADD
+		return gotoken.ADD, nil
 	case tokens.Minus:
-		return gotoken.SUB
+		return gotoken.SUB, nil
 	case tokens.Asterisk:
-		return gotoken.MUL
+		return gotoken.MUL, nil
 	case tokens.Divide:
-		return gotoken.QUO
+		return gotoken.QUO, nil
 	case tokens.NotEqual:
-		return gotoken.NEQ
+		return gotoken.NEQ, nil
 	case tokens.Assign:
-		return gotoken.ASSIGN
+		return gotoken.ASSIGN, nil
 	case tokens.Equal:
-		return gotoken.EQL
+		return gotoken.EQL, nil
 	case tokens.GT:
-		return gotoken.GTR
+		return gotoken.GTR, nil
 	case tokens.GTEqual:
-		return gotoken.GEQ
+		return gotoken.GEQ, nil
 	case tokens.LT:
-		return gotoken.LSS
+		return gotoken.LSS, nil
 	case tokens.LTEqual:
-		return gotoken.LEQ
+		return gotoken.LEQ, nil
 	case tokens.Declaration:
-		return gotoken.DEFINE
+		return gotoken.DEFINE, nil
 	case tokens.And:
-		return gotoken.LAND
+		return gotoken.LAND, nil
 	case tokens.Or:
-		return gotoken.LOR
+		return gotoken.LOR, nil
 	default:
-		panic("unknown binary operator " + t.String())
+		return gotoken.ILLEGAL, fmt.Errorf("unknown binary operator %s", t.String())
 	}
 }
 
-func convertUnaryOperator(t tokens.Type) gotoken.Token {
+func convertUnaryOperator(t tokens.Type) (gotoken.Token, error) {
 	switch t {
 	case tokens.Not:
-		return gotoken.NOT
+		return gotoken.NOT, nil
 	case tokens.Minus:
-		return gotoken.SUB
+		return gotoken.SUB, nil
 	default:
-		panic("unknown unary operator " + t.String())
+		return gotoken.ILLEGAL, fmt.Errorf("unknown unary operator %s", t.String())
 	}
 }

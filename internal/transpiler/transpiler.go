@@ -71,7 +71,10 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 			name := convertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported)
 
 			if s.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
-				t.symbols.DefineDynamic(s.Assignment.Identifier)
+				if err := t.symbols.DefineDynamic(s.Assignment.Identifier); err != nil {
+					errs = append(errs, fmt.Errorf("defining dynamic variable %q: %w", name, err))
+					continue
+				}
 
 				if s.Assignment.Expression != nil {
 					t.dynDefaults[name] = s.Assignment.Expression
