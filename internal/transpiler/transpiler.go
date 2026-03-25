@@ -250,19 +250,6 @@ func (t *Transpiler) addStdLibImport(name string) {
 	}
 }
 
-func (t *Transpiler) addFloat16Import() {
-	_, ok := t.imports["f16"]
-	if !ok {
-		t.imports["f16"] = &goast.ImportSpec{
-			Name: &goast.Ident{Name: "f16"},
-			Path: &goast.BasicLit{
-				Kind:  gotoken.STRING,
-				Value: `"github.com/x448/float16"`,
-			},
-		}
-	}
-}
-
 // attachLineDecl adds a //line directive comment to the first declaration in decls
 // so that compiler errors refer back to the originating Cog source location.
 func (t *Transpiler) attachLineDecl(decls []goast.Decl, node ast.Node) {

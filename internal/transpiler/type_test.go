@@ -87,7 +87,7 @@ main : proc() = {}`)
 		got := transpile(t, `package p
 x : float16 = 1.0
 main : proc() = {}`)
-		mustContain(t, got, "f16.Float16")
+		mustContain(t, got, "cog.Float16")
 	})
 
 	t.Run("complex32_type", func(t *testing.T) {

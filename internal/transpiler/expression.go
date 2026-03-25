@@ -96,13 +96,12 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}, nil
 	case *ast.Complex32Literal:
 		t.addCogImport()
-		t.addFloat16Import()
 
 		fromF32 := func(v float32) *goast.CallExpr {
 			return &goast.CallExpr{
 				Fun: &goast.SelectorExpr{
-					X:   &goast.Ident{Name: "f16"},
-					Sel: &goast.Ident{Name: "Fromfloat32"},
+					X:   &goast.Ident{Name: "cog"},
+					Sel: &goast.Ident{Name: "Float16Fromfloat32"},
 				},
 				Args: []goast.Expr{component.Float32Lit(v)},
 			}
@@ -119,12 +118,12 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			},
 		}, nil
 	case *ast.Float16Literal:
-		t.addFloat16Import()
+		t.addCogImport()
 
 		return &goast.CallExpr{
 			Fun: &goast.SelectorExpr{
-				X:   &goast.Ident{Name: "f16"},
-				Sel: &goast.Ident{Name: "Fromfloat32"},
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Float16Fromfloat32"},
 			},
 			Args: []goast.Expr{component.Float32Lit(n.Value.Float32())},
 		}, nil
@@ -242,7 +241,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				}, nil
 			}
 		case types.Float16:
-			t.addFloat16Import()
+			t.addCogImport()
 
 			binOp, err := convertBinaryOperator(n.Operator.Type)
 			if err != nil {
@@ -266,8 +265,8 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			default:
 				return &goast.CallExpr{
 					Fun: &goast.SelectorExpr{
-						X:   &goast.Ident{Name: "f16"},
-						Sel: &goast.Ident{Name: "Fromfloat32"},
+						X:   &goast.Ident{Name: "cog"},
+						Sel: &goast.Ident{Name: "Float16Fromfloat32"},
 					},
 					Args: []goast.Expr{binaryExpr},
 				}, nil
@@ -373,12 +372,12 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		// Float16 has no native operators; promote to float32, apply, demote.
 		if n.Right.Type().Underlying().Kind() == types.Float16 {
-			t.addFloat16Import()
+			t.addCogImport()
 
 			return &goast.CallExpr{
 				Fun: &goast.SelectorExpr{
-					X:   &goast.Ident{Name: "f16"},
-					Sel: &goast.Ident{Name: "Fromfloat32"},
+					X:   &goast.Ident{Name: "cog"},
+					Sel: &goast.Ident{Name: "Float16Fromfloat32"},
 				},
 				Args: []goast.Expr{
 					&goast.UnaryExpr{

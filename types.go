@@ -10,8 +10,14 @@ import (
 type (
 	ASCII             []byte
 	ASCIIHash         uint64
+	Float16           = f16.Float16
 	Set[T comparable] map[T]struct{}
 )
+
+// Float16Fromfloat32 converts a float32 to a Float16.
+func Float16Fromfloat32(f float32) Float16 {
+	return f16.Fromfloat32(f)
+}
 
 func (a ASCII) Equal(b ASCII) bool {
 	return bytes.Equal(a, b)
@@ -35,8 +41,8 @@ type String interface {
 
 // Complex32 represents a complex number with float16 real and imaginary parts.
 type Complex32 struct {
-	Real f16.Float16
-	Imag f16.Float16
+	Real Float16
+	Imag Float16
 }
 
 // Complex64 promotes the Complex32 to a native complex64.
@@ -47,7 +53,7 @@ func (c Complex32) Complex64() complex64 {
 // Complex32FromComplex64 converts a complex64 to a Complex32.
 func Complex32FromComplex64(c complex64) Complex32 {
 	return Complex32{
-		Real: f16.Fromfloat32(real(c)),
-		Imag: f16.Fromfloat32(imag(c)),
+		Real: Float16Fromfloat32(real(c)),
+		Imag: Float16Fromfloat32(imag(c)),
 	}
 }

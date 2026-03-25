@@ -109,7 +109,7 @@ main : proc() = {
 		got := transpile(t, `package p
 x : float16 = 1.5
 main : proc() = {}`)
-		mustContain(t, got, "f16.Fromfloat32")
+		mustContain(t, got, "cog.Float16Fromfloat32")
 		mustContain(t, got, "1.5")
 	})
 
@@ -123,7 +123,7 @@ main : proc() = {
 	@print(c)
 }`)
 		mustContain(t, got, ".Float32()")
-		mustContain(t, got, "f16.Fromfloat32")
+		mustContain(t, got, "cog.Float16Fromfloat32")
 	})
 
 	t.Run("float16_comparison", func(t *testing.T) {
@@ -147,7 +147,7 @@ main : proc() = {
 	b := -a
 	@print(b)
 }`)
-		mustContain(t, got, "f16.Fromfloat32(-")
+		mustContain(t, got, "cog.Float16Fromfloat32(-")
 		mustContain(t, got, ".Float32()")
 	})
 
@@ -159,7 +159,7 @@ main : proc() = {}`)
 		mustContain(t, got, "cog.Complex32{")
 		mustContain(t, got, "Real:")
 		mustContain(t, got, "Imag:")
-		mustContain(t, got, "f16.Fromfloat32")
+		mustContain(t, got, "cog.Float16Fromfloat32")
 	})
 
 	t.Run("complex32_add", func(t *testing.T) {
