@@ -241,6 +241,13 @@ outerLoop:
     signedNeg := -signed
     signedSum := signed + signed
     signedCmp := signed < signedNeg
+
+    // cross-file: Coordinate type and formatCoord function defined in other.cog.
+    loc : Coordinate = {
+        lat = 52.37,
+        lon = 4.89,
+    }
+    @print(formatCoord(loc))
 }
 
 arenaProc : proc(n : uint64) = {

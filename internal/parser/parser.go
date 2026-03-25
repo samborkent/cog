@@ -20,13 +20,20 @@ type Parser struct {
 }
 
 func NewParser(tokens []tokens.Token, debug bool) (*Parser, error) {
+	return NewParserWithSymbols(tokens, NewSymbolTable(), debug)
+}
+
+// NewParserWithSymbols creates a parser that uses the provided symbol table.
+// This allows multiple parsers (one per file) to share a single symbol table
+// so that global declarations from one file are visible in all others.
+func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool) (*Parser, error) {
 	if len(tokens) == 0 {
 		return nil, errors.New("no tokens provided to parser")
 	}
 
 	p := &Parser{
 		tokens:  tokens,
-		symbols: NewSymbolTable(),
+		symbols: symbols,
 		Errs:    make([]error, 0),
 		debug:   debug,
 	}
@@ -35,9 +42,17 @@ func NewParser(tokens []tokens.Token, debug bool) (*Parser, error) {
 }
 
 func (p *Parser) Parse(ctx context.Context, fileName string) (*ast.File, error) {
-	p.findGlobals(ctx)
+	p.FindGlobals(ctx)
 
-	// Reset errors, so they're only printed once.
+	return p.ParseOnly(ctx, fileName)
+}
+
+// ParseOnly runs the full parse without calling FindGlobals first.
+// Use this when FindGlobals has already been called on a shared symbol table
+// across multiple files.
+func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.File, error) {
+	// Reset position and errors for a clean parse.
+	p.i = 0
 	p.Errs = make([]error, 0, len(p.Errs))
 
 	p.builtins = map[string]BuiltinParser{

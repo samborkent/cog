@@ -3,7 +3,7 @@
 version: '3'
 
 vars:
-  FILE: example.cog
+  FILE: example
   DEBUG: false
 
 tasks:
@@ -19,13 +19,14 @@ tasks:
 
   transpile:
     cmds:
+    - rm -f tmp/*.go
     - GOEXPERIMENT=arenas go run cmd/main.go -file={{.FILE}} -debug=false -write=true
     silent: true
 
   run:
     cmds:
     - task transpile
-    - GOEXPERIMENT=arenas go run tmp/{{.FILE | trimSuffix ".cog"}}.go -asan -ldflags="-asan -race -s -w"
+    - GOEXPERIMENT=arenas go run tmp/*.go -asan -ldflags="-asan -race -s -w"
     silent: true
 
   stats:
@@ -41,4 +42,4 @@ tasks:
       total_cov=$(go tool cover -func=/tmp/cog_cov.out 2>/dev/null | grep total | awk '{print $NF}')
       echo "${date} ${commit} src=${loc_src} test=${loc_test} total=${loc} coverage=${total_cov}" >> stats.txt
       echo "Recorded: src=${loc_src} test=${loc_test} total=${loc} coverage=${total_cov}"
-    silent: false
+    silent: true

@@ -5,8 +5,7 @@ cog is a Go-based hobby programming language that brings some additional feature
 The following basic features are missing that need to be implemented before Cog can be used to write useful programs:
 
 - Go-to-Cog type conversions
-- Multi-file programs
-- Cog packages / imports
+- Cross-package imports
 
 ## Features
 
@@ -71,6 +70,7 @@ The following basic features are missing that need to be implemented before Cog 
     - Range with `in`: `for v, k in container { ... }`
     - Loop over string, slice, array, map, and set.
 - Automatic arena based allocations (using `arena` experiment)
+- Multi-file support
 
 ### Partly implemented
 
@@ -154,6 +154,8 @@ export notExported ~ uint64
 export ExportedString ~ String
 
 main : proc() = {
+    _ = 10 // inline comment stays inline
+
     str := @go.strings.ToUpper("str")
 
     b : float32 = 0.0
@@ -316,6 +318,11 @@ outerLoop:
 		}
 	}
 
+	// Loop over int not allowed.
+	//for v in 10 {
+	//	@print("loop")
+	//}
+
 	for _, i in "hello" {
 		@print(i)
 	}
@@ -348,22 +355,51 @@ outerLoop:
 	arg : uint64 = 10
 	_ = @slice<int32>(arg)
 	_ = @slice<int32, uint8>(10)
+
+	arenaProc(arg)
+
+    // float16: backed by x448/float16 package, arithmetic promotes to float32.
+    half : float16 = 1.5
+    halfNeg := -half
+    halfSum := half + half
+    halfCmp := half < halfNeg
+
+    // complex32: two float16 parts, arithmetic promotes to complex64.
+    comp : complex32 = {1.0, 2.0}
+    compNeg := -comp
+    compSum := comp + comp
+    compEq := comp == compNeg
+
+    // uint128: backed by lukechampine.com/uint128, ops via methods.
+    big : uint128 = 42
+    bigSum := big + big
+    bigMul := big * big
+    bigCmp := big < bigSum
+
+    // int128: backed by ryanavella/wide, ops via methods.
+    signed : int128 = 42
+    signedNeg := -signed
+    signedSum := signed + signed
+    signedCmp := signed < signedNeg
+
+    // cross-file: Coordinate type and formatCoord function defined in other.cog.
+    loc : Coordinate = {
+        lat = 52.37,
+        lon = 4.89,
+    }
+    @print(formatCoord(loc))
+}
+
+arenaProc : proc(n : uint64) = {
+	xs := @slice<int64>(n)
+	ys := @slice<float64>(n)
+	@print(xs)
+	@print(ys)
 }
 
 ASC ~ ascii
 
 definedHere := "defined globally!"
-
-planet ~ struct {
-    name : ascii
-
-    export pressure : float64
-
-    export (
-        radius : float64
-        mass : float64
-    )
-}
 
 Status ~ enum<utf8> {
     Open := "open",
@@ -375,6 +411,17 @@ Planets ~ enum<planet> {
         radius = 0.5,
         mass = 0.1,
     },
+}
+
+planet ~ struct {
+    name : ascii
+
+    export pressure : float64
+
+    export (
+        radius : float64
+        mass : float64
+    )
 }
 
 Tuple ~ utf8 & uint64 & bool

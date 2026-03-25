@@ -7,12 +7,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
 	"github.com/samborkent/cog/internal/parser"
+	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/transpiler"
 )
 
@@ -776,5 +779,235 @@ main : proc() = {
 
 	if !strings.Contains(out, "1.5") {
 		t.Fatalf("expected '1.5', got:\n%s", out)
+	}
+}
+
+// transpilePackage runs the multi-file pipeline: lex each source, share one
+// symbol table for globals, parse each file, then transpile all files together.
+// The files map is filename → cog source.
+func transpilePackage(t *testing.T, files map[string]string) string {
+	t.Helper()
+	ctx := t.Context()
+
+	type lexedFile struct {
+		name   string
+		tokens []tokens.Token
+	}
+
+	// Deterministic order.
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	lexed := make([]lexedFile, 0, len(files))
+
+	for _, name := range names {
+		l := lexer.NewLexer(strings.NewReader(files[name]))
+
+		toks, err := l.Parse(ctx)
+		if err != nil {
+			t.Fatalf("lexer error (%s): %v", name, err)
+		}
+
+		lexed = append(lexed, lexedFile{name: name, tokens: toks})
+	}
+
+	// Shared symbol table across all files.
+	symbols := parser.NewSymbolTable()
+
+	parsers := make([]*parser.Parser, len(lexed))
+	for i, lf := range lexed {
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false)
+		if err != nil {
+			t.Fatalf("parser init (%s): %v", lf.name, err)
+		}
+
+		p.FindGlobals(ctx)
+		parsers[i] = p
+	}
+
+	astFiles := make([]*ast.File, len(lexed))
+	for i, lf := range lexed {
+		f, err := parsers[i].ParseOnly(ctx, lf.name)
+		if err != nil {
+			t.Fatalf("parser parse (%s): %v", lf.name, err)
+		}
+
+		astFiles[i] = f
+	}
+
+	tr := transpiler.NewTranspiler(astFiles...)
+
+	gofile, err := tr.Transpile()
+	if err != nil {
+		t.Fatalf("transpile error: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tr.Print(&buf, gofile); err != nil {
+		t.Fatalf("printing go ast: %v", err)
+	}
+
+	return buf.String()
+}
+
+// tryTranspilePackage is the error-returning variant of transpilePackage.
+func tryTranspilePackage(ctx context.Context, files map[string]string) (string, error) {
+	type lexedFile struct {
+		name   string
+		tokens []tokens.Token
+	}
+
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	lexed := make([]lexedFile, 0, len(files))
+
+	for _, name := range names {
+		l := lexer.NewLexer(strings.NewReader(files[name]))
+
+		toks, err := l.Parse(ctx)
+		if err != nil {
+			return "", fmt.Errorf("lexer (%s): %w", name, err)
+		}
+
+		lexed = append(lexed, lexedFile{name: name, tokens: toks})
+	}
+
+	symbols := parser.NewSymbolTable()
+
+	parsers := make([]*parser.Parser, len(lexed))
+	for i, lf := range lexed {
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false)
+		if err != nil {
+			return "", fmt.Errorf("parser init (%s): %w", lf.name, err)
+		}
+
+		p.FindGlobals(ctx)
+		parsers[i] = p
+	}
+
+	astFiles := make([]*ast.File, len(lexed))
+	for i, lf := range lexed {
+		f, err := parsers[i].ParseOnly(ctx, lf.name)
+		if err != nil {
+			return "", fmt.Errorf("parser parse (%s): %w", lf.name, err)
+		}
+
+		astFiles[i] = f
+	}
+
+	tr := transpiler.NewTranspiler(astFiles...)
+
+	gofile, err := tr.Transpile()
+	if err != nil {
+		return "", fmt.Errorf("transpile: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tr.Print(&buf, gofile); err != nil {
+		return "", fmt.Errorf("printing go ast: %w", err)
+	}
+
+	return buf.String(), nil
+}
+
+// TestMultiFileCrossReference verifies that a type declared in one file
+// can be used in another file when both share the same package.
+func TestMultiFileCrossReference(t *testing.T) {
+	files := map[string]string{
+		"types.cog": `package main
+
+Point ~ struct {
+    export (
+        x : float64
+        y : float64
+    )
+}
+`,
+		"main.cog": `package main
+
+val : Point = {
+    x = 1.5,
+    y = 2.5,
+}
+
+main : proc() = {
+    @print(val.x)
+    @print(val.y)
+}
+`,
+	}
+
+	code := transpilePackage(t, files)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s\ncode:\n%s", err, out, code)
+	}
+
+	if !strings.Contains(out, "1.5") || !strings.Contains(out, "2.5") {
+		t.Fatalf("expected '1.5' and '2.5', got:\n%s", out)
+	}
+}
+
+// TestMultiFileSameGlobalRedeclare verifies that declaring the same global
+// in two files produces an error.
+func TestMultiFileSameGlobalRedeclare(t *testing.T) {
+	t.Parallel()
+
+	files := map[string]string{
+		"a.cog": `package main
+
+x : int64 = 1
+`,
+		"b.cog": `package main
+
+x : int64 = 2
+`,
+	}
+
+	_, err := tryTranspilePackage(t.Context(), files)
+	if err == nil {
+		t.Fatal("expected error for duplicate global declaration, got none")
+	}
+}
+
+// TestMultiFileFunctionCrossCall verifies that a function declared in one file
+// can be called from another file.
+func TestMultiFileFunctionCrossCall(t *testing.T) {
+	files := map[string]string{
+		"greet.cog": `package main
+
+greet : func(name: utf8) utf8 = {
+    return "hello " + name
+}
+`,
+		"main.cog": `package main
+
+main : proc() = {
+    @print(greet("world"))
+}
+`,
+	}
+
+	code := transpilePackage(t, files)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s\ncode:\n%s", err, out, code)
+	}
+
+	if !strings.Contains(out, "hello world") {
+		t.Fatalf("expected 'hello world', got:\n%s", out)
 	}
 }
