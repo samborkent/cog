@@ -1087,7 +1087,7 @@ func TestImportedPackageMustNotDeclareMain(t *testing.T) {
 	// After findGlobals, the symbol table must not contain main for library packages.
 	src := `package geom
 
-export main : proc() = {
+main : proc() = {
 	@print("bad")
 }
 `
