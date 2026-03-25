@@ -368,7 +368,9 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 				return nil, fmt.Errorf("unknown identifier %q", n.Identifier.Name)
 			}
 
-			t.symbols.MarkUsed(n.Identifier.Name)
+			if err := t.symbols.MarkUsed(n.Identifier.Name); err != nil {
+				return nil, fmt.Errorf("marking switch identifier used: %w", err)
+			}
 
 			switchStmt.Tag = ident
 		}

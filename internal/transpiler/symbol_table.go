@@ -41,27 +41,30 @@ func (s *SymbolTable) Define(name string) *goast.Ident {
 	return s.table[name]
 }
 
-func (s *SymbolTable) DefineDynamic(ident *ast.Identifier) {
+func (s *SymbolTable) DefineDynamic(ident *ast.Identifier) error {
 	if s.Outer != nil {
-		panic("cannot define dynamically scoped variables outside of package scope")
+		return fmt.Errorf("cannot define dynamically scoped variables outside of package scope")
 	}
 
 	name := convertExport(ident.Name, ident.Exported)
 	s.dynamics[name] = ident
+
+	return nil
 }
 
-func (s *SymbolTable) MarkUsed(name string) {
+func (s *SymbolTable) MarkUsed(name string) error {
 	ident, ok := s.table[name]
 	if !ok {
 		if s.Outer != nil {
-			s.Outer.MarkUsed(name)
-			return
+			return s.Outer.MarkUsed(name)
 		}
 
-		panic(fmt.Sprintf("identifier %q is not defined", name))
+		return fmt.Errorf("identifier %q is not defined", name)
 	}
 
 	ident.Name = name
+
+	return nil
 }
 
 func (s *SymbolTable) Resolve(name string) (*goast.Ident, bool) {

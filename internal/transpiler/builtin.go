@@ -152,7 +152,7 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (*goast.CallExpr, error) 
 		if node.Arguments[0].Type().Underlying().Kind() == types.EnumKind {
 			enumType, ok := node.Arguments[0].Type().(*types.Alias)
 			if !ok {
-				panic("unable to cast enum to alias")
+				return nil, fmt.Errorf("unable to cast enum to alias for @print argument")
 			}
 
 			arg = &goast.IndexExpr{

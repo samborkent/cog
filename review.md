@@ -1,16 +1,3 @@
-1. # Current State: Solid Mid-Stage Prototype
-The project is in a strong position for a solo hobby language. ~12k lines of source, ~3k lines of tests across 28 test files, 57.4% coverage. The pipeline is end-to-end functional: lexer → parser → AST → transpiler → runnable Go. The integration test in integration_test.go actually compiles and executes generated Go, which is more rigorous than many hobby languages bother with.
-
-What works well:
-
-1. Clean package boundaries (lexer/tokens/parser/ast/types/transpiler)
-2. Two-pass parser with forward reference handling
-3. Broad feature surface: enums, tuples, unions, options, dynamic scoping, typed composite literals, for-loop variants, optional parameters, labeled control flow
-4. Source mapping via //line directives back to .cog files
-5. Dynamic scoping via context.Context propagation is a clever design
-
-Rating: 6/10. Architecturally sound, feature-rich for a prototype, but pre-alpha for real use. The core missing features (multi-file programs, packages/imports, Go-to-Cog type conversions) are load-bearing prerequisites for anything beyond single-file demos.
-
 2. # Biggest Issues
 Correctness bugs in existing code:
 
