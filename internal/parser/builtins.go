@@ -429,7 +429,14 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 
 	p.advance("parseBuiltinCast (") // consume (
 
-	arg := p.expression(ctx, types.None)
+	// If the second type argument (source type) is provided, use it to
+	// guide type inference for the argument expression (e.g. untyped literals).
+	var argType types.Type = types.None
+	if len(typArgs) == 2 {
+		argType = typArgs[1]
+	}
+
+	arg := p.expression(ctx, argType)
 	if arg == nil {
 		return nil
 	}

@@ -186,6 +186,18 @@ main : proc() = {
 		}
 	})
 
+	t.Run("literal inferred from source type arg", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	y := @cast<int16, int8>(1)
+	@print(y)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
 	t.Run("same type rejected", func(t *testing.T) {
 		t.Parallel()
 		parseShouldError(t, `package p

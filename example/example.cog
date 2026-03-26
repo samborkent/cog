@@ -236,6 +236,7 @@ outerLoop:
     wide := @cast<uint64>(narrow)           // uint8 -> uint64 (zero-extend)
     small : int8 = 1
     withSource := @cast<int16, int8>(small)  // explicit source type annotation
+    withLiteral := @cast<int16, int8>(1)     // literal inferred as int8 from type arg
     lng2 : ascii = "hello"
     asUtf := @cast<utf8>(lng2)              // ascii -> utf8
 
