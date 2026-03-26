@@ -223,6 +223,23 @@ outerLoop:
 
 	arenaProc(arg)
 
+    // @cast: bitwise type reinterpretation (source size <= target size).
+    bits : int32 = 42
+    asFloat := @cast<float32>(bits)         // int32 -> float32 (same size, reinterpret bits)
+    asBigFloat := @cast<float64>(bits)      // int32 -> float64 (widen then reinterpret)
+    asUnsigned := @cast<uint32>(bits)       // int32 -> uint32 (same-width sign reinterpret)
+    flag := true
+    flagByte := @cast<uint8>(flag)          // bool -> uint8
+    h : float16 = 1.5
+    hWide := @cast<uint32>(h)              // float16 -> uint32 (extract bits, widen)
+    narrow : uint8 = 255
+    wide := @cast<uint64>(narrow)           // uint8 -> uint64 (zero-extend)
+    small : int8 = 1
+    withSource := @cast<int16, int8>(small)  // explicit source type annotation
+    withLiteral := @cast<int16, int8>(1)     // literal inferred as int8 from type arg
+    lng2 : ascii = "hello"
+    asUtf := @cast<utf8>(lng2)              // ascii -> utf8
+
     // float16: backed by x448/float16 package, arithmetic promotes to float32.
     half : float16 = 1.5
     halfNeg := -half

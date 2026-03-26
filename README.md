@@ -39,6 +39,7 @@ The following basic features are missing that need to be implemented before Cog 
 - Clear builtin functions with `@` prefix
     - `@print(msg any)` print to std out
     - `@if<T any>(if : bool, then : T, else :? T)` conditional expression
+    - `@cast<B, A any>(x A) B` bitwise type cast (target must be same size or larger)
 - Allocation builtins with generic type arguments:
     - `@ptr<T valueType>() *T`
     - `@slice<T any, I uint>(len : I, cap :? I = len) []T`
@@ -70,6 +71,7 @@ The following basic features are missing that need to be implemented before Cog 
     - Loop over string, slice, array, map, and set.
 - Automatic arena based allocations (using `arena` experiment)
 - Multi-file support
+- Explicit exports using `export`
 - Local package imports
     - Import using `import`
     - Access exported symbols with package selector (e.g. `geom.Distance(a, b)`)
@@ -81,7 +83,6 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Partly implemented
 
-- Explicit exports using `export`
 - Canonical syntax highlighting
 
 ### Planned
@@ -106,7 +107,6 @@ The following basic features are missing that need to be implemented before Cog 
 - Conversion builtins:
     - `@convert<A, B any>(x A) B` to cast types instead of `float32()`, etc.
         - Will perform best-effort conversion, allowing some precision loss and handling overflows.
-        - Also implement `@cast<A, B any>(x A) B`, which must panic if casting cannot be done without overflow or precision loss.
 - Additional types:
     - `signal<T any>` alias of `chan<T any>struct{}`
     - `any!` result type (alias of `any | error`)

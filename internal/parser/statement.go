@@ -46,9 +46,14 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			return nil
 		}
 
+		node := builtinParser(ctx, t, types.None)
+		if node == nil {
+			return nil
+		}
+
 		return &ast.ExpressionStatement{
 			Token:      t,
-			Expression: builtinParser(ctx, t, types.None),
+			Expression: node,
 		}
 	case tokens.Dynamic:
 		// Skip, get it with prev in identifier case.

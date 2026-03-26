@@ -80,6 +80,7 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.File, err
 	p.Errs = make([]error, 0, len(p.Errs))
 
 	p.builtins = map[string]BuiltinParser{
+		"cast":  p.parseBuiltinCast,
 		"if":    p.parseBuiltinIf,
 		"map":   p.parseBuiltinMap,
 		"print": p.parseBuiltinPrint,

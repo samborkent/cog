@@ -362,7 +362,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			return nil
 		}
 
-		return builtinParser(ctx, t, typeToken)
+		node := builtinParser(ctx, t, typeToken)
+		if node == nil {
+			return nil
+		}
+
+		return node
 	case tokens.FloatLiteral,
 		tokens.IntLiteral,
 		tokens.StringLiteral:
