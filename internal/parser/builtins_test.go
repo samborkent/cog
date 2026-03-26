@@ -104,3 +104,158 @@ main : proc() = {
 		}
 	})
 }
+
+func TestParseBuiltinCast(t *testing.T) {
+	t.Parallel()
+
+	t.Run("int8 to int16", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	x : int8 = 1
+	y := @cast<int16>(x)
+	@print(y)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("int32 to float32", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	x : int32 = 42
+	y := @cast<float32>(x)
+	@print(y)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("bool to uint8", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	x := true
+	y := @cast<uint8>(x)
+	@print(y)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("float16 to uint32", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	x : float16 = 1.5
+	y := @cast<uint32>(x)
+	@print(y)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("uint64 to int128", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	x : uint64 = 42
+	y := @cast<int128>(x)
+	@print(y)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("with explicit source type", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	x : int8 = 1
+	y := @cast<int16, int8>(x)
+	@print(y)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("same type rejected", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	x : int32 = 1
+	y := @cast<int32>(x)
+	@print(y)
+}`)
+	})
+
+	t.Run("narrowing rejected", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	x : int64 = 1
+	y := @cast<int32>(x)
+	@print(y)
+}`)
+	})
+
+	t.Run("wrong source type arg rejected", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	x : int8 = 1
+	y := @cast<int16, uint8>(x)
+	@print(y)
+}`)
+	})
+
+	t.Run("ascii to utf8", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	x : ascii = "hello"
+	y := @cast<utf8>(x)
+	@print(y)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("utf8 to int32 rejected", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	x : utf8 = "hello"
+	y := @cast<int32>(x)
+	@print(y)
+}`)
+	})
+
+	t.Run("int32 to ascii rejected", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	x : int32 = 42
+	y := @cast<ascii>(x)
+	@print(y)
+}`)
+	})
+
+	t.Run("utf8 to ascii rejected", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	x : utf8 = "hello"
+	y := @cast<ascii>(x)
+	@print(y)
+}`)
+	})
+}

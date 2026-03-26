@@ -401,3 +401,100 @@ func (p *Parser) parseBuiltinSlice(ctx context.Context, t tokens.Token, tokenTyp
 		ReturnType:    &types.Slice{Element: typArgs[0]},
 	}
 }
+
+func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType types.Type) *ast.Builtin {
+	typArgs := p.parseTypeArguments(ctx)
+	if typArgs == nil {
+		return nil
+	}
+
+	if len(typArgs) == 0 || len(typArgs) > 2 {
+		p.error(t, "@cast requires 1 or 2 type arguments", "parseBuiltinCast")
+		return nil
+	}
+
+	targetType := typArgs[0]
+	targetKind := targetType.Kind()
+
+	// Validate target type is castable.
+	if !types.IsBasic(targetType) {
+		p.error(t, fmt.Sprintf("@cast target type %q is not a basic type", targetType), "parseBuiltinCast")
+		return nil
+	}
+
+	if p.this().Type != tokens.LParen {
+		p.error(p.this(), "expected '(' after @cast", "parseBuiltinCast")
+		return nil
+	}
+
+	p.advance("parseBuiltinCast (") // consume (
+
+	arg := p.expression(ctx, types.None)
+	if arg == nil {
+		return nil
+	}
+
+	if p.this().Type != tokens.RParen {
+		p.error(p.this(), "expected ')' after argument in @cast", "parseBuiltinCast")
+		return nil
+	}
+
+	p.advance("parseBuiltinCast )") // consume )
+
+	sourceType := arg.Type()
+	sourceKind := sourceType.Kind()
+
+	// Handle ascii -> utf8 special case.
+	if sourceKind == types.ASCII && targetKind == types.UTF8 {
+		return &ast.Builtin{
+			Token:         t,
+			Name:          "cast",
+			TypeArguments: typArgs,
+			Arguments:     []ast.Expression{arg},
+			ReturnType:    targetType,
+		}
+	}
+
+	// Validate source type is castable.
+	if !types.IsBasic(sourceType) {
+		p.error(t, fmt.Sprintf("@cast source type %q is not a basic type", sourceType), "parseBuiltinCast")
+		return nil
+	}
+
+	// Reject any remaining string casts (only ascii -> utf8 is allowed above).
+	if types.IsString(sourceType) || types.IsString(targetType) {
+		p.error(t, fmt.Sprintf("@cast cannot cast between %q and %q", sourceType, targetType), "parseBuiltinCast")
+		return nil
+	}
+
+	// Same type is not allowed.
+	if sourceKind == targetKind {
+		p.error(t, fmt.Sprintf("@cast source and target types are the same: %q", sourceType), "parseBuiltinCast")
+		return nil
+	}
+
+	// Validate second type argument matches source if provided.
+	if len(typArgs) == 2 {
+		if typArgs[1].Kind() != sourceKind {
+			p.error(t, fmt.Sprintf("@cast second type argument %q does not match source type %q", typArgs[1], sourceType), "parseBuiltinCast")
+			return nil
+		}
+	}
+
+	// Validate bit size: source must be <= target.
+	srcBits := types.Size(sourceKind)
+	dstBits := types.Size(targetKind)
+
+	if srcBits > dstBits {
+		p.error(t, fmt.Sprintf("@cast cannot narrow from %d-bit %q to %d-bit %q", srcBits, sourceType, dstBits, targetType), "parseBuiltinCast")
+		return nil
+	}
+
+	return &ast.Builtin{
+		Token:         t,
+		Name:          "cast",
+		TypeArguments: typArgs,
+		Arguments:     []ast.Expression{arg},
+		ReturnType:    targetType,
+	}
+}

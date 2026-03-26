@@ -11,8 +11,3 @@ func NewArena() *arena.Arena {
 func MakeSlice[T any](a *arena.Arena, len, cap int) []T {
 	return arena.MakeSlice[T](a, len, cap)
 }
-
-//go:fix inline
-func Clone[T any](s T) T {
-	return arena.Clone(s)
-}
