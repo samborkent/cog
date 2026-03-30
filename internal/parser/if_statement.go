@@ -21,8 +21,8 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 		return nil
 	}
 
-	if p.prev().Type != tokens.Question && expr.Type().Kind() != types.Bool {
-		p.error(p.this(), "expected option or bool expression in if condition", "parseIfStatement")
+	if p.prev().Type != tokens.Question && p.prev().Type != tokens.Not && expr.Type().Kind() != types.Bool {
+		p.error(p.this(), "expected option, result, or bool expression in if condition", "parseIfStatement")
 		return nil
 	}
 

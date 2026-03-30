@@ -829,7 +829,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Elts: exprs,
 		}, nil
 	case *ast.Suffix:
-		if n.Operator.Type != tokens.Question {
+		if n.Operator.Type != tokens.Question && n.Operator.Type != tokens.Not {
 			return nil, fmt.Errorf("unknown suffix operator '%s'", n.Operator.Type.String())
 		}
 
@@ -850,9 +850,17 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("marking suffix identifier used: %w", err)
 		}
 
+		var fieldName string
+		switch n.Operator.Type {
+		case tokens.Question:
+			fieldName = "Set"
+		case tokens.Not:
+			fieldName = "IsError"
+		}
+
 		return &goast.SelectorExpr{
 			X:   symbol,
-			Sel: &goast.Ident{Name: "Set"},
+			Sel: &goast.Ident{Name: fieldName},
 		}, nil
 	case *ast.TupleLiteral:
 		values := make([]goast.Expr, 0, len(n.Values))
@@ -919,6 +927,49 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				Key:   &goast.Ident{Name: "Either"},
 				Value: expr,
 			}},
+		}, nil
+	case *ast.ResultLiteral:
+		resultType, ok := n.ResultType.Underlying().(*types.Result)
+		if !ok {
+			return nil, fmt.Errorf("unable to assert result type")
+		}
+
+		expr, err := t.convertExpr(n.Value)
+		if err != nil {
+			return nil, fmt.Errorf("converting result literal value: %w", err)
+		}
+
+		goType, err := t.convertType(n.ResultType)
+		if err != nil {
+			return nil, fmt.Errorf("converting result type: %w", err)
+		}
+
+		_ = resultType // used for type checking in future phases
+
+		if n.IsError {
+			return &goast.CompositeLit{
+				Type: goType,
+				Elts: []goast.Expr{
+					&goast.KeyValueExpr{
+						Key:   &goast.Ident{Name: "Error"},
+						Value: expr,
+					},
+					&goast.KeyValueExpr{
+						Key:   &goast.Ident{Name: "IsError"},
+						Value: &goast.Ident{Name: "true"},
+					},
+				},
+			}, nil
+		}
+
+		return &goast.CompositeLit{
+			Type: goType,
+			Elts: []goast.Expr{
+				&goast.KeyValueExpr{
+					Key:   &goast.Ident{Name: "Value"},
+					Value: expr,
+				},
+			},
 		}, nil
 	case *ast.UTF8Literal:
 		return component.UTF8Lit(n.Value), nil

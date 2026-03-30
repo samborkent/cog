@@ -279,6 +279,21 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		}
 	}
 
+	if p.this().Type == tokens.Not {
+		token := p.this()
+		p.advance("unary !") // consume !
+
+		if typeToken.Kind() != types.ResultKind {
+			p.error(token, "result operator requires result type", "unary")
+			return nil
+		}
+
+		return &ast.Suffix{
+			Operator: token,
+			Left:     node,
+		}
+	}
+
 	return node
 }
 
@@ -631,7 +646,13 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				}
 			}
 
+			// Track the return type for result-aware return parsing.
+			prevReturnType := p.currentReturnType
+			p.currentReturnType = t.ReturnType
+
 			body := p.parseBlockStatement(ctx)
+
+			p.currentReturnType = prevReturnType
 
 			if len(t.Parameters) > 0 {
 				// Leave parameter scope

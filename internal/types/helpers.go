@@ -85,6 +85,9 @@ func Equal(a, b Type) bool {
 	case *Union:
 		bt := bu.(*Union)
 		return Equal(at.Either, bt.Either) && Equal(at.Or, bt.Or)
+	case *Result:
+		bt := bu.(*Result)
+		return Equal(at.Value, bt.Value) && Equal(at.Error, bt.Error)
 	case *Struct:
 		bt := bu.(*Struct)
 		if len(at.Fields) != len(bt.Fields) {

@@ -48,6 +48,7 @@ const (
 
 	// Modified types
 	OptionKind
+	ResultKind
 
 	// Function type
 	ProcedureKind
@@ -111,6 +112,8 @@ func (t Kind) String() string {
 		return "union"
 	case OptionKind:
 		return "option"
+	case ResultKind:
+		return "result"
 	case ProcedureKind:
 		return "proc"
 	case Invalid:

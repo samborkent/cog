@@ -7,6 +7,7 @@ import (
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
+	"github.com/samborkent/cog/internal/types"
 )
 
 type Parser struct {
@@ -14,10 +15,11 @@ type Parser struct {
 	symbols  *SymbolTable
 	builtins map[string]BuiltinParser
 
-	Errs       []error
-	i          int
-	debug      bool
-	scriptMode bool
+	Errs              []error
+	i                 int
+	debug             bool
+	scriptMode        bool
+	currentReturnType types.Type // return type of the enclosing procedure (for result wrapping)
 }
 
 func NewParser(tokens []tokens.Token, debug bool) (*Parser, error) {

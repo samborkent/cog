@@ -544,6 +544,21 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 		return nil
 	}
 
+	// Result type: T ! E
+	if p.this().Type == tokens.Not {
+		p.advance("parseProcedureType !") // consume !
+
+		errorType := p.parseCombinedType(ctx, exported)
+		if errorType == nil {
+			return nil
+		}
+
+		returnType = &types.Result{
+			Value: returnType,
+			Error: errorType,
+		}
+	}
+
 	procType.ReturnType = returnType
 
 	return procType
