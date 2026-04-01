@@ -257,7 +257,12 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 
 	identifier := convertExport(n.Identifier.Name, n.Identifier.Exported)
 
-	enumName := identifier + "Enum"
+	var enumName string
+	if n.Alias.Kind() == types.ErrorKind {
+		enumName = identifier + "Error"
+	} else {
+		enumName = identifier + "Enum"
+	}
 
 	enumTypeIdent := gotypes.Typ[gotypes.Uint8].String()
 

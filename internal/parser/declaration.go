@@ -8,6 +8,19 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
+// resolveResult unwraps aliases to find an underlying Result type.
+func resolveResult(t types.Type) (*types.Result, bool) {
+	if r, ok := t.(*types.Result); ok {
+		return r, true
+	}
+
+	if a, ok := t.(*types.Alias); ok {
+		return resolveResult(a.Underlying())
+	}
+
+	return nil, false
+}
+
 func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier) *ast.Declaration {
 	identType := p.parseCombinedType(ctx, ident.Exported)
 	if identType == nil {
@@ -79,6 +92,31 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 	}
 
 	p.symbols.Define(ident)
+
+	// Static result analysis: if the assigned expression's type matches the
+	// result's value or error type, we know statically which variant it is.
+	// Wrap in ResultLiteral so the transpiler emits the correct Go struct.
+	if resultType, ok := resolveResult(ident.ValueType); ok && expr != nil {
+		if types.Equal(expr.Type(), resultType.Error) {
+			node.Assignment.Expression = &ast.ResultLiteral{
+				Token:      node.Assignment.Token,
+				ResultType: ident.ValueType,
+				Value:      expr,
+				IsError:    true,
+			}
+			p.symbols.MarkChecked(ident.Name, checkError)
+		} else if !types.Equal(expr.Type(), ident.ValueType) {
+			// Expression type is not the full result type (not a function call
+			// returning the same result), so it must be the value variant.
+			node.Assignment.Expression = &ast.ResultLiteral{
+				Token:      node.Assignment.Token,
+				ResultType: ident.ValueType,
+				Value:      expr,
+				IsError:    false,
+			}
+			p.symbols.MarkChecked(ident.Name, checkValue)
+		}
+	}
 
 	return node
 }

@@ -34,6 +34,11 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 	// ? means "is OK?" for both option and result:
 	//   if val?   → consequence: value safe, persists after
 	//   if !val?  → consequence: error safe (scoped); else: value safe (scoped)
+	//
+	// Early-exit promotion: if the consequence block exits scope (return/break/continue),
+	// the opposite check is promoted to persist after the if-statement.
+	//   if !val? { return }  → value safe after (error case handled)
+	//   if val?  { return }  → error safe after (value case handled)
 	persistsAfterIf := checkedVar != "" && !negated
 
 	if checkedVar != "" && !negated {
@@ -56,6 +61,18 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 	}
 
 	node.Consequence = consequence
+
+	// Early-exit promotion: if the consequence block exits scope,
+	// the opposite check persists after the if-statement.
+	if checkedVar != "" && !persistsAfterIf && blockExitsScope(consequence) {
+		if negated {
+			// if !val? { return } → value safe after.
+			persistsAfterIf = true
+		} else {
+			// if val? { return } → error safe after.
+			p.symbols.MarkChecked(checkedVar, checkError)
+		}
+	}
 
 	if p.this().Type == tokens.Else {
 		if ctx.Err() != nil {
@@ -89,6 +106,23 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 	}
 
 	return node
+}
+
+// blockExitsScope reports whether a block's last statement unconditionally
+// exits the enclosing scope (return, break, or continue).
+func blockExitsScope(block *ast.Block) bool {
+	if len(block.Statements) == 0 {
+		return false
+	}
+
+	last := block.Statements[len(block.Statements)-1]
+
+	switch last.(type) {
+	case *ast.Return, *ast.Branch:
+		return true
+	}
+
+	return false
 }
 
 // extractCheckVar extracts the variable name from a ? check expression.

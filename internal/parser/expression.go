@@ -41,6 +41,12 @@ func (p *Parser) parseLiteral(tokenType types.Type) ast.Expression {
 		return node
 	}
 
+	// When expected type is a result, parse the literal using the value type.
+	// The declaration/assignment will handle marking the check state.
+	if r, ok := resolveResult(tokenType); ok {
+		tokenType = r.Value
+	}
+
 	t, ok := tokenType.Underlying().(*types.Basic)
 	if !ok {
 		p.error(p.this(), fmt.Sprintf("expected basic or union type for literal, got %q", tokenType), "parseLiteral")

@@ -124,7 +124,7 @@ divide : func(a : int64, b : int64) int64 ! MyError = {
 	return a
 }
 main : proc() = {}`)
-		mustContain(t, got, "cog.Result[int64, _MyErrorEnum]")
+		mustContain(t, got, "cog.Result[int64, _MyErrorError]")
 	})
 
 	t.Run("result_success_return", func(t *testing.T) {

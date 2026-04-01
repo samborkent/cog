@@ -5,6 +5,7 @@ version: '3'
 vars:
   FILE: example
   DEBUG: false
+  REPLACE_LOCAL_COG: true
 
 tasks:
   test:
@@ -20,18 +21,24 @@ tasks:
   transpile:
     cmds:
     - rm -rf tmp/
-    - GOEXPERIMENT=arenas go run cmd/main.go -file={{.FILE}} -debug=false -write=true
+    - GOEXPERIMENT=arenas go run cmd/main.go -file={{.FILE}} -debug=false -write=true -replace-local-cog={{.REPLACE_LOCAL_COG}}
     silent: true
 
   run:
     cmds:
-    - task transpile
+    - task: transpile
+      vars:
+        FILE: '{{.FILE}}'
+        REPLACE_LOCAL_COG: '{{.REPLACE_LOCAL_COG}}'
     - cd tmp && GOEXPERIMENT=arenas go run . -asan -ldflags="-asan -race -s -w"
     silent: true
 
   run_script:
     cmds:
-    - task transpile
+    - task: transpile
+      vars:
+        FILE: '{{.FILE}}'
+        REPLACE_LOCAL_COG: '{{.REPLACE_LOCAL_COG}}'
     - cd tmp && GOEXPERIMENT=arenas go run ./cmd/script -asan -ldflags="-asan -race -s -w"
     silent: true
 

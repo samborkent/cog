@@ -136,59 +136,64 @@ caseSwitch:
     // @print(option)  // ERROR: negated check is scoped
 
     // Result type: T ! E — typed error handling.
-    var result : int64 ! DivError
-    
     // Must-check: cannot access value or error without checking first.
+    var result : int64 ! DivError
     // @print(result)   // ERROR: must check result before accessing value
     // @print(result!)  // ERROR: must check result before accessing error
-    
-    // ? on result = "is OK?" (no error). Same operator as option.
+
+    // Static analysis: when assigned a value or error literal, the parser
+    // knows statically which variant it is. No check needed.
+    var knownValue : int64 ! DivError = 42
+    @print(knownValue)  // OK: assigned value literal, proven safe
+    var knownError : int64 ! DivError = DivError.DivByZero
+    @print(knownError!)  // OK: assigned error literal, error access safe
+
+    // Direct check: if result? = "is OK?"
+    // Persists after if-block — value remains accessible.
     if result? {
-        // proven: no error, value is safe.
         @print(result)
         // @print(result!)  // ERROR: proven no error, can't access error
     }
-    
-    // Negated: !result? = "is NOT OK?" = has error.
-    if !result? {
-        // proven: has error, error is safe.
-        @print(result!)
-        // @print(result)  // ERROR: proven error, can't access value
+    @print(result)
+
+    // Negated check: if !result? = "has error?"
+    // Does NOT persist unless the block exits scope (return/break/continue).
+    var negatedResult : int64 ! DivError = safeDivide(10, 0)
+    if !negatedResult? {
+        @print(negatedResult!)
+        // @print(negatedResult)  // ERROR: proven error, can't access value
+    }
+    // @print(negatedResult)  // ERROR: negated check does not persist
+
+    // Negated check with else: value safe in else branch.
+    var elseResult : int64 ! DivError = safeDivide(10, 2)
+    if !elseResult? {
+        @print(elseResult!)
+    } else {
+        @print(elseResult)
     }
 
-    // must not be allowed: neither check persists from scoped (negated) checks
-    // @print(result)
-    
-    // Result return from function.
-    var divResult : int64 ! DivError = safeDivide(10, 2)
+    // Early-exit promotion: when the error branch exits scope
+    // (return/break/continue), the value check is promoted after the if.
 
-    // Direct check persists: after `if r?` block, value remains accessible.
-    if divResult? {
-        @print(divResult)
+    // return in function: processResult checks error, returns early on failure.
+    var processed : int64 ! DivError = processResult(safeDivide(10, 2))
+    if processed? {
+        @print(processed)
     }
-    // Check persists — value is safe for rest of scope.
-    @print(divResult)
+    @print(processed)
 
-    // Early return pattern (most common Go error handling idiom).
-    var earlyReturn : int64 ! DivError = safeDivide(10, 0)
-    if !earlyReturn? {
-        @print(earlyReturn!)
-        // In a real function you'd: return earlyReturn!
+    // break in loop: error branch exits, so value is proven safe after.
+    var loopResult : int64 ! DivError = safeDivide(20, 4)
+    for {
+        if !loopResult? {
+            @print(loopResult!)
+            break
+        }
+        // After error branch exits, value is proven safe.
+        @print(loopResult)
+        break
     }
-    // After error branch without exit: NOT proven OK.
-    // @print(earlyReturn)  // ERROR: error branch did not exit scope
-
-    // Re-check pattern: negated check doesn't persist, use direct check to restore.
-    var recheck : int64 ! DivError = safeDivide(20, 4)
-    if !recheck? {
-        @print(recheck!)
-    }
-    // @print(recheck)  // ERROR: negated check does not persist
-    if recheck? {
-        @print(recheck)
-    }
-    // Direct check persists — value safe for rest of scope.
-    @print(recheck)
 
     upperCaseString := upper(language)
     @print(upperCaseString)
@@ -401,6 +406,15 @@ safeDivide : func(a : int64, b : int64) int64 ! DivError = {
     }
 
     return a / b
+}
+
+// Early return pattern: check error, return on failure, use value after.
+processResult : func(r : int64 ! DivError) int64 ! DivError = {
+    if !r? {
+        return r!
+    }
+    // After early return, value is proven safe.
+    return r
 }
 
 upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8 = {

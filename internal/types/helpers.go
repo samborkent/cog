@@ -2,7 +2,8 @@ package types
 
 // AssignableTo reports whether a value of type src can be assigned to a
 // variable of type dst. This is true when the types are Equal, or when
-// dst is an Option type and src equals the option's inner type.
+// dst is an Option type and src equals the option's inner type, or when
+// dst is a Result type and src equals the result's value or error type.
 func AssignableTo(src, dst Type) bool {
 	if Equal(src, dst) {
 		return true
@@ -15,6 +16,16 @@ func AssignableTo(src, dst Type) bool {
 	if a, ok := dst.(*Alias); ok {
 		if opt, ok := a.Underlying().(*Option); ok {
 			return Equal(src, opt.Value)
+		}
+	}
+
+	// Allow assigning T or E to T ! E (Result[T, E]).
+	if r, ok := dst.(*Result); ok {
+		return Equal(src, r.Value) || Equal(src, r.Error)
+	}
+	if a, ok := dst.(*Alias); ok {
+		if r, ok := a.Underlying().(*Result); ok {
+			return Equal(src, r.Value) || Equal(src, r.Error)
 		}
 	}
 

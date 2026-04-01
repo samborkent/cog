@@ -196,4 +196,132 @@ main : proc() = {
 	}
 }`)
 	})
+
+	// Early-exit promotion: negated check with return promotes value check.
+	t.Run("result_negated_return_promotes_value", func(t *testing.T) {
+		t.Parallel()
+		_ = parse(t, `package p
+MyErr ~ error { Fail }
+safeDivide : func(a : int64, b : int64) int64 ! MyErr = {
+	var r : int64 ! MyErr
+	if !r? {
+		return r!
+	}
+	@print(r)
+	return r
+}
+main : proc() = {}`)
+	})
+
+	// Early-exit promotion: negated check with break promotes value check.
+	t.Run("result_negated_break_promotes_value", func(t *testing.T) {
+		t.Parallel()
+		_ = parse(t, `package p
+MyErr ~ error { Fail }
+main : proc() = {
+	var r : int64 ! MyErr
+	for {
+		if !r? {
+			break
+		}
+		@print(r)
+		break
+	}
+}`)
+	})
+
+	// Early-exit promotion: negated check with continue promotes value check.
+	t.Run("result_negated_continue_promotes_value", func(t *testing.T) {
+		t.Parallel()
+		_ = parse(t, `package p
+MyErr ~ error { Fail }
+main : proc() = {
+	var r : int64 ! MyErr
+	for {
+		if !r? {
+			continue
+		}
+		@print(r)
+		break
+	}
+}`)
+	})
+
+	// Without early exit, negated check still does not persist.
+	t.Run("result_negated_no_exit_still_fails", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+MyErr ~ error { Fail }
+main : proc() = {
+	var r : int64 ! MyErr
+	if !r? {
+		@print(r!)
+	}
+	@print(r)
+}`)
+	})
+
+	// Option: negated check with return promotes value check.
+	t.Run("option_negated_return_promotes_value", func(t *testing.T) {
+		t.Parallel()
+		_ = parse(t, `package p
+getValue : func() utf8 = {
+	var opt : utf8?
+	if !opt? {
+		return "default"
+	}
+	return opt
+}
+main : proc() = {}`)
+	})
+
+	// Static analysis: value literal assigned → value access safe.
+	t.Run("result_value_literal_assigned", func(t *testing.T) {
+		t.Parallel()
+		_ = parse(t, `package p
+MyErr ~ error { Fail }
+main : proc() = {
+	var r : int64 ! MyErr = 42
+	@print(r)
+}`)
+	})
+
+	// Static analysis: error literal assigned → error access safe.
+	t.Run("result_error_literal_assigned", func(t *testing.T) {
+		t.Parallel()
+		_ = parse(t, `package p
+MyErr ~ error<utf8> {
+	NotFound := "not found",
+}
+main : proc() = {
+	var r : int64 ! MyErr = MyErr.NotFound
+	@print(r!)
+}`)
+	})
+
+	// Static analysis: function call returning same result → NOT safe.
+	t.Run("result_func_call_not_safe", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+MyErr ~ error { Fail }
+fn : func() int64 ! MyErr = {
+	return 0
+}
+main : proc() = {
+	var r : int64 ! MyErr = fn()
+	@print(r)
+}`)
+	})
+
+	// Static analysis: reassignment with value literal → value access safe.
+	t.Run("result_reassignment_value_literal", func(t *testing.T) {
+		t.Parallel()
+		_ = parse(t, `package p
+MyErr ~ error { Fail }
+main : proc() = {
+	var r : int64 ! MyErr
+	r = 10
+	@print(r)
+}`)
+	})
 }
