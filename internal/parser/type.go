@@ -143,6 +143,19 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 		}
 
 		return union
+	case tokens.Not:
+		// Result type: T ! E
+		p.advance("parseCombinedType result !") // consume !
+
+		errorType := p.parseCombinedType(ctx, exported)
+		if errorType == nil {
+			return nil
+		}
+
+		return &types.Result{
+			Value: typ,
+			Error: errorType,
+		}
 	}
 
 	return typ

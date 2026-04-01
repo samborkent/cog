@@ -42,5 +42,10 @@ func (p *Suffix) Type() types.Type {
 		panic("suffix with nil type detected")
 	}
 
+	// ? and ! suffix operators are boolean checks.
+	if p.Operator.Type == tokens.Question || p.Operator.Type == tokens.Not {
+		return types.Basics[types.Bool]
+	}
+
 	return p.Left.Type()
 }

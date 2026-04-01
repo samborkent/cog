@@ -75,4 +75,54 @@ main := {
 
     // Allowed, val is of type `utf8` here.
     @print("value:", val)
+
+    Fallible ~ utf8 ! TypedError
+
+    errFunc : func() Fallible = {
+        // we don't know what exactly happens in errFunc
+    }
+
+    A : Fallible = "hello"
+    B : Fallible = TypedError.EOF
+    C := errFunc()
+    D := errFunc()
+
+    // allowed, as A is assigned by non-error literal in same scope.
+    // should print "hello"
+    @print(A)
+
+    // allowed, as B is assigned by error literal in same scope.
+    // should print "EOF"
+    @print(B)
+
+    // not allowed, as C is assigned by function call, which could return error or non-error.
+    @print(C)
+
+    if C! {
+        // allowed, as error is checked.
+        // type of C is still Fallible, but we know it's an error, so it prints the error.
+        // should print error returned by errFunc.
+        @print(C)
+    }
+
+    // allowed, because error is checked
+    // type of C is still Fallible, but we know it's not an error, so it prints the value.
+    // should print value returned by errFunc.
+    @print(C)
+
+    // not allowed, error not checked
+    @print(D)
+
+    // don't love this syntax
+    if !D! {
+        // allowed, because error is checked
+        // type of D is still Fallible, but we know it's not an error, so it prints the value.
+        // should print value returned by errFunc.
+        @print(D)
+    }
+
+    // allowed, as error is checked.
+    // type of D is still Fallible, but we know it's an error, so it prints the error.
+    // should print error returned by errFunc.
+    @print(D)
 }

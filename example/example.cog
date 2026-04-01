@@ -105,8 +105,12 @@ caseSwitch:
     // option : Option? // not allowed
     utf = "option"
     
+    // Must-check: cannot access option value without checking first.
+    // @print(utf)  // ERROR: must check utf before accessing value
+    
     if utf? {
-        @print("hello")
+        // Inside checked block, value access is allowed.
+        @print(utf)
     }
     
     var option : uint64?
@@ -117,9 +121,42 @@ caseSwitch:
 
     option = 10
 
-    if option? {
-        @print("do print")
+    // Negated check: value available in else branch.
+    if !option? {
+        @print("not set")
+    } else {
+        @print(option)
     }
+
+    // Result type: T ! E — typed error handling.
+    var result : int64 ! DivError
+    
+    // Must-check: cannot access result without checking first.
+    // @print(result)  // ERROR: must check result before accessing value
+    
+    if result! {
+        // this prints the error
+        @print(result!)
+    }
+    
+    // Negated: !result! means no error, value is safe to access in else.
+    if !result! {
+        // able to use result
+        @print(result)
+    } 
+
+    // should not be allowed
+    // @print(result)
+    
+    // Result return from function.
+    var divResult : int64 ! DivError = safeDivide(10, 2)
+    if divResult! {
+        // prints the error
+        @print(divResult!)
+    }
+
+    // can use error here, as it's already checked above.
+    @print(divResult)
 
     upperCaseString := upper(language)
     @print(upperCaseString)
@@ -319,6 +356,19 @@ Tuple ~ utf8 & uint64 & bool
 Either ~ utf8 | uint64
 
 Option ~ utf8?
+
+// Error type for result examples.
+DivError ~ int32
+divByZero : DivError = 1
+
+// Function returning a result type.
+safeDivide : func(a : int64, b : int64) int64 ! DivError = {
+    if b == 0 {
+        return divByZero
+    }
+
+    return a / b
+}
 
 upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8 = {
     return @go.strings.ToUpper(str) + optional + alsoOptional

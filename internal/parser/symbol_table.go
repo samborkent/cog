@@ -39,6 +39,7 @@ type SymbolTable struct {
 	goimports  map[string]*ast.Identifier
 	cogimports map[string]*CogImport // key: package name
 	fields     map[string]map[string]Symbol
+	checked    map[string]bool // option/result variables verified in this scope
 }
 
 func NewSymbolTable() *SymbolTable {
@@ -54,6 +55,7 @@ func NewSymbolTable() *SymbolTable {
 		goimports:  make(map[string]*ast.Identifier),
 		cogimports: make(map[string]*CogImport),
 		fields:     make(map[string]map[string]Symbol),
+		checked:    make(map[string]bool),
 	}
 }
 
@@ -215,4 +217,23 @@ func (s *SymbolTable) ResolveCogImport(name string) (*CogImport, bool) {
 // CogImports returns all registered cog imports.
 func (s *SymbolTable) CogImports() map[string]*CogImport {
 	return s.cogimports
+}
+
+// MarkChecked records that an option/result variable has been checked in this scope.
+func (s *SymbolTable) MarkChecked(name string) {
+	s.checked[name] = true
+}
+
+// IsChecked reports whether the named option/result variable has been checked
+// in this scope or any enclosing scope.
+func (s *SymbolTable) IsChecked(name string) bool {
+	if s.checked[name] {
+		return true
+	}
+
+	if s.Outer != nil {
+		return s.Outer.IsChecked(name)
+	}
+
+	return false
 }

@@ -294,6 +294,16 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		}
 	}
 
+	// Must-check analysis: bare access to option/result requires prior check.
+	if ident, ok := node.(*ast.Identifier); ok {
+		kind := typeToken.Kind()
+
+		if (kind == types.OptionKind || kind == types.ResultKind) && !p.symbols.IsChecked(ident.Name) {
+			p.error(ident.Token, "must check "+ident.Name+" before accessing value", "unary")
+			return nil
+		}
+	}
+
 	return node
 }
 
