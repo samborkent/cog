@@ -96,7 +96,7 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 	// Static result analysis: if the assigned expression's type matches the
 	// result's value or error type, we know statically which variant it is.
 	// Wrap in ResultLiteral so the transpiler emits the correct Go struct.
-	if resultType, ok := resolveResult(ident.ValueType); ok && expr != nil {
+	if resultType, ok := resolveResult(ident.ValueType); ok {
 		if types.Equal(expr.Type(), resultType.Error) {
 			node.Assignment.Expression = &ast.ResultLiteral{
 				Token:      node.Assignment.Token,
