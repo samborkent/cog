@@ -277,10 +277,17 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		for {
 			expr := p.expression(ctx, types.None)
 			if expr != nil {
-				// If the enclosing procedure returns a Result type, wrap
-				// the return expression in a ResultLiteral.
+				// If the enclosing procedure returns a Result type, only wrap
+				// value/error variants. Returning a full result value must pass
+				// through unchanged to preserve its IsError state.
 				if resultType != nil {
-					expr = wrapResultLiteral(node.Token, p.currentReturnType, resultType, expr)
+					if _, isVariant := resultExprState(resultType, expr); isVariant {
+						expr = wrapResultLiteral(node.Token, p.currentReturnType, resultType, expr)
+					} else if ident, ok := expr.(*ast.Identifier); ok && expr.Type().Kind() == types.ResultKind && p.symbols.IsValueChecked(ident.Name) {
+						// A checked result identifier used as a bare expression denotes
+						// its success value; wrap it for a result-typed return.
+						expr = wrapResultLiteral(node.Token, p.currentReturnType, resultType, expr)
+					}
 				}
 
 				node.Values = append(node.Values, expr)

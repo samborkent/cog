@@ -242,7 +242,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			returnStmts = []goast.Stmt{stmt}
 		}
 	case *ast.IfStatement:
-		cond, err := t.convertIfCondition(n.Condition)
+		cond, err := t.convertExpr(n.Condition)
 		if err != nil {
 			return nil, err
 		}

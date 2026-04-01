@@ -12,69 +12,6 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-// convertIfCondition handles if-statement conditions, with special cases for
-// ? check on result types (result? → !result.IsError, !result? → result.IsError).
-func (t *Transpiler) convertIfCondition(expr ast.Expression) (goast.Expr, error) {
-	// result? → !result.IsError ("is OK?" = no error)
-	if suffix, ok := expr.(*ast.Suffix); ok && suffix.Operator.Type == tokens.Question {
-		if suffix.Left.Type() != nil && suffix.Left.Type().Kind() == types.ResultKind {
-			ident, ok := suffix.Left.(*ast.Identifier)
-			if !ok {
-				return nil, fmt.Errorf("suffix operator applied to non-identifier in condition")
-			}
-
-			name := convertExport(ident.Name, ident.Exported)
-
-			symbol, ok := t.symbols.Resolve(name)
-			if !ok {
-				return nil, fmt.Errorf("identifier %q not found", name)
-			}
-
-			if err := t.symbols.MarkUsed(name); err != nil {
-				return nil, fmt.Errorf("marking suffix identifier used: %w", err)
-			}
-
-			return &goast.UnaryExpr{
-				Op: gotoken.NOT,
-				X: &goast.SelectorExpr{
-					X:   symbol,
-					Sel: &goast.Ident{Name: "IsError"},
-				},
-			}, nil
-		}
-	}
-
-	// !result? → result.IsError ("is NOT OK?" = has error)
-	if prefix, ok := expr.(*ast.Prefix); ok && prefix.Operator.Type == tokens.Not {
-		if suffix, ok := prefix.Right.(*ast.Suffix); ok && suffix.Operator.Type == tokens.Question {
-			if suffix.Left.Type() != nil && suffix.Left.Type().Kind() == types.ResultKind {
-				ident, ok := suffix.Left.(*ast.Identifier)
-				if !ok {
-					return nil, fmt.Errorf("suffix operator applied to non-identifier in condition")
-				}
-
-				name := convertExport(ident.Name, ident.Exported)
-
-				symbol, ok := t.symbols.Resolve(name)
-				if !ok {
-					return nil, fmt.Errorf("identifier %q not found", name)
-				}
-
-				if err := t.symbols.MarkUsed(name); err != nil {
-					return nil, fmt.Errorf("marking suffix identifier used: %w", err)
-				}
-
-				return &goast.SelectorExpr{
-					X:   symbol,
-					Sel: &goast.Ident{Name: "IsError"},
-				}, nil
-			}
-		}
-	}
-
-	return t.convertExpr(expr)
-}
-
 func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	switch n := node.(type) {
 	case *ast.ArrayLiteral:
@@ -659,6 +596,13 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}, nil
 		}
 
+		// Collapse double negation: !(!x) → x
+		if unaryOp == gotoken.NOT {
+			if inner, ok := right.(*goast.UnaryExpr); ok && inner.Op == gotoken.NOT {
+				return inner.X, nil
+			}
+		}
+
 		return &goast.UnaryExpr{
 			Op: unaryOp,
 			X:  right,
@@ -919,20 +863,42 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("marking suffix identifier used: %w", err)
 		}
 
-		var fieldName string
-		switch n.Operator.Type {
-		case tokens.Question:
-			// For option types: .Set; for result types: handled by convertIfCondition.
-			fieldName = "Set"
-		case tokens.Not:
-			// ! always extracts the error value.
-			fieldName = "Error"
+		leftType := ident.ValueType
+		if leftType == nil {
+			return nil, fmt.Errorf("suffix operator applied to untyped identifier")
 		}
 
-		return &goast.SelectorExpr{
-			X:   symbol,
-			Sel: &goast.Ident{Name: fieldName},
-		}, nil
+		switch n.Operator.Type {
+		case tokens.Question:
+			switch leftType.Kind() {
+			case types.OptionKind:
+				return &goast.SelectorExpr{
+					X:   symbol,
+					Sel: &goast.Ident{Name: "Set"},
+				}, nil
+			case types.ResultKind:
+				return &goast.UnaryExpr{
+					Op: gotoken.NOT,
+					X: &goast.SelectorExpr{
+						X:   symbol,
+						Sel: &goast.Ident{Name: "IsError"},
+					},
+				}, nil
+			default:
+				return nil, fmt.Errorf("? operator requires option or result type")
+			}
+		case tokens.Not:
+			if leftType.Kind() != types.ResultKind {
+				return nil, fmt.Errorf("! operator requires result type")
+			}
+
+			return &goast.SelectorExpr{
+				X:   symbol,
+				Sel: &goast.Ident{Name: "Error"},
+			}, nil
+		}
+
+		return nil, fmt.Errorf("unknown suffix operator '%s'", n.Operator.Type.String())
 	case *ast.TupleLiteral:
 		values := make([]goast.Expr, 0, len(n.Values))
 

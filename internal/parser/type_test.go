@@ -186,4 +186,32 @@ main : proc() = {}`)
 			t.Error("expected error return (IsError=true)")
 		}
 	})
+
+	t.Run("result_return_passthrough_not_wrapped", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+MyError ~ error { Fail }
+inner : func(a : int64) int64 ! MyError = {
+	return a
+}
+outer : func(a : int64) int64 ! MyError = {
+	return inner(a)
+}
+main : proc() = {}`)
+		d := stmtAs[*ast.Declaration](t, f, 2)
+		procLit, ok := d.Assignment.Expression.(*ast.ProcedureLiteral)
+		if !ok {
+			t.Fatal("expected ProcedureLiteral")
+		}
+		ret, ok := procLit.Body.Statements[0].(*ast.Return)
+		if !ok {
+			t.Fatal("expected Return statement")
+		}
+		if len(ret.Values) != 1 {
+			t.Fatalf("expected 1 return value, got %d", len(ret.Values))
+		}
+		if _, wrapped := ret.Values[0].(*ast.ResultLiteral); wrapped {
+			t.Fatalf("expected pass-through result return, got %T", ret.Values[0])
+		}
+	})
 }

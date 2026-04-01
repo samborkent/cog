@@ -153,6 +153,22 @@ main : proc() = {}`)
 		mustContain(t, got, "Error:")
 		mustContain(t, got, "IsError")
 	})
+
+	t.Run("result_return_passthrough", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+MyError ~ error<utf8> {
+	NotFound := "not found",
+}
+inner : func(a : int64) int64 ! MyError = {
+	return a
+}
+outer : func(a : int64) int64 ! MyError = {
+	return inner(a)
+}
+main : proc() = {}`)
+		mustContain(t, got, "return inner(a)")
+	})
 }
 
 func TestConvertEnumDecl(t *testing.T) {

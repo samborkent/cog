@@ -232,6 +232,11 @@ func (s *SymbolTable) MarkChecked(name string, state checkState) {
 	s.checked[name] = state
 }
 
+// ClearChecked removes must-check state for a name in the current scope.
+func (s *SymbolTable) ClearChecked(name string) {
+	delete(s.checked, name)
+}
+
 // IsValueChecked reports whether the named variable's value is safe to access.
 func (s *SymbolTable) IsValueChecked(name string) bool {
 	if s.checked[name]&checkValue != 0 {
