@@ -91,6 +91,8 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 		p.advance("parseCombinedType enum }") // consume }
 
 		return typ
+	case tokens.Error:
+		return p.parseErrorType(ctx, exported)
 	case tokens.Function, tokens.Procedure:
 		return p.parseProcedureType(ctx, exported)
 	}
@@ -149,6 +151,11 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 
 		errorType := p.parseCombinedType(ctx, exported)
 		if errorType == nil {
+			return nil
+		}
+
+		if errorType.Kind() != types.ErrorKind {
+			p.error(p.prev(), "result error type must be an error type", "parseCombinedType")
 			return nil
 		}
 
@@ -566,6 +573,11 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 			return nil
 		}
 
+		if errorType.Kind() != types.ErrorKind {
+			p.error(p.prev(), "result error type must be an error type", "parseProcedureType")
+			return nil
+		}
+
 		returnType = &types.Result{
 			Value: returnType,
 			Error: errorType,
@@ -575,4 +587,110 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 	procType.ReturnType = returnType
 
 	return procType
+}
+
+func (p *Parser) parseErrorType(ctx context.Context, exported bool) types.Type {
+	errorIdent := p.tokens[p.i-2]
+
+	p.advance("parseErrorType error") // consume error
+
+	typ := &types.Error{
+		Values: make([]*types.EnumValue, 0),
+	}
+
+	if p.this().Type == tokens.LT {
+		// Typed error: error<ascii> or error<utf8>
+		p.advance("parseErrorType <") // consume <
+
+		valType := p.parseType(ctx)
+		if valType == nil {
+			return nil
+		}
+
+		if valType.Kind() != types.ASCII && valType.Kind() != types.UTF8 {
+			p.error(p.this(), "error type parameter must be ascii or utf8", "parseErrorType")
+			return nil
+		}
+
+		typ.ValueType = valType
+
+		if p.this().Type != tokens.GT {
+			p.error(p.this(), "expected > after error value type", "parseErrorType")
+			return nil
+		}
+
+		p.advance("parseErrorType >") // consume >
+	}
+
+	if p.this().Type != tokens.LBrace {
+		p.error(p.this(), "expected { after error type", "parseErrorType")
+		return nil
+	}
+
+	p.advance("parseErrorType {") // consume {
+
+	for !p.match(tokens.RBrace, tokens.EOF) {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.Identifier {
+			p.error(p.this(), "expected identifier in error declaration", "parseErrorType")
+			return nil
+		}
+
+		valName := p.this().Literal
+
+		// For typeless errors, the value type is utf8 (printed as the variant name).
+		valType := typ.ValueType
+		if valType == nil {
+			valType = types.Basics[types.UTF8]
+		}
+
+		valIdent := &ast.Identifier{
+			Token:     p.this(),
+			Name:      valName,
+			ValueType: valType,
+			Exported:  exported,
+		}
+
+		p.symbols.DefineEnumValue(errorIdent.Literal, valIdent)
+
+		p.advance("parseErrorType identifier") // consume identifier
+
+		if typ.ValueType != nil {
+			// Typed error: require := value
+			if p.this().Type != tokens.Declaration {
+				p.error(p.this(), "expected := in typed error literal", "parseErrorType")
+				return nil
+			}
+
+			p.advance("parseErrorType :=") // consume :=
+
+			enumExpr := p.expression(ctx, typ.ValueType)
+			if enumExpr != nil {
+				typ.Values = append(typ.Values, &types.EnumValue{
+					Name:  valName,
+					Value: enumExpr,
+				})
+			}
+		} else {
+			// Typeless error: value is the variant name as a string literal.
+			typ.Values = append(typ.Values, &types.EnumValue{
+				Name: valName,
+				Value: &ast.UTF8Literal{
+					Token: tokens.Token{Type: tokens.StringLiteral, Literal: valName},
+					Value: valName,
+				},
+			})
+		}
+
+		if p.this().Type == tokens.Comma {
+			p.advance("parseErrorType ,") // consume ,
+		}
+	}
+
+	p.advance("parseErrorType }") // consume }
+
+	return typ
 }

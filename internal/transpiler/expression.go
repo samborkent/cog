@@ -13,35 +13,11 @@ import (
 )
 
 // convertIfCondition handles if-statement conditions, with special cases for
-// result check patterns (result! → .IsError, !result! → !.IsError).
+// ? check on result types (result? → !result.IsError, !result? → result.IsError).
 func (t *Transpiler) convertIfCondition(expr ast.Expression) (goast.Expr, error) {
-	// result! → result.IsError
-	if suffix, ok := expr.(*ast.Suffix); ok && suffix.Operator.Type == tokens.Not {
-		ident, ok := suffix.Left.(*ast.Identifier)
-		if !ok {
-			return nil, fmt.Errorf("suffix operator applied to non-identifier in condition")
-		}
-
-		name := convertExport(ident.Name, ident.Exported)
-
-		symbol, ok := t.symbols.Resolve(name)
-		if !ok {
-			return nil, fmt.Errorf("identifier %q not found", name)
-		}
-
-		if err := t.symbols.MarkUsed(name); err != nil {
-			return nil, fmt.Errorf("marking suffix identifier used: %w", err)
-		}
-
-		return &goast.SelectorExpr{
-			X:   symbol,
-			Sel: &goast.Ident{Name: "IsError"},
-		}, nil
-	}
-
-	// !result! → !result.IsError
-	if prefix, ok := expr.(*ast.Prefix); ok && prefix.Operator.Type == tokens.Not {
-		if suffix, ok := prefix.Right.(*ast.Suffix); ok && suffix.Operator.Type == tokens.Not {
+	// result? → !result.IsError ("is OK?" = no error)
+	if suffix, ok := expr.(*ast.Suffix); ok && suffix.Operator.Type == tokens.Question {
+		if suffix.Left.Type() != nil && suffix.Left.Type().Kind() == types.ResultKind {
 			ident, ok := suffix.Left.(*ast.Identifier)
 			if !ok {
 				return nil, fmt.Errorf("suffix operator applied to non-identifier in condition")
@@ -65,6 +41,34 @@ func (t *Transpiler) convertIfCondition(expr ast.Expression) (goast.Expr, error)
 					Sel: &goast.Ident{Name: "IsError"},
 				},
 			}, nil
+		}
+	}
+
+	// !result? → result.IsError ("is NOT OK?" = has error)
+	if prefix, ok := expr.(*ast.Prefix); ok && prefix.Operator.Type == tokens.Not {
+		if suffix, ok := prefix.Right.(*ast.Suffix); ok && suffix.Operator.Type == tokens.Question {
+			if suffix.Left.Type() != nil && suffix.Left.Type().Kind() == types.ResultKind {
+				ident, ok := suffix.Left.(*ast.Identifier)
+				if !ok {
+					return nil, fmt.Errorf("suffix operator applied to non-identifier in condition")
+				}
+
+				name := convertExport(ident.Name, ident.Exported)
+
+				symbol, ok := t.symbols.Resolve(name)
+				if !ok {
+					return nil, fmt.Errorf("identifier %q not found", name)
+				}
+
+				if err := t.symbols.MarkUsed(name); err != nil {
+					return nil, fmt.Errorf("marking suffix identifier used: %w", err)
+				}
+
+				return &goast.SelectorExpr{
+					X:   symbol,
+					Sel: &goast.Ident{Name: "IsError"},
+				}, nil
+			}
 		}
 	}
 
@@ -739,12 +743,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		var exported bool
 
 		switch n.Identifier.ValueType.Kind() {
-		case types.EnumKind:
-			_, ok := n.Identifier.ValueType.Underlying().(*types.Enum)
-			if !ok {
-				return nil, fmt.Errorf("unable to assert enum type for %q", n.Identifier.Name)
-			}
-
+		case types.EnumKind, types.ErrorKind:
 			enumName := ident
 			enumName.Name = enumName.Name + titleCaser.String(n.Field.Name)
 
@@ -923,8 +922,10 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		var fieldName string
 		switch n.Operator.Type {
 		case tokens.Question:
+			// For option types: .Set; for result types: handled by convertIfCondition.
 			fieldName = "Set"
 		case tokens.Not:
+			// ! always extracts the error value.
 			fieldName = "Error"
 		}
 

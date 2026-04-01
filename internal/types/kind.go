@@ -38,6 +38,7 @@ const (
 	ArrayKind
 	SliceKind
 	EnumKind
+	ErrorKind
 	MapKind
 	SetKind
 	StructKind
@@ -100,6 +101,8 @@ func (t Kind) String() string {
 		return "generic"
 	case EnumKind:
 		return "enum"
+	case ErrorKind:
+		return "error"
 	case MapKind:
 		return "map"
 	case SetKind:

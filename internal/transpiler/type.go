@@ -21,7 +21,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 
 	if alias, ok := typ.(*types.Alias); ok {
 		switch alias.Kind() {
-		case types.EnumKind:
+		case types.EnumKind, types.ErrorKind:
 			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported) + "Enum"}
 		default:
 			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}

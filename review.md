@@ -3,7 +3,6 @@
 Design concerns:
 
 5. The ownership/reference capability model (your headline safety goal) has zero implementation or even concrete design yet. This is the hardest part of the language and it's entirely unspecified.
-6. Error handling strategy (any!, err!) is planned but not designed in detail.
 
 3. # Performance Goals: Partially Feasible
 

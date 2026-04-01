@@ -268,8 +268,9 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		token := p.this()
 		p.advance("unary ?") // consume ?
 
-		if typeToken.Kind() != types.OptionKind {
-			p.error(token, "option operator requires option type", "unary")
+		// ? works on both option and result types.
+		if typeToken.Kind() != types.OptionKind && typeToken.Kind() != types.ResultKind {
+			p.error(token, "? operator requires option or result type", "unary")
 			return nil
 		}
 
@@ -284,8 +285,16 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		p.advance("unary !") // consume !
 
 		if typeToken.Kind() != types.ResultKind {
-			p.error(token, "result operator requires result type", "unary")
+			p.error(token, "! operator requires result type", "unary")
 			return nil
+		}
+
+		// Must-check: cannot extract error without checking ? first.
+		if ident, ok := node.(*ast.Identifier); ok {
+			if !p.symbols.IsErrorChecked(ident.Name) {
+				p.error(ident.Token, "must check "+ident.Name+" before accessing error", "unary")
+				return nil
+			}
 		}
 
 		return &ast.Suffix{
@@ -294,11 +303,11 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		}
 	}
 
-	// Must-check analysis: bare access to option/result requires prior check.
+	// Must-check analysis: bare access to option/result requires prior ? check.
 	if ident, ok := node.(*ast.Identifier); ok {
 		kind := typeToken.Kind()
 
-		if (kind == types.OptionKind || kind == types.ResultKind) && !p.symbols.IsChecked(ident.Name) {
+		if (kind == types.OptionKind || kind == types.ResultKind) && !p.symbols.IsValueChecked(ident.Name) {
 			p.error(ident.Token, "must check "+ident.Name+" before accessing value", "unary")
 			return nil
 		}

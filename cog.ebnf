@@ -1,5 +1,5 @@
 (* Cog Language Grammar - EBNF *)
-(* Based on the implemented parser as of March 2026. *)
+(* Based on the implemented parser as of April 2026. *)
 
 
 (* === Program Structure === *)
@@ -133,6 +133,7 @@ combined_type
     | procedure_type
     | type, "&", type, { "&", type }     (* tuple *)
     | type, "|", type                    (* union, exactly 2 types *)
+    | type, "!", type                    (* result type: value ! error *)
     | type;
 
 enum_type
@@ -159,7 +160,8 @@ type
     | basic_type
     | IDENTIFIER, ".", IDENTIFIER                      (* package-qualified type *)
     | IDENTIFIER                                       (* type alias reference *)
-    | type, "?"                                        (* option type *);
+    | type, "?"                                        (* option type: T? *)
+    | type, "!", type                                  (* result type: T ! E *);
 
 struct_type
     = "struct", "{", { struct_field }, "}";
@@ -202,7 +204,7 @@ factor
 
 unary
     = ( "!" | "-" ), unary
-    | primary, [ "?" ];                                (* suffix option unwrap *)
+    | primary, [ "?" | "!" ];                          (* suffix: ? = check, ! = error extract *)
 
 primary
     = INT | FLOAT | STRING
@@ -214,6 +216,18 @@ primary
                   | )                                   (* variable reference *)
     | typed_literal
     | composite_literal;
+
+
+(* === Must-Check Analysis (semantic, not syntactic) === *)
+(* The following rules are enforced by the parser, not the grammar itself:
+   - Option (T?) and Result (T ! E) variables cannot be accessed bare without
+     a prior ? check in the same branch.
+   - ? suffix returns bool: "is OK?" (is set for option, no error for result).
+   - ! suffix returns the error value E (result types only), requires prior ? check.
+   - if val?  { val is safe }       — direct check, persists after if block.
+   - if !val? { val! is safe }      — negated check, scoped to block only.
+   - if !val? { ... } else { val }  — value safe in else of negated check.
+*)
 
 
 (* === Builtin Expressions === *)

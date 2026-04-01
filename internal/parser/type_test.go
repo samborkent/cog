@@ -104,7 +104,7 @@ main : proc(x : int32) = {}`)
 	t.Run("result_return_type", func(t *testing.T) {
 		t.Parallel()
 		f := parse(t, `package p
-MyError ~ int32
+MyError ~ error { Fail }
 divide : func(a : int64, b : int64) int64 ! MyError = {
 	return a
 }
@@ -132,7 +132,7 @@ main : proc() = {}`)
 	t.Run("result_return_wraps_value", func(t *testing.T) {
 		t.Parallel()
 		f := parse(t, `package p
-MyError ~ int32
+MyError ~ error { Fail }
 divide : func(a : int64, b : int64) int64 ! MyError = {
 	return a
 }
@@ -161,9 +161,9 @@ main : proc() = {}`)
 	t.Run("result_return_wraps_error", func(t *testing.T) {
 		t.Parallel()
 		f := parse(t, `package p
-MyError ~ int32
-divide : func(a : int64, b : int64, e : MyError) int64 ! MyError = {
-	return e
+MyError ~ error { Fail }
+divide : func(a : int64, b : int64) int64 ! MyError = {
+	return MyError.Fail
 }
 main : proc() = {}`)
 		d := stmtAs[*ast.Declaration](t, f, 1)

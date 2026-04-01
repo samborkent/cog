@@ -77,39 +77,70 @@ main : proc() = {
 }`)
 	})
 
+	t.Run("option_direct_check_persists", func(t *testing.T) {
+		t.Parallel()
+		_ = parse(t, `package p
+main : proc() = {
+	var x : int64? = 42
+	if x? {
+		@print(x)
+	}
+	@print(x)
+}`)
+	})
+
+	t.Run("option_negated_check_does_not_persist", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	var x : int64? = 42
+	if !x? {
+		@print("not set")
+	}
+	@print(x)
+}`)
+	})
+
 	t.Run("result_must_check_bare_access_error", func(t *testing.T) {
 		t.Parallel()
 		parseShouldError(t, `package p
-MyErr ~ int32
-foo : func(a : int64, e : MyErr) int64 ! MyErr = {
-	return a
-}
+MyErr ~ error { Fail }
 main : proc() = {
 	var r : int64 ! MyErr
 	@print(r)
 }`)
 	})
 
-	t.Run("result_suffix_in_error_block_ok", func(t *testing.T) {
+	t.Run("result_must_check_error_access_error", func(t *testing.T) {
 		t.Parallel()
-		_ = parse(t, `package p
-MyErr ~ int32
+		parseShouldError(t, `package p
+MyErr ~ error { Fail }
 main : proc() = {
 	var r : int64 ! MyErr
-	if r! {
-		@print(r!)
+	@print(r!)
+}`)
+	})
+
+	t.Run("result_checked_value_ok", func(t *testing.T) {
+		t.Parallel()
+		_ = parse(t, `package p
+MyErr ~ error { Fail }
+main : proc() = {
+	var r : int64 ! MyErr
+	if r? {
+		@print(r)
 	}
 }`)
 	})
 
-	t.Run("result_negated_check_value_ok", func(t *testing.T) {
+	t.Run("result_checked_error_in_negated_ok", func(t *testing.T) {
 		t.Parallel()
 		_ = parse(t, `package p
-MyErr ~ int32
+MyErr ~ error { Fail }
 main : proc() = {
 	var r : int64 ! MyErr
-	if !r! {
-		@print(r)
+	if !r? {
+		@print(r!)
 	}
 }`)
 	})
@@ -117,52 +148,49 @@ main : proc() = {
 	t.Run("result_direct_check_persists", func(t *testing.T) {
 		t.Parallel()
 		_ = parse(t, `package p
-MyErr ~ int32
+MyErr ~ error { Fail }
 main : proc() = {
 	var r : int64 ! MyErr
-	if r! {
-		@print(r!)
-	}
-	@print(r)
-}`)
-	})
-
-	t.Run("result_negated_undoes_persistent_check", func(t *testing.T) {
-		t.Parallel()
-		parseShouldError(t, `package p
-MyErr ~ int32
-main : proc() = {
-	var r : int64 ! MyErr
-	if r! {
-		@print(r!)
-	}
-	if !r! {
+	if r? {
 		@print(r)
 	}
 	@print(r)
 }`)
 	})
 
-	t.Run("result_error_block_bare_access_error", func(t *testing.T) {
+	t.Run("result_negated_check_does_not_persist", func(t *testing.T) {
 		t.Parallel()
 		parseShouldError(t, `package p
-MyErr ~ int32
+MyErr ~ error { Fail }
 main : proc() = {
 	var r : int64 ! MyErr
-	if r! {
+	if !r? {
+		@print(r!)
+	}
+	@print(r)
+}`)
+	})
+
+	t.Run("result_value_in_error_branch_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+MyErr ~ error { Fail }
+main : proc() = {
+	var r : int64 ! MyErr
+	if !r? {
 		@print(r)
 	}
 }`)
 	})
 
-	t.Run("result_negated_else_bare_access_error", func(t *testing.T) {
+	t.Run("result_negated_else_value_ok", func(t *testing.T) {
 		t.Parallel()
-		parseShouldError(t, `package p
-MyErr ~ int32
+		_ = parse(t, `package p
+MyErr ~ error { Fail }
 main : proc() = {
 	var r : int64 ! MyErr
-	if !r! {
-		@print(r)
+	if !r? {
+		@print(r!)
 	} else {
 		@print(r)
 	}

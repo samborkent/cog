@@ -347,6 +347,21 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		return
 	}
 
+	if p.this().Type == tokens.Error {
+		errorType := p.parseErrorType(ctx, exported)
+		if errorType == nil {
+			return
+		}
+
+		ident.ValueType = errorType
+
+		if !preRegistered {
+			p.symbols.DefineGlobal(ident)
+		}
+
+		return
+	}
+
 	alias := p.parseCombinedType(ctx, ident.Exported)
 	if alias == nil {
 		return

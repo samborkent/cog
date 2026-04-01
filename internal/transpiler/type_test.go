@@ -117,18 +117,22 @@ main : proc() = {}`)
 	t.Run("result_return_type", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-MyError ~ int32
+MyError ~ error<utf8> {
+	NotFound := "not found",
+}
 divide : func(a : int64, b : int64) int64 ! MyError = {
 	return a
 }
 main : proc() = {}`)
-		mustContain(t, got, "cog.Result[int64, _MyError]")
+		mustContain(t, got, "cog.Result[int64, _MyErrorEnum]")
 	})
 
 	t.Run("result_success_return", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-MyError ~ int32
+MyError ~ error<utf8> {
+	NotFound := "not found",
+}
 divide : func(a : int64, b : int64) int64 ! MyError = {
 	return a
 }
@@ -139,9 +143,11 @@ main : proc() = {}`)
 	t.Run("result_error_return", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-MyError ~ int32
-divide : func(a : int64, b : int64, e : MyError) int64 ! MyError = {
-	return e
+MyError ~ error<utf8> {
+	NotFound := "not found",
+}
+divide : func(a : int64, b : int64) int64 ! MyError = {
+	return MyError.NotFound
 }
 main : proc() = {}`)
 		mustContain(t, got, "Error:")

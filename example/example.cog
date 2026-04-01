@@ -108,10 +108,13 @@ caseSwitch:
     // Must-check: cannot access option value without checking first.
     // @print(utf)  // ERROR: must check utf before accessing value
     
+    // ? on option = "is set?"
     if utf? {
         // Inside checked block, value access is allowed.
         @print(utf)
     }
+    // Direct check persists — value remains accessible.
+    @print(utf)
     
     var option : uint64?
     
@@ -121,42 +124,71 @@ caseSwitch:
 
     option = 10
 
-    // Negated check: value available in else branch.
+    // Negated check: !option? = "is NOT set?"
     if !option? {
         @print("not set")
+        // @print(option)  // ERROR: proven not set, can't access value
     } else {
         @print(option)
     }
 
+    // Negated check does NOT persist.
+    // @print(option)  // ERROR: negated check is scoped
+
     // Result type: T ! E — typed error handling.
     var result : int64 ! DivError
     
-    // Must-check: cannot access result without checking first.
-    // @print(result)  // ERROR: must check result before accessing value
+    // Must-check: cannot access value or error without checking first.
+    // @print(result)   // ERROR: must check result before accessing value
+    // @print(result!)  // ERROR: must check result before accessing error
     
-    if result! {
-        // this prints the error
-        @print(result!)
+    // ? on result = "is OK?" (no error). Same operator as option.
+    if result? {
+        // proven: no error, value is safe.
+        @print(result)
+        // @print(result!)  // ERROR: proven no error, can't access error
     }
     
-    // Negated: !result! means no error, value is safe to access in else.
-    if !result! {
-        // able to use result
-        @print(result)
-    } 
+    // Negated: !result? = "is NOT OK?" = has error.
+    if !result? {
+        // proven: has error, error is safe.
+        @print(result!)
+        // @print(result)  // ERROR: proven error, can't access value
+    }
 
-    // should not be allowed
+    // must not be allowed: neither check persists from scoped (negated) checks
     // @print(result)
     
     // Result return from function.
     var divResult : int64 ! DivError = safeDivide(10, 2)
-    if divResult! {
-        // prints the error
-        @print(divResult!)
-    }
 
-    // can use error here, as it's already checked above.
+    // Direct check persists: after `if r?` block, value remains accessible.
+    if divResult? {
+        @print(divResult)
+    }
+    // Check persists — value is safe for rest of scope.
     @print(divResult)
+
+    // Early return pattern (most common Go error handling idiom).
+    var earlyReturn : int64 ! DivError = safeDivide(10, 0)
+    if !earlyReturn? {
+        @print(earlyReturn!)
+        // In a real function you'd: return earlyReturn!
+    }
+    // After error branch without exit: NOT proven OK.
+    // @print(earlyReturn)  // ERROR: error branch did not exit scope
+
+    // Re-check pattern: negated check doesn't persist, use direct check to restore.
+    var recheck : int64 ! DivError = safeDivide(20, 4)
+    if !recheck? {
+        @print(recheck!)
+    }
+    // @print(recheck)  // ERROR: negated check does not persist
+    if recheck? {
+        @print(recheck)
+    }
+    // Direct check persists — value safe for rest of scope.
+    @print(recheck)
 
     upperCaseString := upper(language)
     @print(upperCaseString)
@@ -358,13 +390,14 @@ Either ~ utf8 | uint64
 Option ~ utf8?
 
 // Error type for result examples.
-DivError ~ int32
-divByZero : DivError = 1
+DivError ~ error<utf8> {
+    DivByZero := "division by zero",
+}
 
 // Function returning a result type.
 safeDivide : func(a : int64, b : int64) int64 ! DivError = {
     if b == 0 {
-        return divByZero
+        return DivError.DivByZero
     }
 
     return a / b
