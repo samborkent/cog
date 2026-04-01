@@ -188,4 +188,14 @@ main : proc() = {
 	var r : int64 ! NotAnError
 }`)
 	})
+
+	t.Run("result_value_cannot_be_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+MyErr ~ error { Fail }
+OtherErr ~ error { Bad }
+main : proc() = {
+	var r : MyErr ! OtherErr
+}`)
+	})
 }

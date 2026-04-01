@@ -41,6 +41,9 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 	//   if val?  { return }  → error safe after (value case handled)
 	persistsAfterIf := checkedVar != "" && !negated
 
+	// Save check state before modifying, so scoped checks can be restored.
+	prevState, hadPrevState := p.symbols.checked[checkedVar]
+
 	if checkedVar != "" && !negated {
 		// Direct check: value safe in consequence.
 		p.symbols.MarkChecked(checkedVar, checkValue)
@@ -52,7 +55,11 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 	consequence := p.parseBlockStatement(ctx)
 
 	if checkedVar != "" && !persistsAfterIf {
-		delete(p.symbols.checked, checkedVar)
+		if hadPrevState {
+			p.symbols.checked[checkedVar] = prevState
+		} else {
+			delete(p.symbols.checked, checkedVar)
+		}
 	}
 
 	if consequence == nil {
@@ -89,7 +96,11 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 		alternative := p.parseBlockStatement(ctx)
 
 		if checkedVar != "" && negated {
-			delete(p.symbols.checked, checkedVar)
+			if hadPrevState {
+				p.symbols.checked[checkedVar] = prevState
+			} else {
+				delete(p.symbols.checked, checkedVar)
+			}
 		}
 
 		if alternative == nil {

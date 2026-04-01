@@ -8,17 +8,37 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-// resolveResult unwraps aliases to find an underlying Result type.
-func resolveResult(t types.Type) (*types.Result, bool) {
-	if r, ok := t.(*types.Result); ok {
-		return r, true
+// wrapResultLiteral wraps an expression in a ResultLiteral for assignment
+// to a result-typed variable. It determines whether the expression is the
+// error or value variant based on the expression type's kind.
+// Returns nil if the expression type doesn't match either variant.
+func wrapResultLiteral(tok tokens.Token, resultType types.Type, resolved *types.Result, expr ast.Expression) *ast.ResultLiteral {
+	isError := expr.Type().Kind() == types.ErrorKind
+
+	return &ast.ResultLiteral{
+		Token:      tok,
+		ResultType: resultType,
+		Value:      expr,
+		IsError:    isError,
+	}
+}
+
+// resultExprState checks whether an expression assigned to a result type
+// is a valid value or error variant and returns the corresponding check state.
+// Returns (state, true) if the expression matches a variant, or (0, false)
+// if it matches the full result type (e.g. a function call returning T ! E).
+func resultExprState(resolved *types.Result, expr ast.Expression) (checkState, bool) {
+	exprType := expr.Type()
+
+	if exprType.Kind() == types.ErrorKind {
+		return checkError, true
 	}
 
-	if a, ok := t.(*types.Alias); ok {
-		return resolveResult(a.Underlying())
+	if types.Equal(exprType, resolved.Value) || types.AssignableTo(exprType, resolved.Value) {
+		return checkValue, true
 	}
 
-	return nil, false
+	return 0, false
 }
 
 func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier) *ast.Declaration {
@@ -96,25 +116,10 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 	// Static result analysis: if the assigned expression's type matches the
 	// result's value or error type, we know statically which variant it is.
 	// Wrap in ResultLiteral so the transpiler emits the correct Go struct.
-	if resultType, ok := resolveResult(ident.ValueType); ok {
-		if types.Equal(expr.Type(), resultType.Error) {
-			node.Assignment.Expression = &ast.ResultLiteral{
-				Token:      node.Assignment.Token,
-				ResultType: ident.ValueType,
-				Value:      expr,
-				IsError:    true,
-			}
-			p.symbols.MarkChecked(ident.Name, checkError)
-		} else if !types.Equal(expr.Type(), ident.ValueType) {
-			// Expression type is not the full result type (not a function call
-			// returning the same result), so it must be the value variant.
-			node.Assignment.Expression = &ast.ResultLiteral{
-				Token:      node.Assignment.Token,
-				ResultType: ident.ValueType,
-				Value:      expr,
-				IsError:    false,
-			}
-			p.symbols.MarkChecked(ident.Name, checkValue)
+	if resultType, ok := ident.ValueType.Underlying().(*types.Result); ok {
+		if state, isVariant := resultExprState(resultType, expr); isVariant {
+			node.Assignment.Expression = wrapResultLiteral(node.Assignment.Token, ident.ValueType, resultType, expr)
+			p.symbols.MarkChecked(ident.Name, state)
 		}
 	}
 

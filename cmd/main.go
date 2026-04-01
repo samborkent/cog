@@ -80,11 +80,13 @@ func discoverFiles(input string) []string {
 		panic(fmt.Errorf("reading directory %q: %w", input, err))
 	}
 
-	var files []string
+	files := make([]string, 0, len(entries))
+
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".cog") {
 			continue
 		}
+
 		files = append(files, filepath.Join(input, entry.Name()))
 	}
 

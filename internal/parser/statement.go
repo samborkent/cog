@@ -269,21 +269,18 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 
 		node.Values = make([]ast.Expression, 0)
 
-		resultType, isResult := p.currentReturnType.(*types.Result)
+		var resultType *types.Result
+		if p.currentReturnType != nil {
+			resultType, _ = p.currentReturnType.Underlying().(*types.Result)
+		}
 
 		for {
 			expr := p.expression(ctx, types.None)
 			if expr != nil {
 				// If the enclosing procedure returns a Result type, wrap
 				// the return expression in a ResultLiteral.
-				if isResult {
-					isError := types.Equal(expr.Type(), resultType.Error)
-					expr = &ast.ResultLiteral{
-						Token:      node.Token,
-						ResultType: p.currentReturnType,
-						Value:      expr,
-						IsError:    isError,
-					}
+				if resultType != nil {
+					expr = wrapResultLiteral(node.Token, p.currentReturnType, resultType, expr)
 				}
 
 				node.Values = append(node.Values, expr)

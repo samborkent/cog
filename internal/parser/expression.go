@@ -43,7 +43,7 @@ func (p *Parser) parseLiteral(tokenType types.Type) ast.Expression {
 
 	// When expected type is a result, parse the literal using the value type.
 	// The declaration/assignment will handle marking the check state.
-	if r, ok := resolveResult(tokenType); ok {
+	if r, ok := tokenType.Underlying().(*types.Result); ok {
 		tokenType = r.Value
 	}
 

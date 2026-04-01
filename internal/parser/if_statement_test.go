@@ -324,4 +324,23 @@ main : proc() = {
 	@print(r)
 }`)
 	})
+
+	// Regression: a negated check after a direct check must not destroy
+	// the persisted direct check state.
+	t.Run("result_direct_then_negated_preserves", func(t *testing.T) {
+		t.Parallel()
+		_ = parse(t, `package p
+MyErr ~ error { Fail }
+main : proc() = {
+	var r : int64 ! MyErr
+	if r? {
+		@print(r)
+	}
+	@print(r)
+	if !r? {
+		@print(r!)
+	}
+	@print(r)
+}`)
+	})
 }

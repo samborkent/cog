@@ -1000,7 +1000,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}},
 		}, nil
 	case *ast.ResultLiteral:
-		resultType, ok := n.ResultType.Underlying().(*types.Result)
+		_, ok := n.ResultType.Underlying().(*types.Result)
 		if !ok {
 			return nil, fmt.Errorf("unable to assert result type")
 		}
@@ -1014,8 +1014,6 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		if err != nil {
 			return nil, fmt.Errorf("converting result type: %w", err)
 		}
-
-		_ = resultType // used for type checking in future phases
 
 		if n.IsError {
 			return &goast.CompositeLit{

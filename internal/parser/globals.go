@@ -348,7 +348,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 	}
 
 	if p.this().Type == tokens.Error {
-		errorType := p.parseErrorType(ctx, exported)
+		errorType := p.parseErrorType(ctx, ident)
 		if errorType == nil {
 			return
 		}
