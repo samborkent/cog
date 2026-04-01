@@ -19,15 +19,17 @@ import (
 )
 
 var (
-	fileName string
-	debug    bool
-	write    bool
+	fileName        string
+	debug           bool
+	write           bool
+	replaceLocalCog bool
 )
 
 func main() {
 	flag.StringVar(&fileName, "file", "", "Name of .cog/.cogs file or directory containing .cog files.")
 	flag.BoolVar(&debug, "debug", false, "Enable debug parser mode.")
 	flag.BoolVar(&write, "write", false, "Write to file.")
+	flag.BoolVar(&replaceLocalCog, "replace-local-cog", false, "Add replace directive for local cog module in generated go.mod.")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
@@ -78,11 +80,13 @@ func discoverFiles(input string) []string {
 		panic(fmt.Errorf("reading directory %q: %w", input, err))
 	}
 
-	var files []string
+	files := make([]string, 0, len(entries))
+
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".cog") {
 			continue
 		}
+
 		files = append(files, filepath.Join(input, entry.Name()))
 	}
 
@@ -204,6 +208,9 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 		// Only write go.mod when running as a standalone script (not part of a project).
 		if standalone {
 			gomod := fmt.Sprintf("module %s\n\ngo 1.26.1\n", goModuleName)
+			if replaceLocalCog {
+				gomod += "\nreplace github.com/samborkent/cog => ./..\n"
+			}
 			if err := os.WriteFile(filepath.Join("tmp", "go.mod"), []byte(gomod), 0o600); err != nil {
 				panic(fmt.Errorf("writing go.mod: %w", err))
 			}
@@ -468,6 +475,9 @@ func outputProject(goModuleName string, entry *compiledPackage, imported map[str
 		// Write go.mod so `go run .` works from tmp/.
 		// Only declare the module and Go version; `go mod tidy` resolves all dependencies.
 		gomod := fmt.Sprintf("module %s\n\ngo 1.26.1\n", goModuleName)
+		if replaceLocalCog {
+			gomod += "\nreplace github.com/samborkent/cog => ./..\n"
+		}
 		if err := os.WriteFile(filepath.Join("tmp", "go.mod"), []byte(gomod), 0o600); err != nil {
 			panic(fmt.Errorf("writing go.mod: %w", err))
 		}

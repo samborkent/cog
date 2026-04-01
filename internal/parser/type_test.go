@@ -100,4 +100,118 @@ main : func() = {}`)
 		parseShouldError(t, `package p
 main : proc(x : int32) = {}`)
 	})
+
+	t.Run("result_return_type", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+MyError ~ error { Fail }
+divide : func(a : int64, b : int64) int64 ! MyError = {
+	return a
+}
+main : proc() = {}`)
+		d := stmtAs[*ast.Declaration](t, f, 1)
+		procType, ok := d.Assignment.Expression.Type().(*types.Procedure)
+		if !ok {
+			t.Fatal("expected procedure type")
+		}
+		if procType.ReturnType == nil {
+			t.Fatal("expected return type")
+		}
+		if procType.ReturnType.Kind() != types.ResultKind {
+			t.Errorf("expected ResultKind, got %s", procType.ReturnType.Kind())
+		}
+		resultType, ok := procType.ReturnType.(*types.Result)
+		if !ok {
+			t.Fatal("expected *types.Result")
+		}
+		if resultType.Value.Kind() != types.Int64 {
+			t.Errorf("expected value type Int64, got %s", resultType.Value.Kind())
+		}
+	})
+
+	t.Run("result_return_wraps_value", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+MyError ~ error { Fail }
+divide : func(a : int64, b : int64) int64 ! MyError = {
+	return a
+}
+main : proc() = {}`)
+		d := stmtAs[*ast.Declaration](t, f, 1)
+		procLit, ok := d.Assignment.Expression.(*ast.ProcedureLiteral)
+		if !ok {
+			t.Fatal("expected ProcedureLiteral")
+		}
+		ret, ok := procLit.Body.Statements[0].(*ast.Return)
+		if !ok {
+			t.Fatal("expected Return statement")
+		}
+		if len(ret.Values) != 1 {
+			t.Fatalf("expected 1 return value, got %d", len(ret.Values))
+		}
+		rl, ok := ret.Values[0].(*ast.ResultLiteral)
+		if !ok {
+			t.Fatalf("expected ResultLiteral, got %T", ret.Values[0])
+		}
+		if rl.IsError {
+			t.Error("expected success return (IsError=false)")
+		}
+	})
+
+	t.Run("result_return_wraps_error", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+MyError ~ error { Fail }
+divide : func(a : int64, b : int64) int64 ! MyError = {
+	return MyError.Fail
+}
+main : proc() = {}`)
+		d := stmtAs[*ast.Declaration](t, f, 1)
+		procLit, ok := d.Assignment.Expression.(*ast.ProcedureLiteral)
+		if !ok {
+			t.Fatal("expected ProcedureLiteral")
+		}
+		ret, ok := procLit.Body.Statements[0].(*ast.Return)
+		if !ok {
+			t.Fatal("expected Return statement")
+		}
+		if len(ret.Values) != 1 {
+			t.Fatalf("expected 1 return value, got %d", len(ret.Values))
+		}
+		rl, ok := ret.Values[0].(*ast.ResultLiteral)
+		if !ok {
+			t.Fatalf("expected ResultLiteral, got %T", ret.Values[0])
+		}
+		if !rl.IsError {
+			t.Error("expected error return (IsError=true)")
+		}
+	})
+
+	t.Run("result_return_passthrough_not_wrapped", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+MyError ~ error { Fail }
+inner : func(a : int64) int64 ! MyError = {
+	return a
+}
+outer : func(a : int64) int64 ! MyError = {
+	return inner(a)
+}
+main : proc() = {}`)
+		d := stmtAs[*ast.Declaration](t, f, 2)
+		procLit, ok := d.Assignment.Expression.(*ast.ProcedureLiteral)
+		if !ok {
+			t.Fatal("expected ProcedureLiteral")
+		}
+		ret, ok := procLit.Body.Statements[0].(*ast.Return)
+		if !ok {
+			t.Fatal("expected Return statement")
+		}
+		if len(ret.Values) != 1 {
+			t.Fatalf("expected 1 return value, got %d", len(ret.Values))
+		}
+		if _, wrapped := ret.Values[0].(*ast.ResultLiteral); wrapped {
+			t.Fatalf("expected pass-through result return, got %T", ret.Values[0])
+		}
+	})
 }

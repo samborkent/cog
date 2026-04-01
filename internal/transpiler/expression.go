@@ -184,6 +184,17 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("marking identifier used: %w", err)
 		}
 
+		// Auto-unwrap checked option/result identifiers to .Value
+		if n.ValueType != nil {
+			switch n.ValueType.Kind() {
+			case types.OptionKind, types.ResultKind:
+				return &goast.SelectorExpr{
+					X:   ident,
+					Sel: &goast.Ident{Name: "Value"},
+				}, nil
+			}
+		}
+
 		return ident, nil
 	case *ast.Index:
 		ident, err := t.convertExpr(n.Identifier)
@@ -585,6 +596,13 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}, nil
 		}
 
+		// Collapse double negation: !(!x) → x
+		if unaryOp == gotoken.NOT {
+			if inner, ok := right.(*goast.UnaryExpr); ok && inner.Op == gotoken.NOT {
+				return inner.X, nil
+			}
+		}
+
 		return &goast.UnaryExpr{
 			Op: unaryOp,
 			X:  right,
@@ -669,12 +687,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		var exported bool
 
 		switch n.Identifier.ValueType.Kind() {
-		case types.EnumKind:
-			_, ok := n.Identifier.ValueType.Underlying().(*types.Enum)
-			if !ok {
-				return nil, fmt.Errorf("unable to assert enum type for %q", n.Identifier.Name)
-			}
-
+		case types.EnumKind, types.ErrorKind:
 			enumName := ident
 			enumName.Name = enumName.Name + titleCaser.String(n.Field.Name)
 
@@ -829,7 +842,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Elts: exprs,
 		}, nil
 	case *ast.Suffix:
-		if n.Operator.Type != tokens.Question {
+		if n.Operator.Type != tokens.Question && n.Operator.Type != tokens.Not {
 			return nil, fmt.Errorf("unknown suffix operator '%s'", n.Operator.Type.String())
 		}
 
@@ -850,10 +863,42 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("marking suffix identifier used: %w", err)
 		}
 
-		return &goast.SelectorExpr{
-			X:   symbol,
-			Sel: &goast.Ident{Name: "Set"},
-		}, nil
+		leftType := ident.ValueType
+		if leftType == nil {
+			return nil, fmt.Errorf("suffix operator applied to untyped identifier")
+		}
+
+		switch n.Operator.Type {
+		case tokens.Question:
+			switch leftType.Kind() {
+			case types.OptionKind:
+				return &goast.SelectorExpr{
+					X:   symbol,
+					Sel: &goast.Ident{Name: "Set"},
+				}, nil
+			case types.ResultKind:
+				return &goast.UnaryExpr{
+					Op: gotoken.NOT,
+					X: &goast.SelectorExpr{
+						X:   symbol,
+						Sel: &goast.Ident{Name: "IsError"},
+					},
+				}, nil
+			default:
+				return nil, fmt.Errorf("? operator requires option or result type")
+			}
+		case tokens.Not:
+			if leftType.Kind() != types.ResultKind {
+				return nil, fmt.Errorf("! operator requires result type")
+			}
+
+			return &goast.SelectorExpr{
+				X:   symbol,
+				Sel: &goast.Ident{Name: "Error"},
+			}, nil
+		}
+
+		return nil, fmt.Errorf("unknown suffix operator '%s'", n.Operator.Type.String())
 	case *ast.TupleLiteral:
 		values := make([]goast.Expr, 0, len(n.Values))
 
@@ -919,6 +964,47 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				Key:   &goast.Ident{Name: "Either"},
 				Value: expr,
 			}},
+		}, nil
+	case *ast.ResultLiteral:
+		_, ok := n.ResultType.Underlying().(*types.Result)
+		if !ok {
+			return nil, fmt.Errorf("unable to assert result type")
+		}
+
+		expr, err := t.convertExpr(n.Value)
+		if err != nil {
+			return nil, fmt.Errorf("converting result literal value: %w", err)
+		}
+
+		goType, err := t.convertType(n.ResultType)
+		if err != nil {
+			return nil, fmt.Errorf("converting result type: %w", err)
+		}
+
+		if n.IsError {
+			return &goast.CompositeLit{
+				Type: goType,
+				Elts: []goast.Expr{
+					&goast.KeyValueExpr{
+						Key:   &goast.Ident{Name: "Error"},
+						Value: expr,
+					},
+					&goast.KeyValueExpr{
+						Key:   &goast.Ident{Name: "IsError"},
+						Value: &goast.Ident{Name: "true"},
+					},
+				},
+			}, nil
+		}
+
+		return &goast.CompositeLit{
+			Type: goType,
+			Elts: []goast.Expr{
+				&goast.KeyValueExpr{
+					Key:   &goast.Ident{Name: "Value"},
+					Value: expr,
+				},
+			},
 		}, nil
 	case *ast.UTF8Literal:
 		return component.UTF8Lit(n.Value), nil

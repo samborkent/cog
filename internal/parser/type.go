@@ -12,85 +12,19 @@ import (
 func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Type {
 	switch p.this().Type {
 	case tokens.Enum:
-		enumIdent := p.tokens[p.i-2]
-
-		p.advance("parseCombinedType enum") // consume enum
-
-		if p.this().Type != tokens.LT {
-			p.error(p.this(), "expected < after enum type", "parseCombinedType")
-			return nil
+		ident := &ast.Identifier{
+			Token:    p.tokens[p.i-2],
+			Name:     p.tokens[p.i-2].Literal,
+			Exported: exported,
 		}
-
-		p.advance("parseCombinedType enum <") // consume <
-
-		valType := p.parseType(ctx)
-		if valType == nil {
-			return nil
+		return p.parseEnumType(ctx, ident)
+	case tokens.Error:
+		ident := &ast.Identifier{
+			Token:    p.tokens[p.i-2],
+			Name:     p.tokens[p.i-2].Literal,
+			Exported: exported,
 		}
-
-		if p.this().Type != tokens.GT {
-			p.error(p.this(), "expected > after enum value type", "parseCombinedType")
-			return nil
-		}
-
-		p.advance("parseCombinedType enum >") // consume >
-
-		if p.this().Type != tokens.LBrace {
-			p.error(p.this(), "expected { after enum type", "parseCombinedType")
-			return nil
-		}
-
-		p.advance("parseCombinedType enum {") // consume {
-
-		typ := &types.Enum{
-			ValueType: valType,
-			Values:    make([]*types.EnumValue, 0),
-		}
-
-		for !p.match(tokens.RBrace, tokens.EOF) {
-			if ctx.Err() != nil {
-				return nil
-			}
-
-			if p.this().Type != tokens.Identifier {
-				p.error(p.this(), "expected identifier in enum declaration", "parseCombinedType")
-				return nil
-			}
-
-			valIdent := &ast.Identifier{
-				Token:     p.this(),
-				Name:      p.this().Literal,
-				ValueType: valType,
-				Exported:  exported,
-			}
-
-			p.symbols.DefineEnumValue(enumIdent.Literal, valIdent)
-
-			p.advance("parseCombinedType enum literal identifier") // consume identifier
-
-			if p.this().Type != tokens.Declaration {
-				p.error(p.this(), "expected := in enum literal", "parseCombinedType")
-				return nil
-			}
-
-			p.advance("parseCombinedType enum literal :=") // consume :=
-
-			enumExpr := p.expression(ctx, valType)
-			if enumExpr != nil {
-				typ.Values = append(typ.Values, &types.EnumValue{
-					Name:  valIdent.Name,
-					Value: enumExpr,
-				})
-			}
-
-			if p.this().Type == tokens.Comma {
-				p.advance("parseCombinedType enum literal ,") // consume ,
-			}
-		}
-
-		p.advance("parseCombinedType enum }") // consume }
-
-		return typ
+		return p.parseErrorType(ctx, ident)
 	case tokens.Function, tokens.Procedure:
 		return p.parseProcedureType(ctx, exported)
 	}
@@ -143,6 +77,29 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 		}
 
 		return union
+	case tokens.Not:
+		// Result type: T ! E
+		p.advance("parseCombinedType result !") // consume !
+
+		errorType := p.parseCombinedType(ctx, exported)
+		if errorType == nil {
+			return nil
+		}
+
+		if errorType.Kind() != types.ErrorKind {
+			p.error(p.prev(), "result error type must be an error type", "parseCombinedType")
+			return nil
+		}
+
+		if typ.Kind() == types.ErrorKind {
+			p.error(p.prev(), "result value type cannot be an error type", "parseCombinedType")
+			return nil
+		}
+
+		return &types.Result{
+			Value: typ,
+			Error: errorType,
+		}
 	}
 
 	return typ
@@ -544,7 +501,216 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 		return nil
 	}
 
+	// Result type: T ! E
+	if p.this().Type == tokens.Not {
+		p.advance("parseProcedureType !") // consume !
+
+		errorType := p.parseCombinedType(ctx, exported)
+		if errorType == nil {
+			return nil
+		}
+
+		if errorType.Kind() != types.ErrorKind {
+			p.error(p.prev(), "result error type must be an error type", "parseProcedureType")
+			return nil
+		}
+
+		if returnType.Kind() == types.ErrorKind {
+			p.error(p.prev(), "result value type cannot be an error type", "parseProcedureType")
+			return nil
+		}
+
+		returnType = &types.Result{
+			Value: returnType,
+			Error: errorType,
+		}
+	}
+
 	procType.ReturnType = returnType
 
 	return procType
+}
+
+func (p *Parser) parseEnumType(ctx context.Context, ident *ast.Identifier) types.Type {
+	p.advance("parseEnumType enum") // consume enum
+
+	if p.this().Type != tokens.LT {
+		p.error(p.this(), "expected < after enum type", "parseEnumType")
+		return nil
+	}
+
+	p.advance("parseEnumType <") // consume <
+
+	valType := p.parseType(ctx)
+	if valType == nil {
+		return nil
+	}
+
+	if p.this().Type != tokens.GT {
+		p.error(p.this(), "expected > after enum value type", "parseEnumType")
+		return nil
+	}
+
+	p.advance("parseEnumType >") // consume >
+
+	if p.this().Type != tokens.LBrace {
+		p.error(p.this(), "expected { after enum type", "parseEnumType")
+		return nil
+	}
+
+	p.advance("parseEnumType {") // consume {
+
+	typ := &types.Enum{
+		ValueType: valType,
+		Values:    make([]*types.EnumValue, 0),
+	}
+
+	for !p.match(tokens.RBrace, tokens.EOF) {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.Identifier {
+			p.error(p.this(), "expected identifier in enum declaration", "parseEnumType")
+			return nil
+		}
+
+		valIdent := &ast.Identifier{
+			Token:     p.this(),
+			Name:      p.this().Literal,
+			ValueType: valType,
+			Exported:  ident.Exported,
+		}
+
+		p.symbols.DefineEnumValue(ident.Name, valIdent)
+
+		p.advance("parseEnumType identifier") // consume identifier
+
+		if p.this().Type != tokens.Declaration {
+			p.error(p.this(), "expected := in enum literal", "parseEnumType")
+			return nil
+		}
+
+		p.advance("parseEnumType :=") // consume :=
+
+		enumExpr := p.expression(ctx, valType)
+		if enumExpr != nil {
+			typ.Values = append(typ.Values, &types.EnumValue{
+				Name:  valIdent.Name,
+				Value: enumExpr,
+			})
+		}
+
+		if p.this().Type == tokens.Comma {
+			p.advance("parseEnumType ,") // consume ,
+		}
+	}
+
+	p.advance("parseEnumType }") // consume }
+
+	return typ
+}
+
+func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) types.Type {
+	p.advance("parseErrorType error") // consume error
+
+	typ := &types.Error{
+		Values: make([]*types.EnumValue, 0),
+	}
+
+	if p.this().Type == tokens.LT {
+		// Typed error: error<ascii> or error<utf8>
+		p.advance("parseErrorType <") // consume <
+
+		valType := p.parseType(ctx)
+		if valType == nil {
+			return nil
+		}
+
+		if valType.Kind() != types.ASCII && valType.Kind() != types.UTF8 {
+			p.error(p.this(), "error type parameter must be ascii or utf8", "parseErrorType")
+			return nil
+		}
+
+		typ.ValueType = valType
+
+		if p.this().Type != tokens.GT {
+			p.error(p.this(), "expected > after error value type", "parseErrorType")
+			return nil
+		}
+
+		p.advance("parseErrorType >") // consume >
+	}
+
+	if p.this().Type != tokens.LBrace {
+		p.error(p.this(), "expected { after error type", "parseErrorType")
+		return nil
+	}
+
+	p.advance("parseErrorType {") // consume {
+
+	for !p.match(tokens.RBrace, tokens.EOF) {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.Identifier {
+			p.error(p.this(), "expected identifier in error declaration", "parseErrorType")
+			return nil
+		}
+
+		valName := p.this().Literal
+
+		// For typeless errors, the value type is utf8 (printed as the variant name).
+		valType := typ.ValueType
+		if valType == nil {
+			valType = types.Basics[types.UTF8]
+		}
+
+		valIdent := &ast.Identifier{
+			Token:     p.this(),
+			Name:      valName,
+			ValueType: valType,
+			Exported:  ident.Exported,
+		}
+
+		p.symbols.DefineEnumValue(ident.Name, valIdent)
+
+		p.advance("parseErrorType identifier") // consume identifier
+
+		if typ.ValueType != nil {
+			// Typed error: require := value
+			if p.this().Type != tokens.Declaration {
+				p.error(p.this(), "expected := in typed error literal", "parseErrorType")
+				return nil
+			}
+
+			p.advance("parseErrorType :=") // consume :=
+
+			enumExpr := p.expression(ctx, typ.ValueType)
+			if enumExpr != nil {
+				typ.Values = append(typ.Values, &types.EnumValue{
+					Name:  valName,
+					Value: enumExpr,
+				})
+			}
+		} else {
+			// Typeless error: value is the variant name as a string literal.
+			typ.Values = append(typ.Values, &types.EnumValue{
+				Name: valName,
+				Value: &ast.UTF8Literal{
+					Token: tokens.Token{Type: tokens.StringLiteral, Literal: valName},
+					Value: valName,
+				},
+			})
+		}
+
+		if p.this().Type == tokens.Comma {
+			p.advance("parseErrorType ,") // consume ,
+		}
+	}
+
+	p.advance("parseErrorType }") // consume }
+
+	return typ
 }

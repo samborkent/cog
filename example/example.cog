@@ -105,9 +105,16 @@ caseSwitch:
     // option : Option? // not allowed
     utf = "option"
     
+    // Must-check: cannot access option value without checking first.
+    // @print(utf)  // ERROR: must check utf before accessing value
+    
+    // ? on option = "is set?"
     if utf? {
-        @print("hello")
+        // Inside checked block, value access is allowed.
+        @print(utf)
     }
+    // Direct check persists — value remains accessible.
+    @print(utf)
     
     var option : uint64?
     
@@ -117,8 +124,75 @@ caseSwitch:
 
     option = 10
 
-    if option? {
-        @print("do print")
+    // Negated check: !option? = "is NOT set?"
+    if !option? {
+        @print("not set")
+        // @print(option)  // ERROR: proven not set, can't access value
+    } else {
+        @print(option)
+    }
+
+    // Negated check does NOT persist.
+    // @print(option)  // ERROR: negated check is scoped
+
+    // Result type: T ! E — typed error handling.
+    // Must-check: cannot access value or error without checking first.
+    var result : int64 ! DivError
+    // @print(result)   // ERROR: must check result before accessing value
+    // @print(result!)  // ERROR: must check result before accessing error
+
+    // Static analysis: when assigned a value or error literal, the parser
+    // knows statically which variant it is. No check needed.
+    var knownValue : int64 ! DivError = 42
+    @print(knownValue)  // OK: assigned value literal, proven safe
+    var knownError : int64 ! DivError = DivError.DivByZero
+    @print(knownError!)  // OK: assigned error literal, error access safe
+
+    // Direct check: if result? = "is OK?"
+    // Persists after if-block — value remains accessible.
+    if result? {
+        @print(result)
+        // @print(result!)  // ERROR: proven no error, can't access error
+    }
+    @print(result)
+
+    // Negated check: if !result? = "has error?"
+    // Does NOT persist unless the block exits scope (return/break/continue).
+    var negatedResult : int64 ! DivError = safeDivide(10, 0)
+    if !negatedResult? {
+        @print(negatedResult!)
+        // @print(negatedResult)  // ERROR: proven error, can't access value
+    }
+    // @print(negatedResult)  // ERROR: negated check does not persist
+
+    // Negated check with else: value safe in else branch.
+    var elseResult : int64 ! DivError = safeDivide(10, 2)
+    if !elseResult? {
+        @print(elseResult!)
+    } else {
+        @print(elseResult)
+    }
+
+    // Early-exit promotion: when the error branch exits scope
+    // (return/break/continue), the value check is promoted after the if.
+
+    // return in function: processResult checks error, returns early on failure.
+    var processed : int64 ! DivError = processResult(safeDivide(10, 2))
+    if processed? {
+        @print(processed)
+    }
+    @print(processed)
+
+    // break in loop: error branch exits, so value is proven safe after.
+    var loopResult : int64 ! DivError = safeDivide(20, 4)
+    for {
+        if !loopResult? {
+            @print(loopResult!)
+            break
+        }
+        // After error branch exits, value is proven safe.
+        @print(loopResult)
+        break
     }
 
     upperCaseString := upper(language)
@@ -319,6 +393,29 @@ Tuple ~ utf8 & uint64 & bool
 Either ~ utf8 | uint64
 
 Option ~ utf8?
+
+// Error type for result examples.
+DivError ~ error<utf8> {
+    DivByZero := "division by zero",
+}
+
+// Function returning a result type.
+safeDivide : func(a : int64, b : int64) int64 ! DivError = {
+    if b == 0 {
+        return DivError.DivByZero
+    }
+
+    return a / b
+}
+
+// Early return pattern: check error, return on failure, use value after.
+processResult : func(r : int64 ! DivError) int64 ! DivError = {
+    if !r? {
+        return r!
+    }
+    // After early return, value is proven safe.
+    return r
+}
 
 upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8 = {
     return @go.strings.ToUpper(str) + optional + alsoOptional

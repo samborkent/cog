@@ -59,6 +59,12 @@ type Option[T any] struct {
 	Set   bool
 }
 
+type Result[T any, E any] struct {
+	Value   T
+	Error   E
+	IsError bool
+}
+
 type String interface {
 	~[]byte | ~string
 }

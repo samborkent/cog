@@ -129,4 +129,73 @@ main : proc() = {}`)
 			t.Errorf("expected EnumKind, got %s", ta.Alias.Kind())
 		}
 	})
+
+	t.Run("typed_error", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+MyError ~ error<utf8> {
+	NotFound := "not found",
+	Timeout := "timeout",
+}
+main : proc() = {}`)
+		ta := stmtAs[*ast.Type](t, f, 0)
+		if ta.Alias.Kind() != types.ErrorKind {
+			t.Errorf("expected ErrorKind, got %s", ta.Alias.Kind())
+		}
+	})
+
+	t.Run("typeless_error", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+MyError ~ error {
+	NotFound,
+	Timeout,
+}
+main : proc() = {}`)
+		ta := stmtAs[*ast.Type](t, f, 0)
+		if ta.Alias.Kind() != types.ErrorKind {
+			t.Errorf("expected ErrorKind, got %s", ta.Alias.Kind())
+		}
+	})
+
+	t.Run("ascii_error", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+MyError ~ error<ascii> {
+	NotFound := "not found",
+}
+main : proc() = {}`)
+		ta := stmtAs[*ast.Type](t, f, 0)
+		if ta.Alias.Kind() != types.ErrorKind {
+			t.Errorf("expected ErrorKind, got %s", ta.Alias.Kind())
+		}
+	})
+
+	t.Run("error_invalid_type_param", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+MyError ~ error<int32> {
+	Fail := 1,
+}
+main : proc() = {}`)
+	})
+
+	t.Run("result_requires_error_type", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+NotAnError ~ int32
+main : proc() = {
+	var r : int64 ! NotAnError
+}`)
+	})
+
+	t.Run("result_value_cannot_be_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+MyErr ~ error { Fail }
+OtherErr ~ error { Bad }
+main : proc() = {
+	var r : MyErr ! OtherErr
+}`)
+	})
 }

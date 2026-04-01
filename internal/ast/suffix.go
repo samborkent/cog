@@ -42,5 +42,24 @@ func (p *Suffix) Type() types.Type {
 		panic("suffix with nil type detected")
 	}
 
+	// ? suffix is always a boolean check (option: is set?, result: is OK?).
+	if p.Operator.Type == tokens.Question {
+		return types.Basics[types.Bool]
+	}
+
+	// ! suffix extracts the error value from a result type.
+	if p.Operator.Type == tokens.Not {
+		underlying := p.Left.Type()
+		if alias, ok := underlying.(*types.Alias); ok {
+			underlying = alias.Underlying()
+		}
+
+		if result, ok := underlying.(*types.Result); ok {
+			return result.Error
+		}
+
+		panic("! suffix on non-result type")
+	}
+
 	return p.Left.Type()
 }

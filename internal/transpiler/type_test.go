@@ -113,6 +113,62 @@ x : int128 = 1
 main : proc() = {}`)
 		mustContain(t, got, "cog.Int128")
 	})
+
+	t.Run("result_return_type", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+MyError ~ error<utf8> {
+	NotFound := "not found",
+}
+divide : func(a : int64, b : int64) int64 ! MyError = {
+	return a
+}
+main : proc() = {}`)
+		mustContain(t, got, "cog.Result[int64, _MyErrorError]")
+	})
+
+	t.Run("result_success_return", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+MyError ~ error<utf8> {
+	NotFound := "not found",
+}
+divide : func(a : int64, b : int64) int64 ! MyError = {
+	return a
+}
+main : proc() = {}`)
+		mustContain(t, got, "Value:")
+	})
+
+	t.Run("result_error_return", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+MyError ~ error<utf8> {
+	NotFound := "not found",
+}
+divide : func(a : int64, b : int64) int64 ! MyError = {
+	return MyError.NotFound
+}
+main : proc() = {}`)
+		mustContain(t, got, "Error:")
+		mustContain(t, got, "IsError")
+	})
+
+	t.Run("result_return_passthrough", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+MyError ~ error<utf8> {
+	NotFound := "not found",
+}
+inner : func(a : int64) int64 ! MyError = {
+	return a
+}
+outer : func(a : int64) int64 ! MyError = {
+	return inner(a)
+}
+main : proc() = {}`)
+		mustContain(t, got, "return inner(a)")
+	})
 }
 
 func TestConvertEnumDecl(t *testing.T) {

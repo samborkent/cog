@@ -83,6 +83,18 @@ main : proc() = {
 		mustContain(t, got, "p.x")
 	})
 
+	t.Run("result_question_as_expression", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+MyErr ~ error { Fail }
+main : proc() = {
+	var r : int64 ! MyErr = 1
+	ok := r?
+	@print(ok)
+}`)
+		mustContain(t, got, "!r.IsError")
+	})
+
 	t.Run("dyn_read", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p

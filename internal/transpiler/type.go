@@ -23,6 +23,8 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		switch alias.Kind() {
 		case types.EnumKind:
 			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported) + "Enum"}
+		case types.ErrorKind:
+			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported) + "Error"}
 		default:
 			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
 		}
@@ -354,6 +356,31 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 					},
 				},
 			},
+		}
+	case types.ResultKind:
+		resultType, ok := typ.(*types.Result)
+		if !ok {
+			return nil, errors.New("unable to assert result type")
+		}
+
+		valueType, err := t.convertType(resultType.Value)
+		if err != nil {
+			return nil, fmt.Errorf("converting result value type: %w", err)
+		}
+
+		errorType, err := t.convertType(resultType.Error)
+		if err != nil {
+			return nil, fmt.Errorf("converting result error type: %w", err)
+		}
+
+		t.addCogImport()
+
+		expr = &goast.IndexListExpr{
+			X: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Result"},
+			},
+			Indices: []goast.Expr{valueType, errorType},
 		}
 	case types.UTF8:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.String], nil)}

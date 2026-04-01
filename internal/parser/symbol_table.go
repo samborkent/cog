@@ -32,6 +32,14 @@ type CogImport struct {
 	Exports map[string]Symbol // exported symbols from the imported package
 }
 
+// checkState tracks which accesses are safe for a checked option/result variable.
+type checkState uint8
+
+const (
+	checkValue checkState = 1 << iota // value access is safe (? check proven OK)
+	checkError                        // error access is safe (? check proven error)
+)
+
 type SymbolTable struct {
 	Outer *SymbolTable
 
@@ -39,6 +47,7 @@ type SymbolTable struct {
 	goimports  map[string]*ast.Identifier
 	cogimports map[string]*CogImport // key: package name
 	fields     map[string]map[string]Symbol
+	checked    map[string]checkState // option/result variables verified in this scope
 }
 
 func NewSymbolTable() *SymbolTable {
@@ -54,6 +63,7 @@ func NewSymbolTable() *SymbolTable {
 		goimports:  make(map[string]*ast.Identifier),
 		cogimports: make(map[string]*CogImport),
 		fields:     make(map[string]map[string]Symbol),
+		checked:    make(map[string]checkState),
 	}
 }
 
@@ -215,4 +225,40 @@ func (s *SymbolTable) ResolveCogImport(name string) (*CogImport, bool) {
 // CogImports returns all registered cog imports.
 func (s *SymbolTable) CogImports() map[string]*CogImport {
 	return s.cogimports
+}
+
+// MarkChecked records that an option/result variable's value has been checked in this scope.
+func (s *SymbolTable) MarkChecked(name string, state checkState) {
+	s.checked[name] = state
+}
+
+// ClearChecked removes must-check state for a name in the current scope.
+func (s *SymbolTable) ClearChecked(name string) {
+	delete(s.checked, name)
+}
+
+// IsValueChecked reports whether the named variable's value is safe to access.
+func (s *SymbolTable) IsValueChecked(name string) bool {
+	if s.checked[name]&checkValue != 0 {
+		return true
+	}
+
+	if s.Outer != nil {
+		return s.Outer.IsValueChecked(name)
+	}
+
+	return false
+}
+
+// IsErrorChecked reports whether the named variable's error is safe to access.
+func (s *SymbolTable) IsErrorChecked(name string) bool {
+	if s.checked[name]&checkError != 0 {
+		return true
+	}
+
+	if s.Outer != nil {
+		return s.Outer.IsErrorChecked(name)
+	}
+
+	return false
 }

@@ -56,5 +56,18 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 		p.symbols.Update(ident.Name, expr.Type())
 	}
 
+	// Static result analysis: if the assigned expression's type matches the
+	// result's value or error type, we know statically which variant it is.
+	// Wrap in ResultLiteral so the transpiler emits the correct Go struct.
+	if resultType, ok := symbol.Type().Underlying().(*types.Result); ok {
+		if state, isVariant := resultExprState(resultType, expr); isVariant {
+			node.Expression = wrapResultLiteral(node.Token, symbol.Type(), resultType, expr)
+			p.symbols.MarkChecked(ident.Name, state)
+		} else {
+			// Reassignment from an unknown result variant invalidates previous checks.
+			p.symbols.ClearChecked(ident.Name)
+		}
+	}
+
 	return node
 }

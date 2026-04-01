@@ -197,7 +197,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			Specs: []goast.Spec{valueSpec},
 		}}, nil
 	case *ast.Type:
-		if n.Alias.Kind() == types.EnumKind {
+		if n.Alias.Kind() == types.EnumKind || n.Alias.Kind() == types.ErrorKind {
 			return t.convertEnumDecl(n)
 		}
 
@@ -237,25 +237,43 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 }
 
 func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
-	enumType, ok := n.Alias.(*types.Enum)
-	if !ok {
+	var valueType types.Type
+	var values []*types.EnumValue
+
+	switch a := n.Alias.(type) {
+	case *types.Enum:
+		valueType = a.ValueType
+		values = a.Values
+	case *types.Error:
+		if a.ValueType != nil {
+			valueType = a.ValueType
+		} else {
+			valueType = types.Basics[types.UTF8]
+		}
+		values = a.Values
+	default:
 		return nil, fmt.Errorf("cannot convert type %q to enum", n.Alias)
 	}
 
 	identifier := convertExport(n.Identifier.Name, n.Identifier.Exported)
 
-	enumName := identifier + "Enum"
+	var enumName string
+	if n.Alias.Kind() == types.ErrorKind {
+		enumName = identifier + "Error"
+	} else {
+		enumName = identifier + "Enum"
+	}
 
 	enumTypeIdent := gotypes.Typ[gotypes.Uint8].String()
 
-	if len(enumType.Values) > math.MaxUint8 {
+	if len(values) > math.MaxUint8 {
 		enumTypeIdent = gotypes.Typ[gotypes.Uint16].String()
 	}
 
-	specs := make([]goast.Spec, 0, len(enumType.Values))
-	exprs := make([]goast.Expr, 0, len(enumType.Values))
+	specs := make([]goast.Spec, 0, len(values))
+	exprs := make([]goast.Expr, 0, len(values))
 
-	for i, enumVal := range enumType.Values {
+	for i, enumVal := range values {
 		val := enumVal.Value.(ast.Expression)
 
 		expr, err := t.convertExpr(val)
@@ -288,7 +306,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 
 	typeName := &goast.Ident{Name: identifier + "Type"}
 
-	enumValType, err := t.convertType(enumType.ValueType)
+	enumValType, err := t.convertType(valueType)
 	if err != nil {
 		return nil, fmt.Errorf("converting enum value type: %w", err)
 	}

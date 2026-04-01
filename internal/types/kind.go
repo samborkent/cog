@@ -38,6 +38,7 @@ const (
 	ArrayKind
 	SliceKind
 	EnumKind
+	ErrorKind
 	MapKind
 	SetKind
 	StructKind
@@ -48,6 +49,7 @@ const (
 
 	// Modified types
 	OptionKind
+	ResultKind
 
 	// Function type
 	ProcedureKind
@@ -99,6 +101,8 @@ func (t Kind) String() string {
 		return "generic"
 	case EnumKind:
 		return "enum"
+	case ErrorKind:
+		return "error"
 	case MapKind:
 		return "map"
 	case SetKind:
@@ -111,6 +115,8 @@ func (t Kind) String() string {
 		return "union"
 	case OptionKind:
 		return "option"
+	case ResultKind:
+		return "result"
 	case ProcedureKind:
 		return "proc"
 	case Invalid:

@@ -28,6 +28,7 @@ The following basic features are missing that need to be implemented before Cog 
     - Either `this | that`
     - Tuple `this & that & other`
     - Option `foo : uint64?; if foo? { ... }`
+    - Result `bar : int64 ! MyError; if bar? { use bar } if !bar? { handle bar! }`
     - `ascii` string where every character is a single byte
     - `utf8` alias for Go `string`
     - Struct with explicit field exports
@@ -80,6 +81,21 @@ The following basic features are missing that need to be implemented before Cog 
     - No `export` keyword allowed
     - Imports (`import`, `goimport`) are supported
     - Transpiles to `cmd/{script_name}/` with `package main` and `func main()`
+- Result type `T ! E` with typed error handling
+    - Error types: `MyError ~ error<utf8> { ... }` or typeless `MyError ~ error { ... }`
+    - Only `error`, `error<ascii>`, and `error<utf8>` are allowed as error type parameters
+    - Declaration: `var r : int64 ! MyError`
+    - Functions can return result: `func(...) int64 ! MyError`
+    - Check: `if r? { ... }` (no error), `if !r? { ... }` (has error)
+    - Error extraction: `r!` gives the error value
+    - Transpiles to `cog.Result[T, E]` generic Go struct
+- Must-check analysis for option and result types
+    - Cannot access option value without `?` check: `if opt? { use opt }`
+    - Cannot access result value or error without `?` check
+    - `?` = "is OK?" (bool) — works on both option and result
+    - `!` = error extraction (value) — result types only, requires prior `?` check
+    - Direct check (`if val?`) persists for rest of scope
+    - Negated check (`if !val?`) is scoped to its block only
 
 ### Partly implemented
 
@@ -87,6 +103,8 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Planned
 
+- Result type `T ! E` with typed error handling
+    - Also allow `interface{ String() string }` and `interface{ Error() string }` as error types (requires interface implementation)
 - Type qualifiers
     - `comp` for compile time constants. Similar to Zig' `comptime`. When used on variables, like C++ `constexpr`, when used for functions like C++ `consteval`.
 - Variables need to be passed to scope explicitely (no catch all closures)
@@ -109,9 +127,6 @@ The following basic features are missing that need to be implemented before Cog 
         - Will perform best-effort conversion, allowing some precision loss and handling overflows.
 - Additional types:
     - `signal<T any>` alias of `chan<T any>struct{}`
-    - `any!` result type (alias of `any | error`)
-        - Error can be extracted with `err!`
-        - E.g `res := someFunc(); if res! { @print(res) }`
 - Builtin operations for 2D / 3D / 4D slices.
 - Builtin `upx` binary packer for smaller binaries.
 - LSP
@@ -241,20 +256,38 @@ caseSwitch:
     // option : Option? // not allowed
     utf = "option"
     
+    // Must-check: cannot use utf without checking first.
+    // @print(utf)  // ERROR
+    
     if utf? {
-        @print("hello")
+        @print(utf)  // OK: proven set
     }
+    @print(utf)  // OK: direct check persists
     
     var option : uint64?
-    
     if option? {
         @print("do not print")
     }
-
     option = 10
+    if !option? {
+        @print("not set")
+    } else {
+        @print(option)  // OK: proven set in else
+    }
 
-    if option? {
-        @print("do print")
+    // Result type: T ! E
+    DivError ~ error<utf8> {
+        DivByZero := "division by zero",
+    }
+    var divResult : int64 ! DivError = safeDivide(10, 2)
+    if divResult? {
+        @print(divResult)   // OK: proven no error
+    }
+    @print(divResult)       // OK: direct check persists
+
+    var earlyReturn : int64 ! DivError = safeDivide(10, 0)
+    if !earlyReturn? {
+        @print(earlyReturn!)  // OK: error extraction
     }
 
     upperCaseString := upper(language)
@@ -430,6 +463,17 @@ Tuple ~ utf8 & uint64 & bool
 Either ~ utf8 | uint64
 
 Option ~ utf8?
+
+// Error type for result examples.
+DivError ~ int32
+divByZero : DivError = 1
+
+safeDivide : func(a : int64, b : int64) int64 ! DivError = {
+    if b == 0 {
+        return divByZero
+    }
+    return a / b
+}
 
 upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8 = {
     return @go.strings.ToUpper(str) + optional + alsoOptional

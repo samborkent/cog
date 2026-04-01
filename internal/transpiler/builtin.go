@@ -122,8 +122,8 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 			return nil, fmt.Errorf("converting print argument: %w", err)
 		}
 
-		// Print underlying value of enum instead of enum itself.
-		if node.Arguments[0].Type().Kind() == types.EnumKind {
+		// Print underlying value of enum/error instead of enum itself.
+		if node.Arguments[0].Type().Kind() == types.EnumKind || node.Arguments[0].Type().Kind() == types.ErrorKind {
 			enumType, ok := node.Arguments[0].Type().(*types.Alias)
 			if !ok {
 				return nil, fmt.Errorf("unable to cast enum to alias for @print argument")
