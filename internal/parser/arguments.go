@@ -30,7 +30,7 @@ func (p *Parser) parseTypeArguments(ctx context.Context) []types.Type {
 
 	p.advance("parseTypeArguments <") // consume <
 
-	typ := p.parseCombinedType(ctx, false)
+	typ := p.parseCombinedType(ctx, false, false)
 	if typ == nil {
 		return nil
 	}
@@ -40,7 +40,7 @@ func (p *Parser) parseTypeArguments(ctx context.Context) []types.Type {
 	for p.this().Type == tokens.Comma {
 		p.advance("parseTypeArguments ,") // consume ,
 
-		typ := p.parseCombinedType(ctx, false)
+		typ := p.parseCombinedType(ctx, false, false)
 		if typ == nil {
 			return nil
 		}

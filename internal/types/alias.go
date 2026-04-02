@@ -4,17 +4,19 @@ type Alias struct {
 	Name       string
 	Derived    Type
 	Exported   bool
+	Global     bool
 	TypeParams []*TypeParam
 	lazy       func() Type
 }
 
 // NewForwardAlias creates an alias for a type that hasn't been fully resolved yet.
 // The resolver function is called lazily when the type is first accessed.
-func NewForwardAlias(name string, exported bool, resolver func() Type) *Alias {
+func NewForwardAlias(name string, exported, global bool, resolver func() Type) *Alias {
 	return &Alias{
 		Name:     name,
 		Derived:  None,
 		Exported: exported,
+		Global:   global,
 		lazy:     resolver,
 	}
 }

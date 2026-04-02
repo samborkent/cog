@@ -500,6 +500,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 					Name:     symbol.Identifier.Name,
 					Derived:  symbol.Type(),
 					Exported: symbol.Identifier.Exported,
+					Global:   symbol.Identifier.Global,
 				}
 			}
 

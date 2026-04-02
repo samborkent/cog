@@ -5,6 +5,7 @@ import (
 	goast "go/ast"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/transpiler/component"
 )
 
 type SymbolTable struct {
@@ -46,7 +47,7 @@ func (s *SymbolTable) DefineDynamic(ident *ast.Identifier) error {
 		return fmt.Errorf("cannot define dynamically scoped variables outside of package scope")
 	}
 
-	name := convertExport(ident.Name, ident.Exported)
+	name := component.ConvertExport(ident.Name, ident.Exported, ident.Global)
 	s.dynamics[name] = ident
 
 	return nil

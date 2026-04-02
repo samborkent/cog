@@ -32,6 +32,8 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 		if typeParams == nil {
 			return nil
 		}
+
+		typeDecl.TypeParameters = typeParams
 	}
 
 	p.advance("parseTypeAlias export ident ~") // consume ~
@@ -53,7 +55,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 		defer func() { p.symbols = outer }()
 	}
 
-	typ := p.parseCombinedType(ctx, ident.Exported)
+	typ := p.parseCombinedType(ctx, ident.Exported, ident.Global)
 	if typ == nil {
 		return nil
 	}
@@ -66,15 +68,17 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 		if alias, ok := typ.(*types.Alias); ok {
 			alias.TypeParams = typeParams
 		} else {
-			// Wrap in an alias so type params can be carried.
-			wrapped := &types.Alias{
-				Name:       ident.Name,
-				Derived:    typ,
-				Exported:   ident.Exported,
-				TypeParams: typeParams,
-			}
-			typeDecl.Alias = wrapped
-			typeDecl.Identifier.ValueType = wrapped
+			// TODO: check if we need this
+			// // Wrap in an alias so type params can be carried.
+			// wrapped := &types.Alias{
+			// 	Name:       ident.Name,
+			// 	Derived:    typ,
+			// 	Exported:   ident.Exported,
+			// 	Global:     ident.Global,
+			// 	TypeParams: typeParams,
+			// }
+			// typeDecl.Alias = wrapped
+			// typeDecl.Identifier.ValueType = wrapped
 		}
 	}
 

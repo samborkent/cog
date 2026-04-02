@@ -86,6 +86,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				Name:      p.this().Literal,
 				Exported:  true,
 				Qualifier: ast.QualifierImmutable,
+				Global:    true,
 			}
 
 			p.advance("parseStatement export ident") // consume identifier
@@ -144,6 +145,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			Name:      p.this().Literal,
 			Exported:  false,
 			Qualifier: qualifier,
+			Global:    p.symbols.Outer == nil,
 		}
 
 		// Do not skip identifier for function call or imported package selector;
@@ -282,11 +284,11 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				// through unchanged to preserve its IsError state.
 				if resultType != nil {
 					if _, isVariant := resultExprState(resultType, expr); isVariant {
-						expr = wrapResultLiteral(node.Token, p.currentReturnType, resultType, expr)
+						expr = wrapResultLiteral(node.Token, p.currentReturnType, expr)
 					} else if ident, ok := expr.(*ast.Identifier); ok && expr.Type().Kind() == types.ResultKind && p.symbols.IsValueChecked(ident.Name) {
 						// A checked result identifier used as a bare expression denotes
 						// its success value; wrap it for a result-typed return.
-						expr = wrapResultLiteral(node.Token, p.currentReturnType, resultType, expr)
+						expr = wrapResultLiteral(node.Token, p.currentReturnType, expr)
 					}
 				}
 

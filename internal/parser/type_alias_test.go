@@ -213,18 +213,14 @@ main : proc() = {}`)
 			t.Errorf("expected name 'List', got %q", ta.Identifier.Name)
 		}
 
-		alias, ok := ta.Alias.(*types.Alias)
-		if !ok {
-			t.Fatalf("expected *types.Alias, got %T", ta.Alias)
+		if len(ta.TypeParameters) != 1 {
+			t.Fatalf("expected 1 type param, got %d", len(ta.TypeParameters))
 		}
-		if len(alias.TypeParams) != 1 {
-			t.Fatalf("expected 1 type param, got %d", len(alias.TypeParams))
+		if ta.TypeParameters[0].Name != "T" {
+			t.Errorf("expected type param name 'T', got %q", ta.TypeParameters[0].Name)
 		}
-		if alias.TypeParams[0].Name != "T" {
-			t.Errorf("expected type param name 'T', got %q", alias.TypeParams[0].Name)
-		}
-		if alias.TypeParams[0].ConstraintString() != "any" {
-			t.Errorf("expected constraint 'any', got %q", alias.TypeParams[0].ConstraintString())
+		if ta.TypeParameters[0].ConstraintString() != "any" {
+			t.Errorf("expected constraint 'any', got %q", ta.TypeParameters[0].ConstraintString())
 		}
 	})
 
@@ -235,15 +231,12 @@ Pair<A ~ any, B ~ any> ~ A & B
 main : proc() = {}`)
 		ta := stmtAs[*ast.Type](t, f, 0)
 
-		alias, ok := ta.Alias.(*types.Alias)
-		if !ok {
-			t.Fatalf("expected *types.Alias, got %T", ta.Alias)
+		if len(ta.TypeParameters) != 2 {
+			t.Fatalf("expected 2 type params, got %d", len(ta.TypeParameters))
 		}
-		if len(alias.TypeParams) != 2 {
-			t.Fatalf("expected 2 type params, got %d", len(alias.TypeParams))
-		}
-		if alias.TypeParams[0].Name != "A" || alias.TypeParams[1].Name != "B" {
-			t.Errorf("expected params [A, B], got [%s, %s]", alias.TypeParams[0].Name, alias.TypeParams[1].Name)
+
+		if ta.TypeParameters[0].Name != "A" || ta.TypeParameters[1].Name != "B" {
+			t.Errorf("expected params [A, B], got [%s, %s]", ta.TypeParameters[0].Name, ta.TypeParameters[1].Name)
 		}
 	})
 
@@ -253,12 +246,9 @@ main : proc() = {}`)
 NumList<T ~ number> ~ []T
 main : proc() = {}`)
 		ta := stmtAs[*ast.Type](t, f, 0)
-		alias, ok := ta.Alias.(*types.Alias)
-		if !ok {
-			t.Fatalf("expected *types.Alias, got %T", ta.Alias)
-		}
-		if alias.TypeParams[0].ConstraintString() != "number" {
-			t.Errorf("expected constraint 'number', got %q", alias.TypeParams[0].ConstraintString())
+
+		if ta.TypeParameters[0].ConstraintString() != "number" {
+			t.Errorf("expected constraint 'number', got %q", ta.TypeParameters[0].ConstraintString())
 		}
 	})
 
@@ -268,11 +258,8 @@ main : proc() = {}`)
 SList<T ~ string | int> ~ []T
 main : proc() = {}`)
 		ta := stmtAs[*ast.Type](t, f, 0)
-		alias, ok := ta.Alias.(*types.Alias)
-		if !ok {
-			t.Fatalf("expected *types.Alias, got %T", ta.Alias)
-		}
-		cs := alias.TypeParams[0].ConstraintString()
+
+		cs := ta.TypeParameters[0].ConstraintString()
 		if cs != "string | int" {
 			t.Errorf("expected constraint 'string | int', got %q", cs)
 		}
@@ -284,12 +271,9 @@ main : proc() = {}`)
 Dict<K ~ comparable, V ~ any> ~ map<K, V>
 main : proc() = {}`)
 		ta := stmtAs[*ast.Type](t, f, 0)
-		alias, ok := ta.Alias.(*types.Alias)
-		if !ok {
-			t.Fatalf("expected *types.Alias, got %T", ta.Alias)
-		}
-		if len(alias.TypeParams) != 2 {
-			t.Fatalf("expected 2 type params, got %d", len(alias.TypeParams))
+
+		if len(ta.TypeParameters) != 2 {
+			t.Fatalf("expected 2 type params, got %d", len(ta.TypeParameters))
 		}
 	})
 

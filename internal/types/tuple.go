@@ -11,8 +11,8 @@ const (
 )
 
 type Tuple struct {
-	Types    []Type
-	Exported bool
+	Types            []Type
+	Exported, Global bool
 }
 
 func (t *Tuple) Index(i int) Type {

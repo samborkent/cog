@@ -6,6 +6,10 @@ The following basic features are missing that need to be implemented before Cog 
 
 - Go-to-Cog type conversions
 
+## TODO:
+
+- Transpile functions as regular functions to make generics work as expected.
+
 ## Features
 
 ### Implemented

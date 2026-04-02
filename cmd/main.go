@@ -222,13 +222,13 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 			}
 		}
 	} else {
-		fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
+		// fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
 
-		if err := t.Print(os.Stdout, gofile); err != nil {
-			panic(fmt.Errorf("printing output: %w", err))
-		}
+		// if err := t.Print(os.Stdout, gofile); err != nil {
+		// 	panic(fmt.Errorf("printing output: %w", err))
+		// }
 
-		fmt.Println()
+		// fmt.Println()
 	}
 }
 
@@ -530,13 +530,13 @@ func transpileAndOutput(goModuleName string, pkg *compiledPackage) {
 
 			_ = outFile.Close()
 		} else {
-			fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
+			// fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
 
-			if err := t.Print(os.Stdout, gofiles[i]); err != nil {
-				panic(fmt.Errorf("printing output: %w", err))
-			}
+			// if err := t.Print(os.Stdout, gofiles[i]); err != nil {
+			// 	panic(fmt.Errorf("printing output: %w", err))
+			// }
 
-			fmt.Println()
+			// fmt.Println()
 		}
 	}
 }

@@ -5,7 +5,6 @@ import (
 	gotoken "go/token"
 	"strconv"
 	"strings"
-	"unicode"
 	"unsafe"
 
 	"github.com/samborkent/cog/internal/ast"
@@ -30,27 +29,7 @@ func Ident(ident *ast.Identifier) *goast.Ident {
 		return nil
 	}
 
-	return cachedIdent(ConvertExport(ident.Name, ident.Exported))
-}
-
-// ConvertExport adjusts identifier casing for Go export rules.
-func ConvertExport(ident string, exported bool) string {
-	r := rune(ident[0])
-
-	if exported {
-		upper := unicode.ToUpper(r)
-		if upper == r {
-			return ident
-		}
-
-		return string(upper) + ident[1:]
-	}
-
-	if unicode.IsUpper(r) {
-		return "_" + ident
-	}
-
-	return ident
+	return cachedIdent(ConvertExport(ident.Name, ident.Exported, ident.Global))
 }
 
 // BoolLit returns a pre-allocated Go *ast.Ident for "true" or "false".

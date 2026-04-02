@@ -130,7 +130,7 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 			}
 
 			arg = &goast.IndexExpr{
-				X:     &goast.Ident{Name: convertExport(enumType.Name, enumType.Exported)},
+				X:     &goast.Ident{Name: component.ConvertExport(enumType.Name, enumType.Exported, enumType.Global)},
 				Index: arg,
 			}
 		}

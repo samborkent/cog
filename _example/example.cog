@@ -99,7 +99,8 @@ caseSwitch:
         @print(enum1)
     }
 
-    tuple : Tuple = {"hello", 10, false}
+    // TODO: temporarily disabled, not fully implemented.
+    // tuple : Tuple = {"hello", 10, false}
 
     var utf : utf8?  = "hello"
     // option : Option? // not allowed
@@ -370,8 +371,9 @@ outerLoop:
     @print(lookup)
 
     // Two-param generic: pair of any two types.
-    coord : Pair<float64, float64> = {1.0, 2.0}
-    @print(coord)
+    // TODO: temporarily disabled, not fully implemented.
+    // coord : Pair<float64, float64> = {1.0, 2.0}
+    // @print(coord)
 
     // Multi-constraint: T must satisfy `string` or `int`.
     labels : TagSlice<utf8> = @slice<utf8>(3)
@@ -412,7 +414,8 @@ planet ~ struct {
     )
 }
 
-Tuple ~ utf8 & uint64 & bool
+// TODO: temporarily disabled, not fully implemented.
+// Tuple ~ utf8 & uint64 & bool
 
 Either ~ utf8 | uint64
 
@@ -473,7 +476,8 @@ SortableSlice<T ~ ordered> ~ []T
 Dict<K ~ comparable, V ~ any> ~ map<K, V>
 
 // Multiple type params with any constraint.
-Pair<A ~ any, B ~ any> ~ A & B
+// TODO: temporarily disabled, not fully implemented.
+// Pair<A ~ any, B ~ any> ~ A & B
 
 // Multi-constraint union: T must be string or int.
 TagSlice<T ~ string | int> ~ []T

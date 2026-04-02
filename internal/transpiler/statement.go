@@ -26,7 +26,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		ident := &goast.Ident{Name: "_"}
 
 		if n.Identifier.Name != "_" {
-			name := convertExport(n.Identifier.Name, n.Identifier.Exported)
+			name := component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global)
 
 			id, ok := t.symbols.Resolve(name)
 			if !ok {
@@ -145,7 +145,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		}
 
 		if typ.Kind() == types.OptionKind {
-			// Warp option type.
+			// Wrap option type.
 			expr = &goast.CompositeLit{
 				Type: declType,
 				Elts: []goast.Expr{
@@ -158,7 +158,16 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		// Replace type string with type name if missing (for structs, tuples, unions).
 		compositeLiteral, ok := expr.(*goast.CompositeLit)
 		if ok && compositeLiteral.Type == nil {
-			compositeLiteral.Type = &goast.Ident{Name: convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)}
+			litType := n.Assignment.Identifier.Type()
+			litName := litType.String()
+
+			// Handle exported type aliases.
+			litAlias, ok := litType.(*types.Alias)
+			if ok {
+				litName = component.ConvertExport(litAlias.Name, litAlias.Exported, litAlias.Global)
+			}
+
+			compositeLiteral.Type = &goast.Ident{Name: litName}
 		}
 
 		returnStmts = []goast.Stmt{&goast.DeclStmt{

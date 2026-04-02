@@ -27,6 +27,7 @@ type Identifier struct {
 	ValueType types.Type
 	Exported  bool
 	Qualifier Qualifier
+	Global    bool
 }
 
 func (e *Identifier) Pos() (uint32, uint16) {

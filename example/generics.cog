@@ -1,0 +1,5 @@
+package main
+
+genFunc : func<T ~ any>(x : T) = {
+    @print(x)
+}

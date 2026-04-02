@@ -9,24 +9,27 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Type {
+func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) types.Type {
 	switch p.this().Type {
 	case tokens.Enum:
 		ident := &ast.Identifier{
 			Token:    p.tokens[p.i-2],
 			Name:     p.tokens[p.i-2].Literal,
 			Exported: exported,
+			Global:   global,
 		}
+
 		return p.parseEnumType(ctx, ident)
 	case tokens.Error:
 		ident := &ast.Identifier{
 			Token:    p.tokens[p.i-2],
 			Name:     p.tokens[p.i-2].Literal,
 			Exported: exported,
+			Global:   global,
 		}
 		return p.parseErrorType(ctx, ident)
 	case tokens.Function, tokens.Procedure:
-		return p.parseProcedureType(ctx, exported)
+		return p.parseProcedureType(ctx, exported, global)
 	}
 
 	typ := p.parseType(ctx)
@@ -37,6 +40,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 		tuple := &types.Tuple{
 			Types:    make([]types.Type, 1, types.TupleMaxTypes),
 			Exported: exported,
+			Global:   global,
 		}
 
 		// Put parsed type as first type.
@@ -81,7 +85,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 		// Result type: T ! E
 		p.advance("parseCombinedType result !") // consume !
 
-		errorType := p.parseCombinedType(ctx, exported)
+		errorType := p.parseCombinedType(ctx, exported, global)
 		if errorType == nil {
 			return nil
 		}
@@ -251,7 +255,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 				ident := sym.Identifier
 				if types.IsNone(ident.ValueType) {
-					typ = types.NewForwardAlias(ident.Name, ident.Exported, func() types.Type {
+					typ = types.NewForwardAlias(ident.Name, ident.Exported, ident.Global, func() types.Type {
 						return ident.ValueType
 					})
 				} else {
@@ -259,6 +263,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 						Name:     ident.Name,
 						Derived:  ident.ValueType,
 						Exported: ident.Exported,
+						Global:   ident.Global,
 					}
 				}
 
@@ -298,7 +303,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		if types.IsNone(ident.ValueType) {
 			// Forward reference: type name is pre-registered but not yet resolved.
 			// Create a lazy alias that resolves when the type is accessed.
-			typ = types.NewForwardAlias(ident.Name, ident.Exported, func() types.Type {
+			typ = types.NewForwardAlias(ident.Name, ident.Exported, ident.Global, func() types.Type {
 				return ident.ValueType
 			})
 		} else {
@@ -306,6 +311,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 				Name:     ident.Name,
 				Derived:  ident.ValueType,
 				Exported: ident.Exported,
+				Global:   ident.Global,
 			}
 		}
 	}
@@ -485,18 +491,42 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 
 	p.advance("parseField :") // consume :
 
-	field.Type = p.parseCombinedType(ctx, exported)
+	field.Type = p.parseCombinedType(ctx, exported, false)
 
 	return field
 }
 
-func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.Procedure {
+func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) *types.Procedure {
 	procType := &types.Procedure{
 		Function:   p.this().Type == tokens.Function,
 		Parameters: make([]*types.Parameter, 0),
 	}
 
 	p.advance("parseProcedureType proc/func")
+
+	if p.this().Type == tokens.LT {
+		procType.TypeParams = p.parseTypeParams(ctx)
+		if procType.TypeParams == nil {
+			return nil
+		}
+
+		// Enter scope for type parameters.
+		p.symbols = NewEnclosedSymbolTable(p.symbols)
+
+		// Pre-register type parameters in symbol table for recursive references.
+		for _, tp := range procType.TypeParams {
+			p.symbols.Define(&ast.Identifier{
+				Name:      tp.Name,
+				ValueType: tp,
+				Qualifier: ast.QualifierType,
+			})
+		}
+
+		defer func() {
+			// Exit type parameter scope.
+			p.symbols = p.symbols.Outer
+		}()
+	}
 
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), fmt.Sprintf("expected '(' after %q in type", p.prev().Type), "parseProcedureType")
@@ -543,10 +573,15 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 
 		p.advance("parseParameters loop :") // consume :
 
-		paramType := p.parseCombinedType(ctx, false)
+		paramType := p.parseCombinedType(ctx, false, false)
 		if paramType == nil {
 			p.error(p.this(), "unknown parameter type", "parseParameters")
 			return nil
+		}
+
+		alias, ok := paramType.(*types.Alias)
+		if ok {
+			fmt.Printf("TEST %q %t %t\n", alias.Name, alias.Exported, alias.Global)
 		}
 
 		param.Type = paramType
@@ -581,7 +616,7 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 	}
 
 	// TODO: this should only allow a limited set of types.
-	returnType := p.parseCombinedType(ctx, exported)
+	returnType := p.parseCombinedType(ctx, exported, global)
 	if returnType == nil {
 		return nil
 	}
@@ -590,7 +625,7 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 	if p.this().Type == tokens.Not {
 		p.advance("parseProcedureType !") // consume !
 
-		errorType := p.parseCombinedType(ctx, exported)
+		errorType := p.parseCombinedType(ctx, exported, global)
 		if errorType == nil {
 			return nil
 		}

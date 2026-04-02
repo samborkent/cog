@@ -21,16 +21,18 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 	}
 
 	if alias, ok := typ.(*types.Alias); ok {
+		name := component.ConvertExport(alias.Name, alias.Exported, alias.Global)
+
 		switch alias.Kind() {
 		case types.EnumKind:
-			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported) + "Enum"}
+			name += "Enum"
 		case types.ErrorKind:
-			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported) + "Error"}
-		default:
-			expr = &goast.Ident{Name: convertExport(alias.Name, alias.Exported)}
+			name += "Error"
 		}
 
+		expr = &goast.Ident{Name: name}
 		t.typeCache[typ] = expr
+
 		return expr, nil
 	}
 
@@ -113,7 +115,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			// ASCII is an alias of []byte, which is not a valid map key type in Go. Use string instead.
 			aliasType, ok := mapType.Key.(*types.Alias)
 			if ok {
-				keyExpr = &goast.Ident{Name: convertExport(aliasType.Name, aliasType.Exported) + "Hash"}
+				keyExpr = &goast.Ident{Name: component.ConvertExport(aliasType.Name, aliasType.Exported, aliasType.Global) + "Hash"}
 			} else {
 				keyExpr = &goast.SelectorExpr{
 					X:   &goast.Ident{Name: "cog"},
@@ -242,7 +244,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			// ASCII is an alias of []byte, which is not a valid map key type in Go. Use hash of ASCII instead.
 			aliasType, ok := setType.Element.(*types.Alias)
 			if ok {
-				indexExpr = &goast.Ident{Name: convertExport(aliasType.Name, aliasType.Exported) + "Hash"}
+				indexExpr = &goast.Ident{Name: component.ConvertExport(aliasType.Name, aliasType.Exported, aliasType.Global) + "Hash"}
 			} else {
 				indexExpr = &goast.SelectorExpr{
 					X:   &goast.Ident{Name: "cog"},
@@ -318,7 +320,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			}
 
 			fields = append(fields, &goast.Field{
-				Names: []*goast.Ident{{Name: convertExport("t"+strconv.Itoa(i), tupleType.Exported)}},
+				Names: []*goast.Ident{{Name: component.ConvertExport("t"+strconv.Itoa(i), tupleType.Exported, tupleType.Global)}},
 				Type:  elemType,
 			})
 		}
@@ -409,33 +411,25 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 // convertConstraint maps a cog constraint type to its Go equivalent.
 func (t *Transpiler) convertConstraint(typ types.Type) goast.Expr {
 	if typ.Kind() == types.AnyKind {
-		return &goast.Ident{Name: "any"}
+		return component.Any
 	}
 
 	g, ok := typ.(*types.Generic)
 	if !ok {
-		return &goast.Ident{Name: "any"}
+		return component.Any
 	}
 
 	switch g.String() {
 	case "comparable":
-		return &goast.Ident{Name: "comparable"}
+		return component.Comparable
 	case "ordered":
-		t.imports["cmp"] = &goast.ImportSpec{
-			Path: &goast.BasicLit{
-				Kind:  gotoken.STRING,
-				Value: `"cmp"`,
-			},
-		}
-		return &goast.SelectorExpr{
-			X:   &goast.Ident{Name: "cmp"},
-			Sel: &goast.Ident{Name: "Ordered"},
-		}
+		t.addStdLibImport("cmp")
+		return component.CmpOrdered
 	default:
 		// Constraints involving library types (float16, complex32, int128, uint128)
 		// cannot be expressed as Go type constraint interfaces.
 		// Emit 'any' and rely on cog's compile-time Satisfies check.
-		return &goast.Ident{Name: "any"}
+		return component.Any
 	}
 }
 
@@ -495,7 +489,7 @@ func (t *Transpiler) convertField(field *types.Field) (*goast.Field, error) {
 	}
 
 	return &goast.Field{
-		Names: []*goast.Ident{{Name: convertExport(field.Name, field.Exported)}},
+		Names: []*goast.Ident{{Name: component.ConvertExport(field.Name, field.Exported, false)}},
 		Type:  fieldType,
 	}, nil
 }

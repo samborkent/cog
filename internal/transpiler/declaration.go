@@ -29,7 +29,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			return nil, nil
 		}
 
-		ident := t.symbols.Define(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported))
+		ident := t.symbols.Define(component.ConvertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global))
 
 		tok := gotoken.CONST
 
@@ -175,7 +175,16 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		// Replace type string with type name if missing (for structs, tuples, unions).
 		compositeLiteral, ok := expr.(*goast.CompositeLit)
 		if ok && compositeLiteral.Type == nil {
-			compositeLiteral.Type = &goast.Ident{Name: convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)}
+			litType := n.Assignment.Identifier.Type()
+			litName := litType.String()
+
+			// Handle exported type aliases.
+			litAlias, ok := litType.(*types.Alias)
+			if ok {
+				litName = component.ConvertExport(litAlias.Name, litAlias.Exported, litAlias.Global)
+			}
+
+			compositeLiteral.Type = &goast.Ident{Name: litName}
 		}
 
 		valueSpec := &goast.ValueSpec{
@@ -209,12 +218,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		decls := make([]goast.Decl, 0, 2)
 
 		typeSpec := &goast.TypeSpec{
-			Name: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported)},
+			Name: component.Ident(n.Identifier),
 			Type: aliasType,
 		}
 
-		if alias, ok := n.Alias.(*types.Alias); ok && len(alias.TypeParams) > 0 {
-			typeSpec.TypeParams = t.convertTypeParams(alias.TypeParams)
+		if len(n.TypeParameters) > 0 {
+			typeSpec.TypeParams = t.convertTypeParams(n.TypeParameters)
 		}
 
 		decls = append(decls, &goast.GenDecl{
@@ -228,7 +237,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				Tok: gotoken.TYPE,
 				Specs: []goast.Spec{
 					&goast.TypeSpec{
-						Name: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported) + "Hash"},
+						Name: &goast.Ident{Name: component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global) + "Hash"},
 						Type: &goast.Ident{Name: gotypes.Typ[gotypes.Uint64].String()},
 					},
 				},
@@ -260,7 +269,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		return nil, fmt.Errorf("cannot convert type %q to enum", n.Alias)
 	}
 
-	identifier := convertExport(n.Identifier.Name, n.Identifier.Exported)
+	identifier := component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global)
 
 	var enumName string
 	if n.Alias.Kind() == types.ErrorKind {

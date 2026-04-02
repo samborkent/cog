@@ -146,9 +146,27 @@ func (p *Parser) preRegisterTypeNames(ctx context.Context) {
 				Name:     p.this().Literal,
 				Exported: exported,
 				// Qualifier defaults to QualifierType (zero value)
+				Global: true,
 			}
 
 			p.symbols.DefineGlobal(ident)
+
+			p.advance("preRegister identifier") // consume token
+
+			// Skip type parameters in procedure/function declarations during pre-registration.
+			if p.this().Type == tokens.LT {
+				p.skipTypeParams(ctx)
+			}
+
+			continue
+		}
+
+		// Skip type parameters in procedure/function declarations during pre-registration.
+		if (p.this().Type == tokens.Procedure || p.this().Type == tokens.Function) &&
+			p.next().Type == tokens.LT {
+			p.advance("preRegister proc") // consume token
+			p.skipTypeParams(ctx)
+			continue
 		}
 
 		p.advance("preRegister") // consume token
@@ -176,6 +194,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 		Name:      p.this().Literal,
 		Exported:  exported,
 		Qualifier: qualifier,
+		Global:    true,
 	}
 
 	p.advance("findGlobalDecl identifier") // consume identifier
@@ -184,7 +203,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 	case tokens.Colon:
 		p.advance("findGlobalDecl :") // consume :
 
-		ident.ValueType = p.parseCombinedType(ctx, exported)
+		ident.ValueType = p.parseCombinedType(ctx, exported, true)
 
 		if ident.Name == "main" {
 			procType, isProc := ident.ValueType.(*types.Procedure)
@@ -246,6 +265,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		Token:    p.this(),
 		Name:     p.this().Literal,
 		Exported: exported,
+		Global:   true,
 	}
 
 	p.advance("findGlobalType identifier") // consume identifier
@@ -293,7 +313,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 		p.advance("findGlobalType enum <") // consume <
 
-		enumValType := p.parseCombinedType(ctx, exported)
+		enumValType := p.parseCombinedType(ctx, exported, true)
 
 		enumType := &types.Enum{ValueType: enumValType}
 
@@ -394,7 +414,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		defer func() { p.symbols = outer }()
 	}
 
-	alias := p.parseCombinedType(ctx, ident.Exported)
+	alias := p.parseCombinedType(ctx, ident.Exported, ident.Global)
 	if alias == nil {
 		return
 	}
@@ -404,12 +424,14 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		if a, ok := alias.(*types.Alias); ok {
 			a.TypeParams = typeParams
 		} else {
-			alias = &types.Alias{
-				Name:       ident.Name,
-				Derived:    alias,
-				Exported:   ident.Exported,
-				TypeParams: typeParams,
-			}
+			// TODO: check if we need this
+			// alias = &types.Alias{
+			// 	Name:       ident.Name,
+			// 	Derived:    alias,
+			// 	Exported:   ident.Exported,
+			// 	Global:     ident.Global,
+			// 	TypeParams: typeParams,
+			// }
 		}
 	}
 
@@ -459,6 +481,29 @@ func (p *Parser) skipGrouped(ctx context.Context) {
 		}
 
 		p.advance("skipGrouped " + p.this().Literal)
+
+		if parenIndex == 0 {
+			return
+		}
+	}
+}
+
+func (p *Parser) skipTypeParams(ctx context.Context) {
+	parenIndex := 0
+
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		switch p.this().Type {
+		case tokens.LT:
+			parenIndex++
+		case tokens.GT:
+			parenIndex--
+		}
+
+		p.advance("skipTypeParams " + p.this().Literal)
 
 		if parenIndex == 0 {
 			return

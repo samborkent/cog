@@ -12,9 +12,10 @@ var _ Statement = &Type{}
 type Type struct {
 	statement
 
-	Token      tokens.Token
-	Identifier *Identifier
-	Alias      types.Type
+	Token          tokens.Token
+	Identifier     *Identifier
+	TypeParameters []*types.TypeParam
+	Alias          types.Type
 }
 
 func (s *Type) Pos() (uint32, uint16) {
@@ -31,6 +32,22 @@ func (s *Type) stringTo(out *strings.Builder) {
 	}
 
 	_, _ = out.WriteString(s.Identifier.Name)
+
+	if len(s.TypeParameters) > 0 {
+		_, _ = out.WriteString("<")
+
+		for i, tp := range s.TypeParameters {
+			if i > 0 {
+				_, _ = out.WriteString(", ")
+			}
+			_, _ = out.WriteString(tp.Name)
+			_, _ = out.WriteString(" ~ ")
+			_, _ = out.WriteString(tp.ConstraintString())
+		}
+
+		_, _ = out.WriteString(">")
+	}
+
 	_, _ = out.WriteString(" ~ ")
 	_, _ = out.WriteString(s.Alias.String())
 }
