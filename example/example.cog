@@ -352,6 +352,30 @@ outerLoop:
     // subpackage: geom/metric (imported as "metric").
     @print(metric.Pi)
     @print(metric.CircleArea(5.0))
+
+    // Generic type alias with `any` constraint: works for every type.
+    names : List<utf8> = @slice<utf8>(3)
+    @print(names)
+
+    // Generic type alias with `number` constraint: int + uint + float + complex.
+    scores : NumSlice<int64> = @slice<int64>(5)
+    @print(scores)
+
+    // Generic type alias with `ordered` constraint: int + uint + float + string.
+    words : SortableSlice<utf8> = @slice<utf8>(10)
+    @print(words)
+
+    // Generic type alias with `comparable` constraint on map keys.
+    lookup : Dict<utf8, int64> = @map<utf8, int64>()
+    @print(lookup)
+
+    // Two-param generic: pair of any two types.
+    coord : Pair<float64, float64> = {1.0, 2.0}
+    @print(coord)
+
+    // Multi-constraint: T must satisfy `string` or `int`.
+    labels : TagSlice<utf8> = @slice<utf8>(3)
+    @print(labels)
 }
 
 arenaProc : proc(n : uint64) = {
@@ -435,6 +459,24 @@ Map ~ map<utf8, uint64>
 array : [3]uint64 = {1, 2, 3}
 slice : []utf8 = {"foo", "bar", "baz", "qux"}
 SliceType ~ []uint64
+
+// any: accepts every type.
+List<T ~ any> ~ []T
+
+// number: int + uint + float + complex types.
+NumSlice<T ~ number> ~ []T
+
+// ordered: int + uint + float + string — types that support < > <= >=.
+SortableSlice<T ~ ordered> ~ []T
+
+// comparable: ordered + complex + bool + struct + array + enum + pointer + tuple + set.
+Dict<K ~ comparable, V ~ any> ~ map<K, V>
+
+// Multiple type params with any constraint.
+Pair<A ~ any, B ~ any> ~ A & B
+
+// Multi-constraint union: T must be string or int.
+TagSlice<T ~ string | int> ~ []T
 
 /*
 switch variable { // value type
