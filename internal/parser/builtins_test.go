@@ -31,6 +31,30 @@ main : proc() = {
 			t.Fatal("expected statements")
 		}
 	})
+
+	t.Run("typed_result", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	x : int32 = @if(true, 1, 2)
+	@print(x)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("string_result", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	x := @if(true, "yes", "no")
+	@print(x)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
 }
 
 func TestParseBuiltinSlice(t *testing.T) {
@@ -87,6 +111,30 @@ main : proc() = {
 			t.Fatal("expected statements")
 		}
 	})
+
+	t.Run("with_capacity", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	m := @map<utf8, int64>(10)
+	@print(m)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("with_typed_capacity", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	m := @map<utf8, int64, uint32>(10)
+	@print(m)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
 }
 
 func TestParseBuiltinSet(t *testing.T) {
@@ -97,6 +145,18 @@ func TestParseBuiltinSet(t *testing.T) {
 		f := parse(t, `package p
 main : proc() = {
 	s := @set<int64>()
+	@print(s)
+}`)
+		if len(f.Statements) == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("with_capacity", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	s := @set<utf8>(5)
 	@print(s)
 }`)
 		if len(f.Statements) == 0 {

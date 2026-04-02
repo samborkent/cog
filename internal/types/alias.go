@@ -1,10 +1,11 @@
 package types
 
 type Alias struct {
-	Name     string
-	Derived  Type
-	Exported bool
-	lazy     func() Type
+	Name       string
+	Derived    Type
+	Exported   bool
+	TypeParams []*TypeParam
+	lazy       func() Type
 }
 
 // NewForwardAlias creates an alias for a type that hasn't been fully resolved yet.

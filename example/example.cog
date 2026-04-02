@@ -333,10 +333,10 @@ outerLoop:
     bigCmp := big < bigSum
 
     // int128: backed by ryanavella/wide, ops via methods.
-    signed : int128 = 42
-    signedNeg := -signed
-    signedSum := signed + signed
-    signedCmp := signed < signedNeg
+    big128 : int128 = 42
+    big128Neg := -big128
+    big128Sum := big128 + big128
+    big128Cmp := big128 < big128Neg
 
     // cross-file: Coordinate type and formatCoord function defined in other.cog.
     loc : Coordinate = {

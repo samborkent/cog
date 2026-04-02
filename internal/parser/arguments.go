@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
@@ -41,4 +42,90 @@ func (p *Parser) parseTypeArguments(ctx context.Context) []types.Type {
 	p.advance("parseTypeArguments >") // consume >
 
 	return args
+}
+
+// parseTypeParams parses a generic type parameter list in declaration position:
+//
+//	<T ~ any>
+//	<T ~ any, K ~ comparable>
+//	<T ~ string | int>
+//
+// Each parameter is an identifier, followed by ~, followed by one or more
+// constraint keywords separated by |.
+func (p *Parser) parseTypeParams(ctx context.Context) []*types.TypeParam {
+	if p.this().Type != tokens.LT {
+		p.error(p.this(), "expected opening < for type parameters", "parseTypeParams")
+		return nil
+	}
+
+	p.advance("parseTypeParams <") // consume <
+
+	var params []*types.TypeParam
+
+	for {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.Identifier {
+			p.error(p.this(), "expected type parameter name", "parseTypeParams")
+			return nil
+		}
+
+		name := p.this().Literal
+		p.advance("parseTypeParams name") // consume parameter name
+
+		if p.this().Type != tokens.Tilde {
+			p.error(p.this(), "expected ~ after type parameter name", "parseTypeParams")
+			return nil
+		}
+
+		p.advance("parseTypeParams ~") // consume ~
+
+		// Parse constraint(s): one or more constraint keywords separated by |
+		constraint, ok := types.LookupConstraint(p.this().Literal)
+		if !ok {
+			p.error(p.this(), fmt.Sprintf("expected constraint keyword, got %q", p.this().Literal), "parseTypeParams")
+			return nil
+		}
+
+		p.advance("parseTypeParams constraint") // consume first constraint
+
+		constraints := []types.Type{constraint}
+
+		for p.this().Type == tokens.Pipe {
+			p.advance("parseTypeParams |") // consume |
+
+			constraint, ok := types.LookupConstraint(p.this().Literal)
+			if !ok {
+				p.error(p.this(), fmt.Sprintf("expected constraint keyword after |, got %q", p.this().Literal), "parseTypeParams")
+				return nil
+			}
+
+			p.advance("parseTypeParams constraint") // consume constraint
+
+			constraints = append(constraints, constraint)
+		}
+
+		params = append(params, &types.TypeParam{
+			Name:        name,
+			Constraints: constraints,
+		})
+
+		if p.this().Type == tokens.Comma {
+			p.advance("parseTypeParams ,") // consume ,
+			continue
+		}
+
+		break
+	}
+
+	if p.this().Type != tokens.GT {
+		p.error(p.this(), "expected closing > for type parameters", "parseTypeParams")
+		return nil
+	}
+
+	p.advance("parseTypeParams >") // consume >
+
+	return params
 }

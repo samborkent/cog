@@ -585,3 +585,293 @@ func TestGenericConstraints(t *testing.T) {
 		}
 	})
 }
+
+func TestLookupConstraint(t *testing.T) {
+	t.Parallel()
+
+	// All named constraints must be found.
+	names := []string{
+		"any", "int", "uint", "float", "complex", "string",
+		"signed", "number", "ordered", "summable", "comparable",
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			typ, ok := LookupConstraint(name)
+			if !ok {
+				t.Fatalf("LookupConstraint(%q) not found", name)
+			}
+			if typ == nil {
+				t.Fatalf("LookupConstraint(%q) returned nil", name)
+			}
+			if typ.String() != name {
+				t.Errorf("LookupConstraint(%q).String() = %q", name, typ.String())
+			}
+		})
+	}
+
+	t.Run("unknown", func(t *testing.T) {
+		t.Parallel()
+		_, ok := LookupConstraint("nonexistent")
+		if ok {
+			t.Error("LookupConstraint(\"nonexistent\") should return false")
+		}
+	})
+}
+
+func TestTypeParam(t *testing.T) {
+	t.Parallel()
+
+	t.Run("kind", func(t *testing.T) {
+		t.Parallel()
+		tp := &TypeParam{Name: "T", Constraints: []Type{Any}}
+		if tp.Kind() != GenericKind {
+			t.Errorf("TypeParam.Kind() = %v, want GenericKind", tp.Kind())
+		}
+	})
+
+	t.Run("string", func(t *testing.T) {
+		t.Parallel()
+		tp := &TypeParam{Name: "T", Constraints: []Type{Any}}
+		if tp.String() != "T" {
+			t.Errorf("TypeParam.String() = %q, want %q", tp.String(), "T")
+		}
+	})
+
+	t.Run("constraint_string_single", func(t *testing.T) {
+		t.Parallel()
+		tp := &TypeParam{Name: "T", Constraints: []Type{Any}}
+		if tp.ConstraintString() != "any" {
+			t.Errorf("ConstraintString() = %q, want %q", tp.ConstraintString(), "any")
+		}
+	})
+
+	t.Run("constraint_string_multi", func(t *testing.T) {
+		t.Parallel()
+		tp := &TypeParam{
+			Name:        "T",
+			Constraints: []Type{Generics["string"], Generics["int"]},
+		}
+		want := "string | int"
+		if tp.ConstraintString() != want {
+			t.Errorf("ConstraintString() = %q, want %q", tp.ConstraintString(), want)
+		}
+	})
+
+	t.Run("satisfied_by_any", func(t *testing.T) {
+		t.Parallel()
+		tp := &TypeParam{Name: "T", Constraints: []Type{Any}}
+		if !tp.SatisfiedBy(Basics[Int64]) {
+			t.Error("T ~ any should be satisfied by int64")
+		}
+		if !tp.SatisfiedBy(Basics[UTF8]) {
+			t.Error("T ~ any should be satisfied by utf8")
+		}
+	})
+
+	t.Run("satisfied_by_single_constraint", func(t *testing.T) {
+		t.Parallel()
+		tp := &TypeParam{Name: "T", Constraints: []Type{Generics["int"]}}
+		if !tp.SatisfiedBy(Basics[Int64]) {
+			t.Error("T ~ int should be satisfied by int64")
+		}
+		if tp.SatisfiedBy(Basics[UTF8]) {
+			t.Error("T ~ int should not be satisfied by utf8")
+		}
+	})
+
+	t.Run("satisfied_by_multi_constraint_union", func(t *testing.T) {
+		t.Parallel()
+		tp := &TypeParam{
+			Name:        "T",
+			Constraints: []Type{Generics["string"], Generics["int"]},
+		}
+		if !tp.SatisfiedBy(Basics[Int64]) {
+			t.Error("T ~ string | int should be satisfied by int64")
+		}
+		if !tp.SatisfiedBy(Basics[UTF8]) {
+			t.Error("T ~ string | int should be satisfied by utf8")
+		}
+		if tp.SatisfiedBy(Basics[Float64]) {
+			t.Error("T ~ string | int should not be satisfied by float64")
+		}
+	})
+
+	t.Run("underlying", func(t *testing.T) {
+		t.Parallel()
+		tp := &TypeParam{Name: "T", Constraints: []Type{Any}}
+		if tp.Underlying() != tp {
+			t.Error("TypeParam.Underlying() should return itself")
+		}
+	})
+}
+
+func TestSize(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		kind Kind
+		want int
+	}{
+		{Bool, 8},
+		{Int8, 8},
+		{Uint8, 8},
+		{Int16, 16},
+		{Uint16, 16},
+		{Float16, 16},
+		{Int32, 32},
+		{Uint32, 32},
+		{Float32, 32},
+		{Complex32, 32},
+		{Int64, 64},
+		{Uint64, 64},
+		{Float64, 64},
+		{Complex64, 64},
+		{Int128, 128},
+		{Uint128, 128},
+		{Complex128, 128},
+		{ASCII, -1},
+		{UTF8, -1},
+		{SliceKind, -1},
+		{MapKind, -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.kind.String(), func(t *testing.T) {
+			t.Parallel()
+			if got := Size(tt.kind); got != tt.want {
+				t.Errorf("Size(%s) = %d, want %d", tt.kind, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestErrorType(t *testing.T) {
+	t.Parallel()
+
+	t.Run("kind", func(t *testing.T) {
+		t.Parallel()
+		e := &Error{}
+		if e.Kind() != ErrorKind {
+			t.Errorf("Error.Kind() = %v, want ErrorKind", e.Kind())
+		}
+	})
+
+	t.Run("string_typed", func(t *testing.T) {
+		t.Parallel()
+		e := &Error{ValueType: Basics[UTF8]}
+		got := e.String()
+		if got != "error<utf8> {}" {
+			t.Errorf("Error.String() = %q", got)
+		}
+	})
+
+	t.Run("string_untyped", func(t *testing.T) {
+		t.Parallel()
+		e := &Error{}
+		got := e.String()
+		if got != "error {}" {
+			t.Errorf("Error.String() = %q", got)
+		}
+	})
+
+	t.Run("underlying", func(t *testing.T) {
+		t.Parallel()
+		e := &Error{}
+		if e.Underlying() != e {
+			t.Error("Error.Underlying() should return itself")
+		}
+	})
+}
+
+func TestResultType(t *testing.T) {
+	t.Parallel()
+
+	r := &Result{Value: Basics[Int64], Error: &Error{}}
+
+	t.Run("kind", func(t *testing.T) {
+		t.Parallel()
+		if r.Kind() != ResultKind {
+			t.Errorf("Result.Kind() = %v, want ResultKind", r.Kind())
+		}
+	})
+
+	t.Run("string", func(t *testing.T) {
+		t.Parallel()
+		got := r.String()
+		if got != "int64 ! error {}" {
+			t.Errorf("Result.String() = %q", got)
+		}
+	})
+
+	t.Run("underlying", func(t *testing.T) {
+		t.Parallel()
+		if r.Underlying() != r {
+			t.Error("Result.Underlying() should return itself")
+		}
+	})
+}
+
+func TestOptionUnderlying(t *testing.T) {
+	t.Parallel()
+
+	opt := &Option{Value: Basics[Int64]}
+	if opt.Underlying() != Basics[Int64] {
+		t.Errorf("Option.Underlying() = %v, want int64", opt.Underlying())
+	}
+}
+
+func TestProcedureStringWithTypeParams(t *testing.T) {
+	t.Parallel()
+
+	t.Run("single_constraint", func(t *testing.T) {
+		t.Parallel()
+		p := &Procedure{
+			Function: true,
+			TypeParams: []*TypeParam{
+				{Name: "T", Constraints: []Type{Any}},
+			},
+			Parameters: []*Parameter{
+				{Name: "x", Type: Basics[Int64]},
+			},
+			ReturnType: Basics[Int64],
+		}
+		got := p.String()
+		want := "func<T ~ any>(x : int64) int64"
+		if got != want {
+			t.Errorf("Procedure.String() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("multi_constraint", func(t *testing.T) {
+		t.Parallel()
+		p := &Procedure{
+			Function: true,
+			TypeParams: []*TypeParam{
+				{Name: "T", Constraints: []Type{Generics["string"], Generics["int"]}},
+			},
+			Parameters: []*Parameter{},
+		}
+		got := p.String()
+		want := "func<T ~ string | int>()"
+		if got != want {
+			t.Errorf("Procedure.String() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("multiple_type_params", func(t *testing.T) {
+		t.Parallel()
+		p := &Procedure{
+			TypeParams: []*TypeParam{
+				{Name: "K", Constraints: []Type{Generics["comparable"]}},
+				{Name: "V", Constraints: []Type{Any}},
+			},
+			Parameters: []*Parameter{},
+		}
+		got := p.String()
+		want := "proc<K ~ comparable, V ~ any>()"
+		if got != want {
+			t.Errorf("Procedure.String() = %q, want %q", got, want)
+		}
+	})
+}

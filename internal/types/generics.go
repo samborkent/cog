@@ -86,3 +86,18 @@ func (g *Generic) String() string {
 func (g *Generic) Underlying() Type {
 	return g
 }
+
+// LookupConstraint returns the builtin constraint type for the given name.
+// This covers all entries in the Generics map plus "any".
+func LookupConstraint(name string) (Type, bool) {
+	if name == "any" {
+		return Any, true
+	}
+
+	g, ok := Generics[name]
+	if !ok {
+		return nil, false
+	}
+
+	return g, true
+}

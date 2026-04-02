@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	goast "go/ast"
+	gotoken "go/token"
 	gotypes "go/types"
 	"strconv"
 
@@ -184,6 +185,10 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 
 		funcType := &goast.FuncType{
 			Params: &goast.FieldList{List: inputParams},
+		}
+
+		if len(procType.TypeParams) > 0 {
+			funcType.TypeParams = t.convertTypeParams(procType.TypeParams)
 		}
 
 		if procType.ReturnType != nil {
@@ -386,12 +391,101 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.String], nil)}
 	case types.AnyKind:
 		expr = &goast.Ident{Name: "any"}
+	case types.GenericKind:
+		tp, ok := typ.(*types.TypeParam)
+		if ok {
+			expr = &goast.Ident{Name: tp.Name}
+		} else {
+			expr = t.convertConstraint(typ)
+		}
 	default:
 		return nil, fmt.Errorf("unknown type %q", typ)
 	}
 
 	t.typeCache[typ] = expr
 	return expr, nil
+}
+
+// convertConstraint maps a cog constraint type to its Go equivalent.
+func (t *Transpiler) convertConstraint(typ types.Type) goast.Expr {
+	if typ.Kind() == types.AnyKind {
+		return &goast.Ident{Name: "any"}
+	}
+
+	g, ok := typ.(*types.Generic)
+	if !ok {
+		return &goast.Ident{Name: "any"}
+	}
+
+	switch g.String() {
+	case "comparable":
+		return &goast.Ident{Name: "comparable"}
+	case "ordered":
+		t.imports["cmp"] = &goast.ImportSpec{
+			Path: &goast.BasicLit{
+				Kind:  gotoken.STRING,
+				Value: `"cmp"`,
+			},
+		}
+		return &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "cmp"},
+			Sel: &goast.Ident{Name: "Ordered"},
+		}
+	default:
+		// Constraints involving library types (float16, complex32, int128, uint128)
+		// cannot be expressed as Go type constraint interfaces.
+		// Emit 'any' and rely on cog's compile-time Satisfies check.
+		return &goast.Ident{Name: "any"}
+	}
+}
+
+// convertTypeParamConstraints converts a TypeParam's constraint list to a
+// single Go constraint expression. A single constraint maps directly; multiple
+// constraints are joined with | into a union interface.
+func (t *Transpiler) convertTypeParamConstraints(tp *types.TypeParam) goast.Expr {
+	if len(tp.Constraints) == 1 {
+		return t.convertConstraint(tp.Constraints[0])
+	}
+
+	// Multiple constraints: emit interface{ C1 | C2 | ... }
+	var terms []goast.Expr
+	for _, c := range tp.Constraints {
+		terms = append(terms, t.convertConstraint(c))
+	}
+
+	// Build binary | expression tree left-to-right.
+	expr := terms[0]
+	for _, term := range terms[1:] {
+		expr = &goast.BinaryExpr{
+			X:  expr,
+			Op: gotoken.OR,
+			Y:  term,
+		}
+	}
+
+	return &goast.InterfaceType{
+		Methods: &goast.FieldList{
+			List: []*goast.Field{{Type: expr}},
+		},
+	}
+}
+
+// convertTypeParams converts cog type parameters to a Go ast.FieldList
+// suitable for TypeSpec.TypeParams or FuncType.TypeParams.
+func (t *Transpiler) convertTypeParams(params []*types.TypeParam) *goast.FieldList {
+	if len(params) == 0 {
+		return nil
+	}
+
+	fields := make([]*goast.Field, 0, len(params))
+	for _, tp := range params {
+		fields = append(fields, &goast.Field{
+			Names: []*goast.Ident{{Name: tp.Name}},
+			Type:  t.convertTypeParamConstraints(tp),
+		})
+	}
+
+	return &goast.FieldList{List: fields}
 }
 
 func (t *Transpiler) convertField(field *types.Field) (*goast.Field, error) {

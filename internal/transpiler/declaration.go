@@ -207,14 +207,19 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		}
 
 		decls := make([]goast.Decl, 0, 2)
+
+		typeSpec := &goast.TypeSpec{
+			Name: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported)},
+			Type: aliasType,
+		}
+
+		if alias, ok := n.Alias.(*types.Alias); ok && len(alias.TypeParams) > 0 {
+			typeSpec.TypeParams = t.convertTypeParams(alias.TypeParams)
+		}
+
 		decls = append(decls, &goast.GenDecl{
-			Tok: gotoken.TYPE,
-			Specs: []goast.Spec{
-				&goast.TypeSpec{
-					Name: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported)},
-					Type: aliasType,
-				},
-			},
+			Tok:   gotoken.TYPE,
+			Specs: []goast.Spec{typeSpec},
 		})
 
 		if n.Alias.Kind() == types.ASCII {
