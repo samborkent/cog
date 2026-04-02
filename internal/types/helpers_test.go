@@ -339,6 +339,38 @@ func TestSatisfies(t *testing.T) {
 		{"int64 satisfies int64", Basics[Int64], Basics[Int64], true},
 		{"int64 not utf8", Basics[Int64], Basics[UTF8], false},
 
+		// ordered constraint (int + uint + float + string, no complex)
+		{"int64 satisfies ordered", Basics[Int64], Generics["ordered"], true},
+		{"uint32 satisfies ordered", Basics[Uint32], Generics["ordered"], true},
+		{"float64 satisfies ordered", Basics[Float64], Generics["ordered"], true},
+		{"ascii satisfies ordered", Basics[ASCII], Generics["ordered"], true},
+		{"utf8 satisfies ordered", Basics[UTF8], Generics["ordered"], true},
+		{"complex64 not ordered", Basics[Complex64], Generics["ordered"], false},
+		{"bool not ordered", Basics[Bool], Generics["ordered"], false},
+
+		// summable constraint (number + string)
+		{"int64 satisfies summable", Basics[Int64], Generics["summable"], true},
+		{"uint32 satisfies summable", Basics[Uint32], Generics["summable"], true},
+		{"float64 satisfies summable", Basics[Float64], Generics["summable"], true},
+		{"complex128 satisfies summable", Basics[Complex128], Generics["summable"], true},
+		{"ascii satisfies summable", Basics[ASCII], Generics["summable"], true},
+		{"utf8 satisfies summable", Basics[UTF8], Generics["summable"], true},
+		{"bool not summable", Basics[Bool], Generics["summable"], false},
+
+		// comparable constraint
+		{"int64 satisfies comparable", Basics[Int64], Generics["comparable"], true},
+		{"bool satisfies comparable", Basics[Bool], Generics["comparable"], true},
+		{"complex128 satisfies comparable", Basics[Complex128], Generics["comparable"], true},
+		{"utf8 satisfies comparable", Basics[UTF8], Generics["comparable"], true},
+		{"struct satisfies comparable", &Struct{}, Generics["comparable"], true},
+		{"array satisfies comparable", &Array{Element: Basics[Int64]}, Generics["comparable"], true},
+		{"enum satisfies comparable", &Enum{ValueType: Basics[Int64]}, Generics["comparable"], true},
+		{"pointer satisfies comparable", &Pointer{Value: Basics[Int64]}, Generics["comparable"], true},
+		{"tuple satisfies comparable", &Tuple{Types: []Type{Basics[Int64]}}, Generics["comparable"], true},
+		{"set satisfies comparable", &Set{Element: Basics[Int64]}, Generics["comparable"], true},
+		{"slice not comparable", &Slice{Element: Basics[Int64]}, Generics["comparable"], false},
+		{"map not comparable", &Map{Key: Basics[UTF8], Value: Basics[Int64]}, Generics["comparable"], false},
+
 		// alias satisfies constraint via Underlying
 		{"alias(int64) satisfies int", &Alias{Name: "MyInt", Derived: Basics[Int64]}, Generics["int"], true},
 	}
@@ -395,6 +427,160 @@ func TestGenericConstraints(t *testing.T) {
 		for _, k := range numericKinds {
 			if !Satisfies(Basics[k], Generics["number"]) {
 				t.Errorf("expected %s to satisfy number", Basics[k])
+			}
+		}
+	})
+
+	t.Run("ordered_exists", func(t *testing.T) {
+		t.Parallel()
+		g, ok := Generics["ordered"]
+		if !ok {
+			t.Fatal(`Generics["ordered"] not found`)
+		}
+		if g.String() != "ordered" {
+			t.Errorf("expected name %q, got %q", "ordered", g.String())
+		}
+	})
+
+	t.Run("comparable_exists", func(t *testing.T) {
+		t.Parallel()
+		g, ok := Generics["comparable"]
+		if !ok {
+			t.Fatal(`Generics["comparable"] not found`)
+		}
+		if g.String() != "comparable" {
+			t.Errorf("expected name %q, got %q", "comparable", g.String())
+		}
+	})
+
+	t.Run("ordered_excludes_complex", func(t *testing.T) {
+		t.Parallel()
+		for _, k := range []Kind{Complex32, Complex64, Complex128} {
+			if Satisfies(Basics[k], Generics["ordered"]) {
+				t.Errorf("%s should not satisfy ordered", Basics[k])
+			}
+		}
+	})
+
+	t.Run("summable_exists", func(t *testing.T) {
+		t.Parallel()
+		g, ok := Generics["summable"]
+		if !ok {
+			t.Fatal(`Generics["summable"] not found`)
+		}
+		if g.String() != "summable" {
+			t.Errorf("expected name %q, got %q", "summable", g.String())
+		}
+	})
+
+	// Verify that every type in each constraint actually supports the
+	// operators that the constraint implies.
+
+	t.Run("ordered_members_support_ordering_operators", func(t *testing.T) {
+		t.Parallel()
+		// Ordered types support <, >, <=, >= — must be real numeric or string.
+		for _, member := range Generics["ordered"].Constraints {
+			if !IsReal(member) && !IsString(member) {
+				t.Errorf("%s is in ordered but does not support ordering operators (not real numeric or string)", member)
+			}
+		}
+	})
+
+	t.Run("ordered_members_support_equality_operators", func(t *testing.T) {
+		t.Parallel()
+		// Ordered types also support ==, != — all basic types do.
+		for _, member := range Generics["ordered"].Constraints {
+			if !IsBasic(member) {
+				t.Errorf("%s is in ordered but is not a basic type (cannot use == or !=)", member)
+			}
+		}
+	})
+
+	t.Run("comparable_basic_members_support_equality", func(t *testing.T) {
+		t.Parallel()
+		// Every basic-type member of comparable must support ==, !=.
+		for _, member := range Generics["comparable"].Constraints {
+			if !IsBasic(member) {
+				// Structural sentinels (Struct, Array, etc.) are
+				// comparable by kind; skip basic-type check.
+				continue
+			}
+			if !IsBool(member) && !IsNumber(member) && !IsString(member) {
+				t.Errorf("%s is in comparable but does not support ==", member)
+			}
+		}
+	})
+
+	t.Run("comparable_structural_members_are_comparable_kinds", func(t *testing.T) {
+		t.Parallel()
+		// Structural sentinels must have kinds that support == in Go.
+		comparableKinds := map[Kind]bool{
+			StructKind: true, ArrayKind: true, EnumKind: true,
+			PointerKind: true, TupleKind: true, SetKind: true,
+		}
+		for _, member := range Generics["comparable"].Constraints {
+			if IsBasic(member) {
+				continue
+			}
+			if !comparableKinds[member.Kind()] {
+				t.Errorf("%s (kind %s) is a structural member of comparable but is not a comparable kind", member, member.Kind())
+			}
+		}
+	})
+
+	t.Run("comparable_excludes_non_comparable_kinds", func(t *testing.T) {
+		t.Parallel()
+		// Slices, maps, and procedures must NOT satisfy comparable.
+		nonComparable := []Type{
+			&Slice{Element: Basics[Int64]},
+			&Map{Key: Basics[UTF8], Value: Basics[Int64]},
+		}
+		for _, typ := range nonComparable {
+			if Satisfies(typ, Generics["comparable"]) {
+				t.Errorf("%s (kind %s) should not satisfy comparable", typ, typ.Kind())
+			}
+		}
+	})
+
+	t.Run("summable_members_support_plus_operator", func(t *testing.T) {
+		t.Parallel()
+		// Every summable member must pass IsSummable (number or string).
+		for _, member := range Generics["summable"].Constraints {
+			if !IsSummable(member) {
+				t.Errorf("%s is in summable but IsSummable() = false", member)
+			}
+		}
+	})
+
+	t.Run("summable_includes_complex_but_ordered_does_not", func(t *testing.T) {
+		t.Parallel()
+		// Complex types can be added (+) but not ordered (<).
+		for _, k := range []Kind{Complex32, Complex64, Complex128} {
+			if !Satisfies(Basics[k], Generics["summable"]) {
+				t.Errorf("%s should satisfy summable", Basics[k])
+			}
+			if Satisfies(Basics[k], Generics["ordered"]) {
+				t.Errorf("%s should not satisfy ordered", Basics[k])
+			}
+		}
+	})
+
+	t.Run("ordered_is_subset_of_summable", func(t *testing.T) {
+		t.Parallel()
+		// Every ordered type must also be summable.
+		for _, member := range Generics["ordered"].Constraints {
+			if !Satisfies(member, Generics["summable"]) {
+				t.Errorf("%s satisfies ordered but not summable", member)
+			}
+		}
+	})
+
+	t.Run("ordered_is_subset_of_comparable", func(t *testing.T) {
+		t.Parallel()
+		// Every ordered type must also be comparable.
+		for _, member := range Generics["ordered"].Constraints {
+			if !Satisfies(member, Generics["comparable"]) {
+				t.Errorf("%s satisfies ordered but not comparable", member)
 			}
 		}
 	})

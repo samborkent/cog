@@ -26,6 +26,34 @@ func init() {
 		),
 		name: "number",
 	}
+	Generics["ordered"] = &Generic{
+		Constraints: flatten(
+			Generics["int"].Constraints,
+			Generics["uint"].Constraints,
+			Generics["float"].Constraints,
+			Generics["string"].Constraints,
+		),
+		name: "ordered",
+	}
+	Generics["summable"] = &Generic{
+		Constraints: flatten(
+			Generics["number"].Constraints,
+			Generics["string"].Constraints,
+		),
+		name: "summable",
+	}
+	Generics["comparable"] = &Generic{
+		Constraints: flatten(
+			Generics["ordered"].Constraints,
+			Generics["complex"].Constraints,
+			[]Type{Basics[Bool]},
+			// Sentinel zero-values: Satisfies matches by Kind(), so
+			// these allow any struct, array, enum, pointer, tuple,
+			// or set to satisfy comparable.
+			[]Type{&Struct{}, &Array{}, &Enum{}, &Pointer{}, &Tuple{}, &Set{}},
+		),
+		name: "comparable",
+	}
 }
 
 func flatten(slices ...[]Type) []Type {
