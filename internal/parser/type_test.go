@@ -256,7 +256,7 @@ main : proc() = {
 func TestConstraintNamesRejectedInTypePosition(t *testing.T) {
 	t.Parallel()
 
-	constraints := []string{"int", "uint", "float", "complex", "string"}
+	constraints := []string{"int", "uint", "float", "complex", "string", "signed", "number", "ordered", "summable", "comparable"}
 
 	for _, name := range constraints {
 		t.Run(name+"_var_decl", func(t *testing.T) {

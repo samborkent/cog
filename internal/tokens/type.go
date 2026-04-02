@@ -97,11 +97,16 @@ const (
 	Set
 
 	// Type interface
-	Int     // i8, i16, i32, i64, i128
-	Uint    // u8, u16, u32, u64, u128
-	Float   // f16, f32, f64
-	Complex // c32, c64, c128
-	String  // ascii, utf8
+	Int        // i8, i16, i32, i64, i128
+	Uint       // u8, u16, u32, u64, u128
+	Float      // f16, f32, f64
+	Complex    // c32, c64, c128
+	String     // ascii, utf8
+	Signed     // int, float, complex
+	Number     // signed, uint
+	Ordered    // int, uint, float, string
+	Summable   // number, string
+	Comparable // ordered, complex, bool, struct, array, enum, pointer, tuple, set
 
 	// Import keywords
 	Package
@@ -283,6 +288,16 @@ func (t Type) String() string {
 		return "complex"
 	case String:
 		return "string"
+	case Signed:
+		return "signed"
+	case Number:
+		return "number"
+	case Ordered:
+		return "ordered"
+	case Summable:
+		return "summable"
+	case Comparable:
+		return "comparable"
 	case Package:
 		return "package"
 	case Import:
