@@ -34,6 +34,9 @@ const (
 	// Generic type
 	GenericKind
 
+	// Any type
+	AnyKind
+
 	// Container types
 	ArrayKind
 	SliceKind
@@ -99,6 +102,8 @@ func (t Kind) String() string {
 		return "&"
 	case GenericKind:
 		return "generic"
+	case AnyKind:
+		return "any"
 	case EnumKind:
 		return "enum"
 	case ErrorKind:

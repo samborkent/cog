@@ -215,3 +215,40 @@ main : proc() = {}`)
 		}
 	})
 }
+
+func TestParseAnyType(t *testing.T) {
+	t.Parallel()
+
+	t.Run("type_alias_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+A ~ any
+main : proc() = {}`)
+	})
+
+	t.Run("func_param_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+doSomething : proc(x : any) = {
+	@print(x)
+}
+main : proc() = {}`)
+	})
+
+	t.Run("func_return_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+identity : func(x : utf8) any = {
+	return x
+}
+main : proc() = {}`)
+	})
+
+	t.Run("var_decl_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	var x : any
+}`)
+	})
+}

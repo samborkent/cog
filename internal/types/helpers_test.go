@@ -247,3 +247,31 @@ func TestAssignableTo(t *testing.T) {
 		})
 	}
 }
+
+func TestAnyType(t *testing.T) {
+	t.Parallel()
+
+	if Any.Kind() != AnyKind {
+		t.Errorf("Any.Kind() = %v, want AnyKind", Any.Kind())
+	}
+	if Any.String() != "any" {
+		t.Errorf("Any.String() = %q, want %q", Any.String(), "any")
+	}
+	if Any.Underlying() != Any {
+		t.Error("Any.Underlying() != Any")
+	}
+}
+
+func TestEqualAny(t *testing.T) {
+	t.Parallel()
+
+	if !Equal(Any, Any) {
+		t.Error("Equal(any, any) = false")
+	}
+	if Equal(Any, Basics[Int64]) {
+		t.Error("Equal(any, int64) = true")
+	}
+	if Equal(Basics[Int64], Any) {
+		t.Error("Equal(int64, any) = true")
+	}
+}

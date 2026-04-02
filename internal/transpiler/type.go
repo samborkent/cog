@@ -384,6 +384,8 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		}
 	case types.UTF8:
 		expr = &goast.Ident{Name: gotypes.TypeString(gotypes.Typ[gotypes.String], nil)}
+	case types.AnyKind:
+		expr = &goast.Ident{Name: "any"}
 	default:
 		return nil, fmt.Errorf("unknown type %q", typ)
 	}
