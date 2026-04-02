@@ -153,13 +153,6 @@ var Lookup = map[tokens.Type]Type{
 	tokens.Uint128:    Basics[Uint128],
 	tokens.UTF8:       Basics[UTF8],
 
-	// Literal types
-	tokens.Complex: Basics[Complex64],
-	tokens.Float:   Basics[Float64],
-	tokens.Int:     Basics[Int64],
-	tokens.String:  Basics[UTF8],
-	tokens.Uint:    Basics[Uint64],
-
 	// Container types
 	tokens.Map:    &Map{},
 	tokens.Enum:   &Enum{},

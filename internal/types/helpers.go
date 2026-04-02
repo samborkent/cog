@@ -161,3 +161,24 @@ func Size(k Kind) int {
 		return -1
 	}
 }
+
+// Satisfies reports whether a concrete type satisfies the given constraint.
+// If constraint is any, all types satisfy it. If constraint is a *Generic,
+// the concrete type's kind must match one of the constraint's members.
+// Otherwise falls back to Equal.
+func Satisfies(concrete, constraint Type) bool {
+	if constraint.Kind() == AnyKind {
+		return true
+	}
+
+	if g, ok := constraint.(*Generic); ok {
+		for _, member := range g.Constraints {
+			if member.Kind() == concrete.Kind() {
+				return true
+			}
+		}
+		return false
+	}
+
+	return Equal(concrete, constraint)
+}

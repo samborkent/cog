@@ -252,3 +252,26 @@ main : proc() = {
 }`)
 	})
 }
+
+func TestConstraintNamesRejectedInTypePosition(t *testing.T) {
+	t.Parallel()
+
+	constraints := []string{"int", "uint", "float", "complex", "string"}
+
+	for _, name := range constraints {
+		t.Run(name+"_var_decl", func(t *testing.T) {
+			t.Parallel()
+			parseShouldError(t, `package p
+main : proc() = {
+	var x : `+name+`
+}`)
+		})
+
+		t.Run(name+"_type_alias", func(t *testing.T) {
+			t.Parallel()
+			parseShouldError(t, `package p
+A ~ `+name+`
+main : proc() = {}`)
+		})
+	}
+}

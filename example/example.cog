@@ -54,7 +54,7 @@ main : proc() = {
 
     fl := -0.6e-7
 
-    collection : set<string> = { "hello1", "hello2" }
+    collection : set<utf8> = { "hello1", "hello2" }
 
     maths := 5 * 6 / (2 + 3)
 
