@@ -199,3 +199,128 @@ main : proc() = {
 }`)
 	})
 }
+
+func TestParseGenericTypeAlias(t *testing.T) {
+	t.Parallel()
+
+	t.Run("slice_of_T", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+List<T ~ any> ~ []T
+main : proc() = {}`)
+		ta := stmtAs[*ast.Type](t, f, 0)
+		if ta.Identifier.Name != "List" {
+			t.Errorf("expected name 'List', got %q", ta.Identifier.Name)
+		}
+
+		alias, ok := ta.Alias.(*types.Alias)
+		if !ok {
+			t.Fatalf("expected *types.Alias, got %T", ta.Alias)
+		}
+		if len(alias.TypeParams) != 1 {
+			t.Fatalf("expected 1 type param, got %d", len(alias.TypeParams))
+		}
+		if alias.TypeParams[0].Name != "T" {
+			t.Errorf("expected type param name 'T', got %q", alias.TypeParams[0].Name)
+		}
+		if alias.TypeParams[0].ConstraintString() != "any" {
+			t.Errorf("expected constraint 'any', got %q", alias.TypeParams[0].ConstraintString())
+		}
+	})
+
+	t.Run("two_params", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+Pair<A ~ any, B ~ any> ~ A & B
+main : proc() = {}`)
+		ta := stmtAs[*ast.Type](t, f, 0)
+
+		alias, ok := ta.Alias.(*types.Alias)
+		if !ok {
+			t.Fatalf("expected *types.Alias, got %T", ta.Alias)
+		}
+		if len(alias.TypeParams) != 2 {
+			t.Fatalf("expected 2 type params, got %d", len(alias.TypeParams))
+		}
+		if alias.TypeParams[0].Name != "A" || alias.TypeParams[1].Name != "B" {
+			t.Errorf("expected params [A, B], got [%s, %s]", alias.TypeParams[0].Name, alias.TypeParams[1].Name)
+		}
+	})
+
+	t.Run("constrained_param", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+NumList<T ~ number> ~ []T
+main : proc() = {}`)
+		ta := stmtAs[*ast.Type](t, f, 0)
+		alias, ok := ta.Alias.(*types.Alias)
+		if !ok {
+			t.Fatalf("expected *types.Alias, got %T", ta.Alias)
+		}
+		if alias.TypeParams[0].ConstraintString() != "number" {
+			t.Errorf("expected constraint 'number', got %q", alias.TypeParams[0].ConstraintString())
+		}
+	})
+
+	t.Run("multi_constraint", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+SList<T ~ string | int> ~ []T
+main : proc() = {}`)
+		ta := stmtAs[*ast.Type](t, f, 0)
+		alias, ok := ta.Alias.(*types.Alias)
+		if !ok {
+			t.Fatalf("expected *types.Alias, got %T", ta.Alias)
+		}
+		cs := alias.TypeParams[0].ConstraintString()
+		if cs != "string | int" {
+			t.Errorf("expected constraint 'string | int', got %q", cs)
+		}
+	})
+
+	t.Run("map_generic", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+Dict<K ~ comparable, V ~ any> ~ map<K, V>
+main : proc() = {}`)
+		ta := stmtAs[*ast.Type](t, f, 0)
+		alias, ok := ta.Alias.(*types.Alias)
+		if !ok {
+			t.Fatalf("expected *types.Alias, got %T", ta.Alias)
+		}
+		if len(alias.TypeParams) != 2 {
+			t.Fatalf("expected 2 type params, got %d", len(alias.TypeParams))
+		}
+	})
+
+	t.Run("instantiate_slice", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+List<T ~ any> ~ []T
+main : proc() = {
+	xs : List<int32> = @slice<int32>(3)
+	@print(xs)
+}`)
+		if len(f.Statements) < 2 {
+			t.Fatal("expected at least 2 statements")
+		}
+	})
+
+	t.Run("instantiate_wrong_arity", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+List<T ~ any> ~ []T
+main : proc() = {
+	xs : List<int32, utf8> = @slice<int32>(3)
+}`)
+	})
+
+	t.Run("instantiate_constraint_violation", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+NumList<T ~ number> ~ []T
+main : proc() = {
+	xs : NumList<utf8> = @slice<utf8>(3)
+}`)
+	})
+}

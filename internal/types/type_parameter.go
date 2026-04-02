@@ -11,24 +11,24 @@ import "strings"
 //	<T ~ any>           → Constraints: [Any]
 //	<T ~ int>           → Constraints: [Generics["int"]]
 //	<T ~ string | int>  → Constraints: [Generics["string"], Generics["int"]]
-type TypeParameter struct {
+type TypeParam struct {
 	Name        string
 	Constraints []Type // each entry is *Generic, Any, or a concrete type
 }
 
-var _ Type = &TypeParameter{}
+var _ Type = &TypeParam{}
 
-func (tp *TypeParameter) Kind() Kind {
+func (tp *TypeParam) Kind() Kind {
 	return GenericKind
 }
 
-func (tp *TypeParameter) String() string {
+func (tp *TypeParam) String() string {
 	return tp.Name
 }
 
 // ConstraintString returns the constraint portion for display,
 // e.g. "any", "int", or "string | int".
-func (tp *TypeParameter) ConstraintString() string {
+func (tp *TypeParam) ConstraintString() string {
 	if len(tp.Constraints) == 1 {
 		return tp.Constraints[0].String()
 	}
@@ -45,13 +45,13 @@ func (tp *TypeParameter) ConstraintString() string {
 	return out.String()
 }
 
-func (tp *TypeParameter) Underlying() Type {
+func (tp *TypeParam) Underlying() Type {
 	return tp
 }
 
 // SatisfiedBy reports whether a concrete type satisfies all of this
 // type parameter's constraints (OR semantics: satisfies at least one).
-func (tp *TypeParameter) SatisfiedBy(concrete Type) bool {
+func (tp *TypeParam) SatisfiedBy(concrete Type) bool {
 	for _, c := range tp.Constraints {
 		if Satisfies(concrete, c) {
 			return true

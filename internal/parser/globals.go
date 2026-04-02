@@ -64,7 +64,7 @@ tokenLoop:
 			switch p.next().Type {
 			case tokens.Colon, tokens.Declaration:
 				p.findGlobalDecl(ctx, exported, qualifier)
-			case tokens.Tilde:
+			case tokens.Tilde, tokens.LT:
 				p.findGlobalType(ctx, exported)
 			default:
 				p.advance("findGlobals") // consume token
@@ -140,7 +140,7 @@ func (p *Parser) preRegisterTypeNames(ctx context.Context) {
 			p.advance("preRegister qualifier") // consume qualifier
 		}
 
-		if p.this().Type == tokens.Identifier && p.next().Type == tokens.Tilde {
+		if p.this().Type == tokens.Identifier && (p.next().Type == tokens.Tilde || p.next().Type == tokens.LT) {
 			ident := &ast.Identifier{
 				Token:    p.this(),
 				Name:     p.this().Literal,
@@ -266,6 +266,21 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		}
 	}
 
+	// Parse optional type parameters: <T ~ any, K ~ comparable>
+	var typeParams []*types.TypeParam
+
+	if p.this().Type == tokens.LT {
+		typeParams = p.parseTypeParams(ctx)
+		if typeParams == nil {
+			return
+		}
+	}
+
+	if p.this().Type != tokens.Tilde {
+		p.error(p.this(), "expected ~ after type name", "findGlobalType")
+		return
+	}
+
 	p.advance("findGlobalType ~") // consume ~
 
 	if p.this().Type == tokens.Enum {
@@ -362,9 +377,40 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		return
 	}
 
+	// If there are type params, push them into an enclosed scope so that
+	// type parameter names (e.g. T) are resolvable in the alias body.
+	if len(typeParams) > 0 {
+		outer := p.symbols
+		p.symbols = NewEnclosedSymbolTable(outer)
+
+		for _, tp := range typeParams {
+			p.symbols.Define(&ast.Identifier{
+				Name:      tp.Name,
+				ValueType: tp,
+				Qualifier: ast.QualifierType,
+			})
+		}
+
+		defer func() { p.symbols = outer }()
+	}
+
 	alias := p.parseCombinedType(ctx, ident.Exported)
 	if alias == nil {
 		return
+	}
+
+	// Store type params on the alias.
+	if len(typeParams) > 0 {
+		if a, ok := alias.(*types.Alias); ok {
+			a.TypeParams = typeParams
+		} else {
+			alias = &types.Alias{
+				Name:       ident.Name,
+				Derived:    alias,
+				Exported:   ident.Exported,
+				TypeParams: typeParams,
+			}
+		}
 	}
 
 	ident.ValueType = alias

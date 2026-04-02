@@ -288,6 +288,13 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 		ident := typeSymbol.Identifier
 
+		// If the symbol is a type parameter (inside a generic alias body),
+		// return the TypeParam directly.
+		if tp, ok := ident.ValueType.(*types.TypeParam); ok {
+			p.advance("parseType typeparam") // consume type param name
+			return tp
+		}
+
 		if types.IsNone(ident.ValueType) {
 			// Forward reference: type name is pre-registered but not yet resolved.
 			// Create a lazy alias that resolves when the type is accessed.
@@ -305,6 +312,14 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 	p.advance("parseType type") // consume type
 
+	// Check for generic instantiation: Alias<int32, utf8>
+	if p.this().Type == tokens.LT {
+		typ = p.instantiateGenericAlias(ctx, typ)
+		if typ == nil {
+			return nil
+		}
+	}
+
 	if p.this().Type == tokens.Question {
 		// Optional type
 		p.advance("parseType ?") // consume ?
@@ -320,6 +335,76 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 	}
 
 	return typ
+}
+
+// instantiateGenericAlias parses type arguments after a generic alias reference
+// and produces the instantiated concrete type. The current token must be '<'.
+func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) types.Type {
+	alias, ok := typ.(*types.Alias)
+	if !ok {
+		p.error(p.this(), "type arguments on non-alias type", "instantiateGenericAlias")
+		return nil
+	}
+
+	// Resolve the alias to find the generic definition with TypeParams.
+	var genAlias *types.Alias
+
+	if alias.Derived != nil && !types.IsNone(alias.Derived) {
+		if a, ok := alias.Derived.(*types.Alias); ok && len(a.TypeParams) > 0 {
+			genAlias = a
+		}
+	}
+
+	if genAlias == nil {
+		// The alias itself may carry TypeParams (for direct resolutions).
+		if len(alias.TypeParams) > 0 {
+			genAlias = alias
+		}
+	}
+
+	if genAlias == nil {
+		// Try resolving the underlying value type (set during findGlobalType).
+		switch v := alias.Derived.(type) {
+		case *types.Alias:
+			if len(v.TypeParams) > 0 {
+				genAlias = v
+			}
+		}
+	}
+
+	if genAlias == nil {
+		p.error(p.this(), fmt.Sprintf("type %q is not generic", alias.Name), "instantiateGenericAlias")
+		return nil
+	}
+
+	typeArgs := p.parseTypeArguments(ctx)
+	if typeArgs == nil {
+		return nil
+	}
+
+	if len(typeArgs) != len(genAlias.TypeParams) {
+		p.error(p.this(), fmt.Sprintf("wrong number of type arguments for %q: expected %d, got %d",
+			alias.Name, len(genAlias.TypeParams), len(typeArgs)), "instantiateGenericAlias")
+		return nil
+	}
+
+	// Check constraint satisfaction.
+	for i, arg := range typeArgs {
+		tp := genAlias.TypeParams[i]
+		if !tp.SatisfiedBy(arg) {
+			p.error(p.this(), fmt.Sprintf("type argument %q does not satisfy constraint %q for parameter %q",
+				arg.String(), tp.ConstraintString(), tp.Name), "instantiateGenericAlias")
+			return nil
+		}
+	}
+
+	// Build substitution map and instantiate.
+	argMap := make(map[string]types.Type, len(typeArgs))
+	for i, tp := range genAlias.TypeParams {
+		argMap[tp.Name] = typeArgs[i]
+	}
+
+	return genAlias.Instantiate(argMap)
 }
 
 func (p *Parser) parseStruct(ctx context.Context) types.Type {

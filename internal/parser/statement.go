@@ -107,7 +107,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				}
 
 				return nil
-			case tokens.Tilde:
+			case tokens.Tilde, tokens.LT:
 				typeDecl := p.parseTypeAlias(ctx, ident)
 				if typeDecl != nil {
 					return typeDecl
@@ -243,7 +243,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				Token:      identToken,
 				Expression: callExpr,
 			}
-		case tokens.Tilde: // Type declaration
+		case tokens.Tilde, tokens.LT: // Type declaration (possibly generic)
 			typeDecl := p.parseTypeAlias(ctx, ident)
 			if typeDecl != nil {
 				return typeDecl

@@ -8,6 +8,20 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
+// resolveConstraintToken looks up the current token as a constraint.
+// Keywords are matched by type name; identifiers by literal (for "int", "uint", etc.).
+func (p *Parser) resolveConstraintToken() types.Type {
+	if c, ok := types.LookupConstraint(p.this().Type.String()); ok {
+		return c
+	}
+	if p.this().Type == tokens.Identifier {
+		if c, ok := types.LookupConstraint(p.this().Literal); ok {
+			return c
+		}
+	}
+	return nil
+}
+
 func (p *Parser) parseTypeArguments(ctx context.Context) []types.Type {
 	if p.this().Type != tokens.LT {
 		p.error(p.this(), "expected opening < for type arguments", "parseTypeArguments")
@@ -82,10 +96,12 @@ func (p *Parser) parseTypeParams(ctx context.Context) []*types.TypeParam {
 
 		p.advance("parseTypeParams ~") // consume ~
 
-		// Parse constraint(s): one or more constraint keywords separated by |
-		constraint, ok := types.LookupConstraint(p.this().Literal)
-		if !ok {
-			p.error(p.this(), fmt.Sprintf("expected constraint keyword, got %q", p.this().Literal), "parseTypeParams")
+		// Parse constraint(s): one or more constraint keywords separated by |.
+		// Try the token type name first (for keywords like "any", "number"),
+		// then fall back to the literal (for identifiers like "int", "uint").
+		constraint := p.resolveConstraintToken()
+		if constraint == nil {
+			p.error(p.this(), fmt.Sprintf("expected constraint keyword, got %q", p.this().Type.String()), "parseTypeParams")
 			return nil
 		}
 
@@ -96,9 +112,9 @@ func (p *Parser) parseTypeParams(ctx context.Context) []*types.TypeParam {
 		for p.this().Type == tokens.Pipe {
 			p.advance("parseTypeParams |") // consume |
 
-			constraint, ok := types.LookupConstraint(p.this().Literal)
-			if !ok {
-				p.error(p.this(), fmt.Sprintf("expected constraint keyword after |, got %q", p.this().Literal), "parseTypeParams")
+			constraint := p.resolveConstraintToken()
+			if constraint == nil {
+				p.error(p.this(), fmt.Sprintf("expected constraint keyword after |, got %q", p.this().Type.String()), "parseTypeParams")
 				return nil
 			}
 

@@ -875,3 +875,111 @@ func TestProcedureStringWithTypeParams(t *testing.T) {
 		}
 	})
 }
+
+func TestInstantiate(t *testing.T) {
+	t.Parallel()
+
+	t.Run("slice_of_T", func(t *testing.T) {
+		t.Parallel()
+		a := &Alias{
+			Name:       "List",
+			Derived:    &Slice{Element: &TypeParam{Name: "T", Constraints: []Type{Any}}},
+			TypeParams: []*TypeParam{{Name: "T", Constraints: []Type{Any}}},
+		}
+		result := a.Instantiate(map[string]Type{"T": Basics[Int32]})
+		s, ok := result.(*Slice)
+		if !ok {
+			t.Fatalf("expected *Slice, got %T", result)
+		}
+		if s.Element.Kind() != Int32 {
+			t.Errorf("expected element Int32, got %s", s.Element.Kind())
+		}
+	})
+
+	t.Run("map_K_V", func(t *testing.T) {
+		t.Parallel()
+		a := &Alias{
+			Name: "Dict",
+			Derived: &Map{
+				Key:   &TypeParam{Name: "K", Constraints: []Type{Any}},
+				Value: &TypeParam{Name: "V", Constraints: []Type{Any}},
+			},
+			TypeParams: []*TypeParam{
+				{Name: "K", Constraints: []Type{Any}},
+				{Name: "V", Constraints: []Type{Any}},
+			},
+		}
+		result := a.Instantiate(map[string]Type{"K": Basics[UTF8], "V": Basics[Int64]})
+		m, ok := result.(*Map)
+		if !ok {
+			t.Fatalf("expected *Map, got %T", result)
+		}
+		if m.Key.Kind() != UTF8 {
+			t.Errorf("expected key UTF8, got %s", m.Key.Kind())
+		}
+		if m.Value.Kind() != Int64 {
+			t.Errorf("expected value Int64, got %s", m.Value.Kind())
+		}
+	})
+
+	t.Run("tuple", func(t *testing.T) {
+		t.Parallel()
+		a := &Alias{
+			Name: "Pair",
+			Derived: &Tuple{
+				Types: []Type{
+					&TypeParam{Name: "A", Constraints: []Type{Any}},
+					&TypeParam{Name: "B", Constraints: []Type{Any}},
+				},
+			},
+			TypeParams: []*TypeParam{
+				{Name: "A", Constraints: []Type{Any}},
+				{Name: "B", Constraints: []Type{Any}},
+			},
+		}
+		result := a.Instantiate(map[string]Type{"A": Basics[Int32], "B": Basics[UTF8]})
+		tup, ok := result.(*Tuple)
+		if !ok {
+			t.Fatalf("expected *Tuple, got %T", result)
+		}
+		if len(tup.Types) != 2 {
+			t.Fatalf("expected 2 types, got %d", len(tup.Types))
+		}
+		if tup.Types[0].Kind() != Int32 {
+			t.Errorf("expected first type Int32, got %s", tup.Types[0].Kind())
+		}
+		if tup.Types[1].Kind() != UTF8 {
+			t.Errorf("expected second type UTF8, got %s", tup.Types[1].Kind())
+		}
+	})
+
+	t.Run("option", func(t *testing.T) {
+		t.Parallel()
+		a := &Alias{
+			Name:       "Maybe",
+			Derived:    &Option{Value: &TypeParam{Name: "T", Constraints: []Type{Any}}},
+			TypeParams: []*TypeParam{{Name: "T", Constraints: []Type{Any}}},
+		}
+		result := a.Instantiate(map[string]Type{"T": Basics[Float64]})
+		opt, ok := result.(*Option)
+		if !ok {
+			t.Fatalf("expected *Option, got %T", result)
+		}
+		if opt.Value.Kind() != Float64 {
+			t.Errorf("expected Float64, got %s", opt.Value.Kind())
+		}
+	})
+
+	t.Run("basic_passthrough", func(t *testing.T) {
+		t.Parallel()
+		a := &Alias{
+			Name:       "MyInt",
+			Derived:    Basics[Int32],
+			TypeParams: []*TypeParam{{Name: "T", Constraints: []Type{Any}}},
+		}
+		result := a.Instantiate(map[string]Type{"T": Basics[UTF8]})
+		if result.Kind() != Int32 {
+			t.Errorf("expected Int32 passthrough, got %s", result.Kind())
+		}
+	})
+}
