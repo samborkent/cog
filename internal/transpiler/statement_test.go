@@ -147,4 +147,122 @@ outerLoop:
 }`)
 		mustContain(t, got, "outerLoop")
 	})
+
+	t.Run("comment", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	// this is a comment
+	@print("hello")
+}`)
+		mustContain(t, got, "comment")
+	})
+
+	t.Run("for_condition_manual", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	var x := 0
+	for {
+		if x >= 10 {
+			break
+		}
+		x = x + 1
+	}
+}`)
+		mustContain(t, got, "for {")
+	})
+
+	t.Run("continue", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	xs := @slice<int64>(3)
+	for v in xs {
+		if v == 0 {
+			continue
+		}
+		@print(v)
+	}
+}`)
+		mustContain(t, got, "continue")
+	})
+
+	t.Run("if_else_nested", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := 5
+	if x > 10 {
+		@print("big")
+	} else {
+		if x > 0 {
+			@print("small")
+		} else {
+			@print("zero")
+		}
+	}
+}`)
+		mustContain(t, got, "} else {")
+	})
+
+	t.Run("enum_access", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+Status ~ enum<utf8> {
+	Open := "open",
+	Closed := "closed",
+}
+main : proc() = {
+	s := Status.Open
+	@print(s)
+}`)
+		mustContain(t, got, "Status")
+		mustContain(t, got, "Open")
+	})
+
+	t.Run("generic_func_call_in_proc", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+identity : func<T ~ any>(x : T) T = {
+	return x
+}
+main : proc() = {
+	result := identity(42)
+	@print(result)
+}`)
+		mustContain(t, got, "identity[int64]")
+	})
+
+	t.Run("pointer_type", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+Point ~ struct {
+	x : int32
+	y : int32
+}
+main : proc() = {
+	p := @ptr<Point>()
+	@print(p)
+}`)
+		mustContain(t, got, "new")
+	})
+
+	t.Run("option_alias", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+MaybeStr ~ utf8?
+main : proc() = {}`)
+		mustContain(t, got, "type _MaybeStr")
+	})
+
+	t.Run("exported_proc", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+export greet : proc() = {
+	@print("hello")
+}
+main : proc() = {}`)
+		mustContain(t, got, "func Greet")
+	})
 }
