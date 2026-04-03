@@ -393,8 +393,7 @@ func (t *Transpiler) buildDynDecls() []goast.Decl {
 	for name, ident := range t.symbols.dynamics {
 		fieldType, err := t.convertType(ident.ValueType)
 		if err != nil {
-			// Already validated during predeclareGlobals; skip on error.
-			continue
+			panic(fmt.Sprintf("buildDynDecls: converting type for %q: %v", name, err))
 		}
 
 		field := &goast.Field{

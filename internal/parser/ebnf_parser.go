@@ -54,8 +54,6 @@ func (p *Parser) boolean(ctx context.Context, typeToken types.Type) ast.Expressi
 		}
 
 		if !types.IsBool(expr.Type()) {
-			fmt.Println(expr.String())
-
 			p.error(p.this(), "operator requires bool type", "boolean")
 			return nil
 		}

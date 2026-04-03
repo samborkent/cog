@@ -310,4 +310,104 @@ main : proc() = {
 		mustContain(t, got, "~float64")
 		mustNotContain(t, got, "[T any]")
 	})
+
+	// Generic declaration: func with type params emits Go [T constraint] syntax.
+	t.Run("generic_func_decl_syntax", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+identity : func<T ~ any>(x : T) T = {
+	return x
+}
+main : proc() = {
+	y := identity(42)
+	@print(y)
+}`)
+		mustContain(t, got, "[T any]")
+		mustContain(t, got, "func identity")
+	})
+
+	// Generic call: inferred type arg emits Go [TypeArg] at call site.
+	t.Run("generic_call_inferred_type_arg", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+echo : func<T ~ any>(x : T) T = {
+	return x
+}
+main : proc() = {
+	result := echo("hello")
+	@print(result)
+}`)
+		// Call site should have [string] type arg (utf8 -> Go string).
+		mustContain(t, got, "echo[string]")
+	})
+
+	// Generic call: explicit type arg emits Go [TypeArg] at call site.
+	t.Run("generic_call_explicit_type_arg", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+echo : func<T ~ any>(x : T) T = {
+	return x
+}
+main : proc() = {
+	result := echo<int64>(42)
+	@print(result)
+}`)
+		mustContain(t, got, "echo[int64]")
+	})
+
+	// Multi-param generic declaration.
+	t.Run("generic_multi_param_decl", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+Pair<K ~ comparable, V ~ any> ~ struct {
+	key : K
+	value : V
+}
+main : proc() = {}`)
+		mustContain(t, got, "K comparable")
+		mustContain(t, got, "V any")
+	})
+
+	// Generic func with constrained type param: call preserves constraint.
+	t.Run("generic_func_constrained_call", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+show : func<T ~ int>(x : T) = {
+	@print(x)
+}
+main : proc() = {
+	show(21)
+	@print("done")
+}`)
+		// Declaration should have the int constraint union.
+		mustContain(t, got, "~int8")
+		mustContain(t, got, "~int64")
+		// Call should have [int64] type arg.
+		mustContain(t, got, "show[int64]")
+	})
+
+	// Signed constraint emits int + float + complex union.
+	t.Run("signed_constraint", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+SignedSlice<T ~ signed> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "~int8")
+		mustContain(t, got, "~float32")
+		mustContain(t, got, "~complex64")
+		mustNotContain(t, got, "~uint")
+	})
+
+	// Summable constraint emits number + string union.
+	t.Run("summable_constraint", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+SumSlice<T ~ summable> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "~int8")
+		mustContain(t, got, "~uint8")
+		mustContain(t, got, "~float32")
+		mustContain(t, got, "~complex64")
+		mustContain(t, got, "~string")
+	})
 }

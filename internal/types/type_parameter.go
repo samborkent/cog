@@ -49,7 +49,7 @@ func (tp *TypeParam) Underlying() Type {
 	return tp
 }
 
-// SatisfiedBy reports whether a concrete type satisfies all of this
+// SatisfiedBy reports whether a concrete type satisfies this
 // type parameter's constraints (OR semantics: satisfies at least one).
 func (tp *TypeParam) SatisfiedBy(concrete Type) bool {
 	for _, c := range tp.Constraints {

@@ -124,6 +124,10 @@ func (t Kind) String() string {
 		return "result"
 	case ProcedureKind:
 		return "proc"
+	case ArrayKind:
+		return "array"
+	case SliceKind:
+		return "slice"
 	case Invalid:
 		fallthrough
 	default:
