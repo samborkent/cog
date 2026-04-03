@@ -289,7 +289,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			resultType, _ = p.currentReturnType.Underlying().(*types.Result)
 		}
 
-		for {
+		for p.this().Type != tokens.EOF {
 			expr := p.expression(ctx, types.None)
 			if expr != nil {
 				// If the enclosing procedure returns a Result type, only wrap

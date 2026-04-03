@@ -76,7 +76,7 @@ func (p *Parser) parseTypeParams(ctx context.Context) []*types.TypeParam {
 
 	var params []*types.TypeParam
 
-	for {
+	for !p.match(tokens.GT, tokens.EOF) {
 		if ctx.Err() != nil {
 			return nil
 		}

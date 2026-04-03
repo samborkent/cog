@@ -165,27 +165,26 @@ func (p *Parser) preRegisterTypeNames(ctx context.Context) {
 			p.advance("preRegister qualifier") // consume qualifier
 		}
 
-		if p.this().Type == tokens.Identifier {
-			if p.next().Type == tokens.Tilde || p.isGenericTypeDecl() {
-				ident := &ast.Identifier{
-					Token:    p.this(),
-					Name:     p.this().Literal,
-					Exported: exported,
-					// Qualifier defaults to QualifierType (zero value)
-					Global: true,
-				}
-
-				p.symbols.DefineGlobal(ident)
-
-				p.advance("preRegister identifier") // consume token
-
-				// Skip type parameters in procedure/function declarations during pre-registration.
-				if p.this().Type == tokens.LT {
-					p.skipTypeParams(ctx)
-				}
-
-				continue
+		if p.this().Type == tokens.Identifier &&
+			(p.next().Type == tokens.Tilde || p.isGenericTypeDecl()) {
+			ident := &ast.Identifier{
+				Token:    p.this(),
+				Name:     p.this().Literal,
+				Exported: exported,
+				// Qualifier defaults to QualifierType (zero value)
+				Global: true,
 			}
+
+			p.symbols.DefineGlobal(ident)
+
+			p.advance("preRegister identifier") // consume token
+
+			// Skip type parameters in procedure/function declarations during pre-registration.
+			if p.this().Type == tokens.LT {
+				p.skipTypeParams(ctx)
+			}
+
+			continue
 		}
 
 		// Skip type parameters in procedure/function declarations during pre-registration.
@@ -472,7 +471,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 func (p *Parser) skipScope(ctx context.Context) {
 	braceIndex := 0
 
-	for {
+	for p.this().Type != tokens.EOF {
 		if ctx.Err() != nil {
 			return
 		}
@@ -495,7 +494,7 @@ func (p *Parser) skipScope(ctx context.Context) {
 func (p *Parser) skipGrouped(ctx context.Context) {
 	parenIndex := 0
 
-	for {
+	for p.this().Type != tokens.EOF {
 		if ctx.Err() != nil {
 			return
 		}
@@ -518,12 +517,8 @@ func (p *Parser) skipGrouped(ctx context.Context) {
 func (p *Parser) skipTypeParams(ctx context.Context) {
 	parenIndex := 0
 
-	for {
+	for p.this().Type != tokens.EOF {
 		if ctx.Err() != nil {
-			return
-		}
-
-		if p.this().Type == tokens.EOF {
 			return
 		}
 
