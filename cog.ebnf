@@ -70,14 +70,14 @@ builtin_statement
 exported_statement
     = IDENTIFIER, ( ":", typed_declaration
                    | ":=", declaration
-                   | "~", combined_type );
+                   | [ type_param_list ], "~", combined_type );
 
 identifier_statement
     = IDENTIFIER, ( "=", expression                              (* assignment *)
                   | ":", ( labeled_statement | typed_declaration ) (* typed decl or label *)
                   | ":=", expression                              (* inferred decl *)
-                  | "~", combined_type                            (* type alias *)
-                  | "(", call_arguments, ")" );                   (* procedure call *)
+                  | [ type_param_list ], "~", combined_type       (* type alias, possibly generic *)
+                  | [ type_arguments ], "(", call_arguments, ")" );(* call, possibly with explicit type args *)
 
 labeled_statement
     = for_statement | if_statement | switch_statement;
@@ -143,7 +143,17 @@ enum_value
     = IDENTIFIER, ":=", expression;
 
 procedure_type
-    = ( "proc" | "func" ), "(", [ parameter_list ], ")", [ combined_type ];
+    = ( "proc" | "func" ), [ type_param_list ], "(", [ parameter_list ], ")", [ combined_type ];
+
+type_param_list
+    = "<", type_param, { ",", type_param }, ">";
+
+type_param
+    = IDENTIFIER, "~", type_constraint;
+
+type_constraint
+    = "any" | "number" | "ordered" | "comparable" | "string" | "int" | "uint" | "float" | "complex" | "signed"
+    | type, { "|", type };                             (* union constraint *)
 
 parameter_list
     = parameter, { ",", parameter };
@@ -211,7 +221,7 @@ primary
     | "true" | "false"
     | "(", expression, ")"                             (* grouped expression *)
     | builtin_expression
-    | IDENTIFIER, ( "(", call_arguments, ")"           (* function call *)
+    | IDENTIFIER, ( [ type_arguments ], "(", call_arguments, ")"  (* function call, possibly generic *)
                   | ".", IDENTIFIER, [ "(", call_arguments, ")" ]  (* selector or package call *)
                   | )                                   (* variable reference *)
     | typed_literal

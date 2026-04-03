@@ -8,6 +8,25 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
+// isGenericTypeDecl checks whether the current position is at the start of a
+// generic type declaration (e.g. List<T ~ any> ~ ...). It expects the cursor
+// on an Identifier and looks ahead for the pattern: < Identifier ~
+// This distinguishes generic type aliases from comparison expressions like
+// index < 5.
+func (p *Parser) isGenericTypeDecl() bool {
+	// Current token is an Identifier. Check: next is <, next+1 is Identifier, next+2 is ~.
+	if p.next().Type != tokens.LT {
+		return false
+	}
+
+	// Peek at i+2 and i+3.
+	if p.i+3 >= len(p.tokens) {
+		return false
+	}
+
+	return p.tokens[p.i+2].Type == tokens.Identifier && p.tokens[p.i+3].Type == tokens.Tilde
+}
+
 // FindGlobals scans the token stream to pre-register all top-level names
 // (types, declarations, enums) into the parser's symbol table. It can be
 // called externally when multiple parsers share one symbol table, so that
@@ -66,6 +85,12 @@ tokenLoop:
 				p.findGlobalDecl(ctx, exported, qualifier)
 			case tokens.Tilde:
 				p.findGlobalType(ctx, exported)
+			case tokens.LT:
+				if p.isGenericTypeDecl() {
+					p.findGlobalType(ctx, exported)
+				} else {
+					p.advance("findGlobals") // not a type decl, skip
+				}
 			default:
 				p.advance("findGlobals") // consume token
 			}
@@ -140,15 +165,35 @@ func (p *Parser) preRegisterTypeNames(ctx context.Context) {
 			p.advance("preRegister qualifier") // consume qualifier
 		}
 
-		if p.this().Type == tokens.Identifier && p.next().Type == tokens.Tilde {
-			ident := &ast.Identifier{
-				Token:    p.this(),
-				Name:     p.this().Literal,
-				Exported: exported,
-				// Qualifier defaults to QualifierType (zero value)
-			}
+		if p.this().Type == tokens.Identifier {
+			if p.next().Type == tokens.Tilde || p.isGenericTypeDecl() {
+				ident := &ast.Identifier{
+					Token:    p.this(),
+					Name:     p.this().Literal,
+					Exported: exported,
+					// Qualifier defaults to QualifierType (zero value)
+					Global: true,
+				}
 
-			p.symbols.DefineGlobal(ident)
+				p.symbols.DefineGlobal(ident)
+
+				p.advance("preRegister identifier") // consume token
+
+				// Skip type parameters in procedure/function declarations during pre-registration.
+				if p.this().Type == tokens.LT {
+					p.skipTypeParams(ctx)
+				}
+
+				continue
+			}
+		}
+
+		// Skip type parameters in procedure/function declarations during pre-registration.
+		if (p.this().Type == tokens.Procedure || p.this().Type == tokens.Function) &&
+			p.next().Type == tokens.LT {
+			p.advance("preRegister proc") // consume token
+			p.skipTypeParams(ctx)
+			continue
 		}
 
 		p.advance("preRegister") // consume token
@@ -176,6 +221,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 		Name:      p.this().Literal,
 		Exported:  exported,
 		Qualifier: qualifier,
+		Global:    true,
 	}
 
 	p.advance("findGlobalDecl identifier") // consume identifier
@@ -184,7 +230,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 	case tokens.Colon:
 		p.advance("findGlobalDecl :") // consume :
 
-		ident.ValueType = p.parseCombinedType(ctx, exported)
+		ident.ValueType = p.parseCombinedType(ctx, exported, true)
 
 		if ident.Name == "main" {
 			procType, isProc := ident.ValueType.(*types.Procedure)
@@ -246,6 +292,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		Token:    p.this(),
 		Name:     p.this().Literal,
 		Exported: exported,
+		Global:   true,
 	}
 
 	p.advance("findGlobalType identifier") // consume identifier
@@ -266,6 +313,21 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		}
 	}
 
+	// Parse optional type parameters: <T ~ any, K ~ comparable>
+	var typeParams []*types.TypeParam
+
+	if p.this().Type == tokens.LT {
+		typeParams = p.parseTypeParams(ctx)
+		if typeParams == nil {
+			return
+		}
+	}
+
+	if p.this().Type != tokens.Tilde {
+		p.error(p.this(), "expected ~ after type name", "findGlobalType")
+		return
+	}
+
 	p.advance("findGlobalType ~") // consume ~
 
 	if p.this().Type == tokens.Enum {
@@ -278,7 +340,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 		p.advance("findGlobalType enum <") // consume <
 
-		enumValType := p.parseCombinedType(ctx, exported)
+		enumValType := p.parseCombinedType(ctx, exported, true)
 
 		enumType := &types.Enum{ValueType: enumValType}
 
@@ -362,9 +424,42 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		return
 	}
 
-	alias := p.parseCombinedType(ctx, ident.Exported)
+	// If there are type params, push them into an enclosed scope so that
+	// type parameter names (e.g. T) are resolvable in the alias body.
+	if len(typeParams) > 0 {
+		outer := p.symbols
+		p.symbols = NewEnclosedSymbolTable(outer)
+
+		for _, tp := range typeParams {
+			p.symbols.Define(&ast.Identifier{
+				Name:      tp.Name,
+				ValueType: tp,
+				Qualifier: ast.QualifierType,
+			})
+		}
+
+		defer func() { p.symbols = outer }()
+	}
+
+	alias := p.parseCombinedType(ctx, ident.Exported, ident.Global)
 	if alias == nil {
 		return
+	}
+
+	// Store type params on the alias.
+	if len(typeParams) > 0 {
+		if a, ok := alias.(*types.Alias); ok {
+			a.TypeParams = typeParams
+		} else {
+			// Wrap the derived type in an alias to preserve type parameters.
+			alias = &types.Alias{
+				Name:       ident.Name,
+				Derived:    alias,
+				Exported:   ident.Exported,
+				Global:     ident.Global,
+				TypeParams: typeParams,
+			}
+		}
 	}
 
 	ident.ValueType = alias
@@ -413,6 +508,33 @@ func (p *Parser) skipGrouped(ctx context.Context) {
 		}
 
 		p.advance("skipGrouped " + p.this().Literal)
+
+		if parenIndex == 0 {
+			return
+		}
+	}
+}
+
+func (p *Parser) skipTypeParams(ctx context.Context) {
+	parenIndex := 0
+
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+
+		if p.this().Type == tokens.EOF {
+			return
+		}
+
+		switch p.this().Type {
+		case tokens.LT:
+			parenIndex++
+		case tokens.GT:
+			parenIndex--
+		}
+
+		p.advance("skipTypeParams " + p.this().Literal)
 
 		if parenIndex == 0 {
 			return

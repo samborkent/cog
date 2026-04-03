@@ -30,8 +30,8 @@ func TestKindString(t *testing.T) {
 		{UTF8, "utf8"},
 		{PointerKind, "&"},
 		{GenericKind, "generic"},
-		{ArrayKind, ""},
-		{SliceKind, ""},
+		{ArrayKind, "array"},
+		{SliceKind, "slice"},
 		{EnumKind, "enum"},
 		{MapKind, "map"},
 		{SetKind, "set"},
@@ -327,7 +327,7 @@ func TestAliasResolution(t *testing.T) {
 	})
 
 	t.Run("forward alias", func(t *testing.T) {
-		a := NewForwardAlias("Lazy", false, func() Type {
+		a := NewForwardAlias("Lazy", false, false, func() Type {
 			return Basics[Float32]
 		})
 		// Before resolution, Derived is None.

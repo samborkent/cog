@@ -29,7 +29,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			return nil, nil
 		}
 
-		ident := t.symbols.Define(convertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported))
+		ident := t.symbols.Define(component.ConvertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global))
 
 		tok := gotoken.CONST
 
@@ -66,12 +66,21 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		t.usesDyn = prevUsesDyn
 
 		if n.Assignment.Expression.Type().Kind() == types.ProcedureKind {
-			// Procedure declaration
+			// Procedure declaration - convert to function declaration
 			funcLiteral, ok := expr.(*goast.FuncLit)
 			if !ok {
 				return nil, fmt.Errorf("unable to assert function literal for %q", n.Assignment.Identifier.Name)
 			}
 
+			// Create a function declaration instead of a variable declaration
+			funcName := component.ConvertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global)
+			funcDecl := &goast.FuncDecl{
+				Name: &goast.Ident{Name: funcName},
+				Type: funcLiteral.Type,
+				Body: funcLiteral.Body,
+			}
+
+			// For procedure declarations, return function declaration instead of variable declaration
 			if n.Assignment.Identifier.Name == "main" {
 				hasDynVars := len(t.symbols.dynamics) > 0
 
@@ -114,16 +123,16 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 							}
 
 							body := component.DynMainInit(dynIdent, ctxIdent, structLit)
-							funcLiteral.Body.List = append(body, funcLiteral.Body.List...)
+							funcDecl.Body.List = append(body, funcDecl.Body.List...)
 						} else {
 							// No procs: just create dyn struct, no context needed.
-							funcLiteral.Body.List = append([]goast.Stmt{
+							funcDecl.Body.List = append([]goast.Stmt{
 								&goast.AssignStmt{
 									Tok: gotoken.DEFINE,
 									Lhs: []goast.Expr{dynIdent},
 									Rhs: []goast.Expr{structLit},
 								},
-							}, funcLiteral.Body.List...)
+							}, funcDecl.Body.List...)
 						}
 					} else {
 						// Main with procs but no dynamic variables: just init context.
@@ -132,9 +141,9 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 							return nil, fmt.Errorf("marking ctx used: %w", err)
 						}
 
-						funcLiteral.Body.List = append(
+						funcDecl.Body.List = append(
 							[]goast.Stmt{component.ContextMain(ctxIdent)},
-							funcLiteral.Body.List...,
+							funcDecl.Body.List...,
 						)
 					}
 
@@ -148,35 +157,45 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 						}
 
 						// Remove context argument for main func.
-						funcLiteral.Type.Params.List = funcLiteral.Type.Params.List[1:]
+						funcDecl.Type.Params.List = funcDecl.Type.Params.List[1:]
 					}
 				}
 
-				t.injectArena(funcLiteral.Body)
+				t.injectArena(funcDecl.Body)
 
-				return []goast.Decl{&goast.FuncDecl{
-					Name: &goast.Ident{Name: "main"},
-					Type: funcLiteral.Type,
-					Body: funcLiteral.Body,
-				}}, nil
+				return []goast.Decl{funcDecl}, nil
 			}
 
 			// Non-main proc: inject dyn preamble only when body uses dyn.
 			if bodyUsesDyn && len(t.symbols.dynamics) > 0 {
 				procType, ok := n.Assignment.Expression.Type().(*types.Procedure)
 				if ok && !procType.Function {
-					funcLiteral.Body.List = append(component.DynProcEntry(), funcLiteral.Body.List...)
+					funcDecl.Body.List = append(component.DynProcEntry(), funcDecl.Body.List...)
 				}
 			}
 
-			t.injectArena(funcLiteral.Body)
+			t.injectArena(funcDecl.Body)
+			
+			// Return function declaration for procedures
+			return []goast.Decl{funcDecl}, nil
 		}
 
 		// Replace type string with type name if missing (for structs, tuples, unions).
 		compositeLiteral, ok := expr.(*goast.CompositeLit)
 		if ok && compositeLiteral.Type == nil {
-			compositeLiteral.Type = &goast.Ident{Name: convertExport(n.Assignment.Identifier.Type().String(), n.Assignment.Identifier.Exported)}
+			litType := n.Assignment.Identifier.Type()
+			litName := litType.String()
+
+			// Handle exported type aliases.
+			litAlias, ok := litType.(*types.Alias)
+			if ok {
+				litName = component.ConvertExport(litAlias.Name, litAlias.Exported, litAlias.Global)
+			}
+
+			compositeLiteral.Type = &goast.Ident{Name: litName}
 		}
+
+
 
 		valueSpec := &goast.ValueSpec{
 			Names:  []*goast.Ident{ident},
@@ -207,14 +226,19 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		}
 
 		decls := make([]goast.Decl, 0, 2)
+
+		typeSpec := &goast.TypeSpec{
+			Name: component.Ident(n.Identifier),
+			Type: aliasType,
+		}
+
+		if len(n.TypeParameters) > 0 {
+			typeSpec.TypeParams = t.convertTypeParams(n.TypeParameters)
+		}
+
 		decls = append(decls, &goast.GenDecl{
-			Tok: gotoken.TYPE,
-			Specs: []goast.Spec{
-				&goast.TypeSpec{
-					Name: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported)},
-					Type: aliasType,
-				},
-			},
+			Tok:   gotoken.TYPE,
+			Specs: []goast.Spec{typeSpec},
 		})
 
 		if n.Alias.Kind() == types.ASCII {
@@ -223,7 +247,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				Tok: gotoken.TYPE,
 				Specs: []goast.Spec{
 					&goast.TypeSpec{
-						Name: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported) + "Hash"},
+						Name: &goast.Ident{Name: component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global) + "Hash"},
 						Type: &goast.Ident{Name: gotypes.Typ[gotypes.Uint64].String()},
 					},
 				},
@@ -255,7 +279,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		return nil, fmt.Errorf("cannot convert type %q to enum", n.Alias)
 	}
 
-	identifier := convertExport(n.Identifier.Name, n.Identifier.Exported)
+	identifier := component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global)
 
 	var enumName string
 	if n.Alias.Kind() == types.ErrorKind {

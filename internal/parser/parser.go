@@ -215,10 +215,6 @@ func (p *Parser) advance(scope string) {
 		return
 	}
 
-	if p.debug {
-		fmt.Printf("DEBUG: %s: advance from %q to %q\n", scope, p.this(), p.next())
-	}
-
 	p.i++
 }
 

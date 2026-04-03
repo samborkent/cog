@@ -6,6 +6,7 @@ import (
 
 type Procedure struct {
 	Function   bool
+	TypeParams []*TypeParam
 	Parameters []*Parameter
 	ReturnType Type // may be nil
 }
@@ -25,10 +26,25 @@ func (p *Procedure) String() string {
 	var out strings.Builder
 
 	if p.Function {
-		_, _ = out.WriteString("func(")
+		_, _ = out.WriteString("func")
 	} else {
-		_, _ = out.WriteString("proc(")
+		_, _ = out.WriteString("proc")
 	}
+
+	if len(p.TypeParams) > 0 {
+		_ = out.WriteByte('<')
+		for i, tp := range p.TypeParams {
+			_, _ = out.WriteString(tp.Name)
+			_, _ = out.WriteString(" ~ ")
+			_, _ = out.WriteString(tp.ConstraintString())
+			if i < len(p.TypeParams)-1 {
+				_, _ = out.WriteString(", ")
+			}
+		}
+		_ = out.WriteByte('>')
+	}
+
+	_ = out.WriteByte('(')
 
 	for i, param := range p.Parameters {
 		_, _ = out.WriteString(param.Name)

@@ -12,7 +12,7 @@ import (
 // to a result-typed variable. It determines whether the expression is the
 // error or value variant based on the expression type's kind.
 // Returns nil if the expression type doesn't match either variant.
-func wrapResultLiteral(tok tokens.Token, resultType types.Type, resolved *types.Result, expr ast.Expression) *ast.ResultLiteral {
+func wrapResultLiteral(tok tokens.Token, resultType types.Type, expr ast.Expression) *ast.ResultLiteral {
 	isError := expr.Type().Kind() == types.ErrorKind
 
 	return &ast.ResultLiteral{
@@ -42,7 +42,7 @@ func resultExprState(resolved *types.Result, expr ast.Expression) (checkState, b
 }
 
 func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier) *ast.Declaration {
-	identType := p.parseCombinedType(ctx, ident.Exported)
+	identType := p.parseCombinedType(ctx, ident.Exported, ident.Global)
 	if identType == nil {
 		return nil
 	}
@@ -118,7 +118,7 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 	// Wrap in ResultLiteral so the transpiler emits the correct Go struct.
 	if resultType, ok := ident.ValueType.Underlying().(*types.Result); ok {
 		if state, isVariant := resultExprState(resultType, expr); isVariant {
-			node.Assignment.Expression = wrapResultLiteral(node.Assignment.Token, ident.ValueType, resultType, expr)
+			node.Assignment.Expression = wrapResultLiteral(node.Assignment.Token, ident.ValueType, expr)
 			p.symbols.MarkChecked(ident.Name, state)
 		}
 	}

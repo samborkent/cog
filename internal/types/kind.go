@@ -34,6 +34,9 @@ const (
 	// Generic type
 	GenericKind
 
+	// Any type
+	AnyKind
+
 	// Container types
 	ArrayKind
 	SliceKind
@@ -99,6 +102,8 @@ func (t Kind) String() string {
 		return "&"
 	case GenericKind:
 		return "generic"
+	case AnyKind:
+		return "any"
 	case EnumKind:
 		return "enum"
 	case ErrorKind:
@@ -119,6 +124,10 @@ func (t Kind) String() string {
 		return "result"
 	case ProcedureKind:
 		return "proc"
+	case ArrayKind:
+		return "array"
+	case SliceKind:
+		return "slice"
 	case Invalid:
 		fallthrough
 	default:
@@ -147,13 +156,6 @@ var Lookup = map[tokens.Type]Type{
 	tokens.Uint64:     Basics[Uint64],
 	tokens.Uint128:    Basics[Uint128],
 	tokens.UTF8:       Basics[UTF8],
-
-	// Literal types
-	tokens.Complex: Basics[Complex64],
-	tokens.Float:   Basics[Float64],
-	tokens.Int:     Basics[Int64],
-	tokens.String:  Basics[UTF8],
-	tokens.Uint:    Basics[Uint64],
 
 	// Container types
 	tokens.Map:    &Map{},

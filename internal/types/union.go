@@ -7,6 +7,7 @@ import (
 type Union struct {
 	Either, Or Type
 	Exported   bool
+	Global     bool
 }
 
 func (t *Union) Kind() Kind {

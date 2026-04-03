@@ -1080,6 +1080,113 @@ main : proc() = {
 	}
 }
 
+func TestGenericAliasForwardReference(t *testing.T) {
+	src := `package main
+
+names : List<utf8> = @slice<utf8>(3)
+
+List<T ~ any> ~ []T
+
+main : proc() = {
+	@print(names)
+}`
+
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+	}
+
+	if !strings.Contains(out, "[") {
+		t.Fatalf("expected slice output, got:\n%s", out)
+	}
+}
+
+func TestGenericAliasMultipleConstraints(t *testing.T) {
+	src := `package main
+
+List<T ~ any> ~ []T
+NumSlice<T ~ number> ~ []T
+SortableSlice<T ~ ordered> ~ []T
+Dict<K ~ comparable, V ~ any> ~ map<K, V>
+TagSlice<T ~ string | int> ~ []T
+
+main : proc() = {
+	names : List<utf8> = @slice<utf8>(3)
+	@print(names)
+	scores : NumSlice<int64> = @slice<int64>(5)
+	@print(scores)
+	words : SortableSlice<utf8> = @slice<utf8>(10)
+	@print(words)
+	lookup : Dict<utf8, int64> = @map<utf8, int64>()
+	@print(lookup)
+	labels : TagSlice<utf8> = @slice<utf8>(3)
+	@print(labels)
+}`
+
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s\ncode:\n%s", err, out, code)
+	}
+
+	// All slices/maps should produce output.
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 5 {
+		t.Fatalf("expected at least 5 output lines, got %d:\n%s", len(lines), out)
+	}
+}
+
+func TestComparisonNotConfusedWithGenericTypeParam(t *testing.T) {
+	src := `package main
+
+List<T ~ any> ~ []T
+
+main : proc() = {
+	index := 10
+	if index < 5 {
+		@print(index)
+	}
+	xs : List<int32> = @slice<int32>(3)
+	@print(xs)
+}`
+
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s\ncode:\n%s", err, out, code)
+	}
+
+	if !strings.Contains(out, "[") {
+		t.Fatalf("expected slice output, got:\n%s", out)
+	}
+}
+
+// mustContain checks that 'got' contains 'want'.
+func mustContain(t *testing.T, got, want string) {
+	t.Helper()
+	if !strings.Contains(got, want) {
+		t.Errorf("expected %q to contain %q", got, want)
+	}
+}
+
+// mustNotContain checks that 'got' does not contain 'want'.
+func mustNotContain(t *testing.T, got, want string) {
+	t.Helper()
+	if strings.Contains(got, want) {
+		t.Errorf("expected %q not to contain %q", got, want)
+	}
+}
+
 func TestImportedPackageMustNotDeclareMain(t *testing.T) {
 	t.Parallel()
 
@@ -1118,4 +1225,118 @@ main : proc() = {
 	if pkgName == "main" {
 		t.Fatal("expected non-main package name for imported package test")
 	}
+}
+
+func TestFunctionTranspilation(t *testing.T) {
+	t.Parallel()
+
+	// Test that functions are transpiled as function declarations, not variable declarations
+	got := transpilePackage(t, map[string]string{
+		"main.cog": `package main
+
+// Regular function
+add : func(a : int64, b : int64) int64 = {
+    return a + b
+}
+
+// Procedure
+greet : proc(name : utf8) = {
+    @print(name)
+}
+
+main : proc() = {
+    result := add(1, 2)
+    greet("hello")
+    @print(result)
+}`,
+	})
+
+	// Should contain function declarations, not variable declarations
+	mustContain(t, got, "func add(a int64, b int64) int64 {")
+	mustContain(t, got, "func greet(ctx go_context.Context, name string)")
+
+	// Should NOT contain the old variable declaration format
+	mustNotContain(t, got, "var add func")
+	mustNotContain(t, got, "var greet")
+}
+
+func TestGenericFunctionCallInferred(t *testing.T) {
+	src := `package main
+
+genFunc : func<T ~ any>(x : T) = {
+	@print(x)
+}
+
+main : proc() = {
+	genFunc("hello generics")
+	genFunc(42)
+}`
+
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	// Should emit Go generic call syntax.
+	mustContain(t, code, "genFunc[string]")
+	mustContain(t, code, "genFunc[int64]")
+	mustContain(t, code, "func genFunc[T any]")
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s\ncode:\n%s", err, out, code)
+	}
+
+	mustContain(t, out, "hello generics")
+	mustContain(t, out, "42")
+}
+
+func TestGenericFunctionCallExplicit(t *testing.T) {
+	src := `package main
+
+genFunc : func<T ~ any>(x : T) = {
+	@print(x)
+}
+
+main : proc() = {
+	genFunc<utf8>("explicit call")
+}`
+
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	mustContain(t, code, "genFunc[string]")
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s\ncode:\n%s", err, out, code)
+	}
+
+	mustContain(t, out, "explicit call")
+}
+
+func TestGenericFunctionWithReturnType(t *testing.T) {
+	src := `package main
+
+identity : func<T ~ any>(x : T) T = {
+	return x
+}
+
+main : proc() = {
+	result := identity("returned")
+	@print(result)
+}`
+
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	mustContain(t, code, "func identity[T any](x T) T {")
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\noutput:\n%s\ncode:\n%s", err, out, code)
+	}
+
+	mustContain(t, out, "returned")
 }

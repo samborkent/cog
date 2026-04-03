@@ -54,7 +54,7 @@ main : proc() = {
 
     fl := -0.6e-7
 
-    collection : set<string> = { "hello1", "hello2" }
+    collection : set<utf8> = { "hello1", "hello2" }
 
     maths := 5 * 6 / (2 + 3)
 
@@ -99,7 +99,8 @@ caseSwitch:
         @print(enum1)
     }
 
-    tuple : Tuple = {"hello", 10, false}
+    // TODO: temporarily disabled, not fully implemented.
+    // tuple : Tuple = {"hello", 10, false}
 
     var utf : utf8?  = "hello"
     // option : Option? // not allowed
@@ -333,10 +334,10 @@ outerLoop:
     bigCmp := big < bigSum
 
     // int128: backed by ryanavella/wide, ops via methods.
-    signed : int128 = 42
-    signedNeg := -signed
-    signedSum := signed + signed
-    signedCmp := signed < signedNeg
+    big128 : int128 = 42
+    big128Neg := -big128
+    big128Sum := big128 + big128
+    big128Cmp := big128 < big128Neg
 
     // cross-file: Coordinate type and formatCoord function defined in other.cog.
     loc : Coordinate = {
@@ -352,6 +353,53 @@ outerLoop:
     // subpackage: geom/metric (imported as "metric").
     @print(metric.Pi)
     @print(metric.CircleArea(5.0))
+
+    // Generic type alias with `any` constraint: works for every type.
+    names : List<utf8> = @slice<utf8>(3)
+    @print(names)
+
+    // Generic type alias with `number` constraint: int + uint + float + complex.
+    scores : NumSlice<int64> = @slice<int64>(5)
+    @print(scores)
+
+    // Generic type alias with `ordered` constraint: int + uint + float + string.
+    words : SortableSlice<utf8> = @slice<utf8>(10)
+    @print(words)
+
+    // Generic type alias with `comparable` constraint on map keys.
+    lookup : Dict<utf8, int64> = @map<utf8, int64>()
+    @print(lookup)
+
+    // Two-param generic: pair of any two types.
+    // TODO: temporarily disabled, not fully implemented.
+    // coord : Pair<float64, float64> = {1.0, 2.0}
+    // @print(coord)
+
+    // Multi-constraint: T must satisfy `string` or `int`.
+    labels : TagSlice<utf8> = @slice<utf8>(3)
+    @print(labels)
+
+    // Generic function: type parameter on the func type itself.
+    // Type argument is inferred from the argument type.
+    genFunc("hello generics")
+    genFunc(42)
+
+    // Explicit type argument: genFunc<utf8>("explicit")
+    genFunc<utf8>("explicit type arg")
+
+    // Generic function with return type: T flows through.
+    idResult := identity("identity")
+    @print(idResult)
+}
+
+// Generic function: type parameter on the func type.
+genFunc : func<T ~ any>(x : T) = {
+    @print(x)
+}
+
+// Generic function with return type.
+identity : func<T ~ any>(x : T) T = {
+    return x
 }
 
 arenaProc : proc(n : uint64) = {
@@ -388,7 +436,8 @@ planet ~ struct {
     )
 }
 
-Tuple ~ utf8 & uint64 & bool
+// TODO: temporarily disabled, not fully implemented.
+// Tuple ~ utf8 & uint64 & bool
 
 Either ~ utf8 | uint64
 
@@ -435,6 +484,25 @@ Map ~ map<utf8, uint64>
 array : [3]uint64 = {1, 2, 3}
 slice : []utf8 = {"foo", "bar", "baz", "qux"}
 SliceType ~ []uint64
+
+// any: accepts every type.
+List<T ~ any> ~ []T
+
+// number: int + uint + float + complex types.
+NumSlice<T ~ number> ~ []T
+
+// ordered: int + uint + float + string — types that support < > <= >=.
+SortableSlice<T ~ ordered> ~ []T
+
+// comparable: ordered + complex + bool + struct + array + enum + pointer + tuple + set.
+Dict<K ~ comparable, V ~ any> ~ map<K, V>
+
+// Multiple type params with any constraint.
+// TODO: temporarily disabled, not fully implemented.
+// Pair<A ~ any, B ~ any> ~ A & B
+
+// Multi-constraint union: T must be string or int.
+TagSlice<T ~ string | int> ~ []T
 
 /*
 switch variable { // value type

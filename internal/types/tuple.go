@@ -11,12 +11,12 @@ const (
 )
 
 type Tuple struct {
-	Types    []Type
-	Exported bool
+	Types            []Type
+	Exported, Global bool
 }
 
 func (t *Tuple) Index(i int) Type {
-	if i > TupleMaxTypes || i > len(t.Types) {
+	if i < 0 || i >= len(t.Types) || i >= TupleMaxTypes {
 		panic("tuple type index out-of-range")
 	}
 

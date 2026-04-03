@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
@@ -17,6 +18,7 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 	p.advance("parseCallArguments (") // consume '('
 
 	if p.this().Type == tokens.RParen {
+		p.advance("parseCallArguments )") // consume ')'
 		return nil
 	}
 
@@ -40,7 +42,15 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 				return nil
 			}
 
-			arg = p.expression(ctx, procType.Parameters[i].Type)
+			paramType := procType.Parameters[i].Type
+
+			// When the parameter type is a TypeParam, let the expression
+			// infer its own type (like an untyped declaration).
+			if _, isTP := paramType.(*types.TypeParam); isTP {
+				paramType = types.None
+			}
+
+			arg = p.expression(ctx, paramType)
 			if arg == nil {
 				return nil
 			}
@@ -61,4 +71,119 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 	p.advance("parseCallArguments )") // consume ')'
 
 	return args
+}
+
+// inferTypeArgs infers type arguments for a generic procedure call from the
+// actual argument types. Returns the inferred type args (ordered by TypeParams)
+// and the substituted return type. Reports parser errors on failure.
+func (p *Parser) inferTypeArgs(
+	procType *types.Procedure,
+	args []ast.Expression,
+) ([]types.Type, types.Type) {
+	argMap := make(map[string]types.Type, len(procType.TypeParams))
+
+	// Match each argument to its parameter's type param.
+	for i, param := range procType.Parameters {
+		if i >= len(args) {
+			break
+		}
+
+		tp, ok := param.Type.(*types.TypeParam)
+		if !ok {
+			continue
+		}
+
+		argType := args[i].Type()
+
+		if existing, ok := argMap[tp.Name]; ok {
+			// Already inferred — check consistency.
+			if !types.Equal(existing, argType) {
+				p.error(p.this(), fmt.Sprintf(
+					"conflicting types for type parameter %q: %s vs %s",
+					tp.Name, existing, argType), "inferTypeArgs")
+				return nil, nil
+			}
+			continue
+		}
+
+		// Validate constraint satisfaction.
+		if !tp.SatisfiedBy(argType) {
+			p.error(p.this(), fmt.Sprintf(
+				"type %q does not satisfy constraint %q for parameter %q",
+				argType, tp.ConstraintString(), tp.Name), "inferTypeArgs")
+			return nil, nil
+		}
+
+		argMap[tp.Name] = argType
+	}
+
+	// Ensure all type params were inferred.
+	typeArgs := make([]types.Type, len(procType.TypeParams))
+	for i, tp := range procType.TypeParams {
+		concrete, ok := argMap[tp.Name]
+		if !ok {
+			p.error(p.this(), fmt.Sprintf(
+				"cannot infer type parameter %q from arguments", tp.Name), "inferTypeArgs")
+			return nil, nil
+		}
+		typeArgs[i] = concrete
+	}
+
+	// Substitute return type.
+	var returnType types.Type
+	if procType.ReturnType != nil {
+		returnType = types.SubstituteType(procType.ReturnType, argMap)
+	}
+
+	return typeArgs, returnType
+}
+
+// validateExplicitTypeArgs checks explicit type arguments against the procedure's
+// type params. Returns the substituted return type. Reports errors on failure.
+func (p *Parser) validateExplicitTypeArgs(
+	procType *types.Procedure,
+	typeArgs []types.Type,
+	args []ast.Expression,
+) types.Type {
+	if len(typeArgs) != len(procType.TypeParams) {
+		p.error(p.this(), fmt.Sprintf(
+			"wrong number of type arguments: expected %d, got %d",
+			len(procType.TypeParams), len(typeArgs)), "validateExplicitTypeArgs")
+		return nil
+	}
+
+	argMap := make(map[string]types.Type, len(typeArgs))
+
+	for i, tp := range procType.TypeParams {
+		if !tp.SatisfiedBy(typeArgs[i]) {
+			p.error(p.this(), fmt.Sprintf(
+				"type argument %q does not satisfy constraint %q for parameter %q",
+				typeArgs[i], tp.ConstraintString(), tp.Name), "validateExplicitTypeArgs")
+			return nil
+		}
+		argMap[tp.Name] = typeArgs[i]
+	}
+
+	// Validate argument types match the substituted parameter types.
+	for i, param := range procType.Parameters {
+		if i >= len(args) {
+			break
+		}
+
+		expectedType := types.SubstituteType(param.Type, argMap)
+		argType := args[i].Type()
+
+		if !types.Equal(expectedType, argType) && !types.AssignableTo(argType, expectedType) {
+			p.error(p.this(), fmt.Sprintf(
+				"argument type %q does not match parameter type %q (after substitution)",
+				argType, expectedType), "validateExplicitTypeArgs")
+			return nil
+		}
+	}
+
+	if procType.ReturnType != nil {
+		return types.SubstituteType(procType.ReturnType, argMap)
+	}
+
+	return nil
 }

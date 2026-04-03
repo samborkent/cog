@@ -61,7 +61,7 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 	// Wrap in ResultLiteral so the transpiler emits the correct Go struct.
 	if resultType, ok := symbol.Type().Underlying().(*types.Result); ok {
 		if state, isVariant := resultExprState(resultType, expr); isVariant {
-			node.Expression = wrapResultLiteral(node.Token, symbol.Type(), resultType, expr)
+			node.Expression = wrapResultLiteral(node.Token, symbol.Type(), expr)
 			p.symbols.MarkChecked(ident.Name, state)
 		} else {
 			// Reassignment from an unknown result variant invalidates previous checks.

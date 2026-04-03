@@ -9,24 +9,27 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Type {
+func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) types.Type {
 	switch p.this().Type {
 	case tokens.Enum:
 		ident := &ast.Identifier{
 			Token:    p.tokens[p.i-2],
 			Name:     p.tokens[p.i-2].Literal,
 			Exported: exported,
+			Global:   global,
 		}
+
 		return p.parseEnumType(ctx, ident)
 	case tokens.Error:
 		ident := &ast.Identifier{
 			Token:    p.tokens[p.i-2],
 			Name:     p.tokens[p.i-2].Literal,
 			Exported: exported,
+			Global:   global,
 		}
 		return p.parseErrorType(ctx, ident)
 	case tokens.Function, tokens.Procedure:
-		return p.parseProcedureType(ctx, exported)
+		return p.parseProcedureType(ctx, exported, global)
 	}
 
 	typ := p.parseType(ctx)
@@ -37,6 +40,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 		tuple := &types.Tuple{
 			Types:    make([]types.Type, 1, types.TupleMaxTypes),
 			Exported: exported,
+			Global:   global,
 		}
 
 		// Put parsed type as first type.
@@ -81,7 +85,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported bool) types.Typ
 		// Result type: T ! E
 		p.advance("parseCombinedType result !") // consume !
 
-		errorType := p.parseCombinedType(ctx, exported)
+		errorType := p.parseCombinedType(ctx, exported, global)
 		if errorType == nil {
 			return nil
 		}
@@ -251,7 +255,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 				ident := sym.Identifier
 				if types.IsNone(ident.ValueType) {
-					typ = types.NewForwardAlias(ident.Name, ident.Exported, func() types.Type {
+					typ = types.NewForwardAlias(ident.Name, ident.Exported, ident.Global, func() types.Type {
 						return ident.ValueType
 					})
 				} else {
@@ -259,6 +263,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 						Name:     ident.Name,
 						Derived:  ident.ValueType,
 						Exported: ident.Exported,
+						Global:   ident.Global,
 					}
 				}
 
@@ -288,22 +293,45 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 		ident := typeSymbol.Identifier
 
+		// If the symbol is a type parameter (inside a generic alias body),
+		// return the TypeParam directly.
+		if tp, ok := ident.ValueType.(*types.TypeParam); ok {
+			p.advance("parseType typeparam") // consume type param name
+			return tp
+		}
+
 		if types.IsNone(ident.ValueType) {
 			// Forward reference: type name is pre-registered but not yet resolved.
 			// Create a lazy alias that resolves when the type is accessed.
-			typ = types.NewForwardAlias(ident.Name, ident.Exported, func() types.Type {
+			typ = types.NewForwardAlias(ident.Name, ident.Exported, ident.Global, func() types.Type {
 				return ident.ValueType
 			})
 		} else {
+			// Copy type parameters from the original type if it's an alias
+			var typeParams []*types.TypeParam
+			if originalAlias, ok := ident.ValueType.(*types.Alias); ok {
+				typeParams = originalAlias.TypeParams
+			}
+
 			typ = &types.Alias{
-				Name:     ident.Name,
-				Derived:  ident.ValueType,
-				Exported: ident.Exported,
+				Name:       ident.Name,
+				Derived:    ident.ValueType,
+				Exported:   ident.Exported,
+				Global:     ident.Global,
+				TypeParams: typeParams,
 			}
 		}
 	}
 
 	p.advance("parseType type") // consume type
+
+	// Check for generic instantiation: Alias<int32, utf8>
+	if p.this().Type == tokens.LT {
+		typ = p.instantiateGenericAlias(ctx, typ)
+		if typ == nil {
+			return nil
+		}
+	}
 
 	if p.this().Type == tokens.Question {
 		// Optional type
@@ -320,6 +348,76 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 	}
 
 	return typ
+}
+
+// instantiateGenericAlias parses type arguments after a generic alias reference
+// and produces the instantiated concrete type. The current token must be '<'.
+func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) types.Type {
+	alias, ok := typ.(*types.Alias)
+	if !ok {
+		p.error(p.this(), "type arguments on non-alias type", "instantiateGenericAlias")
+		return nil
+	}
+
+	// Resolve the alias to find the generic definition with TypeParams.
+	var genAlias *types.Alias
+
+	if alias.Derived != nil && !types.IsNone(alias.Derived) {
+		if a, ok := alias.Derived.(*types.Alias); ok && len(a.TypeParams) > 0 {
+			genAlias = a
+		}
+	}
+
+	if genAlias == nil {
+		// The alias itself may carry TypeParams (for direct resolutions).
+		if len(alias.TypeParams) > 0 {
+			genAlias = alias
+		}
+	}
+
+	if genAlias == nil {
+		// Try resolving the underlying value type (set during findGlobalType).
+		switch v := alias.Derived.(type) {
+		case *types.Alias:
+			if len(v.TypeParams) > 0 {
+				genAlias = v
+			}
+		}
+	}
+
+	if genAlias == nil {
+		p.error(p.this(), fmt.Sprintf("type %q is not generic", alias.Name), "instantiateGenericAlias")
+		return nil
+	}
+
+	typeArgs := p.parseTypeArguments(ctx)
+	if typeArgs == nil {
+		return nil
+	}
+
+	if len(typeArgs) != len(genAlias.TypeParams) {
+		p.error(p.this(), fmt.Sprintf("wrong number of type arguments for %q: expected %d, got %d",
+			alias.Name, len(genAlias.TypeParams), len(typeArgs)), "instantiateGenericAlias")
+		return nil
+	}
+
+	// Check constraint satisfaction.
+	for i, arg := range typeArgs {
+		tp := genAlias.TypeParams[i]
+		if !tp.SatisfiedBy(arg) {
+			p.error(p.this(), fmt.Sprintf("type argument %q does not satisfy constraint %q for parameter %q",
+				arg.String(), tp.ConstraintString(), tp.Name), "instantiateGenericAlias")
+			return nil
+		}
+	}
+
+	// Build substitution map and instantiate.
+	argMap := make(map[string]types.Type, len(typeArgs))
+	for i, tp := range genAlias.TypeParams {
+		argMap[tp.Name] = typeArgs[i]
+	}
+
+	return genAlias.Instantiate(argMap)
 }
 
 func (p *Parser) parseStruct(ctx context.Context) types.Type {
@@ -400,18 +498,42 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 
 	p.advance("parseField :") // consume :
 
-	field.Type = p.parseCombinedType(ctx, exported)
+	field.Type = p.parseCombinedType(ctx, exported, false)
 
 	return field
 }
 
-func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.Procedure {
+func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) *types.Procedure {
 	procType := &types.Procedure{
 		Function:   p.this().Type == tokens.Function,
 		Parameters: make([]*types.Parameter, 0),
 	}
 
 	p.advance("parseProcedureType proc/func")
+
+	if p.this().Type == tokens.LT {
+		procType.TypeParams = p.parseTypeParams(ctx)
+		if procType.TypeParams == nil {
+			return nil
+		}
+
+		// Enter scope for type parameters.
+		p.symbols = NewEnclosedSymbolTable(p.symbols)
+
+		// Pre-register type parameters in symbol table for recursive references.
+		for _, tp := range procType.TypeParams {
+			p.symbols.Define(&ast.Identifier{
+				Name:      tp.Name,
+				ValueType: tp,
+				Qualifier: ast.QualifierType,
+			})
+		}
+
+		defer func() {
+			// Exit type parameter scope.
+			p.symbols = p.symbols.Outer
+		}()
+	}
 
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), fmt.Sprintf("expected '(' after %q in type", p.prev().Type), "parseProcedureType")
@@ -458,7 +580,7 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 
 		p.advance("parseParameters loop :") // consume :
 
-		paramType := p.parseCombinedType(ctx, false)
+		paramType := p.parseCombinedType(ctx, false, false)
 		if paramType == nil {
 			p.error(p.this(), "unknown parameter type", "parseParameters")
 			return nil
@@ -496,7 +618,7 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 	}
 
 	// TODO: this should only allow a limited set of types.
-	returnType := p.parseCombinedType(ctx, exported)
+	returnType := p.parseCombinedType(ctx, exported, global)
 	if returnType == nil {
 		return nil
 	}
@@ -505,7 +627,7 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported bool) *types.P
 	if p.this().Type == tokens.Not {
 		p.advance("parseProcedureType !") // consume !
 
-		errorType := p.parseCombinedType(ctx, exported)
+		errorType := p.parseCombinedType(ctx, exported, global)
 		if errorType == nil {
 			return nil
 		}

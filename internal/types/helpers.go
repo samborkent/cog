@@ -137,8 +137,25 @@ func Equal(a, b Type) bool {
 			return false
 		}
 		return true
+	case *TypeParam:
+		bt := bu.(*TypeParam)
+		if at.Name != bt.Name {
+			return false
+		}
+		if len(at.Constraints) != len(bt.Constraints) {
+			return false
+		}
+		for i := range at.Constraints {
+			if !Equal(at.Constraints[i], bt.Constraints[i]) {
+				return false
+			}
+		}
+		return true
+	case *Generic:
+		bt := bu.(*Generic)
+		return at.name == bt.name
 	default:
-		// Basic types and Generic: Kind equality is sufficient.
+		// Basic types: Kind equality is sufficient.
 		return true
 	}
 }
@@ -159,5 +176,86 @@ func Size(k Kind) int {
 		return 128
 	default:
 		return -1
+	}
+}
+
+// Satisfies reports whether a concrete type satisfies the given constraint.
+// If constraint is any, all types satisfy it. If constraint is a *Generic,
+// the concrete type's kind must match one of the constraint's members.
+// Otherwise falls back to Equal.
+func Satisfies(concrete, constraint Type) bool {
+	if constraint.Kind() == AnyKind {
+		return true
+	}
+
+	if g, ok := constraint.(*Generic); ok {
+		for _, member := range g.Constraints {
+			if member.Kind() == concrete.Kind() {
+				// For structural types used as comparable sentinels,
+				// verify the concrete type is actually comparable.
+				if isStructuralSentinel(member) {
+					if !IsComparable(concrete) {
+						continue
+					}
+				}
+				return true
+			}
+		}
+		return false
+	}
+
+	return Equal(concrete, constraint)
+}
+
+// isStructuralSentinel reports whether a type is one of the zero-value
+// sentinels used in the comparable constraint definition.
+func isStructuralSentinel(t Type) bool {
+	switch v := t.(type) {
+	case *Struct:
+		return len(v.Fields) == 0
+	case *Array:
+		return v.Element == nil
+	case *Tuple:
+		return len(v.Types) == 0
+	case *Set:
+		return v.Element == nil
+	default:
+		return false
+	}
+}
+
+// IsComparable reports whether a type supports == in Go.
+// Slices, maps, and functions are not comparable. Structs and arrays
+// are comparable only if all their elements/fields are comparable.
+func IsComparable(t Type) bool {
+	switch v := t.Underlying().(type) {
+	case *Basic:
+		return true
+	case *Enum:
+		return true
+	case *Pointer:
+		return true
+	case *Set:
+		return IsComparable(v.Element)
+	case *Struct:
+		for _, f := range v.Fields {
+			if !IsComparable(f.Type) {
+				return false
+			}
+		}
+		return true
+	case *Array:
+		return IsComparable(v.Element)
+	case *Tuple:
+		for _, elem := range v.Types {
+			if !IsComparable(elem) {
+				return false
+			}
+		}
+		return true
+	case *Slice, *Map, *Procedure:
+		return false
+	default:
+		return true
 	}
 }

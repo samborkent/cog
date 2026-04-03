@@ -65,7 +65,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		if len(procType.Parameters) > len(n.Arguments) {
 			// The number of input parameters is greater than the number of arguments, so there are optional parameters.
-			for i := len(args); i < len(procType.Parameters); i++ {
+			for i := len(n.Arguments); i < len(procType.Parameters); i++ {
 				if procType.Parameters[i].Default == nil {
 					argType, err := t.convertType(procType.Parameters[i].Type)
 					if err != nil {
@@ -96,10 +96,34 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		if n.Package != "" {
 			fun = &goast.SelectorExpr{
 				X:   &goast.Ident{Name: n.Package},
-				Sel: &goast.Ident{Name: convertExport(n.Identifier.Name, n.Identifier.Exported)},
+				Sel: component.Ident(n.Identifier),
 			}
 		} else {
 			fun = component.Ident(n.Identifier)
+		}
+
+		// Wrap in IndexExpr/IndexListExpr for generic calls with type arguments.
+		if len(n.TypeArgs) > 0 {
+			indices := make([]goast.Expr, len(n.TypeArgs))
+			for i, ta := range n.TypeArgs {
+				converted, err := t.convertType(ta)
+				if err != nil {
+					return nil, fmt.Errorf("converting type argument %d: %w", i, err)
+				}
+				indices[i] = converted
+			}
+
+			if len(indices) == 1 {
+				fun = &goast.IndexExpr{
+					X:     fun,
+					Index: indices[0],
+				}
+			} else {
+				fun = &goast.IndexListExpr{
+					X:       fun,
+					Indices: indices,
+				}
+			}
 		}
 
 		return &goast.CallExpr{
@@ -163,7 +187,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		return expr, nil
 	case *ast.Identifier:
-		name := convertExport(n.Name, n.Exported)
+		name := component.ConvertExport(n.Name, n.Exported, n.Global)
 
 		if n.Qualifier == ast.QualifierDynamic {
 			if t.inFunc {
@@ -491,7 +515,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 				keyAlias, ok := pair.Key.Type().(*types.Alias)
 				if ok {
-					indexExpr = &goast.Ident{Name: convertExport(keyAlias.Name, keyAlias.Exported) + "Hash"}
+					indexExpr = &goast.Ident{Name: component.ConvertExport(keyAlias.Name, keyAlias.Exported, keyAlias.Global) + "Hash"}
 				} else {
 					indexExpr = &goast.SelectorExpr{
 						X:   &goast.Ident{Name: "cog"},
@@ -669,11 +693,11 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		if types.IsNone(n.Identifier.ValueType) {
 			return &goast.SelectorExpr{
 				X:   &goast.Ident{Name: n.Identifier.Name},
-				Sel: &goast.Ident{Name: convertExport(n.Field.Name, n.Field.Exported)},
+				Sel: component.Ident(n.Field),
 			}, nil
 		}
 
-		name := convertExport(n.Identifier.Name, n.Identifier.Exported)
+		name := component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global)
 
 		ident, ok := t.symbols.Resolve(name)
 		if !ok {
@@ -705,7 +729,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 			return &goast.SelectorExpr{
 				X:   component.Ident(n.Identifier),
-				Sel: &goast.Ident{Name: convertExport(n.Field.Name, exported)},
+				Sel: &goast.Ident{Name: component.ConvertExport(n.Field.Name, exported, false)},
 			}, nil
 		default:
 			return nil, fmt.Errorf("%q: unknown type found for selector expression %q", n, n.Identifier.ValueType)
@@ -729,7 +753,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 				elemAlias, ok := setType.Element.(*types.Alias)
 				if ok {
-					indexExpr = &goast.Ident{Name: convertExport(elemAlias.Name, elemAlias.Exported) + "Hash"}
+					indexExpr = &goast.Ident{Name: component.ConvertExport(elemAlias.Name, elemAlias.Exported, elemAlias.Global) + "Hash"}
 				} else {
 					indexExpr = &goast.SelectorExpr{
 						X:   &goast.Ident{Name: "cog"},
@@ -760,7 +784,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		if isASCII {
 			aliasType, ok := setType.Element.(*types.Alias)
 			if ok {
-				indexExpr = &goast.Ident{Name: convertExport(aliasType.Name, aliasType.Exported) + "Hash"}
+				indexExpr = &goast.Ident{Name: component.ConvertExport(aliasType.Name, aliasType.Exported, aliasType.Global) + "Hash"}
 			} else {
 				indexExpr = &goast.SelectorExpr{
 					X:   &goast.Ident{Name: "cog"},
@@ -833,7 +857,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 
 			exprs = append(exprs, &goast.KeyValueExpr{
-				Key:   &goast.Ident{Name: convertExport(val.Name, structType.Fields[fieldIndex].Exported)},
+				Key:   &goast.Ident{Name: component.ConvertExport(val.Name, structType.Fields[fieldIndex].Exported, false)},
 				Value: expr,
 			})
 		}
@@ -851,7 +875,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("suffix operator applied to non-identifier")
 		}
 
-		name := convertExport(ident.Name, ident.Exported)
+		name := component.ConvertExport(ident.Name, ident.Exported, ident.Global)
 
 		// Mark identifier as used.
 		symbol, ok := t.symbols.Resolve(name)
@@ -945,7 +969,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		if n.Tag {
 			return &goast.CompositeLit{
-				Type: &goast.Ident{Name: convertExport(unionType.String(), unionType.Exported)},
+				Type: &goast.Ident{Name: component.ConvertExport(unionType.String(), unionType.Exported, unionType.Global)},
 				Elts: []goast.Expr{
 					&goast.KeyValueExpr{
 						Key:   &goast.Ident{Name: "Or"},

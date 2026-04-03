@@ -96,6 +96,19 @@ The following basic features are missing that need to be implemented before Cog 
     - `!` = error extraction (value) — result types only, requires prior `?` check
     - Direct check (`if val?`) persists for rest of scope
     - Negated check (`if !val?`) is scoped to its block only
+- Generic type aliases with type parameters and constraints
+    - Declaration: `List<T ~ any> ~ []T`, `Dict<K ~ comparable, V ~ any> ~ map<K, V>`
+    - Instantiation: `names : List<utf8>`, `lookup : Dict<utf8, int64>`
+    - Builtin constraints: `any`, `comparable`, `ordered`, `number`, `string`, `int`, `uint`, `float`, `complex`, `signed`
+    - Union constraints: `T ~ string | int`
+    - Constraint validation at instantiation
+- Generic functions with type parameters on the `func` type
+    - Declaration: `genFunc : func<T ~ any>(x : T) = { ... }`
+    - With return type: `identity : func<T ~ any>(x : T) T = { return x }`
+    - Inferred type arguments: `genFunc("hello")` infers `T = utf8`
+    - Explicit type arguments: `genFunc<utf8>("hello")`
+    - Constraint validation and type argument mismatch errors
+    - Transpiles to Go generics: `func genFunc[T any](x T) { ... }`
 
 ### Partly implemented
 
@@ -114,14 +127,8 @@ The following basic features are missing that need to be implemented before Cog 
     - `switch t { type uint64: ... }`
     - For `t ~ any | interface | union`
 - Select statement
-- Generics with additional builtin generic constraints:
-    - `string ~ ascii | utf8`
-    - `int ~ int8 | int16 | int32 | int64 | int128`
-    - `uint ~ uint8 | uint16 | uint32 | uint64 | uint128`
-    - `float ~ float16 | float32 | float64`
-    - `complex ~ complex32 | complex64 | complex128`
+- Generics: additional builtin generic constraints not yet implemented:
     - `signed ~ int | float | complex`
-    - `number ~ signed | uint`
 - Conversion builtins:
     - `@convert<A, B any>(x A) B` to cast types instead of `float32()`, etc.
         - Will perform best-effort conversion, allowing some precision loss and handling overflows.
@@ -422,6 +429,27 @@ outerLoop:
         lon = 4.89,
     }
     @print(formatCoord(loc))
+
+    // Generic function: type argument inferred from argument.
+    genFunc("hello generics")
+    genFunc(42)
+
+    // Explicit type argument.
+    genFunc<utf8>("explicit type arg")
+
+    // Generic function with return type.
+    idResult := identity("identity")
+    @print(idResult)
+}
+
+// Generic function: type parameter on the func type.
+genFunc : func<T ~ any>(x : T) = {
+    @print(x)
+}
+
+// Generic function with return type.
+identity : func<T ~ any>(x : T) T = {
+    return x
 }
 
 arenaProc : proc(n : uint64) = {

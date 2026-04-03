@@ -86,6 +86,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				Name:      p.this().Literal,
 				Exported:  true,
 				Qualifier: ast.QualifierImmutable,
+				Global:    true,
 			}
 
 			p.advance("parseStatement export ident") // consume identifier
@@ -107,7 +108,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				}
 
 				return nil
-			case tokens.Tilde:
+			case tokens.Tilde, tokens.LT:
 				typeDecl := p.parseTypeAlias(ctx, ident)
 				if typeDecl != nil {
 					return typeDecl
@@ -144,12 +145,26 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			Name:      p.this().Literal,
 			Exported:  false,
 			Qualifier: qualifier,
+			Global:    p.symbols.Outer == nil,
 		}
 
 		// Do not skip identifier for function call or imported package selector;
 		// parse as expression instead.
 		if p.next().Type == tokens.LParen {
 			// Direct function call: e.g. someFunc(...)
+		} else if p.next().Type == tokens.LT {
+			// Could be generic call (genFunc<utf8>(...)) or type alias.
+			// If the symbol is a generic callable, don't consume the identifier
+			// so expression parsing handles it.
+			if sym, ok := p.symbols.Resolve(p.this().Literal); ok {
+				if proc, ok := sym.Identifier.ValueType.(*types.Procedure); ok && len(proc.TypeParams) > 0 {
+					// Generic function call — let expression handle it.
+				} else {
+					p.advance("parseStatement ident") // consume identifier
+				}
+			} else {
+				p.advance("parseStatement ident") // consume identifier
+			}
 		} else if p.next().Type == tokens.Dot {
 			if _, isImport := p.symbols.ResolveCogImport(p.this().Literal); isImport {
 				// Imported package selector: e.g. pkg.Func(...)
@@ -243,7 +258,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				Token:      identToken,
 				Expression: callExpr,
 			}
-		case tokens.Tilde: // Type declaration
+		case tokens.Tilde, tokens.LT: // Type declaration (possibly generic)
 			typeDecl := p.parseTypeAlias(ctx, ident)
 			if typeDecl != nil {
 				return typeDecl
@@ -282,11 +297,11 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				// through unchanged to preserve its IsError state.
 				if resultType != nil {
 					if _, isVariant := resultExprState(resultType, expr); isVariant {
-						expr = wrapResultLiteral(node.Token, p.currentReturnType, resultType, expr)
+						expr = wrapResultLiteral(node.Token, p.currentReturnType, expr)
 					} else if ident, ok := expr.(*ast.Identifier); ok && expr.Type().Kind() == types.ResultKind && p.symbols.IsValueChecked(ident.Name) {
 						// A checked result identifier used as a bare expression denotes
 						// its success value; wrap it for a result-typed return.
-						expr = wrapResultLiteral(node.Token, p.currentReturnType, resultType, expr)
+						expr = wrapResultLiteral(node.Token, p.currentReturnType, expr)
 					}
 				}
 

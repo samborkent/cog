@@ -306,7 +306,7 @@ func (t *Transpiler) predeclareGlobals() error {
 		for i, stmt := range f.Statements {
 			switch s := stmt.(type) {
 			case *ast.Declaration:
-				name := convertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported)
+				name := component.ConvertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported, s.Assignment.Identifier.Global)
 
 				if s.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
 					if err := t.symbols.DefineDynamic(s.Assignment.Identifier); err != nil {
@@ -344,7 +344,7 @@ func (t *Transpiler) predeclareGlobals() error {
 					}
 				}
 			case *ast.Type:
-				t.symbols.Define(convertExport(s.Identifier.Name, s.Identifier.Exported))
+				t.symbols.Define(component.ConvertExport(s.Identifier.Name, s.Identifier.Exported, s.Identifier.Global))
 			}
 		}
 	}
@@ -393,8 +393,7 @@ func (t *Transpiler) buildDynDecls() []goast.Decl {
 	for name, ident := range t.symbols.dynamics {
 		fieldType, err := t.convertType(ident.ValueType)
 		if err != nil {
-			// Already validated during predeclareGlobals; skip on error.
-			continue
+			panic(fmt.Sprintf("buildDynDecls: converting type for %q: %v", name, err))
 		}
 
 		field := &goast.Field{
@@ -534,8 +533,4 @@ func (t *Transpiler) attachLineDecl(decls []goast.Decl, node ast.Node) {
 		Tok: gotoken.IMPORT,
 		Doc: &goast.CommentGroup{List: []*goast.Comment{comment}},
 	}
-}
-
-func convertExport(ident string, exported bool) string {
-	return component.ConvertExport(ident, exported)
 }

@@ -1,9 +1,23 @@
-- Run any supported command prefixed with `rtk` (run `rtk` to see supported commands). This will reduce token usage.
+- The following MCP servers are available:
+    - context7: MUST be used for documentation retrieval
+    - gopls: MUST be used to interact with Go language server and verify code.
+    - github: MUST be used to interact with GitHub.
+- There are also multiple Go skills available that SHOULD be used when appriopriate. MUST check documentation before use.
+- You SHOULD use the following `rtk` subcommands for more efficient processing:
+    - smart: generate summary
+    - json: how JSON structure without values
+    - deps: summarize project dependencies
+    - summary: run command and show heuristic summary
+- You MUST add a test case to verify changes or new code.
+- If a `Makefile`, or `Taskfile.yml` is present, read it, and use those commands.
+
+# Golang
+- INDENTATION DOES NOT MATTER
+- Use of ` go build` is FORBIDDEN.
+- Use `go vet .` instead of `go build .` to check for parsing or compilation issues.
+- Use `go run .` or `go run ./cmd/foo` instead of `go build` to run programs, to avoid leaving behind build artifacts.
 - To see source files from a dependency, or to answer questions about a dependency, run `go mod download -json MODULE` and use the returned `Dir` path to read the files.
 - Use `go doc foo.Bar` or `go doc -all foo` to read documentation for packages, types, functions, etc.
 - Verify if latest training data used lower Go version than locally installed `go version`. If so, get latest Go docs if needed.
-- Use `go run .` or `go run ./cmd/foo` instead of `go build` to run programs, to avoid leaving behind build artifacts.
 - Use `go test` to verify all changes.
-- Always add a test case to verify changes or new code.
 - If a `.golang-ci.yml` file is present, run `golangci-lint run` to verify changes are compliant.
-- If a `Makefile`, or `Taskfile.yml` is present, try to use those commands, instead of invoking CLI tools directly.
