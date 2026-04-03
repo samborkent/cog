@@ -34,6 +34,7 @@ func (p *Prefix) stringTo(out *strings.Builder) {
 func (p *Prefix) String() string {
 	var out strings.Builder
 	p.stringTo(&out)
+
 	return out.String()
 }
 

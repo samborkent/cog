@@ -61,10 +61,12 @@ func flatten(slices ...[]Type) []Type {
 	for _, s := range slices {
 		n += len(s)
 	}
+
 	out := make([]Type, 0, n)
 	for _, s := range slices {
 		out = append(out, s...)
 	}
+
 	return out
 }
 

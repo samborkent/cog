@@ -44,6 +44,7 @@ func (l *ArrayLiteral) stringTo(out *strings.Builder) {
 func (l *ArrayLiteral) String() string {
 	var out strings.Builder
 	l.stringTo(&out)
+
 	return out.String()
 }
 

@@ -45,6 +45,7 @@ func main() {
 	if strings.HasSuffix(files[0], ".cogs") {
 		projectRoot := filepath.Dir(files[0])
 		runScript(ctx, projectRoot, files[0], "")
+
 		return
 	}
 
@@ -71,6 +72,7 @@ func discoverFiles(input string) []string {
 		if !strings.HasSuffix(input, ".cog") && !strings.HasSuffix(input, ".cogs") {
 			panic("invalid file extension, must be .cog or .cogs")
 		}
+
 		return []string{input}
 	}
 
@@ -105,6 +107,7 @@ func lexFile(ctx context.Context, path string) ([]tokens.Token, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening %q: %w", path, err)
 	}
+
 	defer func() { _ = file.Close() }()
 
 	l := lexer.NewLexer(file)
@@ -160,6 +163,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 	// Determine script name from file name (without extension).
 	scriptName := strings.TrimSuffix(filepath.Base(scriptPath), ".cogs")
+
 	standalone := goModuleName == ""
 	if standalone {
 		goModuleName = scriptName
@@ -200,6 +204,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 		if err := t.Print(outFile, gofile); err != nil {
 			_ = outFile.Close()
+
 			panic(fmt.Errorf("printing output: %w", err))
 		}
 
@@ -211,11 +216,13 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 			if replaceLocalCog {
 				gomod += "\nreplace github.com/samborkent/cog => ./..\n"
 			}
+
 			if err := os.WriteFile(filepath.Join("tmp", "go.mod"), []byte(gomod), 0o600); err != nil {
 				panic(fmt.Errorf("writing go.mod: %w", err))
 			}
 
 			tidy := exec.Command("go", "mod", "tidy")
+
 			tidy.Dir = "tmp"
 			if out, err := tidy.CombinedOutput(); err != nil {
 				panic(fmt.Errorf("go mod tidy: %s\n%w", out, err))
@@ -259,6 +266,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) {
 
 	// Step 2: FindGlobals on the entry package (discovers globals + import paths).
 	entrySymbols := parser.NewSymbolTable()
+
 	entryParsers := findGlobals(ctx, entryLexed, entrySymbols)
 	if entryParsers == nil {
 		return
@@ -331,10 +339,12 @@ func discoverScripts(dir string) []string {
 	}
 
 	var scripts []string
+
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".cogs") {
 			continue
 		}
+
 		scripts = append(scripts, filepath.Join(dir, entry.Name()))
 	}
 
@@ -358,6 +368,7 @@ func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string) {
 	}
 
 	dirName := filepath.Base(filepath.Dir(files[0]))
+
 	var pkgName string
 
 	for _, lf := range lexed {
@@ -413,6 +424,7 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 	}
 
 	symbols := parser.NewSymbolTable()
+
 	parsers := findGlobals(ctx, lexed, symbols)
 	if parsers == nil {
 		return nil
@@ -423,6 +435,7 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		ln, col := sym.Identifier.Token.Ln, sym.Identifier.Token.Col
 		fmt.Printf("%s:%d:%d: imported package %q must not declare a main proc\n",
 			files[0], ln, col, pkgName)
+
 		return nil
 	}
 
@@ -478,12 +491,14 @@ func outputProject(goModuleName string, entry *compiledPackage, imported map[str
 		if replaceLocalCog {
 			gomod += "\nreplace github.com/samborkent/cog => ./..\n"
 		}
+
 		if err := os.WriteFile(filepath.Join("tmp", "go.mod"), []byte(gomod), 0o600); err != nil {
 			panic(fmt.Errorf("writing go.mod: %w", err))
 		}
 
 		// Run go mod tidy to resolve all dependencies.
 		tidy := exec.Command("go", "mod", "tidy")
+
 		tidy.Dir = "tmp"
 		if out, err := tidy.CombinedOutput(); err != nil {
 			panic(fmt.Errorf("go mod tidy: %s\n%w", out, err))
@@ -525,6 +540,7 @@ func transpileAndOutput(goModuleName string, pkg *compiledPackage) {
 
 			if err := t.Print(outFile, gofiles[i]); err != nil {
 				_ = outFile.Close()
+
 				panic(fmt.Errorf("printing output: %w", err))
 			}
 

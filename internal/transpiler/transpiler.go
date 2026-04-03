@@ -321,6 +321,7 @@ func (t *Transpiler) predeclareGlobals() error {
 					if i+1 < len(f.Statements) {
 						if comment, ok := f.Statements[i+1].(*ast.Comment); ok {
 							declLn, _ := s.Pos()
+
 							commentLn, _ := comment.Pos()
 							if commentLn == declLn {
 								t.dynComments[name] = comment.Text
@@ -360,6 +361,7 @@ func (t *Transpiler) predeclareGlobals() error {
 func (t *Transpiler) addCogImports(node *ast.Import) {
 	for _, imprt := range node.Imports {
 		importPath := imprt.Name
+
 		goPath := importPath
 		if t.goModulePath != "" {
 			goPath = t.goModulePath + "/" + importPath
@@ -370,6 +372,7 @@ func (t *Transpiler) addCogImports(node *ast.Import) {
 			for i > 0 && importPath[i-1] != '/' {
 				i--
 			}
+
 			pkgName = importPath[i:]
 		}
 

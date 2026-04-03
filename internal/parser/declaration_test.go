@@ -15,10 +15,12 @@ func TestParseDeclaration(t *testing.T) {
 		f := parse(t, `package p
 x := 1
 main : proc() = {}`)
+
 		d := stmtAs[*ast.Declaration](t, f, 0)
 		if d.Assignment.Identifier.Name != "x" {
 			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Name)
 		}
+
 		if d.Assignment.Expression == nil {
 			t.Error("expected expression in declaration")
 		}
@@ -29,6 +31,7 @@ main : proc() = {}`)
 		f := parse(t, `package p
 b := true
 main : proc() = {}`)
+
 		d := stmtAs[*ast.Declaration](t, f, 0)
 		if d.Assignment.Identifier.ValueType.Kind() != types.Bool {
 			t.Errorf("expected Bool, got %s", d.Assignment.Identifier.ValueType.Kind())
@@ -43,14 +46,17 @@ main : proc() = {
 	@print(x)
 }`)
 		d := stmtAs[*ast.Declaration](t, f, 0)
+
 		proc, ok := d.Assignment.Expression.(*ast.ProcedureLiteral)
 		if !ok {
 			t.Fatalf("expected ProcedureLiteral, got %T", d.Assignment.Expression)
 		}
+
 		varDecl, ok := proc.Body.Statements[0].(*ast.Declaration)
 		if !ok {
 			t.Fatalf("expected Declaration, got %T", proc.Body.Statements[0])
 		}
+
 		if varDecl.Assignment.Identifier.Qualifier != ast.QualifierVariable {
 			t.Errorf("expected QualifierVariable, got %d", varDecl.Assignment.Identifier.Qualifier)
 		}
@@ -61,6 +67,7 @@ main : proc() = {
 		f := parse(t, `package p
 export x := 1
 main : proc() = {}`)
+
 		d := stmtAs[*ast.Declaration](t, f, 0)
 		if !d.Assignment.Identifier.Exported {
 			t.Error("expected exported flag to be true")
@@ -80,10 +87,12 @@ main : proc() = {}`)
 		f := parse(t, `package p
 dyn val : utf8 = "default"
 main : proc() = {}`)
+
 		d := stmtAs[*ast.Declaration](t, f, 0)
 		if d.Assignment.Identifier.Qualifier != ast.QualifierDynamic {
 			t.Errorf("expected QualifierDynamic, got %d", d.Assignment.Identifier.Qualifier)
 		}
+
 		if d.Assignment.Identifier.ValueType.Kind() != types.UTF8 {
 			t.Errorf("expected UTF8, got %s", d.Assignment.Identifier.ValueType.Kind())
 		}
@@ -106,10 +115,12 @@ func TestParseTypedDeclaration(t *testing.T) {
 		f := parse(t, `package p
 x : int64 = 42
 main : proc() = {}`)
+
 		d := stmtAs[*ast.Declaration](t, f, 0)
 		if d.Assignment.Identifier.Name != "x" {
 			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Name)
 		}
+
 		if d.Assignment.Identifier.ValueType.Kind() != types.Int64 {
 			t.Errorf("expected Int64, got %s", d.Assignment.Identifier.ValueType.Kind())
 		}
@@ -120,6 +131,7 @@ main : proc() = {}`)
 		f := parse(t, `package p
 s : utf8 = "hello"
 main : proc() = {}`)
+
 		d := stmtAs[*ast.Declaration](t, f, 0)
 		if d.Assignment.Identifier.ValueType.Kind() != types.UTF8 {
 			t.Errorf("expected UTF8, got %s", d.Assignment.Identifier.ValueType.Kind())

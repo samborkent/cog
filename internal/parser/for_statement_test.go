@@ -7,6 +7,7 @@ func TestParseForStatement(t *testing.T) {
 
 	t.Run("infinite", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	for {
@@ -20,6 +21,7 @@ main : proc() = {
 
 	t.Run("for_in", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	xs := @slice<int64>(3)

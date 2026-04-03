@@ -14,11 +14,13 @@ func (p *Parser) resolveConstraintToken() types.Type {
 	if c, ok := types.LookupConstraint(p.this().Type.String()); ok {
 		return c
 	}
+
 	if p.this().Type == tokens.Identifier {
 		if c, ok := types.LookupConstraint(p.this().Literal); ok {
 			return c
 		}
 	}
+
 	return nil
 }
 
@@ -129,8 +131,8 @@ func (p *Parser) parseTypeParams(ctx context.Context) []*types.TypeParam {
 		}
 
 		params = append(params, &types.TypeParam{
-			Name:        name,
-			Constraints: constraints,
+			Name:       name,
+			Constraint: &types.Union{Variants: constraints},
 		})
 
 		if p.this().Type == tokens.Comma {

@@ -30,5 +30,6 @@ func (c *Comment) stringTo(out *strings.Builder) {
 func (c *Comment) String() string {
 	var out strings.Builder
 	c.stringTo(&out)
+
 	return out.String()
 }

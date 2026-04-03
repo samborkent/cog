@@ -7,11 +7,13 @@ func TestParsePackage(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package mypackage
 main : proc() = {}`)
 		if f.Package == nil {
 			t.Fatal("expected package node")
 		}
+
 		if f.Package.Identifier.Name != "mypackage" {
 			t.Errorf("expected package name 'mypackage', got %q", f.Package.Identifier.Name)
 		}

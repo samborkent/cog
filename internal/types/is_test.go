@@ -65,9 +65,9 @@ func TestEqual(t *testing.T) {
 		{"different tuple length", &Tuple{Types: []Type{utf8Type, int64Type}}, &Tuple{Types: []Type{utf8Type, int64Type, boolType}}, false},
 
 		// Unions
-		{"same union", &Union{Either: utf8Type, Or: int64Type}, &Union{Either: utf8Type, Or: int64Type}, true},
-		{"different union either", &Union{Either: utf8Type, Or: int64Type}, &Union{Either: asciiType, Or: int64Type}, false},
-		{"different union or", &Union{Either: utf8Type, Or: int64Type}, &Union{Either: utf8Type, Or: int8Type}, false},
+		{"same union", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{utf8Type, int64Type}}, true},
+		{"different union either", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{asciiType, int64Type}}, false},
+		{"different union or", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{utf8Type, int8Type}}, false},
 
 		// Structs
 		{"same struct", &Struct{Fields: []*Field{{Name: "x", Type: int64Type}}}, &Struct{Fields: []*Field{{Name: "x", Type: int64Type}}}, true},
@@ -101,6 +101,7 @@ func TestEqual(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := Equal(tt.a, tt.b)
 			if got != tt.want {
 				t.Errorf("Equal(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)

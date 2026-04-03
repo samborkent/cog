@@ -36,12 +36,15 @@ func (c *Call) stringTo(out *strings.Builder) {
 
 	if len(c.TypeArgs) > 0 {
 		_ = out.WriteByte('<')
+
 		for i, ta := range c.TypeArgs {
 			if i > 0 {
 				_, _ = out.WriteString(", ")
 			}
+
 			_, _ = out.WriteString(ta.String())
 		}
+
 		_ = out.WriteByte('>')
 	}
 
@@ -61,6 +64,7 @@ func (c *Call) stringTo(out *strings.Builder) {
 func (c *Call) String() string {
 	var out strings.Builder
 	c.stringTo(&out)
+
 	return out.String()
 }
 

@@ -12,6 +12,7 @@ func TestParseLiteral(t *testing.T) {
 
 	t.Run("struct", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 Point ~ struct {
 	x : int32
@@ -34,6 +35,7 @@ main : proc() = {
 		f := parse(t, `package p
 arr : [3]int64 = {1, 2, 3}
 main : proc() = {}`)
+
 		d := stmtAs[*ast.Declaration](t, f, 0)
 		if d.Assignment.Identifier.ValueType.Kind() != types.ArrayKind {
 			t.Errorf("expected ArrayKind, got %s", d.Assignment.Identifier.ValueType.Kind())
@@ -45,6 +47,7 @@ main : proc() = {}`)
 		f := parse(t, `package p
 xs : []utf8 = {"foo", "bar"}
 main : proc() = {}`)
+
 		d := stmtAs[*ast.Declaration](t, f, 0)
 		if d.Assignment.Identifier.ValueType.Kind() != types.SliceKind {
 			t.Errorf("expected SliceKind, got %s", d.Assignment.Identifier.ValueType.Kind())
@@ -53,6 +56,7 @@ main : proc() = {}`)
 
 	t.Run("map", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 M ~ map<utf8, int64>
 m : M = {"a": 1, "b": 2}
@@ -93,6 +97,7 @@ func TestParseTypedLiterals(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
 			if len(f.Statements) == 0 {
 				t.Fatal("expected statements")
@@ -116,6 +121,7 @@ func TestParseInferredLiterals(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
 			if len(f.Statements) == 0 {
 				t.Fatal("expected statements")
@@ -152,6 +158,7 @@ func TestParseArithmeticExpressions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
 			if len(f.Statements) == 0 {
 				t.Fatal("expected statements")

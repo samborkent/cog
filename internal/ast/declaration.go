@@ -60,5 +60,6 @@ func (d *Declaration) stringTo(out *strings.Builder) {
 func (d *Declaration) String() string {
 	var out strings.Builder
 	d.stringTo(&out)
+
 	return out.String()
 }

@@ -69,6 +69,7 @@ func SubstituteType(t Type, args map[string]Type) Type {
 		if concrete, ok := args[v.Name]; ok {
 			return concrete
 		}
+
 		return v
 	case *Alias:
 		v.ensureResolved()
@@ -90,11 +91,16 @@ func SubstituteType(t Type, args map[string]Type) Type {
 		for i, elem := range v.Types {
 			types[i] = SubstituteType(elem, args)
 		}
+
 		return &Tuple{Types: types, Exported: v.Exported, Global: v.Global}
 	case *Union:
+		variants := make([]Type, len(v.Variants))
+		for i, variant := range v.Variants {
+			variants[i] = SubstituteType(variant, args)
+		}
+
 		return &Union{
-			Either:   SubstituteType(v.Either, args),
-			Or:       SubstituteType(v.Or, args),
+			Variants: variants,
 			Exported: v.Exported,
 			Global:   v.Global,
 		}
@@ -112,6 +118,7 @@ func SubstituteType(t Type, args map[string]Type) Type {
 				Exported: f.Exported,
 			}
 		}
+
 		return &Struct{Fields: fields}
 	case *Procedure:
 		params := make([]*Parameter, len(v.Parameters))
@@ -123,10 +130,12 @@ func SubstituteType(t Type, args map[string]Type) Type {
 				Default:  p.Default,
 			}
 		}
+
 		var retType Type
 		if v.ReturnType != nil {
 			retType = SubstituteType(v.ReturnType, args)
 		}
+
 		return &Procedure{
 			Function:   v.Function,
 			TypeParams: v.TypeParams,

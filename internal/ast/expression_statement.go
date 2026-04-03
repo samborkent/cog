@@ -30,5 +30,6 @@ func (s *ExpressionStatement) stringTo(out *strings.Builder) {
 func (s *ExpressionStatement) String() string {
 	var out strings.Builder
 	s.stringTo(&out)
+
 	return out.String()
 }

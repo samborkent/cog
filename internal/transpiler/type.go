@@ -336,33 +336,25 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			return nil, errors.New("unable to assert union type")
 		}
 
-		eitherType, err := t.convertType(unionType.Either)
-		if err != nil {
-			return nil, fmt.Errorf("converting union either type: %w", err)
+		if len(unionType.Variants) != 2 {
+			return nil, errors.New("transpiling union types as variables requires exactly 2 variants")
 		}
 
-		orType, err := t.convertType(unionType.Or)
+		leftType, err := t.convertType(unionType.Variants[0])
 		if err != nil {
-			return nil, fmt.Errorf("converting union or type: %w", err)
+			return nil, fmt.Errorf("converting union left type: %w", err)
 		}
 
-		expr = &goast.StructType{
-			Fields: &goast.FieldList{
-				List: []*goast.Field{
-					{
-						Names: []*goast.Ident{{Name: "Either"}},
-						Type:  eitherType,
-					},
-					{
-						Names: []*goast.Ident{{Name: "Or"}},
-						Type:  orType,
-					},
-					{
-						Names: []*goast.Ident{{Name: "Tag"}},
-						Type:  &goast.Ident{Name: "bool"},
-					},
-				},
-			},
+		rightType, err := t.convertType(unionType.Variants[1])
+		if err != nil {
+			return nil, fmt.Errorf("converting union right type: %w", err)
+		}
+
+		t.addCogImport()
+
+		expr = &goast.IndexListExpr{
+			X:       component.Selector(component.IdentName("cog"), "Either"),
+			Indices: []goast.Expr{leftType, rightType},
 		}
 	case types.ResultKind:
 		resultType, ok := typ.(*types.Result)
@@ -405,6 +397,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 	}
 
 	t.typeCache[typ] = expr
+
 	return expr, nil
 }
 
@@ -454,39 +447,43 @@ func (t *Transpiler) convertConstraint(typ types.Type) goast.Expr {
 // single Go constraint expression. A single constraint maps directly; multiple
 // constraints are joined with | into a union interface.
 func (t *Transpiler) convertTypeParamConstraints(tp *types.TypeParam) goast.Expr {
-	// If any individual constraint is 'any', the whole union is 'any'.
-	for _, c := range tp.Constraints {
-		if c.Kind() == types.AnyKind {
-			return component.Any
+	if tp.Constraint == nil || tp.Constraint.Kind() == types.AnyKind {
+		return component.Any
+	}
+
+	if union, ok := tp.Constraint.(*types.Union); ok {
+		for _, c := range union.Variants {
+			if c.Kind() == types.AnyKind {
+				return component.Any
+			}
+		}
+
+		if len(union.Variants) == 1 {
+			return t.convertConstraint(union.Variants[0])
+		}
+
+		var leaves []goast.Expr
+		for _, c := range union.Variants {
+			flattenBinaryOr(t.convertConstraint(c), &leaves)
+		}
+
+		expr := leaves[0]
+		for _, leaf := range leaves[1:] {
+			expr = &goast.BinaryExpr{
+				X:  expr,
+				Op: gotoken.OR,
+				Y:  leaf,
+			}
+		}
+
+		return &goast.InterfaceType{
+			Methods: &goast.FieldList{
+				List: []*goast.Field{{Type: expr}},
+			},
 		}
 	}
 
-	if len(tp.Constraints) == 1 {
-		return t.convertConstraint(tp.Constraints[0])
-	}
-
-	// Multiple constraints: flatten all leaf terms from each constraint's
-	// BinaryExpr tree, then build a single flat | chain. This avoids nested
-	// parentheses that the Go printer would emit for BinaryExpr sub-trees.
-	var leaves []goast.Expr
-	for _, c := range tp.Constraints {
-		flattenBinaryOr(t.convertConstraint(c), &leaves)
-	}
-
-	expr := leaves[0]
-	for _, leaf := range leaves[1:] {
-		expr = &goast.BinaryExpr{
-			X:  expr,
-			Op: gotoken.OR,
-			Y:  leaf,
-		}
-	}
-
-	return &goast.InterfaceType{
-		Methods: &goast.FieldList{
-			List: []*goast.Field{{Type: expr}},
-		},
-	}
+	return t.convertConstraint(tp.Constraint)
 }
 
 // flattenBinaryOr recursively collects the leaf operands of a BinaryExpr tree
@@ -495,8 +492,10 @@ func flattenBinaryOr(e goast.Expr, out *[]goast.Expr) {
 	if bin, ok := e.(*goast.BinaryExpr); ok && bin.Op == gotoken.OR {
 		flattenBinaryOr(bin.X, out)
 		flattenBinaryOr(bin.Y, out)
+
 		return
 	}
+
 	*out = append(*out, e)
 }
 

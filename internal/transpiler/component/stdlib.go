@@ -40,5 +40,6 @@ func TildeUnion(names ...string) goast.Expr {
 			Y:  &goast.UnaryExpr{Op: gotoken.TILDE, X: &goast.Ident{Name: name}},
 		}
 	}
+
 	return expr
 }

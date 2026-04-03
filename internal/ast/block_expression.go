@@ -46,6 +46,7 @@ func (l *ProcedureLiteral) stringTo(out *strings.Builder) {
 func (l *ProcedureLiteral) String() string {
 	var out strings.Builder
 	l.stringTo(&out)
+
 	return out.String()
 }
 

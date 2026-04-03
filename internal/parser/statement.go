@@ -16,6 +16,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			Text:  p.this().Literal,
 		}
 		p.advance("parseStatement comment")
+
 		return node
 	case tokens.Break, tokens.Continue:
 		node := &ast.Branch{
@@ -69,6 +70,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		if p.scriptMode {
 			p.error(p.this(), "export keyword not allowed in script files", "parseStatement")
 			p.advance("parseStatement export script") // consume export
+
 			return nil
 		}
 
@@ -118,6 +120,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			default:
 				p.error(p.this(), "unexpected token following exported identifier", "parseStatement")
 				p.advance("parseStatement export error") // consume unknown token
+
 				return nil
 			}
 		default:
@@ -275,6 +278,12 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		}
 
 		return nil
+	case tokens.Match:
+		if node := p.parseMatch(ctx); node != nil {
+			return node
+		}
+
+		return nil
 	case tokens.Return:
 		node := &ast.Return{
 			Token: p.this(),
@@ -337,6 +346,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 	default:
 		p.error(p.this(), "unknown token", "parseStatement")
 		p.advance("parseStatement unknown") // consume unknown token
+
 		return nil
 	}
 }

@@ -157,6 +157,7 @@ func collectReturnedIdents(body *goast.BlockStmt) map[string]struct{} {
 					if id, ok := n.(*goast.Ident); ok {
 						returned[id.Name] = struct{}{}
 					}
+
 					return true
 				})
 			}

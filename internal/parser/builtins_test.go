@@ -7,6 +7,7 @@ func TestParseBuiltinPrint(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	@print("hello")
@@ -22,6 +23,7 @@ func TestParseBuiltinIf(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := @if(true, 1, 2)
@@ -34,6 +36,7 @@ main : proc() = {
 
 	t.Run("typed_result", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x : int32 = @if(true, 1, 2)
@@ -46,6 +49,7 @@ main : proc() = {
 
 	t.Run("string_result", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := @if(true, "yes", "no")
@@ -62,6 +66,7 @@ func TestParseBuiltinSlice(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	xs := @slice<int64>(3)
@@ -74,6 +79,7 @@ main : proc() = {
 
 	t.Run("valid with capacity", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	xs := @slice<int64>(3, 10)
@@ -86,6 +92,7 @@ main : proc() = {
 
 	t.Run("valid with typed capacity", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	xs := @slice<int64, uint8>(3, 10)
@@ -102,6 +109,7 @@ func TestParseBuiltinMap(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	m := @map<utf8, int64>()
@@ -114,6 +122,7 @@ main : proc() = {
 
 	t.Run("with_capacity", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	m := @map<utf8, int64>(10)
@@ -126,6 +135,7 @@ main : proc() = {
 
 	t.Run("with_typed_capacity", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	m := @map<utf8, int64, uint32>(10)
@@ -142,6 +152,7 @@ func TestParseBuiltinSet(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	s := @set<int64>()
@@ -154,6 +165,7 @@ main : proc() = {
 
 	t.Run("with_capacity", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	s := @set<utf8>(5)
@@ -170,6 +182,7 @@ func TestParseBuiltinCast(t *testing.T) {
 
 	t.Run("int8 to int16", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x : int8 = 1
@@ -183,6 +196,7 @@ main : proc() = {
 
 	t.Run("int32 to float32", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x : int32 = 42
@@ -196,6 +210,7 @@ main : proc() = {
 
 	t.Run("bool to uint8", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := true
@@ -209,6 +224,7 @@ main : proc() = {
 
 	t.Run("float16 to uint32", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x : float16 = 1.5
@@ -222,6 +238,7 @@ main : proc() = {
 
 	t.Run("uint64 to int128", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x : uint64 = 42
@@ -235,6 +252,7 @@ main : proc() = {
 
 	t.Run("with explicit source type", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x : int8 = 1
@@ -248,6 +266,7 @@ main : proc() = {
 
 	t.Run("literal inferred from source type arg", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	y := @cast<int16, int8>(1)
@@ -290,6 +309,7 @@ main : proc() = {
 
 	t.Run("ascii to utf8", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x : ascii = "hello"

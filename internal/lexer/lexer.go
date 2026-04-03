@@ -62,37 +62,44 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 			case tokens.Assign:
 				if s.Peek() == '=' {
 					t.Type = tokens.Equal
+
 					s.Next()
 				}
 			case tokens.Colon:
 				switch s.Peek() {
 				case '=':
 					t.Type = tokens.Declaration
+
 					s.Next()
 				}
 			case tokens.GT:
 				if s.Peek() == '=' {
 					t.Type = tokens.GTEqual
+
 					s.Next()
 				}
 			case tokens.LT:
 				if s.Peek() == '=' {
 					t.Type = tokens.LTEqual
+
 					s.Next()
 				}
 			case tokens.Not:
 				if s.Peek() == '=' {
 					t.Type = tokens.NotEqual
+
 					s.Next()
 				}
 			case tokens.BitAnd:
 				if s.Peek() == '&' {
 					t.Type = tokens.And
+
 					s.Next()
 				}
 			case tokens.Pipe:
 				if s.Peek() == '|' {
 					t.Type = tokens.Or
+
 					s.Next()
 				}
 			case tokens.Builtin:
@@ -106,6 +113,7 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 			}
 
 			toks = append(toks, t)
+
 			continue
 		}
 

@@ -74,12 +74,14 @@ func TestPostProcess(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := string(postProcess([]byte(tt.in)))
 			for _, want := range tt.wantContain {
 				if !strings.Contains(got, want) {
 					t.Errorf("output missing %q\ngot: %q", want, got)
 				}
 			}
+
 			for _, absent := range tt.wantAbsent {
 				if strings.Contains(got, absent) {
 					t.Errorf("output should not contain %q\ngot: %q", absent, got)

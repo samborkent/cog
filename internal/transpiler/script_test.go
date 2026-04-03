@@ -15,29 +15,38 @@ import (
 
 func transpileScript(t *testing.T, src string) string {
 	t.Helper()
+
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lex error: %v", err)
 	}
+
 	p, err := parser.NewScriptParser(toks, false)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
+
 	f, err := p.Parse(t.Context(), "test.cogs")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
+
 	tr := transpiler.NewTranspiler(f)
+
 	gofile, err := tr.TranspileScript()
 	if err != nil {
 		t.Fatalf("transpile error: %v", err)
 	}
+
 	var buf bytes.Buffer
+
 	fset := gotoken.NewFileSet()
 	if err := goprinter.Fprint(&buf, fset, gofile); err != nil {
 		t.Fatalf("printing go ast: %v", err)
 	}
+
 	return buf.String()
 }
 

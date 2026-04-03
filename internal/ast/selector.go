@@ -34,6 +34,7 @@ func (e *Selector) stringTo(out *strings.Builder) {
 func (e *Selector) String() string {
 	var out strings.Builder
 	e.stringTo(&out)
+
 	return out.String()
 }
 

@@ -36,11 +36,13 @@ func (p *Procedure) String() string {
 		for i, tp := range p.TypeParams {
 			_, _ = out.WriteString(tp.Name)
 			_, _ = out.WriteString(" ~ ")
+
 			_, _ = out.WriteString(tp.ConstraintString())
 			if i < len(p.TypeParams)-1 {
 				_, _ = out.WriteString(", ")
 			}
 		}
+
 		_ = out.WriteByte('>')
 	}
 

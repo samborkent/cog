@@ -61,6 +61,7 @@ func (b *Builtin) stringTo(out *strings.Builder) {
 func (b *Builtin) String() string {
 	var out strings.Builder
 	b.stringTo(&out)
+
 	return out.String()
 }
 

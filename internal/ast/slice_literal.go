@@ -44,6 +44,7 @@ func (l *SliceLiteral) stringTo(out *strings.Builder) {
 func (l *SliceLiteral) String() string {
 	var out strings.Builder
 	l.stringTo(&out)
+
 	return out.String()
 }
 

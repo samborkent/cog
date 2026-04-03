@@ -50,6 +50,7 @@ func (p *Parser) parseImport() *ast.Import {
 				ValueType: types.None,
 			}
 			node.Imports = append(node.Imports, ident)
+
 			continue
 		}
 

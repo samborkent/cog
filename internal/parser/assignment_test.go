@@ -7,6 +7,7 @@ func TestParseAssignment(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	var x := 1

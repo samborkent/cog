@@ -35,5 +35,6 @@ func (b *Branch) stringTo(out *strings.Builder) {
 func (b *Branch) String() string {
 	var out strings.Builder
 	b.stringTo(&out)
+
 	return out.String()
 }

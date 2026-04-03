@@ -32,6 +32,7 @@ func (l *Complex128Literal) stringTo(out *strings.Builder) {
 func (l *Complex128Literal) String() string {
 	var out strings.Builder
 	l.stringTo(&out)
+
 	return out.String()
 }
 

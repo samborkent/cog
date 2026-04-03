@@ -45,6 +45,7 @@ func postProcess(data []byte) []byte {
 		// Reconstruct block comments from consecutive marker lines.
 		if bytes.HasPrefix(trimmed, blockMarkerPrefix) {
 			indent := line[:len(line)-len(trimmed)]
+
 			var blockLines [][]byte
 
 			for i < len(lines) {
@@ -52,6 +53,7 @@ func postProcess(data []byte) []byte {
 				if !bytes.HasPrefix(tr, blockMarkerPrefix) {
 					break
 				}
+
 				content := bytes.TrimPrefix(tr, blockMarkerPrefix)
 				blockLines = append(blockLines, content)
 				i++
@@ -59,6 +61,7 @@ func postProcess(data []byte) []byte {
 
 			if len(blockLines) == 1 {
 				var out []byte
+
 				out = append(out, indent...)
 				out = append(out, "/*"...)
 				out = append(out, blockLines[0]...)
@@ -83,6 +86,7 @@ func postProcess(data []byte) []byte {
 				last = append(last, " */"...)
 				result = append(result, last)
 			}
+
 			continue
 		}
 
@@ -90,6 +94,7 @@ func postProcess(data []byte) []byte {
 		if !bytes.Contains(line, placeholderSentinel) {
 			result = append(result, line)
 		}
+
 		i++
 	}
 

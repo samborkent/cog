@@ -32,5 +32,6 @@ func (p *Package) stringTo(out *strings.Builder) {
 func (p *Package) String() string {
 	var out strings.Builder
 	p.stringTo(&out)
+
 	return out.String()
 }

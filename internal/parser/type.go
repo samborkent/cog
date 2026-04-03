@@ -27,6 +27,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 			Exported: exported,
 			Global:   global,
 		}
+
 		return p.parseErrorType(ctx, ident)
 	case tokens.Function, tokens.Procedure:
 		return p.parseProcedureType(ctx, exported, global)
@@ -59,25 +60,17 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 	case tokens.Pipe:
 		// Union
 		union := &types.Union{
-			Either:   typ,
+			Variants: []types.Type{typ},
 			Exported: exported,
 		}
 
-		if p.this().Type != tokens.Pipe {
-			p.error(p.this(), "expected | in union type declaration", "parseCombinedType")
-			return nil
-		}
+		for p.this().Type == tokens.Pipe {
+			p.advance("parseCombinedType union |") // consume |
 
-		p.advance("parseCombinedType union |") // consume |
-
-		next := p.parseType(ctx)
-		if next != nil {
-			union.Or = next
-		}
-
-		if p.this().Type == tokens.Pipe {
-			p.error(p.this(), "union can only contain two types", "parseCombinedType")
-			return nil
+			next := p.parseType(ctx)
+			if next != nil {
+				union.Variants = append(union.Variants, next)
+			}
 		}
 
 		return union
@@ -398,6 +391,7 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 	if len(typeArgs) != len(genAlias.TypeParams) {
 		p.error(p.this(), fmt.Sprintf("wrong number of type arguments for %q: expected %d, got %d",
 			alias.Name, len(genAlias.TypeParams), len(typeArgs)), "instantiateGenericAlias")
+
 		return nil
 	}
 
@@ -407,6 +401,7 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 		if !tp.SatisfiedBy(arg) {
 			p.error(p.this(), fmt.Sprintf("type argument %q does not satisfy constraint %q for parameter %q",
 				arg.String(), tp.ConstraintString(), tp.Name), "instantiateGenericAlias")
+
 			return nil
 		}
 	}
@@ -454,6 +449,7 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 				}
 
 				p.advance("parseStruct export )") // consume )
+
 				continue
 			}
 

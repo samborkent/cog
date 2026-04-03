@@ -15,7 +15,7 @@ type UnionLiteral struct {
 	Token     tokens.Token
 	UnionType types.Type
 	Value     Expression
-	Tag       bool // False: Either, True: Or
+	IsRight   bool
 }
 
 func (e *UnionLiteral) Pos() (uint32, uint16) {
@@ -33,6 +33,7 @@ func (e *UnionLiteral) stringTo(out *strings.Builder) {
 func (e *UnionLiteral) String() string {
 	var out strings.Builder
 	e.stringTo(&out)
+
 	return out.String()
 }
 

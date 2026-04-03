@@ -35,6 +35,7 @@ func (e *Index) stringTo(out *strings.Builder) {
 func (e *Index) String() string {
 	var out strings.Builder
 	e.stringTo(&out)
+
 	return out.String()
 }
 

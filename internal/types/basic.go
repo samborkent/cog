@@ -8,6 +8,7 @@ func IsNone(t Type) bool {
 	}
 
 	n, ok := t.(*Basic)
+
 	return ok && n == None
 }
 

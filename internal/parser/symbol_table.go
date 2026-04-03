@@ -186,6 +186,7 @@ func (s *SymbolTable) ResolveField(typeName, field string) (Symbol, bool) {
 	}
 
 	symbol, ok := fields[field]
+
 	return symbol, ok
 }
 

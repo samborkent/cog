@@ -18,12 +18,14 @@ func makeIdent(name string, vt types.Type) *ast.Identifier {
 
 func TestNewSymbolTable(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	sym, ok := s.Resolve("_")
 	if !ok {
 		t.Fatal("expected blank identifier")
 	}
+
 	if sym.Scope != LocalScope {
 		t.Errorf("blank scope = %v, want LocalScope", sym.Scope)
 	}
@@ -31,6 +33,7 @@ func TestNewSymbolTable(t *testing.T) {
 
 func TestDefineAndResolve(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	ident := makeIdent("x", types.Basics[types.Int64])
@@ -40,9 +43,11 @@ func TestDefineAndResolve(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to resolve x")
 	}
+
 	if sym.Scope != GlobalScope {
 		t.Errorf("scope = %v, want GlobalScope", sym.Scope)
 	}
+
 	if sym.Type().Kind() != types.Int64 {
 		t.Errorf("type = %v, want int64", sym.Type())
 	}
@@ -50,6 +55,7 @@ func TestDefineAndResolve(t *testing.T) {
 
 func TestDefineNilType(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	ident := &ast.Identifier{
@@ -62,6 +68,7 @@ func TestDefineNilType(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to resolve y")
 	}
+
 	if !types.IsNone(sym.Type()) {
 		t.Errorf("expected None type, got %v", sym.Type())
 	}
@@ -69,6 +76,7 @@ func TestDefineNilType(t *testing.T) {
 
 func TestResolveNotFound(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	_, ok := s.Resolve("nonexistent")
@@ -79,6 +87,7 @@ func TestResolveNotFound(t *testing.T) {
 
 func TestEnclosedSymbolTable(t *testing.T) {
 	t.Parallel()
+
 	outer := NewSymbolTable()
 	outer.Define(makeIdent("a", types.Basics[types.UTF8]))
 
@@ -93,6 +102,7 @@ func TestEnclosedSymbolTable(t *testing.T) {
 	if !ok {
 		t.Fatal("expected inner to resolve a from outer")
 	}
+
 	if sym.Type().Kind() != types.UTF8 {
 		t.Errorf("type = %v, want utf8", sym.Type())
 	}
@@ -105,6 +115,7 @@ func TestEnclosedSymbolTable(t *testing.T) {
 
 func TestDefineGlobal(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	ident := makeIdent("g", types.Basics[types.Float64])
@@ -114,6 +125,7 @@ func TestDefineGlobal(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to resolve g")
 	}
+
 	if sym.Scope != ScanScope {
 		t.Errorf("scope = %v, want ScanScope", sym.Scope)
 	}
@@ -121,6 +133,7 @@ func TestDefineGlobal(t *testing.T) {
 
 func TestDefineAndResolveGoImport(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	ident := makeIdent("strings", types.None)
@@ -130,6 +143,7 @@ func TestDefineAndResolveGoImport(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to resolve go import")
 	}
+
 	if got.Name != "strings" {
 		t.Errorf("name = %q, want strings", got.Name)
 	}
@@ -137,6 +151,7 @@ func TestDefineAndResolveGoImport(t *testing.T) {
 
 func TestGoImportSharedInEnclosed(t *testing.T) {
 	t.Parallel()
+
 	outer := NewSymbolTable()
 	outer.DefineGoImport(makeIdent("fmt", types.None))
 
@@ -149,6 +164,7 @@ func TestGoImportSharedInEnclosed(t *testing.T) {
 
 func TestDefineCogImportAndResolve(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	imp := &CogImport{
@@ -162,6 +178,7 @@ func TestDefineCogImportAndResolve(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to resolve cog import")
 	}
+
 	if got.Path != "geom" {
 		t.Errorf("path = %q, want geom", got.Path)
 	}
@@ -169,6 +186,7 @@ func TestDefineCogImportAndResolve(t *testing.T) {
 
 func TestCogImportNotFound(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	_, ok := s.ResolveCogImport("missing")
@@ -179,6 +197,7 @@ func TestCogImportNotFound(t *testing.T) {
 
 func TestCogImports(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	s.DefineCogImport(&CogImport{Path: "a", Name: "a", Exports: make(map[string]Symbol)})
@@ -188,9 +207,11 @@ func TestCogImports(t *testing.T) {
 	if len(imports) != 2 {
 		t.Fatalf("expected 2 imports, got %d", len(imports))
 	}
+
 	if _, ok := imports["a"]; !ok {
 		t.Error("missing import a")
 	}
+
 	if _, ok := imports["c"]; !ok {
 		t.Error("missing import c")
 	}
@@ -198,6 +219,7 @@ func TestCogImports(t *testing.T) {
 
 func TestCogImportSharedInEnclosed(t *testing.T) {
 	t.Parallel()
+
 	outer := NewSymbolTable()
 	outer.DefineCogImport(&CogImport{Path: "pkg", Name: "pkg", Exports: make(map[string]Symbol)})
 
@@ -210,6 +232,7 @@ func TestCogImportSharedInEnclosed(t *testing.T) {
 
 func TestForEachGlobal(t *testing.T) {
 	t.Parallel()
+
 	outer := NewSymbolTable()
 	outer.Define(makeIdent("a", types.Basics[types.Int64]))
 	outer.Define(makeIdent("b", types.Basics[types.UTF8]))
@@ -218,6 +241,7 @@ func TestForEachGlobal(t *testing.T) {
 	inner.Define(makeIdent("c", types.Basics[types.Bool]))
 
 	var names []string
+
 	inner.ForEachGlobal(func(name string, sym Symbol) {
 		if name != "_" {
 			names = append(names, name)
@@ -231,6 +255,7 @@ func TestForEachGlobal(t *testing.T) {
 
 func TestUpdate(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 	s.Define(makeIdent("x", types.Basics[types.Int64]))
 
@@ -240,6 +265,7 @@ func TestUpdate(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to resolve x")
 	}
+
 	if sym.Type().Kind() != types.Float64 {
 		t.Errorf("updated type = %v, want float64", sym.Type())
 	}
@@ -247,6 +273,7 @@ func TestUpdate(t *testing.T) {
 
 func TestUpdateNonexistent(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	// Should not panic when updating a non-existent symbol.
@@ -255,6 +282,7 @@ func TestUpdateNonexistent(t *testing.T) {
 
 func TestResolveField(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	structType := &types.Struct{
@@ -271,9 +299,11 @@ func TestResolveField(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to resolve field x")
 	}
+
 	if sym.Type().Kind() != types.Float64 {
 		t.Errorf("field type = %v, want float64", sym.Type())
 	}
+
 	if sym.Scope != StructScope {
 		t.Errorf("field scope = %v, want StructScope", sym.Scope)
 	}
@@ -281,6 +311,7 @@ func TestResolveField(t *testing.T) {
 
 func TestResolveFieldNotFound(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	_, ok := s.ResolveField("point", "z")
@@ -291,6 +322,7 @@ func TestResolveFieldNotFound(t *testing.T) {
 
 func TestResolveFieldFromOuter(t *testing.T) {
 	t.Parallel()
+
 	outer := NewSymbolTable()
 	structType := &types.Struct{
 		Fields: []*types.Field{
@@ -307,6 +339,7 @@ func TestResolveFieldFromOuter(t *testing.T) {
 	if !ok {
 		t.Fatal("expected enclosed table to resolve field from outer")
 	}
+
 	if sym.Type().Kind() != types.Int64 {
 		t.Errorf("field type = %v, want int64", sym.Type())
 	}
@@ -314,6 +347,7 @@ func TestResolveFieldFromOuter(t *testing.T) {
 
 func TestDefineEnumValue(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	valIdent := makeIdent("Open", types.Basics[types.UTF8])
@@ -323,6 +357,7 @@ func TestDefineEnumValue(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to resolve enum value")
 	}
+
 	if sym.Scope != EnumScope {
 		t.Errorf("scope = %v, want EnumScope", sym.Scope)
 	}
@@ -330,6 +365,7 @@ func TestDefineEnumValue(t *testing.T) {
 
 func TestSymbolType(t *testing.T) {
 	t.Parallel()
+
 	s := NewSymbolTable()
 
 	ident := makeIdent("v", types.Basics[types.Bool])

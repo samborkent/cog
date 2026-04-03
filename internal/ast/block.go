@@ -26,6 +26,7 @@ func (b *Block) Hash() uint64 {
 func (b *Block) String() string {
 	var out strings.Builder
 	b.stringTo(&out)
+
 	return out.String()
 }
 

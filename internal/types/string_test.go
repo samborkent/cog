@@ -46,6 +46,7 @@ func TestKindString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
 			t.Parallel()
+
 			if got := tt.kind.String(); got != tt.want {
 				t.Errorf("Kind(%d).String() = %q, want %q", tt.kind, got, tt.want)
 			}
@@ -59,6 +60,7 @@ func TestBasicString(t *testing.T) {
 	if s := Basics[Int64].String(); s != "int64" {
 		t.Errorf("int64.String() = %q", s)
 	}
+
 	if s := None.String(); s != "" {
 		t.Errorf("None.String() = %q", s)
 	}
@@ -71,9 +73,11 @@ func TestSliceString(t *testing.T) {
 	if got := s.String(); got != "[]int64" {
 		t.Errorf("Slice.String() = %q, want []int64", got)
 	}
+
 	if s.Kind() != SliceKind {
 		t.Error("Slice.Kind() != SliceKind")
 	}
+
 	if s.Underlying() != s {
 		t.Error("Slice.Underlying() != self")
 	}
@@ -86,6 +90,7 @@ func TestArrayString(t *testing.T) {
 	if got := a.String(); got != "[5]utf8" {
 		t.Errorf("Array.String() = %q, want [5]utf8", got)
 	}
+
 	if a.Kind() != ArrayKind {
 		t.Error("Array.Kind() != ArrayKind")
 	}
@@ -98,6 +103,7 @@ func TestMapString(t *testing.T) {
 	if got := m.String(); got != "map[utf8]int64" {
 		t.Errorf("Map.String() = %q, want map[utf8]int64", got)
 	}
+
 	if m.Kind() != MapKind {
 		t.Error("Map.Kind() != MapKind")
 	}
@@ -110,6 +116,7 @@ func TestSetString(t *testing.T) {
 	if got := s.String(); got != "set[ascii]" {
 		t.Errorf("Set.String() = %q, want set[ascii]", got)
 	}
+
 	if s.Kind() != SetKind {
 		t.Error("Set.Kind() != SetKind")
 	}
@@ -122,6 +129,7 @@ func TestOptionString(t *testing.T) {
 	if got := o.String(); got != "utf8?" {
 		t.Errorf("Option.String() = %q, want utf8?", got)
 	}
+
 	if o.Kind() != OptionKind {
 		t.Error("Option.Kind() != OptionKind")
 	}
@@ -134,6 +142,7 @@ func TestPointerString(t *testing.T) {
 	if got := p.String(); got != "&int64" {
 		t.Errorf("Pointer.String() = %q, want &int64", got)
 	}
+
 	if p.Kind() != PointerKind {
 		t.Error("Pointer.Kind() != PointerKind")
 	}
@@ -146,6 +155,7 @@ func TestTupleString(t *testing.T) {
 	if got := tu.String(); got != "utf8 & int64" {
 		t.Errorf("Tuple.String() = %q, want \"utf8 & int64\"", got)
 	}
+
 	if tu.Kind() != TupleKind {
 		t.Error("Tuple.Kind() != TupleKind")
 	}
@@ -158,6 +168,7 @@ func TestTupleIndex(t *testing.T) {
 	if tu.Index(0) != Basics[UTF8] {
 		t.Error("Tuple.Index(0) != utf8")
 	}
+
 	if tu.Index(2) != Basics[Bool] {
 		t.Error("Tuple.Index(2) != bool")
 	}
@@ -179,10 +190,11 @@ func TestTupleStringPanic(t *testing.T) {
 func TestUnionString(t *testing.T) {
 	t.Parallel()
 
-	u := &Union{Either: Basics[UTF8], Or: Basics[Int64]}
+	u := &Union{Variants: []Type{Basics[UTF8], Basics[Int64]}}
 	if got := u.String(); got != "utf8 | int64" {
 		t.Errorf("Union.String() = %q, want \"utf8 | int64\"", got)
 	}
+
 	if u.Kind() != UnionKind {
 		t.Error("Union.Kind() != UnionKind")
 	}
@@ -203,6 +215,7 @@ func TestStructString(t *testing.T) {
 			{Name: "x", Type: Basics[Float64], Exported: true},
 			{Name: "y", Type: Basics[Float64]},
 		}}
+
 		got := s.String()
 		if got != "struct {\nexport x : float64\ny : float64\n}" {
 			t.Errorf("Struct.String() = %q", got)
@@ -221,6 +234,7 @@ func TestStructField(t *testing.T) {
 	if f := s.Field("x"); f == nil || f.Type != Basics[Float64] {
 		t.Error("Struct.Field(x) failed")
 	}
+
 	if f := s.Field("z"); f != nil {
 		t.Error("Struct.Field(z) should be nil")
 	}
@@ -244,6 +258,7 @@ func TestEnumString(t *testing.T) {
 			},
 		}
 		got := e.String()
+
 		want := "enum<utf8> {\nOpen := \"open\",\n}"
 		if got != want {
 			t.Errorf("Enum.String() = %q, want %q", got, want)
@@ -277,6 +292,7 @@ func TestProcedureString(t *testing.T) {
 			},
 			ReturnType: Basics[Bool],
 		}
+
 		want := "func(a : utf8, b : int64) bool"
 		if got := p.String(); got != want {
 			t.Errorf("Procedure.String() = %q, want %q", got, want)
@@ -290,6 +306,7 @@ func TestProcedureString(t *testing.T) {
 				{Name: "x", Type: Basics[UTF8], Optional: true},
 			},
 		}
+
 		want := "func(x? : utf8)"
 		if got := p.String(); got != want {
 			t.Errorf("Procedure.String() = %q, want %q", got, want)
@@ -303,6 +320,7 @@ func TestProcedureString(t *testing.T) {
 				{Name: "x", Type: Basics[UTF8], Optional: true, Default: mockExpr{str: `"hi"`}},
 			},
 		}
+
 		want := `func(x? : utf8 = "hi")`
 		if got := p.String(); got != want {
 			t.Errorf("Procedure.String() = %q, want %q", got, want)
@@ -318,9 +336,11 @@ func TestAliasResolution(t *testing.T) {
 		if a.String() != "MyInt" {
 			t.Errorf("Alias.String() = %q", a.String())
 		}
+
 		if a.Kind() != Int64 {
 			t.Errorf("Alias.Kind() = %v, want Int64", a.Kind())
 		}
+
 		if a.Underlying() != Basics[Int64] {
 			t.Error("Alias.Underlying() != int64")
 		}
@@ -338,6 +358,7 @@ func TestAliasResolution(t *testing.T) {
 		if a.Kind() != Float32 {
 			t.Errorf("forward Alias.Kind() = %v, want Float32", a.Kind())
 		}
+
 		if a.Underlying() != Basics[Float32] {
 			t.Error("forward Alias.Underlying() != float32")
 		}
@@ -345,10 +366,12 @@ func TestAliasResolution(t *testing.T) {
 
 	t.Run("nested alias", func(t *testing.T) {
 		inner := &Alias{Name: "Inner", Derived: Basics[UTF8]}
+
 		outer := &Alias{Name: "Outer", Derived: inner}
 		if outer.Underlying() != Basics[UTF8] {
 			t.Error("nested Alias.Underlying() != utf8")
 		}
+
 		if outer.Kind() != UTF8 {
 			t.Errorf("nested Alias.Kind() = %v", outer.Kind())
 		}
@@ -362,9 +385,11 @@ func TestGeneric(t *testing.T) {
 	if g.Kind() != GenericKind {
 		t.Error("Generic.Kind() != GenericKind")
 	}
+
 	if g.String() != "int" {
 		t.Errorf("Generic.String() = %q", g.String())
 	}
+
 	if g.Underlying() != g {
 		t.Error("Generic.Underlying() != self")
 	}
@@ -377,9 +402,11 @@ func TestIsHelpersThroughAlias(t *testing.T) {
 	if !IsInt(alias) {
 		t.Error("IsInt(alias→int64) = false")
 	}
+
 	if !IsSigned(alias) {
 		t.Error("IsSigned(alias→int64) = false")
 	}
+
 	if !IsNumber(alias) {
 		t.Error("IsNumber(alias→int64) = false")
 	}

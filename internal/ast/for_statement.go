@@ -30,6 +30,7 @@ func (s *ForStatement) Hash() uint64 {
 func (s *ForStatement) String() string {
 	var out strings.Builder
 	s.stringTo(&out)
+
 	return out.String()
 }
 

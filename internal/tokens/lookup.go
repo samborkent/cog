@@ -60,6 +60,7 @@ var Keywords = map[string]Type{
 	Int64.String():      Int64,
 	Int128.String():     Int128,
 	Map.String():        Map,
+	Match.String():      Match,
 	Number.String():     Number,
 	Ordered.String():    Ordered,
 	Package.String():    Package,

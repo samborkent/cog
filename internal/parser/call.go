@@ -101,8 +101,10 @@ func (p *Parser) inferTypeArgs(
 				p.error(p.this(), fmt.Sprintf(
 					"conflicting types for type parameter %q: %s vs %s",
 					tp.Name, existing, argType), "inferTypeArgs")
+
 				return nil, nil
 			}
+
 			continue
 		}
 
@@ -111,6 +113,7 @@ func (p *Parser) inferTypeArgs(
 			p.error(p.this(), fmt.Sprintf(
 				"type %q does not satisfy constraint %q for parameter %q",
 				argType, tp.ConstraintString(), tp.Name), "inferTypeArgs")
+
 			return nil, nil
 		}
 
@@ -124,8 +127,10 @@ func (p *Parser) inferTypeArgs(
 		if !ok {
 			p.error(p.this(), fmt.Sprintf(
 				"cannot infer type parameter %q from arguments", tp.Name), "inferTypeArgs")
+
 			return nil, nil
 		}
+
 		typeArgs[i] = concrete
 	}
 
@@ -149,6 +154,7 @@ func (p *Parser) validateExplicitTypeArgs(
 		p.error(p.this(), fmt.Sprintf(
 			"wrong number of type arguments: expected %d, got %d",
 			len(procType.TypeParams), len(typeArgs)), "validateExplicitTypeArgs")
+
 		return nil
 	}
 
@@ -159,8 +165,10 @@ func (p *Parser) validateExplicitTypeArgs(
 			p.error(p.this(), fmt.Sprintf(
 				"type argument %q does not satisfy constraint %q for parameter %q",
 				typeArgs[i], tp.ConstraintString(), tp.Name), "validateExplicitTypeArgs")
+
 			return nil
 		}
+
 		argMap[tp.Name] = typeArgs[i]
 	}
 
@@ -177,6 +185,7 @@ func (p *Parser) validateExplicitTypeArgs(
 			p.error(p.this(), fmt.Sprintf(
 				"argument type %q does not match parameter type %q (after substitution)",
 				argType, expectedType), "validateExplicitTypeArgs")
+
 			return nil
 		}
 	}

@@ -349,10 +349,21 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				return nil
 			}
 
-			isEither := types.Equal(expr.Type(), unionType.Either)
-			isOr := types.Equal(expr.Type(), unionType.Or)
+			var (
+				matched bool
+				isRight bool
+			)
 
-			if !isEither && !isOr {
+			for i, variant := range unionType.Variants {
+				if types.Equal(expr.Type(), variant) {
+					matched = true
+					isRight = i > 0
+
+					break
+				}
+			}
+
+			if !matched {
 				p.error(p.this(), fmt.Sprintf("expression of type %q not in union type %q", expr.Type().String(), unionType.String()), "primary")
 				return nil
 			}
@@ -361,7 +372,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				Token:     token,
 				UnionType: unionType,
 				Value:     expr,
-				Tag:       isOr,
+				IsRight:   isRight,
 			}
 		}
 	}
@@ -448,6 +459,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			p.error(p.this(), "undefined identifier", "primary")
+
 			return nil
 		}
 
@@ -465,6 +477,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			if len(procType.TypeParams) > 0 {
 				// Generic call with type inference.
 				args := p.parseCallArguments(ctx, procType)
+
 				typeArgs, returnType := p.inferTypeArgs(procType, args)
 				if typeArgs == nil {
 					return nil
@@ -941,6 +954,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			p.advance("primary complex32 }") // consume }
 
 			realLit, realOk := realPart.(*ast.Float16Literal)
+
 			imagLit, imagOk := imagPart.(*ast.Float16Literal)
 			if !realOk || !imagOk {
 				p.error(token, "complex32 literal requires float16 literal values", "primary")
@@ -968,6 +982,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			p.error(p.this(), fmt.Sprintf("unexpected type %q for expression starting with {", typeToken.String()), "primary")
+
 			return nil
 		}
 	default:

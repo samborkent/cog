@@ -56,6 +56,7 @@ tokenLoop:
 			}
 
 			p.advance("findGlobals export") // consume export
+
 			exported = true
 		}
 
@@ -64,9 +65,11 @@ tokenLoop:
 		switch p.this().Type {
 		case tokens.Dynamic:
 			qualifier = ast.QualifierDynamic
+
 			p.advance("findGlobals dyn") // consume dyn
 		case tokens.Variable:
 			qualifier = ast.QualifierVariable
+
 			p.advance("findGlobals var") // consume var
 		}
 
@@ -130,6 +133,7 @@ func (p *Parser) findScriptImports(ctx context.Context) {
 			p.parseImport()
 		case tokens.GoImport:
 			p.advance("findScriptImports goimport") // consume goimport
+
 			if p.this().Type == tokens.LParen {
 				p.skipGrouped(ctx)
 			}
@@ -157,6 +161,7 @@ func (p *Parser) preRegisterTypeNames(ctx context.Context) {
 			}
 
 			p.advance("preRegister export") // consume export
+
 			exported = true
 		}
 
@@ -192,6 +197,7 @@ func (p *Parser) preRegisterTypeNames(ctx context.Context) {
 			p.next().Type == tokens.LT {
 			p.advance("preRegister proc") // consume token
 			p.skipTypeParams(ctx)
+
 			continue
 		}
 
@@ -212,6 +218,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 		// Report redeclare error and advance past the identifier to avoid an infinite loop
 		p.error(p.this(), "cannot redeclare variable", "findGlobalDecl")
 		p.advance("findGlobalDecl redeclare") // consume identifier to make progress
+
 		return
 	}
 
@@ -365,6 +372,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 			if p.this().Type != tokens.Identifier {
 				p.error(p.this(), "expected identifier in enum literal", "findGlobalType")
 				p.advance("findGlobalType enum recovery") // skip bad token
+
 				continue
 			}
 

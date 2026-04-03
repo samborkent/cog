@@ -51,6 +51,7 @@ func (l *MapLiteral) stringTo(out *strings.Builder) {
 func (l *MapLiteral) String() string {
 	var out strings.Builder
 	l.stringTo(&out)
+
 	return out.String()
 }
 

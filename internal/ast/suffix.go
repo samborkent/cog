@@ -34,6 +34,7 @@ func (p *Suffix) stringTo(out *strings.Builder) {
 func (p *Suffix) String() string {
 	var out strings.Builder
 	p.stringTo(&out)
+
 	return out.String()
 }
 

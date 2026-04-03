@@ -10,23 +10,29 @@ import (
 
 func lex(t *testing.T, src string) []tokens.Token {
 	t.Helper()
+
 	l := NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected lex error: %v", err)
 	}
+
 	return toks
 }
 
 func lexOne(t *testing.T, src string) tokens.Token {
 	t.Helper()
+
 	toks := lex(t, src)
 	if len(toks) < 2 {
 		t.Fatalf("expected at least 1 token + EOF, got %d tokens", len(toks))
 	}
+
 	if toks[len(toks)-1].Type != tokens.EOF {
 		t.Fatalf("expected last token to be EOF, got %s", toks[len(toks)-1].Type)
 	}
+
 	return toks[0]
 }
 
@@ -58,6 +64,7 @@ func TestSingleCharTokens(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.src, func(t *testing.T) {
 			t.Parallel()
+
 			tok := lexOne(t, tt.src)
 			if tok.Type != tt.expected {
 				t.Errorf("expected %s, got %s", tt.expected, tok.Type)
@@ -86,6 +93,7 @@ func TestMultiCharTokens(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			tok := lexOne(t, tt.src)
 			if tok.Type != tt.expected {
 				t.Errorf("expected %s, got %s", tt.expected, tok.Type)
@@ -114,6 +122,7 @@ func TestSingleVsMultiCharDisambiguation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			tok := lexOne(t, tt.src)
 			if tok.Type != tt.expected {
 				t.Errorf("expected %s, got %s", tt.expected, tok.Type)
@@ -137,10 +146,12 @@ func TestIntLiteral(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.src, func(t *testing.T) {
 			t.Parallel()
+
 			tok := lexOne(t, tt.src)
 			if tok.Type != tokens.IntLiteral {
 				t.Errorf("expected IntLiteral, got %s", tok.Type)
 			}
+
 			if tok.Literal != tt.literal {
 				t.Errorf("expected literal %q, got %q", tt.literal, tok.Literal)
 			}
@@ -163,10 +174,12 @@ func TestFloatLiteral(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.src, func(t *testing.T) {
 			t.Parallel()
+
 			tok := lexOne(t, tt.src)
 			if tok.Type != tokens.FloatLiteral {
 				t.Errorf("expected FloatLiteral, got %s", tok.Type)
 			}
+
 			if tok.Literal != tt.literal {
 				t.Errorf("expected literal %q, got %q", tt.literal, tok.Literal)
 			}
@@ -181,6 +194,7 @@ func TestStringLiteral(t *testing.T) {
 	if tok.Type != tokens.StringLiteral {
 		t.Errorf("expected StringLiteral, got %s", tok.Type)
 	}
+
 	if tok.Literal != "hello world" {
 		t.Errorf("expected literal %q, got %q", "hello world", tok.Literal)
 	}
@@ -193,6 +207,7 @@ func TestRawStringLiteral(t *testing.T) {
 	if tok.Type != tokens.StringLiteral {
 		t.Errorf("expected StringLiteral, got %s", tok.Type)
 	}
+
 	if tok.Literal != "raw string" {
 		t.Errorf("expected literal %q, got %q", "raw string", tok.Literal)
 	}
@@ -205,6 +220,7 @@ func TestEmptyStringLiteral(t *testing.T) {
 	if tok.Type != tokens.StringLiteral {
 		t.Errorf("expected StringLiteral, got %s", tok.Type)
 	}
+
 	if tok.Literal != "" {
 		t.Errorf("expected empty literal, got %q", tok.Literal)
 	}
@@ -249,6 +265,7 @@ func TestKeywords(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.src, func(t *testing.T) {
 			t.Parallel()
+
 			tok := lexOne(t, tt.src)
 			if tok.Type != tt.expected {
 				t.Errorf("expected %s, got %s", tt.expected, tok.Type)
@@ -288,6 +305,7 @@ func TestTypeKeywords(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.src, func(t *testing.T) {
 			t.Parallel()
+
 			tok := lexOne(t, tt.src)
 			if tok.Type != tt.expected {
 				t.Errorf("expected %s, got %s", tt.expected, tok.Type)
@@ -312,10 +330,12 @@ func TestIdentifier(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.src, func(t *testing.T) {
 			t.Parallel()
+
 			tok := lexOne(t, tt.src)
 			if tok.Type != tokens.Identifier {
 				t.Errorf("expected Identifier, got %s", tok.Type)
 			}
+
 			if tok.Literal != tt.literal {
 				t.Errorf("expected literal %q, got %q", tt.literal, tok.Literal)
 			}
@@ -338,10 +358,12 @@ func TestBuiltinToken(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.src, func(t *testing.T) {
 			t.Parallel()
+
 			tok := lexOne(t, tt.src)
 			if tok.Type != tokens.Builtin {
 				t.Errorf("expected Builtin, got %s", tok.Type)
 			}
+
 			if tok.Literal != tt.literal {
 				t.Errorf("expected literal %q, got %q", tt.literal, tok.Literal)
 			}
@@ -364,16 +386,20 @@ func TestCommentsArePreserved(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			toks := lex(t, tt.src)
 			if len(toks) != 3 {
 				t.Fatalf("expected 3 tokens (comment + int + EOF), got %d: %v", len(toks), toks)
 			}
+
 			if toks[0].Type != tokens.Comment {
 				t.Errorf("expected Comment, got %s", toks[0].Type)
 			}
+
 			if toks[0].Literal != tt.comment {
 				t.Errorf("expected comment literal %q, got %q", tt.comment, toks[0].Literal)
 			}
+
 			if toks[1].Type != tokens.IntLiteral {
 				t.Errorf("expected IntLiteral, got %s", toks[1].Type)
 			}
@@ -388,12 +414,15 @@ func TestInlineComment(t *testing.T) {
 	if len(toks) != 3 {
 		t.Fatalf("expected 3 tokens (int + comment + EOF), got %d: %v", len(toks), toks)
 	}
+
 	if toks[0].Type != tokens.IntLiteral {
 		t.Errorf("expected IntLiteral, got %s", toks[0].Type)
 	}
+
 	if toks[1].Type != tokens.Comment {
 		t.Errorf("expected Comment, got %s", toks[1].Type)
 	}
+
 	if toks[1].Literal != "// trailing" {
 		t.Errorf("expected literal %q, got %q", "// trailing", toks[1].Literal)
 	}
@@ -406,12 +435,15 @@ func TestMultiLineComment(t *testing.T) {
 	if len(toks) != 3 {
 		t.Fatalf("expected 3 tokens (comment + int + EOF), got %d: %v", len(toks), toks)
 	}
+
 	if toks[0].Type != tokens.Comment {
 		t.Errorf("expected Comment, got %s", toks[0].Type)
 	}
+
 	if toks[0].Literal != "/* multi\nline\ncomment */" {
 		t.Errorf("expected multi-line comment literal, got %q", toks[0].Literal)
 	}
+
 	if toks[1].Type != tokens.IntLiteral {
 		t.Errorf("expected IntLiteral, got %s", toks[1].Type)
 	}
@@ -424,6 +456,7 @@ func TestEOFOnlyForEmptyInput(t *testing.T) {
 	if len(toks) != 1 {
 		t.Fatalf("expected 1 token (EOF), got %d", len(toks))
 	}
+
 	if toks[0].Type != tokens.EOF {
 		t.Errorf("expected EOF, got %s", toks[0].Type)
 	}
@@ -436,7 +469,9 @@ func TestEOFPositionMatchesLastToken(t *testing.T) {
 	if len(toks) != 3 {
 		t.Fatalf("expected 3 tokens, got %d", len(toks))
 	}
+
 	lastTok := toks[1]
+
 	eof := toks[2]
 	if eof.Ln != lastTok.Ln || eof.Col != lastTok.Col {
 		t.Errorf("EOF position (%d:%d) should match last token (%d:%d)",
@@ -451,15 +486,19 @@ func TestMultipleTokenSequence(t *testing.T) {
 	if len(toks) != 4 {
 		t.Fatalf("expected 4 tokens, got %d: %v", len(toks), toks)
 	}
+
 	if toks[0].Type != tokens.Identifier || toks[0].Literal != "x" {
 		t.Errorf("token 0: expected Identifier 'x', got %s %q", toks[0].Type, toks[0].Literal)
 	}
+
 	if toks[1].Type != tokens.Declaration {
 		t.Errorf("token 1: expected Declaration, got %s", toks[1].Type)
 	}
+
 	if toks[2].Type != tokens.IntLiteral || toks[2].Literal != "42" {
 		t.Errorf("token 2: expected IntLiteral '42', got %s %q", toks[2].Type, toks[2].Literal)
 	}
+
 	if toks[3].Type != tokens.EOF {
 		t.Errorf("token 3: expected EOF, got %s", toks[3].Type)
 	}
@@ -511,13 +550,16 @@ func TestContextCancellation(t *testing.T) {
 	cancel()
 
 	l := NewLexer(strings.NewReader("x := 42"))
+
 	toks, err := l.Parse(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if len(toks) == 0 {
 		t.Fatal("expected at least EOF token")
 	}
+
 	if toks[len(toks)-1].Type != tokens.EOF {
 		t.Errorf("expected last token to be EOF, got %s", toks[len(toks)-1].Type)
 	}
@@ -530,9 +572,11 @@ func TestLineAndColumnTracking(t *testing.T) {
 	if len(toks) != 3 {
 		t.Fatalf("expected 3 tokens, got %d", len(toks))
 	}
+
 	if toks[0].Ln != 1 || toks[0].Col != 1 {
 		t.Errorf("'x' at (%d:%d), expected (1:1)", toks[0].Ln, toks[0].Col)
 	}
+
 	if toks[1].Ln != 2 || toks[1].Col != 1 {
 		t.Errorf("'y' at (%d:%d), expected (2:1)", toks[1].Ln, toks[1].Col)
 	}
@@ -552,17 +596,20 @@ main : proc() = {
 	if toks[0].Type != tokens.Package {
 		t.Errorf("expected Package, got %s", toks[0].Type)
 	}
+
 	if toks[1].Type != tokens.Identifier || toks[1].Literal != "main" {
 		t.Errorf("expected Identifier 'main', got %s %q", toks[1].Type, toks[1].Literal)
 	}
 
 	var foundPrint bool
+
 	for _, tok := range toks {
 		if tok.Type == tokens.Builtin && tok.Literal == "print" {
 			foundPrint = true
 			break
 		}
 	}
+
 	if !foundPrint {
 		t.Error("expected to find @print builtin token")
 	}

@@ -12,35 +12,45 @@ import (
 
 func parse(t *testing.T, src string) *ast.File {
 	t.Helper()
+
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lex error: %v", err)
 	}
+
 	p, err := parser.NewParser(toks, false)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
+
 	f, err := p.Parse(t.Context(), "test.cog")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
+
 	return f
 }
 
 func parseShouldError(t *testing.T, src string) {
 	t.Helper()
+
 	ctx, cancel := context.WithTimeout(t.Context(), 3e9)
 	defer cancel()
+
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(ctx)
 	if err != nil {
 		return
 	}
+
 	p, err := parser.NewParser(toks, false)
 	if err != nil {
 		return
 	}
+
 	_, err = p.Parse(ctx, "test.cog")
 	if err == nil {
 		t.Fatal("expected parse error, got nil")
@@ -49,12 +59,15 @@ func parseShouldError(t *testing.T, src string) {
 
 func stmtAs[T ast.Statement](t *testing.T, f *ast.File, i int) T {
 	t.Helper()
+
 	if i >= len(f.Statements) {
 		t.Fatalf("expected at least %d statements, got %d", i+1, len(f.Statements))
 	}
+
 	s, ok := f.Statements[i].(T)
 	if !ok {
 		t.Fatalf("statement %d: expected %T, got %T", i, *new(T), f.Statements[i])
 	}
+
 	return s
 }

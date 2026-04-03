@@ -126,17 +126,32 @@ Pragmatic rollout option:
 
 ### 1. Concrete Unions (Either)
 
-Since `Either` variables and generic constraints reduce to the unified `types.Union` representation, they share the same transpilation strategy. `Either` variable types lower to Go `any`.
-
-If `match` is used on an `Either` type, transpile it directly to a Go type switch, identical to generic type parameter behavior.
+Since `Either` variables represent concrete values, they should not incur heap allocations from interface boxing (which `any` causes). 
+We will introduce a runtime struct representation in `types.go`:
 
 ```go
-switch t := x.(type) {
-case MyType:
-case string:
+type Either[L any, R any] struct {
+    Left L
+    Right R
+    IsRight bool
 }
 ```
-*(Note: Because of this, the `?` token on an `Either` type operates via a Go type assertion `_, ok := x.(RightType)` under the hood, rather than a `.Tag` struct field check like Option or Result do).*
+
+When a `types.Union` is used as a variable (which implies exactly two types are specified), it will transpile to the `cog.Either[Left, Right]` type in Go.
+`ast.UnionLiteral` will be updated to hold an `Index` integer that indicates which variant matched during type checking. 
+When transpiling `ast.UnionLiteral`, if `Index == 0`, it emits `cog.Either[Left, Right]{Left: val}`. If `Index == 1`, it emits `cog.Either[Left, Right]{Right: val, IsRight: true}`.
+
+If `match` is used on an `Either` struct type, transpile it directly to a Go `if/else` block based on `IsRight`:
+
+```go
+if !x.IsRight {
+    t := x.Left
+    // case MyType
+} else {
+    t := x.Right
+    // case string
+}
+```
 
 ### 2. Generic Type Parameters
 
@@ -161,8 +176,10 @@ For `~Type` matching, we may need to fallback to runtime reflect checks in the `
 1. Add `Match` token in token enum.
 2. Add `"match"` keyword lookup.
 3. Extend grammar with `match_statement` and type-case clause production.
-4. Refactor `types.Union` in `internal/types/union.go` to hold a slice `Variants []Type`. Update `TypeParam` in `internal/types/type_parameter.go` to replace `Constraints []Type` with `Constraint Type` (which would be a `*types.Union` when multiple types are specified).
-5. Update the type evaluation phase to enforce capability limits on the unified `types.Union` based on usage context (variable declarations vs. generic bounds).
+4. Refactor `types.Union` in `internal/types/union.go` to hold a slice `Variants []Type` (DONE). Update `TypeParam` in `internal/types/type_parameter.go` to replace `Constraints []Type` with `Constraint Type` (DONE).
+5. Update `ast.UnionLiteral` to track `Index int` indicating which variant of the union matched the expression (NEW).
+6. Implement `Either[L any, R any]` in `types.go` (NEW).
+7. Modify the transpiler: `types.UnionKind` variables emit `cog.Either[L, R]`. Type boundaries emit interface unions `interface { L | R }` (NEW).
 
 ### Phase 2: AST
 

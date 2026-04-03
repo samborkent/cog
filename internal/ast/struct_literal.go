@@ -52,6 +52,7 @@ func (e *StructLiteral) stringTo(out *strings.Builder) {
 func (e *StructLiteral) String() string {
 	var out strings.Builder
 	e.stringTo(&out)
+
 	return out.String()
 }
 

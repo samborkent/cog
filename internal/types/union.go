@@ -5,9 +5,9 @@ import (
 )
 
 type Union struct {
-	Either, Or Type
-	Exported   bool
-	Global     bool
+	Variants []Type
+	Exported bool
+	Global   bool
 }
 
 func (t *Union) Kind() Kind {
@@ -17,9 +17,13 @@ func (t *Union) Kind() Kind {
 func (t *Union) String() string {
 	var out strings.Builder
 
-	_, _ = out.WriteString(t.Either.String())
-	_, _ = out.WriteString(" | ")
-	_, _ = out.WriteString(t.Or.String())
+	for i, v := range t.Variants {
+		if i > 0 {
+			out.WriteString(" | ")
+		}
+
+		out.WriteString(v.String())
+	}
 
 	return out.String()
 }

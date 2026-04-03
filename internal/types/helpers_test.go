@@ -19,6 +19,7 @@ func TestIsNone(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			if got := IsNone(tt.typ); got != tt.want {
 				t.Errorf("IsNone(%v) = %v, want %v", tt.typ, got, tt.want)
 			}
@@ -32,6 +33,7 @@ func TestIsBool(t *testing.T) {
 	if !IsBool(Basics[Bool]) {
 		t.Error("IsBool(bool) = false")
 	}
+
 	if IsBool(Basics[Int64]) {
 		t.Error("IsBool(int64) = true")
 	}
@@ -45,6 +47,7 @@ func TestIsComplex(t *testing.T) {
 			t.Errorf("IsComplex(%s) = false", Basics[k])
 		}
 	}
+
 	if IsComplex(Basics[Float64]) {
 		t.Error("IsComplex(float64) = true")
 	}
@@ -58,6 +61,7 @@ func TestIsFloat(t *testing.T) {
 			t.Errorf("IsFloat(%s) = false", Basics[k])
 		}
 	}
+
 	if IsFloat(Basics[Int64]) {
 		t.Error("IsFloat(int64) = true")
 	}
@@ -71,6 +75,7 @@ func TestIsInt(t *testing.T) {
 			t.Errorf("IsInt(%s) = false", Basics[k])
 		}
 	}
+
 	if IsInt(Basics[Uint64]) {
 		t.Error("IsInt(uint64) = true")
 	}
@@ -84,6 +89,7 @@ func TestIsUint(t *testing.T) {
 			t.Errorf("IsUint(%s) = false", Basics[k])
 		}
 	}
+
 	if IsUint(Basics[Int64]) {
 		t.Error("IsUint(int64) = true")
 	}
@@ -95,9 +101,11 @@ func TestIsFixed(t *testing.T) {
 	if !IsFixed(Basics[Int32]) {
 		t.Error("IsFixed(int32) = false")
 	}
+
 	if !IsFixed(Basics[Uint16]) {
 		t.Error("IsFixed(uint16) = false")
 	}
+
 	if IsFixed(Basics[Float64]) {
 		t.Error("IsFixed(float64) = true")
 	}
@@ -109,15 +117,19 @@ func TestIsNumber(t *testing.T) {
 	if !IsNumber(Basics[Int64]) {
 		t.Error("IsNumber(int64) = false")
 	}
+
 	if !IsNumber(Basics[Float32]) {
 		t.Error("IsNumber(float32) = false")
 	}
+
 	if !IsNumber(Basics[Complex64]) {
 		t.Error("IsNumber(complex64) = false")
 	}
+
 	if !IsNumber(Basics[Uint128]) {
 		t.Error("IsNumber(uint128) = false")
 	}
+
 	if IsNumber(Basics[Bool]) {
 		t.Error("IsNumber(bool) = true")
 	}
@@ -129,9 +141,11 @@ func TestIsReal(t *testing.T) {
 	if !IsReal(Basics[Int64]) {
 		t.Error("IsReal(int64) = false")
 	}
+
 	if !IsReal(Basics[Uint32]) {
 		t.Error("IsReal(uint32) = false")
 	}
+
 	if !IsReal(Basics[Float64]) {
 		t.Error("IsReal(float64) = false")
 	}
@@ -139,6 +153,7 @@ func TestIsReal(t *testing.T) {
 	if !IsReal(Basics[Complex64]) {
 		t.Error("IsReal(complex64) = false")
 	}
+
 	if IsReal(Basics[Bool]) {
 		t.Error("IsReal(bool) = true")
 	}
@@ -150,12 +165,15 @@ func TestIsSigned(t *testing.T) {
 	if !IsSigned(Basics[Int64]) {
 		t.Error("IsSigned(int64) = false")
 	}
+
 	if !IsSigned(Basics[Float32]) {
 		t.Error("IsSigned(float32) = false")
 	}
+
 	if !IsSigned(Basics[Complex128]) {
 		t.Error("IsSigned(complex128) = false")
 	}
+
 	if IsSigned(Basics[Uint64]) {
 		t.Error("IsSigned(uint64) = true")
 	}
@@ -167,9 +185,11 @@ func TestIsString(t *testing.T) {
 	if !IsString(Basics[ASCII]) {
 		t.Error("IsString(ascii) = false")
 	}
+
 	if !IsString(Basics[UTF8]) {
 		t.Error("IsString(utf8) = false")
 	}
+
 	if IsString(Basics[Int64]) {
 		t.Error("IsString(int64) = true")
 	}
@@ -181,9 +201,11 @@ func TestIsSummable(t *testing.T) {
 	if !IsSummable(Basics[Int64]) {
 		t.Error("IsSummable(int64) = false")
 	}
+
 	if !IsSummable(Basics[UTF8]) {
 		t.Error("IsSummable(utf8) = false")
 	}
+
 	if IsSummable(Basics[Bool]) {
 		t.Error("IsSummable(bool) = true")
 	}
@@ -195,24 +217,31 @@ func TestIsIterator(t *testing.T) {
 	if !IsIterator(Basics[UTF8]) {
 		t.Error("IsIterator(utf8) = false")
 	}
+
 	if !IsIterator(Basics[ASCII]) {
 		t.Error("IsIterator(ascii) = false")
 	}
+
 	if !IsIterator(&Slice{Element: Basics[Int64]}) {
 		t.Error("IsIterator([]int64) = false")
 	}
+
 	if !IsIterator(&Array{Element: Basics[Int64], Length: mockExpr{str: "3"}}) {
 		t.Error("IsIterator([3]int64) = false")
 	}
+
 	if !IsIterator(&Map{Key: Basics[UTF8], Value: Basics[Int64]}) {
 		t.Error("IsIterator(map) = false")
 	}
+
 	if !IsIterator(&Set{Element: Basics[UTF8]}) {
 		t.Error("IsIterator(set) = false")
 	}
+
 	if !IsIterator(&Enum{ValueType: Basics[UTF8]}) {
 		t.Error("IsIterator(enum) = false")
 	}
+
 	if IsIterator(Basics[Int64]) {
 		t.Error("IsIterator(int64) = true")
 	}
@@ -241,6 +270,7 @@ func TestAssignableTo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			if got := AssignableTo(tt.src, tt.dst); got != tt.want {
 				t.Errorf("AssignableTo(%v, %v) = %v, want %v", tt.src, tt.dst, got, tt.want)
 			}
@@ -254,9 +284,11 @@ func TestAnyType(t *testing.T) {
 	if Any.Kind() != AnyKind {
 		t.Errorf("Any.Kind() = %v, want AnyKind", Any.Kind())
 	}
+
 	if Any.String() != "any" {
 		t.Errorf("Any.String() = %q, want %q", Any.String(), "any")
 	}
+
 	if Any.Underlying() != Any {
 		t.Error("Any.Underlying() != Any")
 	}
@@ -268,9 +300,11 @@ func TestEqualAny(t *testing.T) {
 	if !Equal(Any, Any) {
 		t.Error("Equal(any, any) = false")
 	}
+
 	if Equal(Any, Basics[Int64]) {
 		t.Error("Equal(any, int64) = true")
 	}
+
 	if Equal(Basics[Int64], Any) {
 		t.Error("Equal(int64, any) = true")
 	}
@@ -378,6 +412,7 @@ func TestSatisfies(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			if got := Satisfies(tt.concrete, tt.constraint); got != tt.want {
 				t.Errorf("Satisfies(%v, %v) = %v, want %v", tt.concrete, tt.constraint, got, tt.want)
 			}
@@ -390,13 +425,16 @@ func TestGenericConstraints(t *testing.T) {
 
 	t.Run("signed_exists", func(t *testing.T) {
 		t.Parallel()
+
 		g, ok := Generics["signed"]
 		if !ok {
 			t.Fatal("Generics[\"signed\"] not found")
 		}
+
 		if g.String() != "signed" {
 			t.Errorf("expected name \"signed\", got %q", g.String())
 		}
+
 		if len(g.Constraints) == 0 {
 			t.Error("signed has no constraints")
 		}
@@ -404,13 +442,16 @@ func TestGenericConstraints(t *testing.T) {
 
 	t.Run("number_exists", func(t *testing.T) {
 		t.Parallel()
+
 		g, ok := Generics["number"]
 		if !ok {
 			t.Fatal("Generics[\"number\"] not found")
 		}
+
 		if g.String() != "number" {
 			t.Errorf("expected name \"number\", got %q", g.String())
 		}
+
 		if len(g.Constraints) == 0 {
 			t.Error("number has no constraints")
 		}
@@ -418,6 +459,7 @@ func TestGenericConstraints(t *testing.T) {
 
 	t.Run("number_covers_all_numeric", func(t *testing.T) {
 		t.Parallel()
+
 		numericKinds := []Kind{
 			Int8, Int16, Int32, Int64, Int128,
 			Uint8, Uint16, Uint32, Uint64, Uint128,
@@ -433,10 +475,12 @@ func TestGenericConstraints(t *testing.T) {
 
 	t.Run("ordered_exists", func(t *testing.T) {
 		t.Parallel()
+
 		g, ok := Generics["ordered"]
 		if !ok {
 			t.Fatal(`Generics["ordered"] not found`)
 		}
+
 		if g.String() != "ordered" {
 			t.Errorf("expected name %q, got %q", "ordered", g.String())
 		}
@@ -444,10 +488,12 @@ func TestGenericConstraints(t *testing.T) {
 
 	t.Run("comparable_exists", func(t *testing.T) {
 		t.Parallel()
+
 		g, ok := Generics["comparable"]
 		if !ok {
 			t.Fatal(`Generics["comparable"] not found`)
 		}
+
 		if g.String() != "comparable" {
 			t.Errorf("expected name %q, got %q", "comparable", g.String())
 		}
@@ -455,6 +501,7 @@ func TestGenericConstraints(t *testing.T) {
 
 	t.Run("ordered_excludes_complex", func(t *testing.T) {
 		t.Parallel()
+
 		for _, k := range []Kind{Complex32, Complex64, Complex128} {
 			if Satisfies(Basics[k], Generics["ordered"]) {
 				t.Errorf("%s should not satisfy ordered", Basics[k])
@@ -464,10 +511,12 @@ func TestGenericConstraints(t *testing.T) {
 
 	t.Run("summable_exists", func(t *testing.T) {
 		t.Parallel()
+
 		g, ok := Generics["summable"]
 		if !ok {
 			t.Fatal(`Generics["summable"] not found`)
 		}
+
 		if g.String() != "summable" {
 			t.Errorf("expected name %q, got %q", "summable", g.String())
 		}
@@ -505,6 +554,7 @@ func TestGenericConstraints(t *testing.T) {
 				// comparable by kind; skip basic-type check.
 				continue
 			}
+
 			if !IsBool(member) && !IsNumber(member) && !IsString(member) {
 				t.Errorf("%s is in comparable but does not support ==", member)
 			}
@@ -518,10 +568,12 @@ func TestGenericConstraints(t *testing.T) {
 			StructKind: true, ArrayKind: true, EnumKind: true,
 			PointerKind: true, TupleKind: true, SetKind: true,
 		}
+
 		for _, member := range Generics["comparable"].Constraints {
 			if IsBasic(member) {
 				continue
 			}
+
 			if !comparableKinds[member.Kind()] {
 				t.Errorf("%s (kind %s) is a structural member of comparable but is not a comparable kind", member, member.Kind())
 			}
@@ -559,6 +611,7 @@ func TestGenericConstraints(t *testing.T) {
 			if !Satisfies(Basics[k], Generics["summable"]) {
 				t.Errorf("%s should satisfy summable", Basics[k])
 			}
+
 			if Satisfies(Basics[k], Generics["ordered"]) {
 				t.Errorf("%s should not satisfy ordered", Basics[k])
 			}
@@ -597,13 +650,16 @@ func TestLookupConstraint(t *testing.T) {
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
+
 			typ, ok := LookupConstraint(name)
 			if !ok {
 				t.Fatalf("LookupConstraint(%q) not found", name)
 			}
+
 			if typ == nil {
 				t.Fatalf("LookupConstraint(%q) returned nil", name)
 			}
+
 			if typ.String() != name {
 				t.Errorf("LookupConstraint(%q).String() = %q", name, typ.String())
 			}
@@ -612,6 +668,7 @@ func TestLookupConstraint(t *testing.T) {
 
 	t.Run("unknown", func(t *testing.T) {
 		t.Parallel()
+
 		_, ok := LookupConstraint("nonexistent")
 		if ok {
 			t.Error("LookupConstraint(\"nonexistent\") should return false")
@@ -624,7 +681,8 @@ func TestTypeParam(t *testing.T) {
 
 	t.Run("kind", func(t *testing.T) {
 		t.Parallel()
-		tp := &TypeParam{Name: "T", Constraints: []Type{Any}}
+
+		tp := &TypeParam{Name: "T", Constraint: Any}
 		if tp.Kind() != GenericKind {
 			t.Errorf("TypeParam.Kind() = %v, want GenericKind", tp.Kind())
 		}
@@ -632,7 +690,8 @@ func TestTypeParam(t *testing.T) {
 
 	t.Run("string", func(t *testing.T) {
 		t.Parallel()
-		tp := &TypeParam{Name: "T", Constraints: []Type{Any}}
+
+		tp := &TypeParam{Name: "T", Constraint: Any}
 		if tp.String() != "T" {
 			t.Errorf("TypeParam.String() = %q, want %q", tp.String(), "T")
 		}
@@ -640,7 +699,8 @@ func TestTypeParam(t *testing.T) {
 
 	t.Run("constraint_string_single", func(t *testing.T) {
 		t.Parallel()
-		tp := &TypeParam{Name: "T", Constraints: []Type{Any}}
+
+		tp := &TypeParam{Name: "T", Constraint: Any}
 		if tp.ConstraintString() != "any" {
 			t.Errorf("ConstraintString() = %q, want %q", tp.ConstraintString(), "any")
 		}
@@ -648,10 +708,12 @@ func TestTypeParam(t *testing.T) {
 
 	t.Run("constraint_string_multi", func(t *testing.T) {
 		t.Parallel()
+
 		tp := &TypeParam{
-			Name:        "T",
-			Constraints: []Type{Generics["string"], Generics["int"]},
+			Name:       "T",
+			Constraint: &Union{Variants: []Type{Generics["string"], Generics["int"]}},
 		}
+
 		want := "string | int"
 		if tp.ConstraintString() != want {
 			t.Errorf("ConstraintString() = %q, want %q", tp.ConstraintString(), want)
@@ -660,10 +722,12 @@ func TestTypeParam(t *testing.T) {
 
 	t.Run("satisfied_by_any", func(t *testing.T) {
 		t.Parallel()
-		tp := &TypeParam{Name: "T", Constraints: []Type{Any}}
+
+		tp := &TypeParam{Name: "T", Constraint: Any}
 		if !tp.SatisfiedBy(Basics[Int64]) {
 			t.Error("T ~ any should be satisfied by int64")
 		}
+
 		if !tp.SatisfiedBy(Basics[UTF8]) {
 			t.Error("T ~ any should be satisfied by utf8")
 		}
@@ -671,10 +735,12 @@ func TestTypeParam(t *testing.T) {
 
 	t.Run("satisfied_by_single_constraint", func(t *testing.T) {
 		t.Parallel()
-		tp := &TypeParam{Name: "T", Constraints: []Type{Generics["int"]}}
+
+		tp := &TypeParam{Name: "T", Constraint: Generics["int"]}
 		if !tp.SatisfiedBy(Basics[Int64]) {
 			t.Error("T ~ int should be satisfied by int64")
 		}
+
 		if tp.SatisfiedBy(Basics[UTF8]) {
 			t.Error("T ~ int should not be satisfied by utf8")
 		}
@@ -682,16 +748,19 @@ func TestTypeParam(t *testing.T) {
 
 	t.Run("satisfied_by_multi_constraint_union", func(t *testing.T) {
 		t.Parallel()
+
 		tp := &TypeParam{
-			Name:        "T",
-			Constraints: []Type{Generics["string"], Generics["int"]},
+			Name:       "T",
+			Constraint: &Union{Variants: []Type{Generics["string"], Generics["int"]}},
 		}
 		if !tp.SatisfiedBy(Basics[Int64]) {
 			t.Error("T ~ string | int should be satisfied by int64")
 		}
+
 		if !tp.SatisfiedBy(Basics[UTF8]) {
 			t.Error("T ~ string | int should be satisfied by utf8")
 		}
+
 		if tp.SatisfiedBy(Basics[Float64]) {
 			t.Error("T ~ string | int should not be satisfied by float64")
 		}
@@ -699,7 +768,8 @@ func TestTypeParam(t *testing.T) {
 
 	t.Run("underlying", func(t *testing.T) {
 		t.Parallel()
-		tp := &TypeParam{Name: "T", Constraints: []Type{Any}}
+
+		tp := &TypeParam{Name: "T", Constraint: Any}
 		if tp.Underlying() != tp {
 			t.Error("TypeParam.Underlying() should return itself")
 		}
@@ -739,6 +809,7 @@ func TestSize(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.kind.String(), func(t *testing.T) {
 			t.Parallel()
+
 			if got := Size(tt.kind); got != tt.want {
 				t.Errorf("Size(%s) = %d, want %d", tt.kind, got, tt.want)
 			}
@@ -751,6 +822,7 @@ func TestErrorType(t *testing.T) {
 
 	t.Run("kind", func(t *testing.T) {
 		t.Parallel()
+
 		e := &Error{}
 		if e.Kind() != ErrorKind {
 			t.Errorf("Error.Kind() = %v, want ErrorKind", e.Kind())
@@ -759,7 +831,9 @@ func TestErrorType(t *testing.T) {
 
 	t.Run("string_typed", func(t *testing.T) {
 		t.Parallel()
+
 		e := &Error{ValueType: Basics[UTF8]}
+
 		got := e.String()
 		if got != "error<utf8> {}" {
 			t.Errorf("Error.String() = %q", got)
@@ -768,7 +842,9 @@ func TestErrorType(t *testing.T) {
 
 	t.Run("string_untyped", func(t *testing.T) {
 		t.Parallel()
+
 		e := &Error{}
+
 		got := e.String()
 		if got != "error {}" {
 			t.Errorf("Error.String() = %q", got)
@@ -777,6 +853,7 @@ func TestErrorType(t *testing.T) {
 
 	t.Run("underlying", func(t *testing.T) {
 		t.Parallel()
+
 		e := &Error{}
 		if e.Underlying() != e {
 			t.Error("Error.Underlying() should return itself")
@@ -791,6 +868,7 @@ func TestResultType(t *testing.T) {
 
 	t.Run("kind", func(t *testing.T) {
 		t.Parallel()
+
 		if r.Kind() != ResultKind {
 			t.Errorf("Result.Kind() = %v, want ResultKind", r.Kind())
 		}
@@ -798,6 +876,7 @@ func TestResultType(t *testing.T) {
 
 	t.Run("string", func(t *testing.T) {
 		t.Parallel()
+
 		got := r.String()
 		if got != "int64 ! error {}" {
 			t.Errorf("Result.String() = %q", got)
@@ -806,6 +885,7 @@ func TestResultType(t *testing.T) {
 
 	t.Run("underlying", func(t *testing.T) {
 		t.Parallel()
+
 		if r.Underlying() != r {
 			t.Error("Result.Underlying() should return itself")
 		}
@@ -826,10 +906,11 @@ func TestProcedureStringWithTypeParams(t *testing.T) {
 
 	t.Run("single_constraint", func(t *testing.T) {
 		t.Parallel()
+
 		p := &Procedure{
 			Function: true,
 			TypeParams: []*TypeParam{
-				{Name: "T", Constraints: []Type{Any}},
+				{Name: "T", Constraint: Any},
 			},
 			Parameters: []*Parameter{
 				{Name: "x", Type: Basics[Int64]},
@@ -837,6 +918,7 @@ func TestProcedureStringWithTypeParams(t *testing.T) {
 			ReturnType: Basics[Int64],
 		}
 		got := p.String()
+
 		want := "func<T ~ any>(x : int64) int64"
 		if got != want {
 			t.Errorf("Procedure.String() = %q, want %q", got, want)
@@ -845,14 +927,16 @@ func TestProcedureStringWithTypeParams(t *testing.T) {
 
 	t.Run("multi_constraint", func(t *testing.T) {
 		t.Parallel()
+
 		p := &Procedure{
 			Function: true,
 			TypeParams: []*TypeParam{
-				{Name: "T", Constraints: []Type{Generics["string"], Generics["int"]}},
+				{Name: "T", Constraint: &Union{Variants: []Type{Generics["string"], Generics["int"]}}},
 			},
 			Parameters: []*Parameter{},
 		}
 		got := p.String()
+
 		want := "func<T ~ string | int>()"
 		if got != want {
 			t.Errorf("Procedure.String() = %q, want %q", got, want)
@@ -861,14 +945,16 @@ func TestProcedureStringWithTypeParams(t *testing.T) {
 
 	t.Run("multiple_type_params", func(t *testing.T) {
 		t.Parallel()
+
 		p := &Procedure{
 			TypeParams: []*TypeParam{
-				{Name: "K", Constraints: []Type{Generics["comparable"]}},
-				{Name: "V", Constraints: []Type{Any}},
+				{Name: "K", Constraint: Generics["comparable"]},
+				{Name: "V", Constraint: Any},
 			},
 			Parameters: []*Parameter{},
 		}
 		got := p.String()
+
 		want := "proc<K ~ comparable, V ~ any>()"
 		if got != want {
 			t.Errorf("Procedure.String() = %q, want %q", got, want)
@@ -881,16 +967,19 @@ func TestInstantiate(t *testing.T) {
 
 	t.Run("slice_of_T", func(t *testing.T) {
 		t.Parallel()
+
 		a := &Alias{
 			Name:       "List",
-			Derived:    &Slice{Element: &TypeParam{Name: "T", Constraints: []Type{Any}}},
-			TypeParams: []*TypeParam{{Name: "T", Constraints: []Type{Any}}},
+			Derived:    &Slice{Element: &TypeParam{Name: "T", Constraint: Any}},
+			TypeParams: []*TypeParam{{Name: "T", Constraint: Any}},
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Int32]})
+
 		s, ok := result.(*Slice)
 		if !ok {
 			t.Fatalf("expected *Slice, got %T", result)
 		}
+
 		if s.Element.Kind() != Int32 {
 			t.Errorf("expected element Int32, got %s", s.Element.Kind())
 		}
@@ -898,25 +987,29 @@ func TestInstantiate(t *testing.T) {
 
 	t.Run("map_K_V", func(t *testing.T) {
 		t.Parallel()
+
 		a := &Alias{
 			Name: "Dict",
 			Derived: &Map{
-				Key:   &TypeParam{Name: "K", Constraints: []Type{Any}},
-				Value: &TypeParam{Name: "V", Constraints: []Type{Any}},
+				Key:   &TypeParam{Name: "K", Constraint: Any},
+				Value: &TypeParam{Name: "V", Constraint: Any},
 			},
 			TypeParams: []*TypeParam{
-				{Name: "K", Constraints: []Type{Any}},
-				{Name: "V", Constraints: []Type{Any}},
+				{Name: "K", Constraint: Any},
+				{Name: "V", Constraint: Any},
 			},
 		}
 		result := a.Instantiate(map[string]Type{"K": Basics[UTF8], "V": Basics[Int64]})
+
 		m, ok := result.(*Map)
 		if !ok {
 			t.Fatalf("expected *Map, got %T", result)
 		}
+
 		if m.Key.Kind() != UTF8 {
 			t.Errorf("expected key UTF8, got %s", m.Key.Kind())
 		}
+
 		if m.Value.Kind() != Int64 {
 			t.Errorf("expected value Int64, got %s", m.Value.Kind())
 		}
@@ -924,30 +1017,35 @@ func TestInstantiate(t *testing.T) {
 
 	t.Run("tuple", func(t *testing.T) {
 		t.Parallel()
+
 		a := &Alias{
 			Name: "Pair",
 			Derived: &Tuple{
 				Types: []Type{
-					&TypeParam{Name: "A", Constraints: []Type{Any}},
-					&TypeParam{Name: "B", Constraints: []Type{Any}},
+					&TypeParam{Name: "A", Constraint: Any},
+					&TypeParam{Name: "B", Constraint: Any},
 				},
 			},
 			TypeParams: []*TypeParam{
-				{Name: "A", Constraints: []Type{Any}},
-				{Name: "B", Constraints: []Type{Any}},
+				{Name: "A", Constraint: Any},
+				{Name: "B", Constraint: Any},
 			},
 		}
 		result := a.Instantiate(map[string]Type{"A": Basics[Int32], "B": Basics[UTF8]})
+
 		tup, ok := result.(*Tuple)
 		if !ok {
 			t.Fatalf("expected *Tuple, got %T", result)
 		}
+
 		if len(tup.Types) != 2 {
 			t.Fatalf("expected 2 types, got %d", len(tup.Types))
 		}
+
 		if tup.Types[0].Kind() != Int32 {
 			t.Errorf("expected first type Int32, got %s", tup.Types[0].Kind())
 		}
+
 		if tup.Types[1].Kind() != UTF8 {
 			t.Errorf("expected second type UTF8, got %s", tup.Types[1].Kind())
 		}
@@ -955,16 +1053,19 @@ func TestInstantiate(t *testing.T) {
 
 	t.Run("option", func(t *testing.T) {
 		t.Parallel()
+
 		a := &Alias{
 			Name:       "Maybe",
-			Derived:    &Option{Value: &TypeParam{Name: "T", Constraints: []Type{Any}}},
-			TypeParams: []*TypeParam{{Name: "T", Constraints: []Type{Any}}},
+			Derived:    &Option{Value: &TypeParam{Name: "T", Constraint: Any}},
+			TypeParams: []*TypeParam{{Name: "T", Constraint: Any}},
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Float64]})
+
 		opt, ok := result.(*Option)
 		if !ok {
 			t.Fatalf("expected *Option, got %T", result)
 		}
+
 		if opt.Value.Kind() != Float64 {
 			t.Errorf("expected Float64, got %s", opt.Value.Kind())
 		}
@@ -972,11 +1073,13 @@ func TestInstantiate(t *testing.T) {
 
 	t.Run("basic_passthrough", func(t *testing.T) {
 		t.Parallel()
+
 		a := &Alias{
 			Name:       "MyInt",
 			Derived:    Basics[Int32],
-			TypeParams: []*TypeParam{{Name: "T", Constraints: []Type{Any}}},
+			TypeParams: []*TypeParam{{Name: "T", Constraint: Any}},
 		}
+
 		result := a.Instantiate(map[string]Type{"T": Basics[UTF8]})
 		if result.Kind() != Int32 {
 			t.Errorf("expected Int32 passthrough, got %s", result.Kind())
@@ -985,26 +1088,30 @@ func TestInstantiate(t *testing.T) {
 
 	t.Run("substitute_procedure", func(t *testing.T) {
 		t.Parallel()
+
 		proc := &Procedure{
 			Function: true,
 			Parameters: []*Parameter{
-				{Name: "x", Type: &TypeParam{Name: "T", Constraints: []Type{Any}}},
+				{Name: "x", Type: &TypeParam{Name: "T", Constraint: Any}},
 			},
-			ReturnType: &TypeParam{Name: "T", Constraints: []Type{Any}},
+			ReturnType: &TypeParam{Name: "T", Constraint: Any},
 		}
 		a := &Alias{
 			Name:       "MyFunc",
 			Derived:    proc,
-			TypeParams: []*TypeParam{{Name: "T", Constraints: []Type{Any}}},
+			TypeParams: []*TypeParam{{Name: "T", Constraint: Any}},
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Int64]})
+
 		rp, ok := result.(*Procedure)
 		if !ok {
 			t.Fatalf("expected *Procedure, got %T", result)
 		}
+
 		if !Equal(rp.Parameters[0].Type, Basics[Int64]) {
 			t.Errorf("expected parameter type int64, got %s", rp.Parameters[0].Type)
 		}
+
 		if !Equal(rp.ReturnType, Basics[Int64]) {
 			t.Errorf("expected return type int64, got %s", rp.ReturnType)
 		}
@@ -1019,6 +1126,7 @@ func TestTupleIndexBounds(t *testing.T) {
 	if tup.Index(0).Kind() != Int64 {
 		t.Errorf("Index(0) = %s, want int64", tup.Index(0))
 	}
+
 	if tup.Index(1).Kind() != UTF8 {
 		t.Errorf("Index(1) = %s, want utf8", tup.Index(1))
 	}
@@ -1030,6 +1138,7 @@ func TestTupleIndexBounds(t *testing.T) {
 				t.Error("expected panic for negative index")
 			}
 		}()
+
 		tup.Index(-1)
 	})
 
@@ -1040,6 +1149,7 @@ func TestTupleIndexBounds(t *testing.T) {
 				t.Error("expected panic for index == len")
 			}
 		}()
+
 		tup.Index(2)
 	})
 }
@@ -1047,17 +1157,19 @@ func TestTupleIndexBounds(t *testing.T) {
 func TestTypeParamEquality(t *testing.T) {
 	t.Parallel()
 
-	tp1 := &TypeParam{Name: "T", Constraints: []Type{Generics["int"]}}
-	tp2 := &TypeParam{Name: "T", Constraints: []Type{Generics["int"]}}
-	tp3 := &TypeParam{Name: "U", Constraints: []Type{Generics["int"]}}
-	tp4 := &TypeParam{Name: "T", Constraints: []Type{Generics["uint"]}}
+	tp1 := &TypeParam{Name: "T", Constraint: Generics["int"]}
+	tp2 := &TypeParam{Name: "T", Constraint: Generics["int"]}
+	tp3 := &TypeParam{Name: "U", Constraint: Generics["int"]}
+	tp4 := &TypeParam{Name: "T", Constraint: Generics["uint"]}
 
 	if !Equal(tp1, tp2) {
 		t.Error("same name, same constraints should be equal")
 	}
+
 	if Equal(tp1, tp3) {
 		t.Error("different name should not be equal")
 	}
+
 	if Equal(tp1, tp4) {
 		t.Error("different constraints should not be equal")
 	}
@@ -1090,6 +1202,7 @@ func TestIsComparable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			if got := IsComparable(tt.typ); got != tt.want {
 				t.Errorf("IsComparable(%v) = %v, want %v", tt.typ, got, tt.want)
 			}

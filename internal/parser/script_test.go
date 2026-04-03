@@ -11,19 +11,24 @@ import (
 
 func parseScript(t *testing.T, src string) {
 	t.Helper()
+
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lex error: %v", err)
 	}
+
 	p, err := parser.NewScriptParser(toks, false)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
+
 	f, err := p.Parse(t.Context(), "test.cogs")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}
+
 	if f.Package == nil || f.Package.Identifier.Name != "main" {
 		t.Fatal("expected synthesized package main")
 	}
@@ -31,17 +36,22 @@ func parseScript(t *testing.T, src string) {
 
 func parseScriptShouldError(t *testing.T, src string) {
 	t.Helper()
+
 	ctx, cancel := context.WithTimeout(t.Context(), 3e9)
 	defer cancel()
+
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(ctx)
 	if err != nil {
 		return
 	}
+
 	p, err := parser.NewScriptParser(toks, false)
 	if err != nil {
 		return
 	}
+
 	_, err = p.Parse(ctx, "test.cogs")
 	if err == nil {
 		t.Fatal("expected parse error, got nil")

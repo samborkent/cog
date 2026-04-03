@@ -171,6 +171,7 @@ func (e *Infix) stringTo(out *strings.Builder) {
 func (e *Infix) String() string {
 	var out strings.Builder
 	e.stringTo(&out)
+
 	return out.String()
 }
 

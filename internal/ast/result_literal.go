@@ -33,6 +33,7 @@ func (e *ResultLiteral) stringTo(out *strings.Builder) {
 func (e *ResultLiteral) String() string {
 	var out strings.Builder
 	e.stringTo(&out)
+
 	return out.String()
 }
 

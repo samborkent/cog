@@ -33,6 +33,7 @@ script_only_statement
     | "var", script_only_statement
     | for_statement
     | if_statement
+    | match_statement
     | switch_statement
     | "return", [ expression, { ",", expression } ]
     | builtin_statement
@@ -59,6 +60,7 @@ statement
     | "var", statement
     | for_statement
     | if_statement
+    | match_statement
     | switch_statement
     | "return", [ expression, { ",", expression } ]
     | builtin_statement
@@ -80,7 +82,7 @@ identifier_statement
                   | [ type_arguments ], "(", call_arguments, ")" );(* call, possibly with explicit type args *)
 
 labeled_statement
-    = for_statement | if_statement | switch_statement;
+    = for_statement | if_statement | match_statement | switch_statement;
 
 
 (* === Declarations === *)
@@ -96,6 +98,15 @@ declaration
 
 if_statement
     = "if", expression, block, [ "else", block ];
+
+
+(* === Match Statement === *)
+
+match_statement
+    = "match", [ IDENTIFIER, ":=" ], expression, "{", { match_case_clause }, [ default_clause ], "}";
+
+match_case_clause
+    = "case", [ "~" ], type, ":", { statement };
 
 
 (* === Switch Statement === *)

@@ -7,6 +7,7 @@ func TestParseBoolSwitch(t *testing.T) {
 
 	t.Run("with_default", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	switch {
@@ -27,6 +28,7 @@ func TestParseIdentSwitch(t *testing.T) {
 
 	t.Run("with_default", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 1

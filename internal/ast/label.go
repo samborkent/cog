@@ -26,6 +26,7 @@ func (s *Label) Hash() uint64 {
 func (s *Label) String() string {
 	var out strings.Builder
 	s.stringTo(&out)
+
 	return out.String()
 }
 

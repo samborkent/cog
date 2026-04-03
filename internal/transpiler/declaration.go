@@ -16,10 +16,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	switch n := node.(type) {
 	case *ast.Comment:
 		text := n.Text
+
 		commentLn, _ := n.Pos()
 		if commentLn != t.lastSourceLine {
 			text = "\n" + text
 		}
+
 		return t.commentDecl(text), nil
 	case *ast.Declaration:
 		if n.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
@@ -175,7 +177,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			}
 
 			t.injectArena(funcDecl.Body)
-			
+
 			// Return function declaration for procedures
 			return []goast.Decl{funcDecl}, nil
 		}
@@ -194,8 +196,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 			compositeLiteral.Type = &goast.Ident{Name: litName}
 		}
-
-
 
 		valueSpec := &goast.ValueSpec{
 			Names:  []*goast.Ident{ident},
@@ -261,8 +261,10 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 }
 
 func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
-	var valueType types.Type
-	var values []*types.EnumValue
+	var (
+		valueType types.Type
+		values    []*types.EnumValue
+	)
 
 	switch a := n.Alias.(type) {
 	case *types.Enum:
@@ -274,6 +276,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		} else {
 			valueType = types.Basics[types.UTF8]
 		}
+
 		values = a.Values
 	default:
 		return nil, fmt.Errorf("cannot convert type %q to enum", n.Alias)

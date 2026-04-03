@@ -88,5 +88,6 @@ func (s *SymbolTable) ResolveDynamic(name string) (*ast.Identifier, bool) {
 	}
 
 	ident, ok := s.dynamics[name]
+
 	return ident, ok
 }

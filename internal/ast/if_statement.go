@@ -46,5 +46,6 @@ func (s *IfStatement) stringTo(out *strings.Builder) {
 func (s *IfStatement) String() string {
 	var out strings.Builder
 	s.stringTo(&out)
+
 	return out.String()
 }

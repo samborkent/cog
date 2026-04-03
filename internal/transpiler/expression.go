@@ -74,6 +74,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 					// Add zero value of parameter type.
 					args = append(args, component.ZeroValue(argType))
+
 					continue
 				}
 
@@ -110,6 +111,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				if err != nil {
 					return nil, fmt.Errorf("converting type argument %d: %w", i, err)
 				}
+
 				indices[i] = converted
 			}
 
@@ -195,6 +197,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 
 			t.usesDyn = true
+
 			return component.DynRead(name), nil
 		}
 
@@ -651,6 +654,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		// Track whether we're inside a func and reset usesDyn for this body.
 		prevInFunc := t.inFunc
 		prevUsesDyn := t.usesDyn
+
 		t.usesDyn = false
 		if procType, ok := n.ProcedureType.(*types.Procedure); ok {
 			t.inFunc = procType.Function
@@ -957,37 +961,31 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Args: []goast.Expr{component.UTF8Lit(n.Value.String())},
 		}, nil
 	case *ast.UnionLiteral:
-		unionType, ok := n.UnionType.Underlying().(*types.Union)
-		if !ok {
-			return nil, fmt.Errorf("unable to assert union type")
-		}
-
 		expr, err := t.convertExpr(n.Value)
 		if err != nil {
 			return nil, fmt.Errorf("converting union literal value: %w", err)
 		}
 
-		if n.Tag {
-			return &goast.CompositeLit{
-				Type: &goast.Ident{Name: component.ConvertExport(unionType.String(), unionType.Exported, unionType.Global)},
-				Elts: []goast.Expr{
-					&goast.KeyValueExpr{
-						Key:   &goast.Ident{Name: "Or"},
-						Value: expr,
-					},
-					&goast.KeyValueExpr{
-						Key:   &goast.Ident{Name: "Tag"},
-						Value: &goast.Ident{Name: "true"},
-					},
-				},
-			}, nil
+		goType, err := t.convertType(n.UnionType)
+		if err != nil {
+			return nil, fmt.Errorf("converting union literal type: %w", err)
+		}
+
+		var eltExpr goast.Expr
+		if n.IsRight {
+			eltExpr = component.KeyValue(component.IdentName("Right"), expr)
+		} else {
+			eltExpr = component.KeyValue(component.IdentName("Left"), expr)
+		}
+
+		kvs := []goast.Expr{eltExpr}
+		if n.IsRight {
+			kvs = append(kvs, component.KeyValue(component.IdentName("IsRight"), component.IdentName("true")))
 		}
 
 		return &goast.CompositeLit{
-			Elts: []goast.Expr{&goast.KeyValueExpr{
-				Key:   &goast.Ident{Name: "Either"},
-				Value: expr,
-			}},
+			Type: goType,
+			Elts: kvs,
 		}, nil
 	case *ast.ResultLiteral:
 		_, ok := n.ResultType.Underlying().(*types.Result)

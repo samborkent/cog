@@ -38,5 +38,6 @@ func (r *Return) stringTo(out *strings.Builder) {
 func (r *Return) String() string {
 	var out strings.Builder
 	r.stringTo(&out)
+
 	return out.String()
 }

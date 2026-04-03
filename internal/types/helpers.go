@@ -13,6 +13,7 @@ func AssignableTo(src, dst Type) bool {
 	if opt, ok := dst.(*Option); ok {
 		return Equal(src, opt.Value)
 	}
+
 	if a, ok := dst.(*Alias); ok {
 		if opt, ok := a.Underlying().(*Option); ok {
 			return Equal(src, opt.Value)
@@ -23,6 +24,7 @@ func AssignableTo(src, dst Type) bool {
 	if r, ok := dst.(*Result); ok {
 		return Equal(src, r.Value) || Equal(src, r.Error)
 	}
+
 	if a, ok := dst.(*Alias); ok {
 		if r, ok := a.Underlying().(*Result); ok {
 			return Equal(src, r.Value) || Equal(src, r.Error)
@@ -42,6 +44,7 @@ func Equal(a, b Type) bool {
 	if !aIsOpt {
 		ao, aIsOpt = a.Underlying().(*Option)
 	}
+
 	if !bIsOpt {
 		bo, bIsOpt = b.Underlying().(*Option)
 	}
@@ -49,6 +52,7 @@ func Equal(a, b Type) bool {
 	if aIsOpt != bIsOpt {
 		return false
 	}
+
 	if aIsOpt {
 		return Equal(ao.Value, bo.Value)
 	}
@@ -72,6 +76,7 @@ func Equal(a, b Type) bool {
 		if at.Length.String() != bt.Length.String() {
 			return false
 		}
+
 		return Equal(at.Element, bt.Element)
 	case *Map:
 		bt := bu.(*Map)
@@ -87,15 +92,27 @@ func Equal(a, b Type) bool {
 		if len(at.Types) != len(bt.Types) {
 			return false
 		}
+
 		for i := range at.Types {
 			if !Equal(at.Types[i], bt.Types[i]) {
 				return false
 			}
 		}
+
 		return true
 	case *Union:
 		bt := bu.(*Union)
-		return Equal(at.Either, bt.Either) && Equal(at.Or, bt.Or)
+		if len(at.Variants) != len(bt.Variants) {
+			return false
+		}
+
+		for i := range at.Variants {
+			if !Equal(at.Variants[i], bt.Variants[i]) {
+				return false
+			}
+		}
+
+		return true
 	case *Result:
 		bt := bu.(*Result)
 		return Equal(at.Value, bt.Value) && Equal(at.Error, bt.Error)
@@ -104,14 +121,17 @@ func Equal(a, b Type) bool {
 		if len(at.Fields) != len(bt.Fields) {
 			return false
 		}
+
 		for i := range at.Fields {
 			if at.Fields[i].Name != bt.Fields[i].Name {
 				return false
 			}
+
 			if !Equal(at.Fields[i].Type, bt.Fields[i].Type) {
 				return false
 			}
 		}
+
 		return true
 	case *Enum:
 		bt := bu.(*Enum)
@@ -121,9 +141,11 @@ func Equal(a, b Type) bool {
 		if at.Function != bt.Function {
 			return false
 		}
+
 		if len(at.Parameters) != len(bt.Parameters) {
 			return false
 		}
+
 		for i := range at.Parameters {
 			if !Equal(at.Parameters[i].Type, bt.Parameters[i].Type) {
 				return false
@@ -133,24 +155,19 @@ func Equal(a, b Type) bool {
 		if (at.ReturnType == nil) != (bt.ReturnType == nil) {
 			return false
 		}
+
 		if at.ReturnType != nil && !Equal(at.ReturnType, bt.ReturnType) {
 			return false
 		}
+
 		return true
 	case *TypeParam:
 		bt := bu.(*TypeParam)
 		if at.Name != bt.Name {
 			return false
 		}
-		if len(at.Constraints) != len(bt.Constraints) {
-			return false
-		}
-		for i := range at.Constraints {
-			if !Equal(at.Constraints[i], bt.Constraints[i]) {
-				return false
-			}
-		}
-		return true
+
+		return Equal(at.Constraint, bt.Constraint)
 	case *Generic:
 		bt := bu.(*Generic)
 		return at.name == bt.name
@@ -198,9 +215,11 @@ func Satisfies(concrete, constraint Type) bool {
 						continue
 					}
 				}
+
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -243,6 +262,7 @@ func IsComparable(t Type) bool {
 				return false
 			}
 		}
+
 		return true
 	case *Array:
 		return IsComparable(v.Element)
@@ -252,6 +272,7 @@ func IsComparable(t Type) bool {
 				return false
 			}
 		}
+
 		return true
 	case *Slice, *Map, *Procedure:
 		return false

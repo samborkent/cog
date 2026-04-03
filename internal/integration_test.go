@@ -24,6 +24,7 @@ func transpileSource(t *testing.T, src string) string {
 	t.Helper()
 
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
@@ -40,6 +41,7 @@ func transpileSource(t *testing.T, src string) string {
 	}
 
 	tr := transpiler.NewTranspiler(f)
+
 	gofile, err := tr.Transpile()
 	if err != nil {
 		t.Fatalf("transpile error: %v", err)
@@ -192,6 +194,7 @@ func TestMissingPackageProducesError(t *testing.T) {
 	src := `main : proc() = {}`
 
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
@@ -269,6 +272,7 @@ a := 2
 
 main : proc() = {}`
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
@@ -640,6 +644,7 @@ result := @go.strings.ToUpper("hello")
 main : proc() = {
     @print(result)
 }`
+
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
@@ -658,6 +663,7 @@ main : proc() = {
     str := @go.strings.ToUpper("hello")
     @print(str)
 }`
+
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
@@ -680,6 +686,7 @@ main : proc() = {
     str := @go.strings.ToUpper("hello")
     @print(str)
 }`
+
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
@@ -799,6 +806,7 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 	for name := range files {
 		names = append(names, name)
 	}
+
 	sort.Strings(names)
 
 	lexed := make([]lexedFile, 0, len(files))
@@ -864,6 +872,7 @@ func tryTranspilePackage(ctx context.Context, files map[string]string) (string, 
 	for name := range files {
 		names = append(names, name)
 	}
+
 	sort.Strings(names)
 
 	lexed := make([]lexedFile, 0, len(files))
@@ -1025,6 +1034,7 @@ main : proc() = {
 `
 
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
@@ -1174,6 +1184,7 @@ main : proc() = {
 // mustContain checks that 'got' contains 'want'.
 func mustContain(t *testing.T, got, want string) {
 	t.Helper()
+
 	if !strings.Contains(got, want) {
 		t.Errorf("expected %q to contain %q", got, want)
 	}
@@ -1182,6 +1193,7 @@ func mustContain(t *testing.T, got, want string) {
 // mustNotContain checks that 'got' does not contain 'want'.
 func mustNotContain(t *testing.T, got, want string) {
 	t.Helper()
+
 	if strings.Contains(got, want) {
 		t.Errorf("expected %q not to contain %q", got, want)
 	}
@@ -1200,6 +1212,7 @@ main : proc() = {
 `
 
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)

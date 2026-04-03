@@ -72,6 +72,7 @@ const (
 	If
 	Else
 	For
+	Match
 	Switch
 	Select
 	Case
@@ -242,6 +243,8 @@ func (t Type) String() string {
 		return "else"
 	case For:
 		return "for"
+	case Match:
+		return "match"
 	case Switch:
 		return "switch"
 	case Select:
