@@ -204,4 +204,60 @@ main : proc() = {
 			t.Errorf("expected inferred type arg utf8, got %s", call.TypeArgs[0])
 		}
 	})
+
+	// Critical #1: zero-arg calls must not corrupt parser state.
+	t.Run("zero_arg_proc_call", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+noArgs : proc() = {
+	@print("hello")
+}
+main : proc() = {
+	noArgs()
+}`)
+		if len(f.Statements) < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		}
+	})
+
+	t.Run("zero_arg_func_call", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+getVal : func() int64 = {
+	return 42
+}
+main : proc() = {
+	x := getVal()
+	@print(x)
+}`)
+		if len(f.Statements) < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		}
+	})
+
+	// Critical #2: explicit type arg validation failure on func with return type
+	// must not produce a Call with nil ReturnType (which would panic).
+	t.Run("explicit_validation_failure_with_return_type", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+identity : func<T ~ any>(x : T) T = {
+	return x
+}
+main : proc() = {
+	result := identity<utf8>(42)
+	@print(result)
+}`)
+	})
+
+	t.Run("explicit_constraint_failure_with_return_type", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+numOnly : func<T ~ number>(x : T) T = {
+	return x
+}
+main : proc() = {
+	result := numOnly<utf8>("hello")
+	@print(result)
+}`)
+	})
 }

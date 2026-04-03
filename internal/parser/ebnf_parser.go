@@ -506,6 +506,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			args := p.parseCallArguments(ctx, procType)
 			returnType := p.validateExplicitTypeArgs(procType, typeArgs, args)
 
+			// Validation failed (nil) but proc has a return type — error already reported.
+			if returnType == nil && procType.ReturnType != nil {
+				return nil
+			}
+
 			return &ast.Call{
 				Identifier: symbol.Identifier,
 				Arguments:  args,

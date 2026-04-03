@@ -409,6 +409,8 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 }
 
 // convertConstraint maps a cog constraint type to its Go equivalent.
+// For compound constraints (int, uint, etc.) it emits an inline tilde-union
+// with the Go-native subset of the constraint's types.
 func (t *Transpiler) convertConstraint(typ types.Type) goast.Expr {
 	if typ.Kind() == types.AnyKind {
 		return component.Any
@@ -425,10 +427,25 @@ func (t *Transpiler) convertConstraint(typ types.Type) goast.Expr {
 	case "ordered":
 		t.addStdLibImport("cmp")
 		return component.CmpOrdered
+	case "int":
+		return component.TildeUnion(component.GoInt...)
+	case "uint":
+		return component.TildeUnion(component.GoUint...)
+	case "float":
+		return component.TildeUnion(component.GoFloat...)
+	case "complex":
+		return component.TildeUnion(component.GoComplex...)
+	case "string":
+		// cog string = ascii | utf8. ascii is Go []byte (no tilde constraint);
+		// utf8 is Go string. Only ~string is representable.
+		return component.TildeUnion(component.GoString...)
+	case "signed":
+		return component.TildeUnion(append(append(component.GoInt, component.GoFloat...), component.GoComplex...)...)
+	case "number":
+		return component.TildeUnion(append(append(append(component.GoInt, component.GoUint...), component.GoFloat...), component.GoComplex...)...)
+	case "summable":
+		return component.TildeUnion(append(append(append(append(component.GoInt, component.GoUint...), component.GoFloat...), component.GoComplex...), component.GoString...)...)
 	default:
-		// Constraints involving library types (float16, complex32, int128, uint128)
-		// cannot be expressed as Go type constraint interfaces.
-		// Emit 'any' and rely on cog's compile-time Satisfies check.
 		return component.Any
 	}
 }
@@ -437,23 +454,31 @@ func (t *Transpiler) convertConstraint(typ types.Type) goast.Expr {
 // single Go constraint expression. A single constraint maps directly; multiple
 // constraints are joined with | into a union interface.
 func (t *Transpiler) convertTypeParamConstraints(tp *types.TypeParam) goast.Expr {
+	// If any individual constraint is 'any', the whole union is 'any'.
+	for _, c := range tp.Constraints {
+		if c.Kind() == types.AnyKind {
+			return component.Any
+		}
+	}
+
 	if len(tp.Constraints) == 1 {
 		return t.convertConstraint(tp.Constraints[0])
 	}
 
-	// Multiple constraints: emit interface{ C1 | C2 | ... }
-	var terms []goast.Expr
+	// Multiple constraints: flatten all leaf terms from each constraint's
+	// BinaryExpr tree, then build a single flat | chain. This avoids nested
+	// parentheses that the Go printer would emit for BinaryExpr sub-trees.
+	var leaves []goast.Expr
 	for _, c := range tp.Constraints {
-		terms = append(terms, t.convertConstraint(c))
+		flattenBinaryOr(t.convertConstraint(c), &leaves)
 	}
 
-	// Build binary | expression tree left-to-right.
-	expr := terms[0]
-	for _, term := range terms[1:] {
+	expr := leaves[0]
+	for _, leaf := range leaves[1:] {
 		expr = &goast.BinaryExpr{
 			X:  expr,
 			Op: gotoken.OR,
-			Y:  term,
+			Y:  leaf,
 		}
 	}
 
@@ -462,6 +487,17 @@ func (t *Transpiler) convertTypeParamConstraints(tp *types.TypeParam) goast.Expr
 			List: []*goast.Field{{Type: expr}},
 		},
 	}
+}
+
+// flattenBinaryOr recursively collects the leaf operands of a BinaryExpr tree
+// joined by OR (|). Non-binary expressions are appended directly.
+func flattenBinaryOr(e goast.Expr, out *[]goast.Expr) {
+	if bin, ok := e.(*goast.BinaryExpr); ok && bin.Op == gotoken.OR {
+		flattenBinaryOr(bin.X, out)
+		flattenBinaryOr(bin.Y, out)
+		return
+	}
+	*out = append(*out, e)
 }
 
 // convertTypeParams converts cog type parameters to a Go ast.FieldList

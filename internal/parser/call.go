@@ -18,6 +18,7 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 	p.advance("parseCallArguments (") // consume '('
 
 	if p.this().Type == tokens.RParen {
+		p.advance("parseCallArguments )") // consume ')'
 		return nil
 	}
 

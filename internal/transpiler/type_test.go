@@ -188,3 +188,126 @@ main : proc() = {}`)
 		mustContain(t, got, "type _StatusType string")
 	})
 }
+
+func TestGenericConstraintTranspilation(t *testing.T) {
+	t.Parallel()
+
+	// Critical #3: constraints must emit proper Go type sets, not 'any'.
+	t.Run("number_constraint", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+NumSlice<T ~ number> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "~int8")
+		mustContain(t, got, "~uint64")
+		mustContain(t, got, "~float64")
+		mustNotContain(t, got, "[T any]")
+	})
+
+	t.Run("int_constraint", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+IntSlice<T ~ int> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "~int8")
+		mustContain(t, got, "~int64")
+		mustNotContain(t, got, "~uint")
+	})
+
+	t.Run("uint_constraint", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+UintSlice<T ~ uint> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "~uint8")
+		mustContain(t, got, "~uint64")
+		mustNotContain(t, got, "~int8")
+	})
+
+	t.Run("float_constraint", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+FloatSlice<T ~ float> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "~float32")
+		mustContain(t, got, "~float64")
+		mustNotContain(t, got, "~int")
+	})
+
+	t.Run("complex_constraint", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+ComplexSlice<T ~ complex> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "~complex64")
+		mustContain(t, got, "~complex128")
+	})
+
+	t.Run("string_constraint", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+StrSlice<T ~ string> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "~string")
+	})
+
+	t.Run("ordered_uses_cmp", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+Sortable<T ~ ordered> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "go_cmp.Ordered")
+	})
+
+	t.Run("comparable_builtin", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+Dict<K ~ comparable, V ~ any> ~ map<K, V>
+main : proc() = {}`)
+		mustContain(t, got, "K comparable")
+		mustContain(t, got, "V any")
+	})
+
+	// Critical #4: multi-constraint union must not produce any|any.
+	t.Run("multi_constraint_no_any_dup", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+TagSlice<T ~ string | int> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "~string")
+		mustContain(t, got, "~int8")
+		mustNotContain(t, got, "any | any")
+	})
+
+	t.Run("multi_constraint_flat_no_parens", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+TagSlice<T ~ string | int> ~ []T
+main : proc() = {}`)
+		// Should be flat: ~string | ~int8 | ~int16 | ...
+		// Must NOT contain parenthesized sub-expressions.
+		mustNotContain(t, got, "(~")
+	})
+
+	t.Run("any_constraint_absorbs_union", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+List<T ~ any> ~ []T
+main : proc() = {}`)
+		mustContain(t, got, "T any")
+	})
+
+	t.Run("generic_func_constraint", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+showNum : func<T ~ number>(x : T) = {
+	@print(x)
+}
+main : proc() = {
+	showNum(42)
+}`)
+		mustContain(t, got, "~int8")
+		mustContain(t, got, "~float64")
+		mustNotContain(t, got, "[T any]")
+	})
+}
