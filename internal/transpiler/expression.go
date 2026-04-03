@@ -102,6 +102,30 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			fun = component.Ident(n.Identifier)
 		}
 
+		// Wrap in IndexExpr/IndexListExpr for generic calls with type arguments.
+		if len(n.TypeArgs) > 0 {
+			indices := make([]goast.Expr, len(n.TypeArgs))
+			for i, ta := range n.TypeArgs {
+				converted, err := t.convertType(ta)
+				if err != nil {
+					return nil, fmt.Errorf("converting type argument %d: %w", i, err)
+				}
+				indices[i] = converted
+			}
+
+			if len(indices) == 1 {
+				fun = &goast.IndexExpr{
+					X:     fun,
+					Index: indices[0],
+				}
+			} else {
+				fun = &goast.IndexListExpr{
+					X:       fun,
+					Indices: indices,
+				}
+			}
+		}
+
 		return &goast.CallExpr{
 			Fun:  fun,
 			Args: args,

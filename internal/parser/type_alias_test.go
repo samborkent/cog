@@ -307,4 +307,100 @@ main : proc() = {
 	xs : NumList<utf8> = @slice<utf8>(3)
 }`)
 	})
+
+	t.Run("forward_reference", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+names : List<utf8> = @slice<utf8>(3)
+List<T ~ any> ~ []T
+main : proc() = {
+	@print(names)
+}`)
+		if len(f.Statements) < 3 {
+			t.Fatalf("expected at least 3 statements, got %d", len(f.Statements))
+		}
+	})
+
+	t.Run("comparison_not_confused_with_type_params", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+main : proc() = {
+	index := 10
+	if index < 5 {
+		@print(index)
+	}
+}`)
+		if len(f.Statements) < 1 {
+			t.Fatal("expected at least 1 statement")
+		}
+	})
+
+	t.Run("comparison_with_generic_alias_in_same_file", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+List<T ~ any> ~ []T
+main : proc() = {
+	index := 10
+	if index < 5 {
+		@print(index)
+	}
+	xs : List<int32> = @slice<int32>(3)
+	@print(xs)
+}`)
+		if len(f.Statements) < 2 {
+			t.Fatal("expected at least 2 statements")
+		}
+	})
+
+	t.Run("instantiate_map_two_params", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+Dict<K ~ comparable, V ~ any> ~ map<K, V>
+main : proc() = {
+	m : Dict<utf8, int64> = @map<utf8, int64>()
+	@print(m)
+}`)
+		if len(f.Statements) < 2 {
+			t.Fatal("expected at least 2 statements")
+		}
+	})
+
+	t.Run("ordered_constraint", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+SortableSlice<T ~ ordered> ~ []T
+main : proc() = {
+	words : SortableSlice<utf8> = @slice<utf8>(10)
+	@print(words)
+}`)
+		if len(f.Statements) < 2 {
+			t.Fatal("expected at least 2 statements")
+		}
+	})
+
+	t.Run("comparable_constraint", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+Dict<K ~ comparable, V ~ any> ~ map<K, V>
+main : proc() = {
+	lookup : Dict<utf8, int64> = @map<utf8, int64>()
+	@print(lookup)
+}`)
+		if len(f.Statements) < 2 {
+			t.Fatal("expected at least 2 statements")
+		}
+	})
+
+	t.Run("union_constraint_instantiate", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+TagSlice<T ~ string | int> ~ []T
+main : proc() = {
+	labels : TagSlice<utf8> = @slice<utf8>(3)
+	@print(labels)
+}`)
+		if len(f.Statements) < 2 {
+			t.Fatal("expected at least 2 statements")
+		}
+	})
 }

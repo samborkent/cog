@@ -79,7 +79,7 @@ greet : proc(name : utf8) = {
 	@print(name)
 }
 main : proc() = {}`)
-		mustContain(t, got, "func(ctx go_context.Context, name string)")
+		mustContain(t, got, "func greet(ctx go_context.Context, name string)")
 	})
 
 	t.Run("func_declaration", func(t *testing.T) {
@@ -89,7 +89,7 @@ add : func(a : int64, b : int64) int64 = {
 	return a + b
 }
 main : proc() = {}`)
-		mustContain(t, got, "func(a int64, b int64) int64")
+		mustContain(t, got, "func add(a int64, b int64) int64")
 		mustContain(t, got, "return a + b")
 	})
 

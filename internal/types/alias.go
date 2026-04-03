@@ -59,11 +59,11 @@ func (a *Alias) Underlying() Type {
 // typeArgs maps type parameter names to their concrete replacements.
 func (a *Alias) Instantiate(typeArgs map[string]Type) Type {
 	a.ensureResolved()
-	return substituteType(a.Derived, typeArgs)
+	return SubstituteType(a.Derived, typeArgs)
 }
 
-// substituteType recursively replaces TypeParam references with concrete types.
-func substituteType(t Type, args map[string]Type) Type {
+// SubstituteType recursively replaces TypeParam references with concrete types.
+func SubstituteType(t Type, args map[string]Type) Type {
 	switch v := t.(type) {
 	case *TypeParam:
 		if concrete, ok := args[v.Name]; ok {
@@ -72,42 +72,42 @@ func substituteType(t Type, args map[string]Type) Type {
 		return v
 	case *Alias:
 		v.ensureResolved()
-		return substituteType(v.Derived, args)
+		return SubstituteType(v.Derived, args)
 	case *Slice:
-		return &Slice{Element: substituteType(v.Element, args)}
+		return &Slice{Element: SubstituteType(v.Element, args)}
 	case *Array:
-		return &Array{Element: substituteType(v.Element, args), Length: v.Length}
+		return &Array{Element: SubstituteType(v.Element, args), Length: v.Length}
 	case *Map:
-		return &Map{Key: substituteType(v.Key, args), Value: substituteType(v.Value, args)}
+		return &Map{Key: SubstituteType(v.Key, args), Value: SubstituteType(v.Value, args)}
 	case *Set:
-		return &Set{Element: substituteType(v.Element, args)}
+		return &Set{Element: SubstituteType(v.Element, args)}
 	case *Option:
-		return &Option{Value: substituteType(v.Value, args)}
+		return &Option{Value: SubstituteType(v.Value, args)}
 	case *Pointer:
-		return &Pointer{Value: substituteType(v.Value, args)}
+		return &Pointer{Value: SubstituteType(v.Value, args)}
 	case *Tuple:
 		types := make([]Type, len(v.Types))
 		for i, elem := range v.Types {
-			types[i] = substituteType(elem, args)
+			types[i] = SubstituteType(elem, args)
 		}
 		return &Tuple{Types: types, Exported: v.Exported}
 	case *Union:
 		return &Union{
-			Either:   substituteType(v.Either, args),
-			Or:       substituteType(v.Or, args),
+			Either:   SubstituteType(v.Either, args),
+			Or:       SubstituteType(v.Or, args),
 			Exported: v.Exported,
 		}
 	case *Result:
 		return &Result{
-			Value: substituteType(v.Value, args),
-			Error: substituteType(v.Error, args),
+			Value: SubstituteType(v.Value, args),
+			Error: SubstituteType(v.Error, args),
 		}
 	case *Struct:
 		fields := make([]*Field, len(v.Fields))
 		for i, f := range v.Fields {
 			fields[i] = &Field{
 				Name:     f.Name,
-				Type:     substituteType(f.Type, args),
+				Type:     SubstituteType(f.Type, args),
 				Exported: f.Exported,
 			}
 		}

@@ -464,10 +464,53 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				return nil
 			}
 
+			if len(procType.TypeParams) > 0 {
+				// Generic call with type inference.
+				args := p.parseCallArguments(ctx, procType)
+				typeArgs, returnType := p.inferTypeArgs(procType, args)
+				if typeArgs == nil {
+					return nil
+				}
+
+				return &ast.Call{
+					Identifier: symbol.Identifier,
+					Arguments:  args,
+					ReturnType: returnType,
+					TypeArgs:   typeArgs,
+				}
+			}
+
 			return &ast.Call{
 				Identifier: symbol.Identifier,
 				Arguments:  p.parseCallArguments(ctx, procType),
 				ReturnType: procType.ReturnType,
+			}
+		case tokens.LT:
+			// Explicit type arguments on generic call: genFunc<utf8>("hello")
+			procType, ok := symbol.Identifier.ValueType.(*types.Procedure)
+			if !ok || len(procType.TypeParams) == 0 {
+				// Not a generic callable — let comparison() handle '<'.
+				return symbol.Identifier
+			}
+
+			typeArgs := p.parseTypeArguments(ctx)
+			if typeArgs == nil {
+				return nil
+			}
+
+			if p.this().Type != tokens.LParen {
+				p.error(p.this(), "expected '(' after type arguments in generic call", "primary")
+				return nil
+			}
+
+			args := p.parseCallArguments(ctx, procType)
+			returnType := p.validateExplicitTypeArgs(procType, typeArgs, args)
+
+			return &ast.Call{
+				Identifier: symbol.Identifier,
+				Arguments:  args,
+				ReturnType: returnType,
+				TypeArgs:   typeArgs,
 			}
 		case tokens.Dot:
 			// TODO: recursive selector expression

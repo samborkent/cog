@@ -152,6 +152,19 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		// parse as expression instead.
 		if p.next().Type == tokens.LParen {
 			// Direct function call: e.g. someFunc(...)
+		} else if p.next().Type == tokens.LT {
+			// Could be generic call (genFunc<utf8>(...)) or type alias.
+			// If the symbol is a generic callable, don't consume the identifier
+			// so expression parsing handles it.
+			if sym, ok := p.symbols.Resolve(p.this().Literal); ok {
+				if proc, ok := sym.Identifier.ValueType.(*types.Procedure); ok && len(proc.TypeParams) > 0 {
+					// Generic function call — let expression handle it.
+				} else {
+					p.advance("parseStatement ident") // consume identifier
+				}
+			} else {
+				p.advance("parseStatement ident") // consume identifier
+			}
 		} else if p.next().Type == tokens.Dot {
 			if _, isImport := p.symbols.ResolveCogImport(p.this().Literal); isImport {
 				// Imported package selector: e.g. pkg.Func(...)

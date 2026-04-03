@@ -378,6 +378,28 @@ outerLoop:
     // Multi-constraint: T must satisfy `string` or `int`.
     labels : TagSlice<utf8> = @slice<utf8>(3)
     @print(labels)
+
+    // Generic function: type parameter on the func type itself.
+    // Type argument is inferred from the argument type.
+    genFunc("hello generics")
+    genFunc(42)
+
+    // Explicit type argument: genFunc<utf8>("explicit")
+    genFunc<utf8>("explicit type arg")
+
+    // Generic function with return type: T flows through.
+    idResult := identity("identity")
+    @print(idResult)
+}
+
+// Generic function: type parameter on the func type.
+genFunc : func<T ~ any>(x : T) = {
+    @print(x)
+}
+
+// Generic function with return type.
+identity : func<T ~ any>(x : T) T = {
+    return x
 }
 
 arenaProc : proc(n : uint64) = {

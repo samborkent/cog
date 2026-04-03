@@ -15,6 +15,7 @@ type Call struct {
 	Package    string // non-empty when calling an imported package's function
 	Arguments  []Expression
 	ReturnType types.Type
+	TypeArgs   []types.Type // explicit or inferred type arguments for generic calls
 }
 
 func (c *Call) Pos() (uint32, uint16) {
@@ -32,6 +33,18 @@ func (c *Call) stringTo(out *strings.Builder) {
 	}
 
 	c.Identifier.stringTo(out)
+
+	if len(c.TypeArgs) > 0 {
+		_ = out.WriteByte('<')
+		for i, ta := range c.TypeArgs {
+			if i > 0 {
+				_, _ = out.WriteString(", ")
+			}
+			_, _ = out.WriteString(ta.String())
+		}
+		_ = out.WriteByte('>')
+	}
+
 	_ = out.WriteByte('(')
 
 	for i, arg := range c.Arguments {

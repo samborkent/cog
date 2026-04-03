@@ -66,12 +66,21 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		t.usesDyn = prevUsesDyn
 
 		if n.Assignment.Expression.Type().Kind() == types.ProcedureKind {
-			// Procedure declaration
+			// Procedure declaration - convert to function declaration
 			funcLiteral, ok := expr.(*goast.FuncLit)
 			if !ok {
 				return nil, fmt.Errorf("unable to assert function literal for %q", n.Assignment.Identifier.Name)
 			}
 
+			// Create a function declaration instead of a variable declaration
+			funcName := component.ConvertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global)
+			funcDecl := &goast.FuncDecl{
+				Name: &goast.Ident{Name: funcName},
+				Type: funcLiteral.Type,
+				Body: funcLiteral.Body,
+			}
+
+			// For procedure declarations, return function declaration instead of variable declaration
 			if n.Assignment.Identifier.Name == "main" {
 				hasDynVars := len(t.symbols.dynamics) > 0
 
@@ -114,16 +123,16 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 							}
 
 							body := component.DynMainInit(dynIdent, ctxIdent, structLit)
-							funcLiteral.Body.List = append(body, funcLiteral.Body.List...)
+							funcDecl.Body.List = append(body, funcDecl.Body.List...)
 						} else {
 							// No procs: just create dyn struct, no context needed.
-							funcLiteral.Body.List = append([]goast.Stmt{
+							funcDecl.Body.List = append([]goast.Stmt{
 								&goast.AssignStmt{
 									Tok: gotoken.DEFINE,
 									Lhs: []goast.Expr{dynIdent},
 									Rhs: []goast.Expr{structLit},
 								},
-							}, funcLiteral.Body.List...)
+							}, funcDecl.Body.List...)
 						}
 					} else {
 						// Main with procs but no dynamic variables: just init context.
@@ -132,9 +141,9 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 							return nil, fmt.Errorf("marking ctx used: %w", err)
 						}
 
-						funcLiteral.Body.List = append(
+						funcDecl.Body.List = append(
 							[]goast.Stmt{component.ContextMain(ctxIdent)},
-							funcLiteral.Body.List...,
+							funcDecl.Body.List...,
 						)
 					}
 
@@ -148,28 +157,27 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 						}
 
 						// Remove context argument for main func.
-						funcLiteral.Type.Params.List = funcLiteral.Type.Params.List[1:]
+						funcDecl.Type.Params.List = funcDecl.Type.Params.List[1:]
 					}
 				}
 
-				t.injectArena(funcLiteral.Body)
+				t.injectArena(funcDecl.Body)
 
-				return []goast.Decl{&goast.FuncDecl{
-					Name: &goast.Ident{Name: "main"},
-					Type: funcLiteral.Type,
-					Body: funcLiteral.Body,
-				}}, nil
+				return []goast.Decl{funcDecl}, nil
 			}
 
 			// Non-main proc: inject dyn preamble only when body uses dyn.
 			if bodyUsesDyn && len(t.symbols.dynamics) > 0 {
 				procType, ok := n.Assignment.Expression.Type().(*types.Procedure)
 				if ok && !procType.Function {
-					funcLiteral.Body.List = append(component.DynProcEntry(), funcLiteral.Body.List...)
+					funcDecl.Body.List = append(component.DynProcEntry(), funcDecl.Body.List...)
 				}
 			}
 
-			t.injectArena(funcLiteral.Body)
+			t.injectArena(funcDecl.Body)
+			
+			// Return function declaration for procedures
+			return []goast.Decl{funcDecl}, nil
 		}
 
 		// Replace type string with type name if missing (for structs, tuples, unions).
@@ -186,6 +194,8 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 			compositeLiteral.Type = &goast.Ident{Name: litName}
 		}
+
+
 
 		valueSpec := &goast.ValueSpec{
 			Names:  []*goast.Ident{ident},

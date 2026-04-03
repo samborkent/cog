@@ -8,6 +8,25 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
+// isGenericTypeDecl checks whether the current position is at the start of a
+// generic type declaration (e.g. List<T ~ any> ~ ...). It expects the cursor
+// on an Identifier and looks ahead for the pattern: < Identifier ~
+// This distinguishes generic type aliases from comparison expressions like
+// index < 5.
+func (p *Parser) isGenericTypeDecl() bool {
+	// Current token is an Identifier. Check: next is <, next+1 is Identifier, next+2 is ~.
+	if p.next().Type != tokens.LT {
+		return false
+	}
+
+	// Peek at i+2 and i+3.
+	if p.i+3 >= len(p.tokens) {
+		return false
+	}
+
+	return p.tokens[p.i+2].Type == tokens.Identifier && p.tokens[p.i+3].Type == tokens.Tilde
+}
+
 // FindGlobals scans the token stream to pre-register all top-level names
 // (types, declarations, enums) into the parser's symbol table. It can be
 // called externally when multiple parsers share one symbol table, so that
@@ -64,8 +83,14 @@ tokenLoop:
 			switch p.next().Type {
 			case tokens.Colon, tokens.Declaration:
 				p.findGlobalDecl(ctx, exported, qualifier)
-			case tokens.Tilde, tokens.LT:
+			case tokens.Tilde:
 				p.findGlobalType(ctx, exported)
+			case tokens.LT:
+				if p.isGenericTypeDecl() {
+					p.findGlobalType(ctx, exported)
+				} else {
+					p.advance("findGlobals") // not a type decl, skip
+				}
 			default:
 				p.advance("findGlobals") // consume token
 			}
@@ -140,25 +165,27 @@ func (p *Parser) preRegisterTypeNames(ctx context.Context) {
 			p.advance("preRegister qualifier") // consume qualifier
 		}
 
-		if p.this().Type == tokens.Identifier && (p.next().Type == tokens.Tilde || p.next().Type == tokens.LT) {
-			ident := &ast.Identifier{
-				Token:    p.this(),
-				Name:     p.this().Literal,
-				Exported: exported,
-				// Qualifier defaults to QualifierType (zero value)
-				Global: true,
+		if p.this().Type == tokens.Identifier {
+			if p.next().Type == tokens.Tilde || p.isGenericTypeDecl() {
+				ident := &ast.Identifier{
+					Token:    p.this(),
+					Name:     p.this().Literal,
+					Exported: exported,
+					// Qualifier defaults to QualifierType (zero value)
+					Global: true,
+				}
+
+				p.symbols.DefineGlobal(ident)
+
+				p.advance("preRegister identifier") // consume token
+
+				// Skip type parameters in procedure/function declarations during pre-registration.
+				if p.this().Type == tokens.LT {
+					p.skipTypeParams(ctx)
+				}
+
+				continue
 			}
-
-			p.symbols.DefineGlobal(ident)
-
-			p.advance("preRegister identifier") // consume token
-
-			// Skip type parameters in procedure/function declarations during pre-registration.
-			if p.this().Type == tokens.LT {
-				p.skipTypeParams(ctx)
-			}
-
-			continue
 		}
 
 		// Skip type parameters in procedure/function declarations during pre-registration.
@@ -424,14 +451,14 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		if a, ok := alias.(*types.Alias); ok {
 			a.TypeParams = typeParams
 		} else {
-			// TODO: check if we need this
-			// alias = &types.Alias{
-			// 	Name:       ident.Name,
-			// 	Derived:    alias,
-			// 	Exported:   ident.Exported,
-			// 	Global:     ident.Global,
-			// 	TypeParams: typeParams,
-			// }
+			// Wrap the derived type in an alias to preserve type parameters.
+			alias = &types.Alias{
+				Name:       ident.Name,
+				Derived:    alias,
+				Exported:   ident.Exported,
+				Global:     ident.Global,
+				TypeParams: typeParams,
+			}
 		}
 	}
 
@@ -493,6 +520,10 @@ func (p *Parser) skipTypeParams(ctx context.Context) {
 
 	for {
 		if ctx.Err() != nil {
+			return
+		}
+
+		if p.this().Type == tokens.EOF {
 			return
 		}
 

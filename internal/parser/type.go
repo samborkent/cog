@@ -307,11 +307,18 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 				return ident.ValueType
 			})
 		} else {
+			// Copy type parameters from the original type if it's an alias
+			var typeParams []*types.TypeParam
+			if originalAlias, ok := ident.ValueType.(*types.Alias); ok {
+				typeParams = originalAlias.TypeParams
+			}
+
 			typ = &types.Alias{
-				Name:     ident.Name,
-				Derived:  ident.ValueType,
-				Exported: ident.Exported,
-				Global:   ident.Global,
+				Name:       ident.Name,
+				Derived:    ident.ValueType,
+				Exported:   ident.Exported,
+				Global:     ident.Global,
+				TypeParams: typeParams,
 			}
 		}
 	}
@@ -577,11 +584,6 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 		if paramType == nil {
 			p.error(p.this(), "unknown parameter type", "parseParameters")
 			return nil
-		}
-
-		alias, ok := paramType.(*types.Alias)
-		if ok {
-			fmt.Printf("TEST %q %t %t\n", alias.Name, alias.Exported, alias.Global)
 		}
 
 		param.Type = paramType
