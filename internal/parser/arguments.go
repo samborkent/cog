@@ -96,16 +96,18 @@ func (p *Parser) parseTypeParams(ctx context.Context) []*types.TypeParam {
 
 		p.advance("parseTypeParams ~") // consume ~
 
-		// Parse constraint(s): one or more constraint keywords separated by |.
-		// Try the token type name first (for keywords like "any", "number"),
-		// then fall back to the literal (for identifiers like "int", "uint").
+		// Parse constraint(s): keyword constraints or concrete types separated by |.
+		// Try keyword constraint first, fall back to concrete type via parseType.
 		constraint := p.resolveConstraintToken()
-		if constraint == nil {
-			p.error(p.this(), fmt.Sprintf("expected constraint keyword, got %q", p.this().Type.String()), "parseTypeParams")
-			return nil
+		if constraint != nil {
+			p.advance("parseTypeParams constraint") // consume keyword constraint
+		} else {
+			constraint = p.parseType(ctx)
+			if constraint == nil {
+				p.error(p.this(), fmt.Sprintf("expected constraint or type, got %q", p.this().Type.String()), "parseTypeParams")
+				return nil
+			}
 		}
-
-		p.advance("parseTypeParams constraint") // consume first constraint
 
 		constraints := []types.Type{constraint}
 
@@ -113,12 +115,15 @@ func (p *Parser) parseTypeParams(ctx context.Context) []*types.TypeParam {
 			p.advance("parseTypeParams |") // consume |
 
 			constraint := p.resolveConstraintToken()
-			if constraint == nil {
-				p.error(p.this(), fmt.Sprintf("expected constraint keyword after |, got %q", p.this().Type.String()), "parseTypeParams")
-				return nil
+			if constraint != nil {
+				p.advance("parseTypeParams constraint") // consume keyword constraint
+			} else {
+				constraint = p.parseType(ctx)
+				if constraint == nil {
+					p.error(p.this(), fmt.Sprintf("expected constraint or type after |, got %q", p.this().Type.String()), "parseTypeParams")
+					return nil
+				}
 			}
-
-			p.advance("parseTypeParams constraint") // consume constraint
 
 			constraints = append(constraints, constraint)
 		}

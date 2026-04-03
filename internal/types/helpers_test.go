@@ -982,4 +982,133 @@ func TestInstantiate(t *testing.T) {
 			t.Errorf("expected Int32 passthrough, got %s", result.Kind())
 		}
 	})
+
+	t.Run("substitute_procedure", func(t *testing.T) {
+		t.Parallel()
+		proc := &Procedure{
+			Function: true,
+			Parameters: []*Parameter{
+				{Name: "x", Type: &TypeParam{Name: "T", Constraints: []Type{Any}}},
+			},
+			ReturnType: &TypeParam{Name: "T", Constraints: []Type{Any}},
+		}
+		a := &Alias{
+			Name:       "MyFunc",
+			Derived:    proc,
+			TypeParams: []*TypeParam{{Name: "T", Constraints: []Type{Any}}},
+		}
+		result := a.Instantiate(map[string]Type{"T": Basics[Int64]})
+		rp, ok := result.(*Procedure)
+		if !ok {
+			t.Fatalf("expected *Procedure, got %T", result)
+		}
+		if !Equal(rp.Parameters[0].Type, Basics[Int64]) {
+			t.Errorf("expected parameter type int64, got %s", rp.Parameters[0].Type)
+		}
+		if !Equal(rp.ReturnType, Basics[Int64]) {
+			t.Errorf("expected return type int64, got %s", rp.ReturnType)
+		}
+	})
+}
+
+func TestTupleIndexBounds(t *testing.T) {
+	t.Parallel()
+
+	tup := &Tuple{Types: []Type{Basics[Int64], Basics[UTF8]}}
+
+	if tup.Index(0).Kind() != Int64 {
+		t.Errorf("Index(0) = %s, want int64", tup.Index(0))
+	}
+	if tup.Index(1).Kind() != UTF8 {
+		t.Errorf("Index(1) = %s, want utf8", tup.Index(1))
+	}
+
+	// Negative index should panic.
+	t.Run("negative_panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic for negative index")
+			}
+		}()
+		tup.Index(-1)
+	})
+
+	// Index equal to length should panic.
+	t.Run("at_length_panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("expected panic for index == len")
+			}
+		}()
+		tup.Index(2)
+	})
+}
+
+func TestTypeParamEquality(t *testing.T) {
+	t.Parallel()
+
+	tp1 := &TypeParam{Name: "T", Constraints: []Type{Generics["int"]}}
+	tp2 := &TypeParam{Name: "T", Constraints: []Type{Generics["int"]}}
+	tp3 := &TypeParam{Name: "U", Constraints: []Type{Generics["int"]}}
+	tp4 := &TypeParam{Name: "T", Constraints: []Type{Generics["uint"]}}
+
+	if !Equal(tp1, tp2) {
+		t.Error("same name, same constraints should be equal")
+	}
+	if Equal(tp1, tp3) {
+		t.Error("different name should not be equal")
+	}
+	if Equal(tp1, tp4) {
+		t.Error("different constraints should not be equal")
+	}
+}
+
+func TestIsComparable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		typ  Type
+		want bool
+	}{
+		{"basic int64", Basics[Int64], true},
+		{"basic bool", Basics[Bool], true},
+		{"pointer", &Pointer{Value: Basics[Int64]}, true},
+		{"enum", &Enum{ValueType: Basics[Int64]}, true},
+		{"struct with comparable fields", &Struct{Fields: []*Field{{Name: "x", Type: Basics[Int64]}}}, true},
+		{"struct with slice field", &Struct{Fields: []*Field{{Name: "x", Type: &Slice{Element: Basics[Int64]}}}}, false},
+		{"array of comparable", &Array{Element: Basics[Int64]}, true},
+		{"array of slice", &Array{Element: &Slice{Element: Basics[Int64]}}, false},
+		{"tuple of comparable", &Tuple{Types: []Type{Basics[Int64], Basics[UTF8]}}, true},
+		{"tuple with map", &Tuple{Types: []Type{Basics[Int64], &Map{Key: Basics[UTF8], Value: Basics[Int64]}}}, false},
+		{"slice", &Slice{Element: Basics[Int64]}, false},
+		{"map", &Map{Key: Basics[UTF8], Value: Basics[Int64]}, false},
+		{"set with comparable element", &Set{Element: Basics[Int64]}, true},
+		{"set with slice element", &Set{Element: &Slice{Element: Basics[Int64]}}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IsComparable(tt.typ); got != tt.want {
+				t.Errorf("IsComparable(%v) = %v, want %v", tt.typ, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestComparableRejectsNonComparableStruct(t *testing.T) {
+	t.Parallel()
+
+	// A struct with a slice field should NOT satisfy comparable.
+	s := &Struct{Fields: []*Field{{Name: "data", Type: &Slice{Element: Basics[Int64]}}}}
+	if Satisfies(s, Generics["comparable"]) {
+		t.Error("struct with slice field should not satisfy comparable")
+	}
+
+	// A struct with all comparable fields should satisfy comparable.
+	s2 := &Struct{Fields: []*Field{{Name: "x", Type: Basics[Int64]}, {Name: "y", Type: Basics[UTF8]}}}
+	if !Satisfies(s2, Generics["comparable"]) {
+		t.Error("struct with comparable fields should satisfy comparable")
+	}
 }

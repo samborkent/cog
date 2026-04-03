@@ -112,6 +112,26 @@ func SubstituteType(t Type, args map[string]Type) Type {
 			}
 		}
 		return &Struct{Fields: fields}
+	case *Procedure:
+		params := make([]*Parameter, len(v.Parameters))
+		for i, p := range v.Parameters {
+			params[i] = &Parameter{
+				Name:     p.Name,
+				Optional: p.Optional,
+				Type:     SubstituteType(p.Type, args),
+				Default:  p.Default,
+			}
+		}
+		var retType Type
+		if v.ReturnType != nil {
+			retType = SubstituteType(v.ReturnType, args)
+		}
+		return &Procedure{
+			Function:   v.Function,
+			TypeParams: v.TypeParams,
+			Parameters: params,
+			ReturnType: retType,
+		}
 	default:
 		// Basic types and other concrete types pass through unchanged.
 		return t

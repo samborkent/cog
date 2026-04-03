@@ -65,7 +65,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		if len(procType.Parameters) > len(n.Arguments) {
 			// The number of input parameters is greater than the number of arguments, so there are optional parameters.
-			for i := len(args); i < len(procType.Parameters); i++ {
+			for i := len(n.Arguments); i < len(procType.Parameters); i++ {
 				if procType.Parameters[i].Default == nil {
 					argType, err := t.convertType(procType.Parameters[i].Type)
 					if err != nil {

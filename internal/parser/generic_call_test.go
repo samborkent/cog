@@ -260,4 +260,54 @@ main : proc() = {
 	@print(result)
 }`)
 	})
+
+	// Major #9: concrete type constraints (not just keywords).
+	t.Run("concrete_type_constraint", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+intOnly : func<T ~ int32 | int64>(x : T) = {
+	@print(x)
+}
+main : proc() = {
+	intOnly(42)
+}`)
+		if len(f.Statements) < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		}
+
+		// Verify the first func's type parameter has concrete type constraints.
+		decl := stmtAs[*ast.Declaration](t, f, 0)
+		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
+		procType := procLit.ProcedureType.(*types.Procedure)
+		if len(procType.TypeParams) != 1 {
+			t.Fatalf("expected 1 type param, got %d", len(procType.TypeParams))
+		}
+		tp := procType.TypeParams[0]
+		if tp.Name != "T" {
+			t.Errorf("expected type param name T, got %s", tp.Name)
+		}
+		if len(tp.Constraints) != 2 {
+			t.Fatalf("expected 2 constraints, got %d", len(tp.Constraints))
+		}
+		if tp.Constraints[0].Kind() != types.Int32 {
+			t.Errorf("expected first constraint int32, got %s", tp.Constraints[0])
+		}
+		if tp.Constraints[1].Kind() != types.Int64 {
+			t.Errorf("expected second constraint int64, got %s", tp.Constraints[1])
+		}
+	})
+
+	t.Run("single_concrete_type_constraint", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+utf8Only : func<T ~ utf8>(x : T) = {
+	@print(x)
+}
+main : proc() = {
+	utf8Only("hello")
+}`)
+		if len(f.Statements) < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		}
+	})
 }
