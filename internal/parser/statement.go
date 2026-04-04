@@ -180,7 +180,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 
 		switch p.this().Type {
 		case tokens.Assign: // Assignment
-			if p.symbols.Outer == nil {
+			if !p.scriptMode && p.symbols.Outer == nil {
 				p.error(p.this(), "no assignment allowed in package scope, use declaration instead", "parseStatement")
 				return nil
 			}
@@ -335,7 +335,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		// Skip, get it with prev in identifier case.
 		p.advance("parseStatement var") // consume var
 
-		if p.symbols.Outer == nil {
+		if !p.scriptMode && p.symbols.Outer == nil {
 			p.error(p.this(), "variable declarations are not allowed in package scope", "parseStatement")
 			return nil
 		}

@@ -1,0 +1,17 @@
+package cog
+
+// type Struct struct{}
+
+Struct ~ struct {}
+
+// func Function() {}
+
+Function : proc() = {}
+
+// func (Struct) Method()
+
+Struct.Method : proc() = {}
+
+// func (*Struct) Method()
+
+&Struct.Method : proc() = {}

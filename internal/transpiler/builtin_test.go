@@ -64,12 +64,12 @@ main : proc() = {
 		mustContain(t, got, "make(cog.Set[int64])")
 	})
 
-	t.Run("ptr", func(t *testing.T) {
+	t.Run("ref", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
 main : proc() = {
-	ptr := @ptr<utf8>()
-	_ = ptr
+	ref := @ref<utf8>()
+	_ = ref
 }`)
 		mustContain(t, got, "new(string)")
 	})

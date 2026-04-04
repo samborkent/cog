@@ -1,0 +1,7 @@
+foo := "hello"
+var bar := &foo
+
+baz := "world"
+bar = &baz
+
+_ = bar

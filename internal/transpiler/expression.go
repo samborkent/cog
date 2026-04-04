@@ -1076,6 +1076,8 @@ func convertUnaryOperator(t tokens.Type) (gotoken.Token, error) {
 		return gotoken.NOT, nil
 	case tokens.Minus:
 		return gotoken.SUB, nil
+	case tokens.BitAnd:
+		return gotoken.AND, nil
 	default:
 		return gotoken.ILLEGAL, fmt.Errorf("unknown unary operator %s", t.String())
 	}

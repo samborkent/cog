@@ -203,8 +203,9 @@ func (p *Parser) parseBuiltinPrint(ctx context.Context, t tokens.Token, tokenTyp
 	}
 }
 
-func (p *Parser) parseBuiltinPtr(ctx context.Context, t tokens.Token, tokenType types.Type) *ast.Builtin {
-	if tokenType.Kind() != types.Invalid && tokenType.Kind() != types.PointerKind {
+// TODO: possibly remove this, why do we need reference allocator? maybe better that is works like `@ref<T any>(x T) &T`, but not needed if we allow `&literal`
+func (p *Parser) parseBuiltinRef(ctx context.Context, t tokens.Token, tokenType types.Type) *ast.Builtin {
+	if tokenType.Kind() != types.Invalid && tokenType.Kind() != types.ReferenceKind {
 		// If type is supplied, check if it's a pointer.
 		p.error(p.this(), "expected pointer type", "parseBuiltinPtr")
 		return nil
@@ -216,42 +217,42 @@ func (p *Parser) parseBuiltinPtr(ctx context.Context, t tokens.Token, tokenType 
 	}
 
 	if len(typArgs) != 1 {
-		p.error(p.this(), "@ptr requires one type argument", "parseBuiltinPtr")
+		p.error(p.this(), "@ref requires one type argument", "parseBuiltinRef")
 		return nil
 	}
 
 	if tokenType.Kind() != types.Invalid {
-		ptrType, ok := tokenType.Underlying().(*types.Pointer)
+		refType, ok := tokenType.Underlying().(*types.Reference)
 		if !ok {
-			p.error(p.this(), "unable to cast supplied pointer type", "parseBuiltinPtr")
+			p.error(p.this(), "unable to cast supplied reference type", "parseBuiltinRef")
 			return nil
 		}
 
-		if ptrType.Value.Kind() != typArgs[0].Kind() {
-			p.error(p.this(), "type mismatch in @ptr type", "parseBuiltinPtr")
+		if refType.Value.Kind() != typArgs[0].Kind() {
+			p.error(p.this(), "type mismatch in @ref type", "parseBuiltinRef")
 			return nil
 		}
 	}
 
 	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after @ptr", "parseBuiltinPtr")
+		p.error(p.this(), "expected '(' after @ref", "parseBuiltinRef")
 		return nil
 	}
 
-	p.advance("parseBuiltinPtr (") // consume (
+	p.advance("parseBuiltinRef (") // consume (
 
 	if p.this().Type != tokens.RParen {
-		p.error(p.this(), "expected ')' after argument in @ptr", "parseBuiltinPtr")
+		p.error(p.this(), "expected ')' after argument in @ref", "parseBuiltinPtr")
 		return nil
 	}
 
-	p.advance("parseBuiltinPtr )") // consume ')'
+	p.advance("parseBuiltinRef )") // consume ')'
 
 	return &ast.Builtin{
 		Token:         t,
-		Name:          "ptr",
+		Name:          "ref",
 		TypeArguments: typArgs,
-		ReturnType:    &types.Pointer{Value: typArgs[0]},
+		ReturnType:    &types.Reference{Value: typArgs[0]},
 	}
 }
 

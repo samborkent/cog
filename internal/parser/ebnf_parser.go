@@ -219,11 +219,38 @@ func (p *Parser) factor(ctx context.Context, typeToken types.Type) ast.Expressio
 }
 
 func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression {
-	if p.match(tokens.Not, tokens.Minus) {
+	if p.match(tokens.Not, tokens.Minus, tokens.BitAnd) {
+		// Previous operator is stored, to disallow double references.
+		prevOperator := p.prev()
+		if prevOperator.Type == tokens.LParen && p.i >= 2 && p.tokens[p.i-2].Type == tokens.BitAnd {
+			prevOperator = p.tokens[p.i-2]
+		}
+
 		operator := p.this()
 		p.advance("unary operator") // consume operator
-		right := p.unary(ctx, typeToken)
 
+		exprType := typeToken
+
+		if operator.Type == tokens.BitAnd {
+			// Special reference handling.
+			if prevOperator.Type == tokens.BitAnd {
+				p.error(p.this(), "double reference is not allowed", "unary")
+				return nil
+			}
+
+			if typeToken != types.None && typeToken.Kind() == types.ReferenceKind {
+				// If a type is specified, we need to pass the reference underlying type to the expression parsing.
+				refType, ok := typeToken.(*types.Reference)
+				if !ok {
+					p.error(p.this(), "unable to assert reference type", "unary")
+					return nil
+				}
+
+				exprType = refType.Value
+			}
+		}
+
+		right := p.unary(ctx, exprType)
 		if right == nil {
 			return nil
 		}

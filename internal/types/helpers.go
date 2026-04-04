@@ -84,8 +84,8 @@ func Equal(a, b Type) bool {
 	case *Set:
 		bt := bu.(*Set)
 		return Equal(at.Element, bt.Element)
-	case *Pointer:
-		bt := bu.(*Pointer)
+	case *Reference:
+		bt := bu.(*Reference)
 		return Equal(at.Value, bt.Value)
 	case *Tuple:
 		bt := bu.(*Tuple)
@@ -252,7 +252,7 @@ func IsComparable(t Type) bool {
 		return true
 	case *Enum:
 		return true
-	case *Pointer:
+	case *Reference:
 		return true
 	case *Set:
 		return IsComparable(v.Element)

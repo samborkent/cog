@@ -86,7 +86,7 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.File, err
 		"if":    p.parseBuiltinIf,
 		"map":   p.parseBuiltinMap,
 		"print": p.parseBuiltinPrint,
-		"ptr":   p.parseBuiltinPtr,
+		"ref":   p.parseBuiltinRef,
 		"set":   p.parseBuiltinSet,
 		"slice": p.parseBuiltinSlice,
 	}

@@ -1,5 +1,7 @@
 package types
 
+// TODO: TypeParam is redundant, this could be handled by types.Alias
+
 // TypeParam represents a named type parameter with a set of constraints.
 // Distinct from Generic: Generic is a constraint family (set of allowed types),
 // TypeParam is a named placeholder bound to one or more constraints.

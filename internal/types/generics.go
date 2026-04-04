@@ -50,7 +50,7 @@ func init() {
 			// Sentinel zero-values: Satisfies matches by Kind(), so
 			// these allow any struct, array, enum, pointer, tuple,
 			// or set to satisfy comparable.
-			[]Type{&Struct{}, &Array{}, &Enum{}, &Pointer{}, &Tuple{}, &Set{}},
+			[]Type{&Struct{}, &Array{}, &Enum{}, &Reference{}, &Tuple{}, &Set{}},
 		),
 		name: "comparable",
 	}

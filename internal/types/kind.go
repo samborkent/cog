@@ -28,8 +28,8 @@ const (
 	Uint128
 	UTF8
 
-	// Pointer type
-	PointerKind
+	// Reference type
+	ReferenceKind
 
 	// Generic type
 	GenericKind
@@ -98,7 +98,7 @@ func (t Kind) String() string {
 		return "uint128"
 	case UTF8:
 		return "utf8"
-	case PointerKind:
+	case ReferenceKind:
 		return "&"
 	case GenericKind:
 		return "generic"

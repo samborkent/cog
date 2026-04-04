@@ -43,5 +43,12 @@ func (p *Prefix) Type() types.Type {
 		panic("prefix with nil type detected")
 	}
 
+	// Return
+	if p.Operator.Type == tokens.BitAnd {
+		return &types.Reference{
+			Value: p.Right.Type(),
+		}
+	}
+
 	return p.Right.Type()
 }

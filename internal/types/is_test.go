@@ -55,9 +55,9 @@ func TestEqual(t *testing.T) {
 		{"different option", &Option{Value: utf8Type}, &Option{Value: int64Type}, false},
 		{"option vs non-option", &Option{Value: utf8Type}, utf8Type, false},
 
-		// Pointers
-		{"same pointer", &Pointer{Value: int64Type}, &Pointer{Value: int64Type}, true},
-		{"different pointer", &Pointer{Value: int64Type}, &Pointer{Value: int8Type}, false},
+		// References
+		{"same pointer", &Reference{Value: int64Type}, &Reference{Value: int64Type}, true},
+		{"different pointer", &Reference{Value: int64Type}, &Reference{Value: int8Type}, false},
 
 		// Tuples
 		{"same tuple", &Tuple{Types: []Type{utf8Type, int64Type}}, &Tuple{Types: []Type{utf8Type, int64Type}}, true},

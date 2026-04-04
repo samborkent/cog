@@ -399,7 +399,7 @@ func TestSatisfies(t *testing.T) {
 		{"struct satisfies comparable", &Struct{}, Generics["comparable"], true},
 		{"array satisfies comparable", &Array{Element: Basics[Int64]}, Generics["comparable"], true},
 		{"enum satisfies comparable", &Enum{ValueType: Basics[Int64]}, Generics["comparable"], true},
-		{"pointer satisfies comparable", &Pointer{Value: Basics[Int64]}, Generics["comparable"], true},
+		{"pointer satisfies comparable", &Reference{Value: Basics[Int64]}, Generics["comparable"], true},
 		{"tuple satisfies comparable", &Tuple{Types: []Type{Basics[Int64]}}, Generics["comparable"], true},
 		{"set satisfies comparable", &Set{Element: Basics[Int64]}, Generics["comparable"], true},
 		{"slice not comparable", &Slice{Element: Basics[Int64]}, Generics["comparable"], false},
@@ -566,7 +566,7 @@ func TestGenericConstraints(t *testing.T) {
 		// Structural sentinels must have kinds that support == in Go.
 		comparableKinds := map[Kind]bool{
 			StructKind: true, ArrayKind: true, EnumKind: true,
-			PointerKind: true, TupleKind: true, SetKind: true,
+			ReferenceKind: true, TupleKind: true, SetKind: true,
 		}
 
 		for _, member := range Generics["comparable"].Constraints {
@@ -1185,7 +1185,7 @@ func TestIsComparable(t *testing.T) {
 	}{
 		{"basic int64", Basics[Int64], true},
 		{"basic bool", Basics[Bool], true},
-		{"pointer", &Pointer{Value: Basics[Int64]}, true},
+		{"reference", &Reference{Value: Basics[Int64]}, true},
 		{"enum", &Enum{ValueType: Basics[Int64]}, true},
 		{"struct with comparable fields", &Struct{Fields: []*Field{{Name: "x", Type: Basics[Int64]}}}, true},
 		{"struct with slice field", &Struct{Fields: []*Field{{Name: "x", Type: &Slice{Element: Basics[Int64]}}}}, false},

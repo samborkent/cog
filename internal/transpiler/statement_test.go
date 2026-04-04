@@ -242,7 +242,7 @@ Point ~ struct {
 	y : int32
 }
 main : proc() = {
-	p := @ptr<Point>()
+	p := @ref<Point>()
 	@print(p)
 }`)
 		mustContain(t, got, "new")

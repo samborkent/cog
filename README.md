@@ -42,7 +42,7 @@ The following basic features are missing that need to be implemented before Cog 
     - `@if<T any>(if : bool, then : T, else :? T)` conditional expression
     - `@cast<B, A any>(x A) B` bitwise type cast (target must be same size or larger)
 - Allocation builtins with generic type arguments:
-    - `@ptr<T valueType>() *T`
+    - `@ref<T valueType>() &T`
     - `@slice<T any, I uint>(len : I, cap :? I = len) []T`
     - `@map<K comparable, V any, I uint>(cap :? I = 8) map<K, V>`
     - `@set<K comparable, I uint>(cap :? I = 8) set<K>`
@@ -390,8 +390,8 @@ outerLoop:
 
 	what := @if<uint64, bool>(5 != 6, 10, 6)
 
-	ptr := @ptr<utf8>()
-	_ = ptr
+	ref := @ref<utf8>()
+	_ = ref
 
 	arg : uint64 = 10
 	_ = @slice<int32>(arg)

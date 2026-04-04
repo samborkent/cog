@@ -18,7 +18,7 @@ const (
 	BuiltinIf    Builtins = "if"
 	BuiltinMap   Builtins = "map"
 	BuiltinPrint Builtins = "print"
-	BuiltinPtr   Builtins = "ptr"
+	BuiltinRef   Builtins = "ref"
 	BuiltinSet   Builtins = "set"
 	BuiltinSlice Builtins = "slice"
 )
@@ -138,18 +138,18 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 		t.addBuiltinImport()
 
 		return component.BuiltinPrint(arg), nil
-	case BuiltinPtr:
+	case BuiltinRef:
 		if len(node.TypeArguments) != 1 {
-			return nil, fmt.Errorf("@ptr expects 1 type argument, got %d", len(node.TypeArguments))
+			return nil, fmt.Errorf("@ref expects 1 type argument, got %d", len(node.TypeArguments))
 		}
 
 		if len(node.Arguments) > 0 {
-			return nil, fmt.Errorf("@ptr cannot take any arguments, got %d", len(node.Arguments))
+			return nil, fmt.Errorf("@ref cannot take any arguments, got %d", len(node.Arguments))
 		}
 
 		valueType, err := t.convertType(node.TypeArguments[0])
 		if err != nil {
-			return nil, fmt.Errorf("converting @ptr value type: %w", err)
+			return nil, fmt.Errorf("converting @ref value type: %w", err)
 		}
 
 		return component.BuiltinPtr(valueType), nil

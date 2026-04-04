@@ -28,7 +28,7 @@ func TestKindString(t *testing.T) {
 		{Uint64, "uint64"},
 		{Uint128, "uint128"},
 		{UTF8, "utf8"},
-		{PointerKind, "&"},
+		{ReferenceKind, "&"},
 		{GenericKind, "generic"},
 		{ArrayKind, "array"},
 		{SliceKind, "slice"},
@@ -138,13 +138,14 @@ func TestOptionString(t *testing.T) {
 func TestPointerString(t *testing.T) {
 	t.Parallel()
 
-	p := &Pointer{Value: Basics[Int64]}
+	p := &Reference{Value: Basics[Int64]}
+
 	if got := p.String(); got != "&int64" {
-		t.Errorf("Pointer.String() = %q, want &int64", got)
+		t.Errorf("Reference.String() = %q, want &int64", got)
 	}
 
-	if p.Kind() != PointerKind {
-		t.Error("Pointer.Kind() != PointerKind")
+	if p.Kind() != ReferenceKind {
+		t.Error("Reference.Kind() != ReferenceKind")
 	}
 }
 

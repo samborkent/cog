@@ -382,7 +382,7 @@ func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string) {
 		if pkgName == "" {
 			pkgName = name
 
-			if pkgName != "main" && pkgName != dirName {
+			if pkgName != "main" && dirName != "." && pkgName != dirName {
 				fmt.Printf("%s: package %q does not match directory name %q\n", lf.path, pkgName, dirName)
 				return nil, ""
 			}

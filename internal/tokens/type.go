@@ -96,6 +96,7 @@ const (
 	Enum
 	Map
 	Set
+	Interface
 
 	// Type interface
 	Int        // i8, i16, i32, i64, i128
@@ -281,6 +282,8 @@ func (t Type) String() string {
 		return "map"
 	case Set:
 		return "set"
+	case Interface:
+		return "interface"
 	case Int:
 		return "int"
 	case Uint:

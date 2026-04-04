@@ -84,8 +84,8 @@ func SubstituteType(t Type, args map[string]Type) Type {
 		return &Set{Element: SubstituteType(v.Element, args)}
 	case *Option:
 		return &Option{Value: SubstituteType(v.Value, args)}
-	case *Pointer:
-		return &Pointer{Value: SubstituteType(v.Value, args)}
+	case *Reference:
+		return &Reference{Value: SubstituteType(v.Value, args)}
 	case *Tuple:
 		types := make([]Type, len(v.Types))
 		for i, elem := range v.Types {

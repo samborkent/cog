@@ -3,7 +3,7 @@
 version: '3'
 
 vars:
-  FILE: example
+  FILE: references.cogs
   DEBUG: false
   REPLACE_LOCAL_COG: true
 
@@ -44,7 +44,7 @@ tasks:
       vars:
         FILE: '{{.FILE}}'
         REPLACE_LOCAL_COG: '{{.REPLACE_LOCAL_COG}}'
-    - cd tmp && GOEXPERIMENT=arenas rtk go run ./cmd/script -asan -ldflags="-asan -race -s -w"
+    - cd tmp && GOEXPERIMENT=arenas rtk go run ./cmd/references -asan -ldflags="-asan -race -s -w"
     silent: true
 
   stats:

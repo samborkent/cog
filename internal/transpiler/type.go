@@ -205,15 +205,15 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		}
 
 		expr = funcType
-	case types.PointerKind:
-		pointerType, ok := typ.(*types.Pointer)
+	case types.ReferenceKind:
+		refType, ok := typ.(*types.Reference)
 		if !ok {
-			return nil, errors.New("unable to assert pointer type")
+			return nil, errors.New("unable to assert reference type")
 		}
 
-		valueType, err := t.convertType(pointerType.Value)
+		valueType, err := t.convertType(refType.Value)
 		if err != nil {
-			return nil, fmt.Errorf("converting pointer value type: %w", err)
+			return nil, fmt.Errorf("converting reference value type: %w", err)
 		}
 
 		expr = &goast.StarExpr{X: valueType}
