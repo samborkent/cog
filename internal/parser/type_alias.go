@@ -83,9 +83,10 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 	}
 
 	// Define type if in inner scope
-	if p.symbols.Outer != nil && len(typeParams) == 0 {
-		p.symbols.Define(typeDecl.Identifier)
-	}
+	// TODO: find out why we had these restrictions.
+	// if p.symbols.Outer != nil && len(typeParams) == 0 {
+	p.symbols.Define(typeDecl.Identifier)
+	// }
 
 	return typeDecl
 }

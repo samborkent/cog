@@ -117,6 +117,13 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				}
 
 				return nil
+			case tokens.Dot:
+				// Method declaration
+				if node := p.parseMethod(ctx, ident); node != nil {
+					return node
+				}
+
+				return nil
 			default:
 				p.error(p.this(), "unexpected token following exported identifier", "parseStatement")
 				p.advance("parseStatement export error") // consume unknown token
@@ -265,6 +272,13 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			typeDecl := p.parseTypeAlias(ctx, ident)
 			if typeDecl != nil {
 				return typeDecl
+			}
+
+			return nil
+		case tokens.Dot:
+			// Method declaration
+			if node := p.parseMethod(ctx, ident); node != nil {
+				return node
 			}
 
 			return nil

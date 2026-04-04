@@ -106,14 +106,7 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 			switch s := stmt.(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
-					alias := goStdLibAlias(imprt.Name)
-					t.imports[imprt.Name] = &goast.ImportSpec{
-						Name: &goast.Ident{Name: alias},
-						Path: &goast.BasicLit{
-							Kind:  gotoken.STRING,
-							Value: `"` + imprt.Name + `"`,
-						},
-					}
+					t.addStdLibImport(imprt.Name)
 				}
 			case *ast.Import:
 				t.addCogImports(s)
@@ -183,14 +176,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 			switch s := stmt.(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
-					alias := goStdLibAlias(imprt.Name)
-					t.imports[imprt.Name] = &goast.ImportSpec{
-						Name: &goast.Ident{Name: alias},
-						Path: &goast.BasicLit{
-							Kind:  gotoken.STRING,
-							Value: `"` + imprt.Name + `"`,
-						},
-					}
+					t.addStdLibImport(imprt.Name)
 				}
 			case *ast.Import:
 				t.addCogImports(s)
@@ -247,18 +233,11 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 			switch s := stmt.(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
-					alias := goStdLibAlias(imprt.Name)
-					t.imports[imprt.Name] = &goast.ImportSpec{
-						Name: &goast.Ident{Name: alias},
-						Path: &goast.BasicLit{
-							Kind:  gotoken.STRING,
-							Value: `"` + imprt.Name + `"`,
-						},
-					}
+					t.addStdLibImport(imprt.Name)
 				}
 			case *ast.Import:
 				t.addCogImports(s)
-			case *ast.Type:
+			case *ast.Method, *ast.Type:
 				gonodes, err := t.convertDecl(s)
 				if err != nil {
 					errs = append(errs, fmt.Errorf("\t%s: %w", s.String(), err))
@@ -481,9 +460,8 @@ func (t *Transpiler) addBuiltinImport() {
 func (t *Transpiler) addStdLibImport(name string) {
 	_, ok := t.imports[name]
 	if !ok {
-		alias := goStdLibAlias(name)
 		t.imports[name] = &goast.ImportSpec{
-			Name: &goast.Ident{Name: alias},
+			Name: &goast.Ident{Name: goStdLibAlias(name)},
 			Path: &goast.BasicLit{
 				Kind:  gotoken.STRING,
 				Value: `"` + name + `"`,

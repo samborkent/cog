@@ -11,6 +11,7 @@ type Qualifier uint8
 
 const (
 	QualifierType Qualifier = iota
+	QualifierMethod
 	QualifierImmutable
 	QualifierVariable
 	QualifierDynamic

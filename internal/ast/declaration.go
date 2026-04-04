@@ -50,11 +50,7 @@ func (d *Declaration) stringTo(out *strings.Builder) {
 		return
 	}
 
-	d.Assignment.Identifier.stringTo(out)
-	_, _ = out.WriteString(" : ")
-	_, _ = out.WriteString(d.Assignment.Identifier.ValueType.String())
-	_, _ = out.WriteString(" = ")
-	d.Assignment.Expression.stringTo(out)
+	d.Assignment.stringTo(out)
 }
 
 func (d *Declaration) String() string {

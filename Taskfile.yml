@@ -3,7 +3,7 @@
 version: '3'
 
 vars:
-  FILE: references.cogs
+  FILE: methods.cog
   DEBUG: false
   REPLACE_LOCAL_COG: true
 

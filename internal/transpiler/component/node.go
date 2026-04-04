@@ -3,7 +3,20 @@ package component
 import (
 	goast "go/ast"
 	gotoken "go/token"
+
+	"github.com/samborkent/cog/internal/ast"
 )
+
+var This = []*goast.Ident{{Name: "this"}}
+
+func Receiver(ident *ast.Identifier) *goast.FieldList {
+	return &goast.FieldList{
+		List: []*goast.Field{{
+			Names: This,
+			Type:  Ident(ident),
+		}},
+	}
+}
 
 // Selector creates a *goast.SelectorExpr for x.sel.
 func Selector(x goast.Expr, sel string) *goast.SelectorExpr {

@@ -1,6 +1,7 @@
 package transpiler
 
 import (
+	"errors"
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
@@ -139,9 +140,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					} else {
 						// Main with procs but no dynamic variables: just init context.
 						ctxIdent := t.symbols.Define("ctx")
-						if err := t.symbols.MarkUsed("ctx"); err != nil {
-							return nil, fmt.Errorf("marking ctx used: %w", err)
-						}
 
 						funcDecl.Body.List = append(
 							[]goast.Stmt{component.ContextMain(ctxIdent)},
@@ -150,13 +148,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					}
 
 					if t.needsContext {
-						t.imports["ctx"] = &goast.ImportSpec{
-							Name: &goast.Ident{Name: goStdLibAlias("context")},
-							Path: &goast.BasicLit{
-								Kind:  gotoken.STRING,
-								Value: `"context"`,
-							},
-						}
+						t.addStdLibImport("context")
 
 						// Remove context argument for main func.
 						funcDecl.Type.Params.List = funcDecl.Type.Params.List[1:]
@@ -174,6 +166,10 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				if ok && !procType.Function {
 					funcDecl.Body.List = append(component.DynProcEntry(), funcDecl.Body.List...)
 				}
+			}
+
+			if t.needsContext {
+				t.addStdLibImport("context")
 			}
 
 			t.injectArena(funcDecl.Body)
@@ -215,6 +211,24 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			Tok:   tok,
 			Specs: []goast.Spec{valueSpec},
 		}}, nil
+	case *ast.Method:
+		decls, err := t.convertDecl(n.Declaration)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(decls) != 1 {
+			return nil, fmt.Errorf("transpilation of method declaration resulted in an unexpected number of declarations: %d", len(decls))
+		}
+
+		funcDecl, ok := decls[0].(*goast.FuncDecl)
+		if !ok {
+			return nil, errors.New("unable to assert function declartion during method transpilation")
+		}
+
+		funcDecl.Recv = component.Receiver(n.Receiver)
+
+		return decls, nil
 	case *ast.Type:
 		if n.Alias.Kind() == types.EnumKind || n.Alias.Kind() == types.ErrorKind {
 			return t.convertEnumDecl(n)

@@ -1,17 +1,58 @@
-package cog
+package main
 
-// type Struct struct{}
+// order shouldn't matter
+Struct.Unordered : proc() = {}
+
+// type _Struct struct{}
 
 Struct ~ struct {}
 
-// func Function() {}
+// func _Function() {}
 
 Function : proc() = {}
 
-// func (Struct) Method()
+// func (_Struct) Method()
 
 Struct.Method : proc() = {}
 
+// type Exported struct{}
+
+export Exported ~ struct {
+    Method : uint64
+}
+
+// error: field name conflict
+// Exported.Method : proc() = {}
+
+// func (Exported) _Other()
+
+Exported.Other : proc() = {}
+
+// func (Exported) Export()
+
+export Exported.Export : proc() = {}
+
+// func (_Struct) Export()
+
+// error: exported method not allowed on unexported type
+// export Struct.Export : proc() = {}
+
 // func (*Struct) Method()
 
-&Struct.Method : proc() = {}
+// &Struct.Method : proc() = {}
+
+main : proc() = {
+    foo := "hello"
+    var bar := &foo
+
+    baz := "world"
+    bar = &baz
+
+    _ = bar
+
+    Foo : &utf8 = &foo
+    Bar : &ascii = &"hello"
+
+    Baz ~ &complex128
+}
+

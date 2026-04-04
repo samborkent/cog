@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
@@ -168,7 +169,7 @@ tokenLoop:
 		case tokens.EOF:
 			break tokenLoop
 		default:
-			p.error(p.this(), "unknown token", "Parse")
+			p.error(p.this(), "unexpected token", "Parse")
 			p.synchronize()
 		}
 
@@ -213,6 +214,25 @@ func (p *Parser) next() tokens.Token {
 func (p *Parser) advance(scope string) {
 	if p.i >= len(p.tokens)-1 {
 		return
+	}
+
+	if p.debug && p.this().Type != tokens.Comment {
+		from := p.this().Type.String()
+		if slices.Contains([]tokens.Type{
+			tokens.Identifier, tokens.StringLiteral, tokens.IntLiteral, tokens.FloatLiteral,
+		}, p.this().Type) {
+			from = p.this().Literal
+		}
+
+		to := p.next().Type.String()
+		if slices.Contains([]tokens.Type{
+			tokens.Identifier, tokens.StringLiteral, tokens.IntLiteral, tokens.FloatLiteral,
+		}, p.next().Type) {
+			to = p.next().Literal
+		}
+
+		_, _ = fmt.Printf("ADVANCE: ln %d, col %d:\t%s\t\tfrom %q,\tto %q\n",
+			p.this().Ln, p.this().Col, scope, from, to)
 	}
 
 	p.i++
