@@ -13,7 +13,7 @@ type Selector struct {
 	expression
 
 	Token      tokens.Token
-	Identifier *Identifier
+	Expression Expression // *Identifier or *Selector
 	Field      *Identifier
 }
 
@@ -26,9 +26,9 @@ func (e *Selector) Hash() uint64 {
 }
 
 func (e *Selector) stringTo(out *strings.Builder) {
-	_, _ = out.WriteString(e.Identifier.Name)
+	e.Expression.stringTo(out)
 	_ = out.WriteByte('.')
-	_, _ = out.WriteString(e.Field.Name)
+	e.Field.stringTo(out)
 }
 
 func (e *Selector) String() string {

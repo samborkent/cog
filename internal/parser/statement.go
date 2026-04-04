@@ -276,12 +276,16 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 
 			return nil
 		case tokens.Dot:
-			// Method declaration
-			if node := p.parseMethod(ctx, ident); node != nil {
-				return node
+			if p.symbols.Outer == nil {
+				// Method declaration (only possible in global scope)
+				if node := p.parseMethod(ctx, ident); node != nil {
+					return node
+				}
+
+				return nil
 			}
 
-			return nil
+			fallthrough
 		default:
 			p.error(p.this(), "unexpected token found after identifier", "parseStatement")
 			return nil

@@ -71,7 +71,7 @@ func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.Expre
 	// Otherwise it's a value/type selector: pkg.Value
 	return &ast.Selector{
 		Token:      pkgToken,
-		Identifier: pkgIdent,
+		Expression: pkgIdent,
 		Field:      fieldIdent,
 	}
 }

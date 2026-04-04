@@ -1,6 +1,7 @@
 package transpiler
 
 import (
+	"errors"
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
@@ -694,18 +695,38 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}, nil
 	case *ast.Selector:
 		// Check if this is a package import selector (pkg.Symbol).
-		if types.IsNone(n.Identifier.ValueType) {
+		if types.IsNone(n.Expression.Type()) {
 			return &goast.SelectorExpr{
-				X:   &goast.Ident{Name: n.Identifier.Name},
+				X:   component.IdentName(n.Expression.String()),
 				Sel: component.Ident(n.Field),
 			}, nil
 		}
 
-		name := component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global)
+		var leftMost *ast.Identifier
+
+		// Find left-most identifier of selector.
+	selectorLoop:
+		for {
+			switch sel := n.Expression.(type) {
+			case *ast.Selector:
+				continue
+			case *ast.Identifier:
+				leftMost = sel
+				break selectorLoop
+			default:
+				return nil, fmt.Errorf("unexpected type %T found in selector expression", n.Expression)
+			}
+		}
+
+		if leftMost == nil {
+			return nil, errors.New("unable to find left-most identifier in selector expression")
+		}
+
+		name := component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
 
 		ident, ok := t.symbols.Resolve(name)
 		if !ok {
-			return nil, fmt.Errorf("%s: unknown selector identifier", n.Identifier.Token)
+			return nil, fmt.Errorf("%s: unknown selector identifier", leftMost.Token)
 		}
 
 		if err := t.symbols.MarkUsed(name); err != nil {
@@ -714,16 +735,16 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		var exported bool
 
-		switch n.Identifier.ValueType.Kind() {
+		switch leftMost.ValueType.Kind() {
 		case types.EnumKind, types.ErrorKind:
 			enumName := ident
 			enumName.Name = enumName.Name + titleCaser.String(n.Field.Name)
 
 			return enumName, nil
 		case types.StructKind:
-			structType, ok := n.Identifier.ValueType.Underlying().(*types.Struct)
+			structType, ok := leftMost.ValueType.Underlying().(*types.Struct)
 			if !ok {
-				return nil, fmt.Errorf("unable to assert struct type for %q", n.Identifier.Name)
+				return nil, fmt.Errorf("unable to assert struct type for %q", leftMost.Name)
 			}
 
 			field := structType.Field(n.Field.Name)
@@ -732,11 +753,11 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 
 			return &goast.SelectorExpr{
-				X:   component.Ident(n.Identifier),
-				Sel: &goast.Ident{Name: component.ConvertExport(n.Field.Name, exported, false)},
+				X:   component.Ident(leftMost),
+				Sel: component.IdentName(component.ConvertExport(n.Field.Name, exported, false)),
 			}, nil
 		default:
-			return nil, fmt.Errorf("%q: unknown type found for selector expression %q", n, n.Identifier.ValueType)
+			return nil, fmt.Errorf("%q: unknown type found for selector expression %q", n, leftMost.ValueType)
 		}
 	case *ast.SetLiteral:
 		// TODO: handle not directly comparable types

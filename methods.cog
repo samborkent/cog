@@ -30,7 +30,9 @@ Exported.Other : proc() = {}
 
 // func (Exported) Export()
 
-export Exported.Export : proc() = {}
+export Exported.Export : proc() = {
+    @print("Exported.Export")
+}
 
 // func (_Struct) Export()
 
@@ -54,5 +56,7 @@ main : proc() = {
     Bar : &ascii = &"hello"
 
     Baz ~ &complex128
+
+    _ = Exported.Export
 }
 

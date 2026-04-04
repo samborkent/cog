@@ -556,44 +556,59 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				TypeArgs:   typeArgs,
 			}
 		case tokens.Dot:
-			// TODO: recursive selector expression
-
 			// Selector expression
 			selector := p.this()
 
-			p.advance("primary identifier .") // consume .
+			var expr ast.Expression = symbol.Identifier
+			var selected *ast.Identifier
 
-			if p.this().Type != tokens.Identifier {
-				p.error(p.this(), "expected field identifier after . selector", "primary")
-				return nil
-			}
+			for p.this().Type == tokens.Dot && p.this().Type != tokens.EOF {
+				p.advance("primary identifier .") // consume .
 
-			field, ok := p.symbols.ResolveField(symbol.Identifier.Name, p.this().Literal)
-			if !ok {
-				p.error(p.this(), "undefined field", "primary")
-				return nil
-			}
-
-			field.Identifier.Token = p.this()
-
-			p.advance("primary identifier field") // consume field identifier
-
-			// For enum selectors, wrap the field type in an alias so the enum
-			// type can be inferred downstream.  For struct fields, preserve the
-			// original field type (e.g. float64) so arithmetic works correctly.
-			if field.Scope == EnumScope {
-				field.Identifier.ValueType = &types.Alias{
-					Name:     symbol.Identifier.Name,
-					Derived:  symbol.Type(),
-					Exported: symbol.Identifier.Exported,
-					Global:   symbol.Identifier.Global,
+				if p.this().Type != tokens.Identifier {
+					p.error(p.this(), "expected field identifier after . selector", "primary")
+					return nil
 				}
+
+				field, ok := p.symbols.ResolveField(symbol.Identifier.Name, p.this().Literal)
+				if !ok {
+					p.error(p.this(), "undefined field", "primary")
+					return nil
+				}
+
+				field.Identifier.Token = p.this()
+
+				p.advance("primary identifier field") // consume field identifier
+
+				// For enum selectors, wrap the field type in an alias so the enum
+				// type can be inferred downstream.  For struct fields, preserve the
+				// original field type (e.g. float64) so arithmetic works correctly.
+				if field.Scope == EnumScope {
+					field.Identifier.ValueType = &types.Alias{
+						Name:     symbol.Identifier.Name,
+						Derived:  symbol.Type(),
+						Exported: symbol.Identifier.Exported,
+						Global:   symbol.Identifier.Global,
+					}
+				}
+
+				if selected != nil {
+					// If there is already a selected field, add it to selector expression.
+					expr = &ast.Selector{
+						Token:      selector,
+						Expression: expr,
+						Field:      selected,
+					}
+				}
+
+				// Change selected to the right most selected field.
+				selected = field.Identifier
 			}
 
 			return &ast.Selector{
 				Token:      selector,
-				Identifier: symbol.Identifier,
-				Field:      field.Identifier,
+				Expression: expr,
+				Field:      selected,
 			}
 		default:
 			// Variable reference
