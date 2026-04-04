@@ -5,3 +5,8 @@ baz := "world"
 bar = &baz
 
 _ = bar
+
+Foo : &utf8 = &foo
+Bar : &ascii = &"hello"
+
+Baz ~ &complex128

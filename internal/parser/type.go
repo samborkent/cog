@@ -225,6 +225,24 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		return &types.Set{Element: elemType}
 	case tokens.Struct:
 		return p.parseStruct(ctx)
+	case tokens.BitAnd:
+		// Reference type parsing
+		p.advance("parseType &") // consume &
+
+		valType := p.parseType(ctx)
+		if valType == nil {
+			return nil
+		}
+
+		// TODO: check if this is correct.
+		if types.IsPointer(valType) {
+			p.error(p.this(), fmt.Sprintf("reference of pointer type %q not allowed", valType.Kind()), "parseType")
+			return nil
+		}
+
+		return &types.Reference{
+			Value: valType,
+		}
 	}
 
 	typ, ok := types.Lookup[p.this().Type]

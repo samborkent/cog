@@ -57,3 +57,9 @@ func IsUint(t Type) bool {
 func IsBasic(t Type) bool {
 	return IsBool(t) || IsNumber(t) || IsString(t)
 }
+
+// Pointer types are types which are pointer types under the hood.
+func IsPointer(t Type) bool {
+	kind := t.Kind()
+	return kind == ReferenceKind || kind == SliceKind || kind == SetKind || kind == MapKind
+}

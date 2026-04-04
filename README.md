@@ -6,6 +6,20 @@ The following basic features are missing that need to be implemented before Cog 
 
 - Go-to-Cog type conversions
 
+## TODO:
+
+### Bugs
+- When declaring type alias in script mode, the type gets placed in global scope, instead of inside of main.
+- Syntax clash between bitwise AND and reference, both use same token.
+
+### Features
+- Remove `@ref` allocator.
+- Change `@cast` signature to `@cast<B, A any>(x A) B?`. Return type will only be set if lossless cast is possible.
+- Define builtin functions as `cog` functions.
+- Design how iterators should work.
+    - Range over int (or other literal) should not be possible.
+    - Instead we should range over an iterator function which takes literal as argument.
+
 ## Features
 
 ### Implemented
@@ -134,7 +148,10 @@ The following basic features are missing that need to be implemented before Cog 
         - Will perform best-effort conversion, allowing some precision loss and handling overflows.
 - Additional types:
     - `signal<T any>` alias of `chan<T any>struct{}`
+- Range operator `0..4 == [0, 1, 2, 3]`
 - Builtin operations for 2D / 3D / 4D slices.
+- Implement flat AST.
+- Fork and rework float16, uint128 and int128 imported packages.
 - Builtin `upx` binary packer for smaller binaries.
 - LSP
 - Adaptive GC (https://github.com/samborkent/adaptive-gc)
@@ -148,15 +165,6 @@ The following basic features are missing that need to be implemented before Cog 
 * `=` - assign a value to a value identifier
 * `:=` - short hand for `: <inferred type> =`
 * `~` - declare a type alias
-
-## TODO
-
-- Range operator `0..4 == [0, 1, 2, 3]`
-- Design how iterators should work.
-    - Range over int (or other literal) should not be possible.
-    - Instead we should range over an iterator function which takes literal as argument.
-- Fork and rework float16, uint128 and int128 imported packages.
-- Implement flat AST.
 
 ## Example code
 
