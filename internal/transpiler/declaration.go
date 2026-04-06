@@ -237,7 +237,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			return nil, errors.New("unable to assert function declartion during method transpilation")
 		}
 
-		funcDecl.Recv = component.Receiver(n.Receiver)
+		funcDecl.Recv = component.Receiver(n.Receiver, n.Reference)
 
 		return decls, nil
 	case *ast.Type:

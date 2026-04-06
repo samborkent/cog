@@ -556,7 +556,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				TypeArgs:   typeArgs,
 			}
 		case tokens.Dot:
-			if symbol.Identifier.Qualifier == ast.QualifierType {
+			symbolType := symbol.Type()
+			kind := symbolType.Kind()
+
+			if symbol.Identifier.Qualifier == ast.QualifierType &&
+				kind != types.EnumKind && kind != types.ErrorKind {
 				p.error(p.this(), fmt.Sprintf("%q is a type, not a value: cannot invoke methods on types", symbol.Identifier.Name), "primary")
 				return nil
 			}
@@ -575,7 +579,15 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 					return nil
 				}
 
-				field, ok := p.symbols.ResolveField(symbol.Type().String(), p.this().Literal)
+				var typName string
+
+				if kind == types.EnumKind || kind == types.ErrorKind {
+					typName = symbol.Identifier.Name
+				} else {
+					typName = symbolType.String()
+				}
+
+				field, ok := p.symbols.ResolveField(typName, p.this().Literal)
 				if !ok {
 					p.error(p.this(), "undefined field", "primary")
 					return nil
@@ -608,6 +620,9 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 				// Change selected to the right most selected field.
 				selected = field.Identifier
+
+				// Update symbolType for chained selector expressions.
+				symbolType = field.Type()
 			}
 
 			expr = &ast.Selector{
@@ -619,7 +634,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			if p.match(tokens.LParen, tokens.LT) {
 				// Method call expression
 				if expr.Type().Kind() != types.ProcedureKind {
-					p.error(p.prev(), "cannot call expression: expression is not a function")
+					p.error(p.prev(), fmt.Sprintf("cannot call expression: expression of type %q is not a function", expr.Type()))
 					return nil
 				}
 

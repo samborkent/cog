@@ -228,15 +228,15 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 				panic(fmt.Errorf("go mod tidy: %s\n%w", out, err))
 			}
 		}
-	} else {
-		// fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
-
-		// if err := t.Print(os.Stdout, gofile); err != nil {
-		// 	panic(fmt.Errorf("printing output: %w", err))
-		// }
-
-		// fmt.Println()
 	}
+
+	// fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
+
+	// if err := t.Print(os.Stdout, gofile); err != nil {
+	// 	panic(fmt.Errorf("printing output: %w", err))
+	// }
+
+	// fmt.Println()
 }
 
 // compiledPackage holds the output of compiling a single cog package.

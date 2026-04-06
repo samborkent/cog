@@ -145,7 +145,8 @@ tokenLoop:
 			tokens.Switch,
 			tokens.Return,
 			tokens.Break,
-			tokens.Continue:
+			tokens.Continue,
+			tokens.BitAnd:
 			node := p.parseStatement(ctx)
 			if node != nil {
 				f.Statements = append(f.Statements, node)

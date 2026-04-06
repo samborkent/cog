@@ -181,6 +181,11 @@ func (p *Parser) parseBuiltinPrint(ctx context.Context, t tokens.Token, tokenTyp
 
 	p.advance("parsePrint (") // consume (
 
+	if p.this().Type == tokens.RParen {
+		p.error(p.this(), "expected argument in @print", "parsePrint")
+		return nil
+	}
+
 	arg := p.expression(ctx, tokenType)
 	if arg == nil {
 		return nil

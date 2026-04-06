@@ -473,6 +473,12 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 	if !preRegistered {
 		p.symbols.DefineGlobal(ident)
+	} else {
+		// For pre-registered types, we still need to register struct fields
+		// since they weren't available during pre-registration.
+		if alias.Kind() == types.StructKind {
+			p.symbols.Define(ident)
+		}
 	}
 }
 

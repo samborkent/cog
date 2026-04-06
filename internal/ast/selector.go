@@ -48,16 +48,18 @@ func (e *Selector) LeftMost() (*Identifier, error) {
 	var leftMost *Identifier
 
 	// Find left-most identifier of selector.
+	current := e
 selectorLoop:
 	for {
-		switch sel := e.Expression.(type) {
+		switch sel := current.Expression.(type) {
 		case *Selector:
+			current = sel
 			continue
 		case *Identifier:
 			leftMost = sel
 			break selectorLoop
 		default:
-			return nil, fmt.Errorf("unexpected type %T found in selector expression", e.Expression)
+			return nil, fmt.Errorf("unexpected type %T found in selector expression", current.Expression)
 		}
 	}
 

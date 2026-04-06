@@ -13,6 +13,7 @@ type Method struct {
 
 	Token       tokens.Token
 	Receiver    *Identifier
+	Reference   bool
 	Declaration *Declaration
 }
 
@@ -27,6 +28,10 @@ func (s *Method) Hash() uint64 {
 func (s *Method) stringTo(out *strings.Builder) {
 	if s.Declaration.Assignment.Identifier.Exported {
 		_, _ = out.WriteString("export ")
+	}
+
+	if s.Reference {
+		_ = out.WriteByte('&')
 	}
 
 	_, _ = out.WriteString(s.Receiver.Name)

@@ -37,11 +37,11 @@ export Exported.Export : proc() = {
 // func (_Struct) Export()
 
 // error: exported method not allowed on unexported type
-export Struct.Export : proc() = {}
+// export Struct.Export : proc() = {}
 
-// func (*Struct) Method()
+// func (*Struct) Method2()
 
-// &Struct.Method : proc() = {}
+&Struct.Method2 : proc() = {}
 
 main : proc() = {
     foo := "hello"

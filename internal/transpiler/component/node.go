@@ -9,11 +9,17 @@ import (
 
 var This = []*goast.Ident{{Name: "this"}}
 
-func Receiver(ident *ast.Identifier) *goast.FieldList {
+func Receiver(ident *ast.Identifier, reference bool) *goast.FieldList {
+	var typ goast.Expr = Ident(ident)
+
+	if reference {
+		typ = &goast.StarExpr{X: typ}
+	}
+
 	return &goast.FieldList{
 		List: []*goast.Field{{
 			Names: This,
-			Type:  Ident(ident),
+			Type:  typ,
 		}},
 	}
 }
