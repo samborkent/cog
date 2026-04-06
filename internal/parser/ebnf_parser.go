@@ -511,7 +511,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				}
 
 				return &ast.Call{
-					Identifier: symbol.Identifier,
+					Expression: symbol.Identifier,
 					Arguments:  args,
 					ReturnType: returnType,
 					TypeArgs:   typeArgs,
@@ -519,7 +519,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			return &ast.Call{
-				Identifier: symbol.Identifier,
+				Expression: symbol.Identifier,
 				Arguments:  p.parseCallArguments(ctx, procType),
 				ReturnType: procType.ReturnType,
 			}
@@ -550,12 +550,17 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			return &ast.Call{
-				Identifier: symbol.Identifier,
+				Expression: symbol.Identifier,
 				Arguments:  args,
 				ReturnType: returnType,
 				TypeArgs:   typeArgs,
 			}
 		case tokens.Dot:
+			if symbol.Identifier.Qualifier == ast.QualifierType {
+				p.error(p.this(), fmt.Sprintf("%q is a type, not a value: cannot invoke methods on types", symbol.Identifier.Name), "primary")
+				return nil
+			}
+
 			// Selector expression
 			selector := p.this()
 
@@ -570,7 +575,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 					return nil
 				}
 
-				field, ok := p.symbols.ResolveField(symbol.Identifier.Name, p.this().Literal)
+				field, ok := p.symbols.ResolveField(symbol.Type().String(), p.this().Literal)
 				if !ok {
 					p.error(p.this(), "undefined field", "primary")
 					return nil
@@ -603,6 +608,46 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 				// Change selected to the right most selected field.
 				selected = field.Identifier
+			}
+
+			expr = &ast.Selector{
+				Token:      selector,
+				Expression: expr,
+				Field:      selected,
+			}
+
+			if p.match(tokens.LParen, tokens.LT) {
+				// Method call expression
+				if expr.Type().Kind() != types.ProcedureKind {
+					p.error(p.prev(), "cannot call expression: expression is not a function")
+					return nil
+				}
+
+				procType, ok := expr.Type().(*types.Procedure)
+				if !ok {
+					panic("unable to cast procedure kind expressions to type in call parsing")
+				}
+
+				var typeArgs []types.Type
+
+				if p.this().Type == tokens.LT {
+					typeArgs = p.parseTypeArguments(ctx)
+					if typeArgs == nil {
+						return nil
+					}
+				}
+
+				args := p.parseCallArguments(ctx, procType)
+				if args == nil {
+					return nil
+				}
+
+				return &ast.Call{
+					Expression: expr,
+					Arguments:  args,
+					ReturnType: procType.ReturnType,
+					TypeArgs:   typeArgs,
+				}
 			}
 
 			return &ast.Selector{

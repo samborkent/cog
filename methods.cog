@@ -37,7 +37,7 @@ export Exported.Export : proc() = {
 // func (_Struct) Export()
 
 // error: exported method not allowed on unexported type
-// export Struct.Export : proc() = {}
+export Struct.Export : proc() = {}
 
 // func (*Struct) Method()
 
@@ -57,6 +57,10 @@ main : proc() = {
 
     Baz ~ &complex128
 
-    _ = Exported.Export
+    exported : Exported = {
+        Method = 42,
+    }
+
+    exported.Export()
 }
 

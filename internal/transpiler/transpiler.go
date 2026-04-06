@@ -323,6 +323,13 @@ func (t *Transpiler) predeclareGlobals() error {
 						t.needsContext = true
 					}
 				}
+			case *ast.Method:
+				if s.Declaration.Assignment.Expression.Type().Kind() == types.ProcedureKind {
+					procType, ok := s.Declaration.Assignment.Expression.Type().(*types.Procedure)
+					if ok && !procType.Function {
+						t.needsContext = true
+					}
+				}
 			case *ast.Type:
 				t.symbols.Define(component.ConvertExport(s.Identifier.Name, s.Identifier.Exported, s.Identifier.Global))
 			}

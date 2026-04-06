@@ -178,7 +178,8 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		} else if p.next().Type == tokens.Dot {
 			if _, isImport := p.symbols.ResolveCogImport(p.this().Literal); isImport {
 				// Imported package selector: e.g. pkg.Func(...)
-			} else {
+			} else if p.symbols.Outer == nil {
+				// Only consume in global scope, for method declarations.
 				p.advance("parseStatement ident") // consume identifier
 			}
 		} else {
@@ -256,7 +257,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			}
 
 			return nil
-		case tokens.Identifier: // Procedure call
+		case tokens.Identifier: // Procedure / method call
 			identToken := p.this()
 
 			callExpr := p.expression(ctx, types.None)

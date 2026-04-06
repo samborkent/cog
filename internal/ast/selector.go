@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/samborkent/cog/internal/tokens"
@@ -40,4 +42,28 @@ func (e *Selector) String() string {
 
 func (e *Selector) Type() types.Type {
 	return e.Field.Type()
+}
+
+func (e *Selector) LeftMost() (*Identifier, error) {
+	var leftMost *Identifier
+
+	// Find left-most identifier of selector.
+selectorLoop:
+	for {
+		switch sel := e.Expression.(type) {
+		case *Selector:
+			continue
+		case *Identifier:
+			leftMost = sel
+			break selectorLoop
+		default:
+			return nil, fmt.Errorf("unexpected type %T found in selector expression", e.Expression)
+		}
+	}
+
+	if leftMost == nil {
+		return nil, errors.New("unable to find left-most identifier in selector expression")
+	}
+
+	return leftMost, nil
 }

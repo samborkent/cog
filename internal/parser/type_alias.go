@@ -19,6 +19,8 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 		}
 	}
 
+	ident.Qualifier = ast.QualifierType
+
 	typeDecl := &ast.Type{
 		Token:      p.this(),
 		Identifier: ident,

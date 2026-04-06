@@ -60,6 +60,17 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		prevUsesDyn := t.usesDyn
 		t.usesDyn = false
 
+		// Pre-define ctx and dyn in the symbol table for main so that
+		// the body conversion can reference them (e.g. passing ctx to procs).
+		if n.Assignment.Identifier.Name == "main" {
+			if len(t.symbols.dynamics) > 0 {
+				t.symbols.Define("dyn")
+			}
+			if t.needsContext {
+				t.symbols.Define("ctx")
+			}
+		}
+
 		expr, err := t.convertExpr(n.Assignment.Expression)
 		if err != nil {
 			return nil, err

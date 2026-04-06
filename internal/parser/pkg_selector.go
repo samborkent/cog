@@ -61,7 +61,7 @@ func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.Expre
 		}
 
 		return &ast.Call{
-			Identifier: fieldIdent,
+			Expression: fieldIdent,
 			Package:    imp.Name,
 			Arguments:  p.parseCallArguments(ctx, procType),
 			ReturnType: procType.ReturnType,

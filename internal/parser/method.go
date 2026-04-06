@@ -20,7 +20,7 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier) *ast
 	}
 
 	if receiver.Exported && !storedReceiver.Identifier.Exported {
-		p.error(p.this(), "exported methods on unexported types are not allowed", "parseMethod")
+		p.error(p.this(), "exported method not allowed on unexported type", "parseMethod")
 		return nil
 	}
 

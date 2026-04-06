@@ -1,7 +1,6 @@
 package transpiler
 
 import (
-	"errors"
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
@@ -43,14 +42,18 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Builtin:
 		return t.convertBuiltin(n)
 	case *ast.Call:
-		procType, ok := n.Identifier.ValueType.(*types.Procedure)
+		procType, ok := n.Expression.Type().(*types.Procedure)
 		if !ok {
-			return nil, fmt.Errorf("failed to assert procedure type for %q", n.Identifier.Name)
+			return nil, fmt.Errorf("failed to assert procedure type for %q", n.Expression)
 		}
 
 		args := make([]goast.Expr, 0, len(procType.Parameters))
 
 		if !procType.Function && t.needsContext {
+			if err := t.symbols.MarkUsed("ctx"); err != nil {
+				return nil, err
+			}
+
 			// Pass context variable to all procedures.
 			args = append(args, component.ContextVar)
 		}
@@ -89,19 +92,76 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		if n.Package == "" {
-			if err := t.symbols.MarkUsed(n.Identifier.Name); err != nil {
+			var usedName string
+
+			switch expr := n.Expression.(type) {
+			case *ast.Identifier:
+				usedName = expr.Name
+			case *ast.Selector:
+				leftMost, err := expr.LeftMost()
+				if err != nil {
+					return nil, err
+				}
+
+				usedName = leftMost.Name
+			}
+
+			if err := t.symbols.MarkUsed(usedName); err != nil {
 				return nil, fmt.Errorf("marking call identifier used: %w", err)
 			}
 		}
 
 		var fun goast.Expr
+
 		if n.Package != "" {
-			fun = &goast.SelectorExpr{
-				X:   &goast.Ident{Name: n.Package},
-				Sel: component.Ident(n.Identifier),
+			switch sel := n.Expression.(type) {
+			case *ast.Identifier:
+				fun = &goast.SelectorExpr{
+					X:   &goast.Ident{Name: n.Package},
+					Sel: component.Ident(sel),
+				}
+			case *ast.Selector:
+				var fields []*goast.Ident
+
+				selExpr := sel.Expression
+
+			selCallLoop:
+				for {
+					switch subsel := selExpr.(type) {
+					case *ast.Selector:
+						fields = append(fields, component.Ident(subsel.Field))
+						selExpr = subsel.Expression
+					case *ast.Identifier:
+						fields = append(fields, component.Ident(subsel))
+						break selCallLoop
+					default:
+						return nil, fmt.Errorf("unexpected type %T encounterd in selector call expression", selExpr)
+					}
+				}
+
+				var x goast.Expr = &goast.Ident{Name: n.Package}
+
+				for _, field := range slices.Backward(fields) {
+					x = &goast.SelectorExpr{
+						X:   x,
+						Sel: field,
+					}
+				}
+
+				fun = &goast.SelectorExpr{
+					X:   x,
+					Sel: component.Ident(sel.Field),
+				}
+			default:
+				return nil, fmt.Errorf("unexpected type in call expression: %T", sel)
 			}
 		} else {
-			fun = component.Ident(n.Identifier)
+			expr, err := t.convertExpr(n.Expression)
+			if err != nil {
+				return nil, err
+			}
+
+			fun = expr
 		}
 
 		// Wrap in IndexExpr/IndexListExpr for generic calls with type arguments.
@@ -702,24 +762,9 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}, nil
 		}
 
-		var leftMost *ast.Identifier
-
-		// Find left-most identifier of selector.
-	selectorLoop:
-		for {
-			switch sel := n.Expression.(type) {
-			case *ast.Selector:
-				continue
-			case *ast.Identifier:
-				leftMost = sel
-				break selectorLoop
-			default:
-				return nil, fmt.Errorf("unexpected type %T found in selector expression", n.Expression)
-			}
-		}
-
-		if leftMost == nil {
-			return nil, errors.New("unable to find left-most identifier in selector expression")
+		leftMost, err := n.LeftMost()
+		if err != nil {
+			return nil, err
 		}
 
 		name := component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
