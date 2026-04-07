@@ -55,11 +55,13 @@ func IsUint(t Type) bool {
 }
 
 func IsBasic(t Type) bool {
-	return IsBool(t) || IsNumber(t) || IsString(t)
+	return IsBool(t) || IsNumber(t) || IsString(t) || t.Kind() == ArrayKind ||
+		// Basic (non-pointer containing) structs are also basic types.
+		(t.Kind() == StructKind && !t.Underlying().(*Struct).IsComplex)
 }
 
 // Pointer types are types which are pointer types under the hood.
 func IsPointer(t Type) bool {
 	kind := t.Kind()
-	return kind == ReferenceKind || kind == SliceKind || kind == SetKind || kind == MapKind
+	return kind == ReferenceKind || kind == SliceKind || kind == SetKind || kind == MapKind || kind == ProcedureKind
 }

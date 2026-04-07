@@ -19,9 +19,9 @@ import (
 var titleCaser = cases.Title(language.English)
 
 type Transpiler struct {
-	files []*ast.File
-	file  *ast.File // current file being processed (for line directives)
-	fset  *gotoken.FileSet
+	files        map[uint16]*ast.File // file ID → file mapping
+	file         *ast.File            // current file being processed (for line directives)
+	fset         *gotoken.FileSet
 
 	nodes        map[uint64]ast.Node
 	imports      map[string]*goast.ImportSpec // Key: import name
@@ -31,7 +31,7 @@ type Transpiler struct {
 	dynDefaults    map[string]ast.Expression // Default expressions for dynamic variables
 	inFunc         bool
 	usesDyn        bool // set during body conversion when a dyn var is read or written
-	needsContext   map[*ast.File]bool      // per-file tracking of context requirement
+	needsContext   map[uint16]bool          // per-file tracking of context requirement by file ID
 	ifLabelCounter uint32
 
 	typeCache      map[types.Type]goast.Expr
@@ -46,10 +46,12 @@ func NewTranspiler(files ...*ast.File) *Transpiler {
 
 func NewTranspilerWithModule(goModulePath string, files ...*ast.File) *Transpiler {
 	nodes := make(map[uint64]ast.Node)
+	fileMap := make(map[uint16]*ast.File)
 
-	for _, f := range files {
+	for i, f := range files {
 		nodes[f.Hash()] = f
 		nodes[f.Package.Hash()] = f.Package
+		fileMap[uint16(i)] = f
 
 		for _, stmt := range f.Statements {
 			nodes[stmt.Hash()] = stmt
@@ -57,13 +59,13 @@ func NewTranspilerWithModule(goModulePath string, files ...*ast.File) *Transpile
 	}
 
 	return &Transpiler{
-		files:        files,
+		files:        fileMap,
 		fset:         gotoken.NewFileSet(),
 		nodes:        nodes,
 		goModulePath: goModulePath,
 		symbols:      NewSymbolTable(),
 		dynDefaults:  make(map[string]ast.Expression),
-		needsContext: make(map[*ast.File]bool),
+		needsContext: make(map[uint16]bool),
 		typeCache:    make(map[types.Type]goast.Expr),
 		dynComments:  make(map[string]string),
 		skipComments: make(map[uint64]struct{}),
@@ -75,14 +77,21 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 		return nil, err
 	}
 
+	// Get files in order by ID
+	fileIDs := make([]uint16, 0, len(t.files))
+	for id := range t.files {
+		fileIDs = append(fileIDs, id)
+	}
+	slices.Sort(fileIDs)
+
 	// Count total statements across all files.
 	totalStmts := 0
-	for _, f := range t.files {
-		totalStmts += len(f.Statements)
+	for _, id := range fileIDs {
+		totalStmts += len(t.files[id].Statements)
 	}
 
 	gofile := &goast.File{
-		Name:  goast.NewIdent(t.files[0].Package.Identifier.Name),
+		Name:  goast.NewIdent(t.files[fileIDs[0]].Package.Identifier.Name),
 		Decls: make([]goast.Decl, 0, totalStmts),
 	}
 	errs := make([]error, 0)
@@ -93,7 +102,8 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	dynDecls := t.buildDynDecls()
 	gofile.Decls = append(gofile.Decls, dynDecls...)
 
-	for _, f := range t.files {
+	for _, id := range fileIDs {
+		f := t.files[id]
 		t.file = f // set current file for line directives
 
 		for _, stmt := range f.Statements {
@@ -147,7 +157,17 @@ func (t *Transpiler) currentFileNeedsContext() bool {
 	if t.file == nil {
 		return false
 	}
-	return t.needsContext[t.file]
+	
+	// Find the file ID for the current file
+	var fileID uint16
+	for id, f := range t.files {
+		if f == t.file {
+			fileID = id
+			break
+		}
+	}
+	
+	return t.needsContext[fileID]
 }
 
 func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
@@ -155,12 +175,20 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 		return nil, err
 	}
 
-	pkgName := t.files[0].Package.Identifier.Name
+	// Get files in order by ID
+	fileIDs := make([]uint16, 0, len(t.files))
+	for id := range t.files {
+		fileIDs = append(fileIDs, id)
+	}
+	slices.Sort(fileIDs)
+
+	pkgName := t.files[fileIDs[0]].Package.Identifier.Name
 	errs := make([]error, 0)
 
 	gofiles := make([]*goast.File, len(t.files))
 
-	for fi, f := range t.files {
+	for i, id := range fileIDs {
+		f := t.files[id]
 		t.file = f
 		t.imports = make(map[string]*goast.ImportSpec)
 		t.lastSourceLine = 0
@@ -171,7 +199,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 		}
 
 		// Emit dyn struct types in the first file only.
-		if fi == 0 {
+		if i == 0 {
 			gofile.Decls = append(gofile.Decls, t.buildDynDecls()...)
 		}
 
@@ -208,7 +236,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 		}
 
 		t.finalizeImports(gofile)
-		gofiles[fi] = gofile
+		gofiles[i] = gofile
 	}
 
 	if err := errors.Join(errs...); err != nil {
@@ -235,7 +263,15 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 	// declarations and imports which stay at file level.
 	mainBody := make([]goast.Stmt, 0)
 
-	for _, f := range t.files {
+	// Get files in order by ID
+	fileIDs := make([]uint16, 0, len(t.files))
+	for id := range t.files {
+		fileIDs = append(fileIDs, id)
+	}
+	slices.Sort(fileIDs)
+
+	for _, id := range fileIDs {
+		f := t.files[id]
 		t.file = f
 
 		for _, stmt := range f.Statements {
@@ -290,7 +326,15 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 func (t *Transpiler) predeclareGlobals() error {
 	errs := make([]error, 0)
 
-	for _, f := range t.files {
+	// Get files in order by ID
+	fileIDs := make([]uint16, 0, len(t.files))
+	for id := range t.files {
+		fileIDs = append(fileIDs, id)
+	}
+	slices.Sort(fileIDs)
+
+	for _, id := range fileIDs {
+		f := t.files[id]
 		for i, stmt := range f.Statements {
 			switch s := stmt.(type) {
 			case *ast.Declaration:
@@ -329,14 +373,26 @@ func (t *Transpiler) predeclareGlobals() error {
 
 				if s.Assignment.Identifier.Name != "main" && s.Assignment.Expression != nil {
 					if procType, ok := s.Assignment.Expression.Type().(*types.Procedure); ok && !procType.Function {
-						t.needsContext[f] = true
+						// Find the file ID for this file
+						for id, file := range t.files {
+							if file == f {
+								t.needsContext[id] = true
+								break
+							}
+						}
 					}
 				}
 			case *ast.Method:
 				if s.Declaration.Assignment.Expression.Type().Kind() == types.ProcedureKind {
 					procType, ok := s.Declaration.Assignment.Expression.Type().(*types.Procedure)
 					if ok && !procType.Function {
-						t.needsContext[f] = true
+						// Find the file ID for this file
+						for id, file := range t.files {
+							if file == f {
+								t.needsContext[id] = true
+								break
+							}
+						}
 					}
 				}
 			case *ast.Type:

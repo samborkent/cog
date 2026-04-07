@@ -12,16 +12,22 @@ import (
 )
 
 type Lexer struct {
-	scan scanner.Scanner
+	scan    scanner.Scanner
+	fileID  uint16
 }
 
 func NewLexer(r io.Reader) *Lexer {
+	return NewLexerWithFileID(r, 0)
+}
+
+func NewLexerWithFileID(r io.Reader, fileID uint16) *Lexer {
 	var s scanner.Scanner
 	s.Init(r)
 	s.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
 
 	return &Lexer{
-		scan: s,
+		scan:   s,
+		fileID: fileID,
 	}
 }
 
@@ -52,8 +58,9 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 
 		//nolint:gosec // G115: integer overflow conversion
 		t := tokens.Token{
-			Ln:  uint32(s.Line),
-			Col: uint16(s.Column),
+			Ln:     uint32(s.Line),
+			Col:    uint16(s.Column),
+			FileID: l.fileID,
 		}
 
 		tokenType, ok := tokens.Runes[tok]

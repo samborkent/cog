@@ -445,6 +445,8 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 
 	fields := []*types.Field{}
 
+	isComplex := false
+
 	for p.this().Type != tokens.RBrace {
 		if ctx.Err() != nil {
 			return nil
@@ -461,6 +463,10 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 					field := p.parseField(ctx, true)
 					if field == nil {
 						return nil
+					}
+
+					if field.PointerLike {
+						isComplex = true
 					}
 
 					fields = append(fields, field)
@@ -493,7 +499,8 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 	p.advance("parseStruct }") // consume }
 
 	return &types.Struct{
-		Fields: fields,
+		Fields:    fields,
+		IsComplex: isComplex,
 	}
 }
 
@@ -513,6 +520,12 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 	p.advance("parseField :") // consume :
 
 	field.Type = p.parseCombinedType(ctx, exported, false)
+
+	if field.Type.Kind() == types.StructKind {
+		field.PointerLike = field.Type.Underlying().(*types.Struct).IsComplex
+	} else {
+		field.PointerLike = types.IsPointer(field.Type)
+	}
 
 	return field
 }

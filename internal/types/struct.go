@@ -8,13 +8,15 @@ import (
 var _ Type = &Struct{}
 
 type Struct struct {
-	Fields []*Field
+	Fields    []*Field
+	IsComplex bool
 }
 
 type Field struct {
-	Name     string
-	Type     Type
-	Exported bool
+	Name        string
+	Type        Type
+	Exported    bool
+	PointerLike bool
 }
 
 func (s *Struct) Kind() Kind {

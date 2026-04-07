@@ -20,6 +20,16 @@ type (
 	Uint128           = u128.Uint128
 )
 
+func (s Set[T]) Copy() Set[T] {
+	cpy := make(Set[T], len(s))
+
+	for k := range s {
+		cpy[k] = struct{}{}
+	}
+
+	return cpy
+}
+
 // Float16Fromfloat32 converts a float32 to a Float16.
 func Float16Fromfloat32(f float32) Float16 {
 	return f16.Fromfloat32(f)
