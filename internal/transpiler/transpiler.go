@@ -31,7 +31,7 @@ type Transpiler struct {
 	dynDefaults    map[string]ast.Expression // Default expressions for dynamic variables
 	inFunc         bool
 	usesDyn        bool // set during body conversion when a dyn var is read or written
-	needsContext   bool
+	needsContext   map[*ast.File]bool      // per-file tracking of context requirement
 	ifLabelCounter uint32
 
 	typeCache      map[types.Type]goast.Expr
@@ -63,6 +63,7 @@ func NewTranspilerWithModule(goModulePath string, files ...*ast.File) *Transpile
 		goModulePath: goModulePath,
 		symbols:      NewSymbolTable(),
 		dynDefaults:  make(map[string]ast.Expression),
+		needsContext: make(map[*ast.File]bool),
 		typeCache:    make(map[types.Type]goast.Expr),
 		dynComments:  make(map[string]string),
 		skipComments: make(map[uint64]struct{}),
@@ -141,6 +142,14 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 // TranspileFiles produces one *goast.File per input *ast.File.
 // Shared constructs (dyn struct types) are emitted in the first file.
 // Each output file gets its own import declarations.
+// currentFileNeedsContext returns true if the current file being processed needs context support
+func (t *Transpiler) currentFileNeedsContext() bool {
+	if t.file == nil {
+		return false
+	}
+	return t.needsContext[t.file]
+}
+
 func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 	if err := t.predeclareGlobals(); err != nil {
 		return nil, err
@@ -320,14 +329,14 @@ func (t *Transpiler) predeclareGlobals() error {
 
 				if s.Assignment.Identifier.Name != "main" && s.Assignment.Expression != nil {
 					if procType, ok := s.Assignment.Expression.Type().(*types.Procedure); ok && !procType.Function {
-						t.needsContext = true
+						t.needsContext[f] = true
 					}
 				}
 			case *ast.Method:
 				if s.Declaration.Assignment.Expression.Type().Kind() == types.ProcedureKind {
 					procType, ok := s.Declaration.Assignment.Expression.Type().(*types.Procedure)
 					if ok && !procType.Function {
-						t.needsContext = true
+						t.needsContext[f] = true
 					}
 				}
 			case *ast.Type:

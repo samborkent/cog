@@ -589,7 +589,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 				field, ok := p.symbols.ResolveField(typName, p.this().Literal)
 				if !ok {
-					p.error(p.this(), "undefined field", "primary")
+					p.error(p.this(), fmt.Sprintf("undefined field %q for selector %q", p.this().Literal, typName), "primary")
 					return nil
 				}
 

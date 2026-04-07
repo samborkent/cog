@@ -42,25 +42,3 @@ export Exported.Export : proc() = {
 // func (*Struct) Method2()
 
 &Struct.Method2 : proc() = {}
-
-main : proc() = {
-    foo := "hello"
-    var bar := &foo
-
-    baz := "world"
-    bar = &baz
-
-    _ = bar
-
-    Foo : &utf8 = &foo
-    Bar : &ascii = &"hello"
-
-    Baz ~ &complex128
-
-    exported : Exported = {
-        Method = 42,
-    }
-
-    exported.Export()
-}
-

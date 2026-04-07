@@ -66,7 +66,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			if len(t.symbols.dynamics) > 0 {
 				t.symbols.Define("dyn")
 			}
-			if t.needsContext {
+			if t.currentFileNeedsContext() {
 				t.symbols.Define("ctx")
 			}
 		}
@@ -98,7 +98,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			if n.Assignment.Identifier.Name == "main" {
 				hasDynVars := len(t.symbols.dynamics) > 0
 
-				if hasDynVars || t.needsContext {
+				if hasDynVars || t.currentFileNeedsContext() {
 					if hasDynVars {
 						// Main with dynamic variables: init dyn struct.
 						dynIdent := t.symbols.Define("dyn")
@@ -129,7 +129,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 							Elts: structElts,
 						}
 
-						if t.needsContext {
+						if t.currentFileNeedsContext() {
 							// Also seed context for proc propagation.
 							ctxIdent := t.symbols.Define("ctx")
 							if err := t.symbols.MarkUsed("ctx"); err != nil {
@@ -158,7 +158,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 						)
 					}
 
-					if t.needsContext {
+					if t.currentFileNeedsContext() {
 						t.addStdLibImport("context")
 
 						// Remove context argument for main func.
@@ -179,7 +179,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				}
 			}
 
-			if t.needsContext {
+			if t.currentFileNeedsContext() {
 				t.addStdLibImport("context")
 			}
 

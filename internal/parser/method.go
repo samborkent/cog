@@ -33,24 +33,17 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier) *ast
 		return nil
 	}
 
-	methodIdent := &ast.Identifier{
-		Token:     p.this(),
-		Name:      p.this().Literal,
-		Exported:  receiver.Exported, // TODO: check if correct? you may only export methods on exported types.
-		Qualifier: ast.QualifierMethod,
-		Global:    true, // TODO: check if methods may be declared in local scope
+	methodSymbol, ok := p.symbols.ResolveField(receiver.Name, p.this().Literal)
+	if !ok {
+		p.error(p.this(), fmt.Sprintf("method %q is undefined", p.this().Literal), "parseMethod")
+		return nil
 	}
 
 	p.advance("parseMethod identifier") // consume identifier
 	p.advance("parseMethod :")          // consume :
 
-	decl := p.parseTypedDeclaration(ctx, methodIdent)
+	decl := p.parseTypedDeclaration(ctx, methodSymbol.Identifier)
 	if decl == nil {
-		return nil
-	}
-
-	if err := p.symbols.DefineMethod(receiver.Name, methodIdent); err != nil {
-		p.error(p.this(), err.Error(), "parseMethod")
 		return nil
 	}
 

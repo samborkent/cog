@@ -63,6 +63,9 @@ tokenLoop:
 		qualifier := ast.QualifierImmutable
 
 		switch p.this().Type {
+		case tokens.BitAnd:
+			// Reference receiver method.
+			p.advance("findGlobals &") // consume &
 		case tokens.Dynamic:
 			qualifier = ast.QualifierDynamic
 
@@ -86,6 +89,8 @@ tokenLoop:
 			switch p.next().Type {
 			case tokens.Colon, tokens.Declaration:
 				p.findGlobalDecl(ctx, exported, qualifier)
+			case tokens.Dot:
+				p.findGlobalMethod(ctx, exported)
 			case tokens.Tilde:
 				p.findGlobalType(ctx, exported)
 			case tokens.LT:
@@ -482,6 +487,39 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 	}
 }
 
+func (p *Parser) skipExpression(ctx context.Context) {
+	parenIndex := 0
+	braceIndex := 0
+	bracketIndex := 0
+
+	for p.this().Type != tokens.EOF {
+		if ctx.Err() != nil {
+			return
+		}
+
+		switch p.this().Type {
+		case tokens.LParen:
+			parenIndex++
+		case tokens.RParen:
+			parenIndex--
+		case tokens.LBrace:
+			braceIndex++
+		case tokens.RBrace:
+			braceIndex--
+		case tokens.LBracket:
+			bracketIndex++
+		case tokens.RBracket:
+			bracketIndex--
+		}
+
+		p.advance("skipExpression")
+
+		if parenIndex == 0 && braceIndex == 0 && bracketIndex == 0 {
+			return
+		}
+	}
+}
+
 func (p *Parser) skipScope(ctx context.Context) {
 	braceIndex := 0
 
@@ -525,6 +563,67 @@ func (p *Parser) skipGrouped(ctx context.Context) {
 		if parenIndex == 0 {
 			return
 		}
+	}
+}
+
+func (p *Parser) findGlobalMethod(ctx context.Context, exported bool) {
+	// Parse method declaration: Type.Method : proc() = ...
+	// Current token is the receiver type name.
+	receiverName := p.this().Literal
+	p.advance("findGlobalMethod receiver") // consume receiver type name
+
+	if p.this().Type != tokens.Dot {
+		p.error(p.this(), "expected . after receiver type name", "findGlobalMethod")
+		return
+	}
+
+	p.advance("findGlobalMethod .") // consume .
+
+	if p.this().Type != tokens.Identifier {
+		p.error(p.this(), "expected method name after .", "findGlobalMethod")
+		return
+	}
+
+	methodName := p.this().Literal
+
+	// Create a placeholder method identifier to register in the symbol table.
+	methodIdent := &ast.Identifier{
+		Token:     p.this(),
+		Name:      methodName,
+		Exported:  exported,
+		Qualifier: ast.QualifierMethod,
+		Global:    true,
+	}
+
+	p.advance("findGlobalMethod method") // consume identifier
+
+	if p.this().Type != tokens.Colon {
+		p.error(p.this(), "expected function type definition after method declaration", "findGlobalMethod")
+		return
+	}
+
+	p.advance("findGlobalMethod :") // consume :
+
+	procType := p.parseProcedureType(ctx, exported, true)
+	if procType == nil {
+		return
+	}
+
+	methodIdent.ValueType = procType
+
+	if p.this().Type != tokens.Assign {
+		p.error(p.this(), "expected function body assignment after method type definition", "findGlobalMethod")
+		return
+	}
+
+	p.advance("findGlobalMethod =") // consume =
+
+	p.skipScope(ctx)
+
+	// Register the method in the symbol table so it's available for forward references.
+	if err := p.symbols.DefineMethod(receiverName, methodIdent); err != nil {
+		p.error(p.this(), err.Error(), "findGlobalMethod")
+		return
 	}
 }
 

@@ -390,6 +390,25 @@ outerLoop:
     // Generic function with return type: T flows through.
     idResult := identity("identity")
     @print(idResult)
+
+    fooVal := "hello"
+    var barRef := &fooVal
+
+    bazVal := "world"
+    barRef = &bazVal
+
+    _ = barRef
+
+    FooRef : &utf8 = &fooVal
+    BarRef : &ascii = &"hello"
+
+    BazRefType ~ &complex128
+
+    methodCaller : Exported = {
+        Method = 42,
+    }
+
+    methodCaller.Export()
 }
 
 // Generic function: type parameter on the func type.

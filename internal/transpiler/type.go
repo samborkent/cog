@@ -168,7 +168,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 
 		inputParams := make([]*goast.Field, 0, len(procType.Parameters))
 
-		if !procType.Function && t.needsContext {
+		if !procType.Function && t.currentFileNeedsContext() {
 			// Procedures take context when context propagation is needed.
 			inputParams = append(inputParams, component.ContextArg)
 		}

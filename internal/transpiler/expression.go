@@ -49,7 +49,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		args := make([]goast.Expr, 0, len(procType.Parameters))
 
-		if !procType.Function && t.needsContext {
+		if !procType.Function && t.currentFileNeedsContext() {
 			if err := t.symbols.MarkUsed("ctx"); err != nil {
 				return nil, err
 			}
