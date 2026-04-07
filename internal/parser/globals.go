@@ -487,39 +487,6 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 	}
 }
 
-func (p *Parser) skipExpression(ctx context.Context) {
-	parenIndex := 0
-	braceIndex := 0
-	bracketIndex := 0
-
-	for p.this().Type != tokens.EOF {
-		if ctx.Err() != nil {
-			return
-		}
-
-		switch p.this().Type {
-		case tokens.LParen:
-			parenIndex++
-		case tokens.RParen:
-			parenIndex--
-		case tokens.LBrace:
-			braceIndex++
-		case tokens.RBrace:
-			braceIndex--
-		case tokens.LBracket:
-			bracketIndex++
-		case tokens.RBracket:
-			bracketIndex--
-		}
-
-		p.advance("skipExpression")
-
-		if parenIndex == 0 && braceIndex == 0 && bracketIndex == 0 {
-			return
-		}
-	}
-}
-
 func (p *Parser) skipScope(ctx context.Context) {
 	braceIndex := 0
 
