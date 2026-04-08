@@ -404,8 +404,12 @@ outerLoop:
 
     BazRefType ~ &complex128
 
-    methodCaller : Exported = {
+    var methodCaller : Exported = {
         Method = 42,
+    }
+
+    methodCaller = Exported{
+        Method = 67,
     }
 
     methodCaller.Export()

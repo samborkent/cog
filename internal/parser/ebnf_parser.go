@@ -492,6 +492,23 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 		p.advance("primary identifier") // consume identifier
 
+		if symbol.Identifier.Qualifier == ast.QualifierType && p.this().Type == tokens.LBrace {
+			// Named struct literal
+			literal := p.primary(ctx, symbol.Type())
+			if literal == nil {
+				return nil
+			}
+
+			literal.(*ast.StructLiteral).StructType = &types.Alias{
+				Name:     symbol.Identifier.Name,
+				Derived:  literal.Type(),
+				Exported: symbol.Identifier.Exported,
+				Global:   symbol.Identifier.Global,
+			}
+
+			return literal
+		}
+
 		switch p.this().Type {
 		case tokens.LParen:
 			// Function call

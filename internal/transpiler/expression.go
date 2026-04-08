@@ -913,6 +913,11 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("encountered struct literal with non-struct type %q", n.Type())
 		}
 
+		literalType, err := t.convertType(n.Type())
+		if err != nil {
+			return nil, fmt.Errorf("converting struct literal type: %w", err)
+		}
+
 		for _, val := range n.Values {
 			expr, err := t.convertExpr(val.Value)
 			if err != nil {
@@ -933,6 +938,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		return &goast.CompositeLit{
+			Type: literalType,
 			Elts: exprs,
 		}, nil
 	case *ast.Suffix:
