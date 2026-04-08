@@ -25,6 +25,7 @@ exported := Exported{
 - When declaring type alias in script mode, the type gets placed in global scope, instead of inside of main.
     This is required for method declaration, so we need to manually disallow using a type which is only defined later in the file in script mode.
 - Syntax clash between bitwise AND and reference, both use same token.
+- Generic type alias
 
 ### Features
 - Remove `@ref` allocator.

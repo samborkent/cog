@@ -519,7 +519,12 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 
 	p.advance("parseField :") // consume :
 
-	field.Type = p.parseCombinedType(ctx, exported, false)
+	fieldType := p.parseCombinedType(ctx, exported, false)
+	if fieldType == nil {
+		return nil
+	}
+
+	field.Type = fieldType
 
 	if field.Type.Kind() == types.StructKind {
 		field.PointerLike = field.Type.Underlying().(*types.Struct).IsComplex

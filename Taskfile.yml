@@ -3,8 +3,8 @@
 version: '3'
 
 vars:
-  FILE: example/
-  DEBUG: false
+  FILE: literal_bug.cogs
+  DEBUG: true
   REPLACE_LOCAL_COG: true
 
 tasks:
