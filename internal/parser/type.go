@@ -104,6 +104,8 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 
 func (p *Parser) parseType(ctx context.Context) types.Type {
 	switch p.this().Type {
+	case tokens.Interface:
+		return p.parseInterface(ctx)
 	case tokens.LBracket:
 		p.advance("parseType [") // consume [
 
@@ -320,6 +322,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		} else {
 			// Copy type parameters from the original type if it's an alias
 			var typeParams []*types.TypeParam
+
 			if originalAlias, ok := ident.ValueType.(*types.Alias); ok {
 				typeParams = originalAlias.TypeParams
 			}
@@ -431,6 +434,58 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 	}
 
 	return genAlias.Instantiate(argMap)
+}
+
+func (p *Parser) parseInterface(ctx context.Context) types.Type {
+	p.advance("parseInterface interface") // consume interface
+
+	if p.this().Type != tokens.LBrace {
+		p.error(p.this(), "expected { after interface declaration", "parseInterface")
+		return nil
+	}
+
+	p.advance("parseInterface {") // consume {
+
+	methods := []*types.Method{}
+
+	for p.this().Type != tokens.RBrace {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.Identifier {
+			p.error(p.this(), "unexpected token found in interface declaration", "parseInterface")
+			return nil
+		}
+
+		method := &types.Method{
+			Name: p.this().Literal,
+		}
+
+		p.advance("parseInterface identifier") // consume identifier
+
+		if p.this().Type != tokens.Colon {
+			p.error(p.this(), "expected : after method name in interface method", "parseInterface")
+			return nil
+		}
+
+		p.advance("parseInterface :") // consume :
+
+		methodType := p.parseProcedureType(ctx, true, false)
+		if methodType == nil {
+			return nil
+		}
+
+		method.Procedure = methodType
+
+		methods = append(methods, method)
+	}
+
+	p.advance("parseInterface }") // consume }
+
+	return &types.Interface{
+		Methods: methods,
+	}
 }
 
 func (p *Parser) parseStruct(ctx context.Context) types.Type {

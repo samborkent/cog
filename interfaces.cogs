@@ -1,0 +1,3 @@
+Stringer ~ interface {
+    String : func() utf8
+}

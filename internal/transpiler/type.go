@@ -103,6 +103,28 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			X:   &goast.Ident{Name: "cog"},
 			Sel: &goast.Ident{Name: "Int128"},
 		}
+	case types.InterfaceKind:
+		interfaceType, ok := typ.(*types.Interface)
+		if !ok {
+			return nil, errors.New("unable to assert interface type")
+		}
+
+		methods := make([]*goast.Field, 0, len(interfaceType.Methods))
+
+		for i := range interfaceType.Methods {
+			method, err := t.convertMethod(interfaceType.Methods[i])
+			if err != nil {
+				return nil, fmt.Errorf("converting interface method %q: %w", interfaceType.Methods[i].Name, err)
+			}
+
+			methods = append(methods, method)
+		}
+
+		expr = &goast.InterfaceType{
+			Methods: &goast.FieldList{
+				List: methods,
+			},
+		}
 	case types.MapKind:
 		mapType, ok := typ.(*types.Map)
 		if !ok {
@@ -526,5 +548,17 @@ func (t *Transpiler) convertField(field *types.Field) (*goast.Field, error) {
 	return &goast.Field{
 		Names: []*goast.Ident{{Name: component.ConvertExport(field.Name, field.Exported, false)}},
 		Type:  fieldType,
+	}, nil
+}
+
+func (t *Transpiler) convertMethod(method *types.Method) (*goast.Field, error) {
+	methodType, err := t.convertType(method.Procedure)
+	if err != nil {
+		return nil, fmt.Errorf("converting method %q type: %w", method.Name, err)
+	}
+
+	return &goast.Field{
+		Names: []*goast.Ident{{Name: component.ConvertExport(method.Name, true, false)}},
+		Type:  methodType,
 	}, nil
 }

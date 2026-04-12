@@ -36,6 +36,7 @@ const (
 
 	// Any type
 	AnyKind
+	InterfaceKind
 
 	// Container types
 	ArrayKind
@@ -166,4 +167,7 @@ var Lookup = map[tokens.Type]Type{
 	// Procedure type
 	tokens.Procedure: &Procedure{},
 	tokens.Function:  &Procedure{Function: true},
+
+	// Interface type
+	tokens.Interface: &Interface{},
 }
