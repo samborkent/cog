@@ -24,7 +24,7 @@ func transpile(t *testing.T, src string) string {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParser(toks, false)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -63,7 +63,7 @@ func transpileWithPrint(t *testing.T, src string) string {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParser(toks, false)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -117,7 +117,7 @@ func mustFailTranspile(t *testing.T, src, want string) {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParser(toks, false)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}

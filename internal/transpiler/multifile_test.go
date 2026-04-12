@@ -20,7 +20,6 @@ import (
 // and transpiles using TranspileFiles, returning a map of filename -> Go source.
 func transpileMultiFile(t *testing.T, files map[string]string) map[string]string {
 	t.Helper()
-	ctx := t.Context()
 
 	names := make([]string, 0, len(files))
 	for name := range files {
@@ -38,7 +37,7 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 	for _, name := range names {
 		l := lexer.NewLexer(strings.NewReader(files[name]))
 
-		toks, err := l.Parse(ctx)
+		toks, err := l.Parse(t.Context())
 		if err != nil {
 			t.Fatalf("lex error (%s): %v", name, err)
 		}
@@ -50,18 +49,18 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, f := range lexed {
-		p, err := parser.NewParserWithSymbols(f.toks, symbols, false)
+		p, err := parser.NewParserWithSymbols(f.toks, symbols, false, f.name)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", f.name, err)
 		}
 
-		p.FindGlobals(ctx)
+		p.FindGlobals(t.Context())
 		parsers[i] = p
 	}
 
 	astFiles := make([]*ast.File, len(lexed))
 	for i, f := range lexed {
-		af, err := parsers[i].ParseOnly(ctx, f.name)
+		af, err := parsers[i].ParseOnly(t.Context(), f.name)
 		if err != nil {
 			t.Fatalf("parse error (%s): %v", f.name, err)
 		}
@@ -102,7 +101,7 @@ func transpileWithModule(t *testing.T, moduleName, src string) string {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParser(toks, false)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -236,7 +235,6 @@ func TestTranspileCogImport(t *testing.T) {
 	t.Parallel()
 
 	// Test that cog import generates proper Go import with module prefix.
-	ctx := t.Context()
 
 	src := `package main
 
@@ -248,17 +246,17 @@ main : proc() = {}
 `
 	l := lexer.NewLexer(strings.NewReader(src))
 
-	toks, err := l.Parse(ctx)
+	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParser(toks, false)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
 	if err != nil {
 		t.Fatalf("parser init: %v", err)
 	}
 
-	f, err := p.Parse(ctx, "test.cog")
+	f, err := p.Parse(t.Context(), "test.cog")
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}

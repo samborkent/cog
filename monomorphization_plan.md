@@ -15,7 +15,9 @@ This eliminates Go's GCShape stenciling overhead (interface boxing, dictionary i
 A generic parameter `T` **cannot** be used in expressions, assignments, or as an argument to any function call until its type is narrowed by a `match` case branch. Before the match, the only legal operations on `T`-typed values are:
 
 - Passing them to `match`
-- Storing them in local variables (the variable itself remains opaque)
+- Passing them to another function whose type-constraint matches `T`.
+- Type-asserting them (excluded from this scope, design pending)
+    - Perhaps builtin? (e.g. `@as<T ~ any>(x any) T?`)
 
 This rule is enforced at parse time / type-check time, not at transpile time.
 
@@ -65,6 +67,8 @@ Call sites for types that match a specific case are rewritten to the concrete fu
 
 When there is **no** `default` case, the match must be **exhaustive** over the constraint. Every type in the constraint must have a case. The transpiler produces only concrete functions, no generic fallback.
 
+As follow-up optimization, we should only generate the concrete which are actually used.
+
 ### 6. Type parameter limit
 
 Maximum of **3** type parameters per function, matching the existing `@map<K, V, I>` design. The combinatorial concern is mitigated by the fact that only *call-site combinations* produce implementations, not the full constraint cross-product.
@@ -79,9 +83,11 @@ Maximum of **3** type parameters per function, matching the existing `@map<K, V,
 
 Real programs call `@map<utf8, int64, uint32>` and perhaps a handful of other combinations — not 5 × 5 × 5 = 125. The `default` fallback further limits this: only types with explicit `match` cases get monomorphized.
 
-### 7. Setup code before `match`
+### 7. Setup code before `match`, and wrap-up code after `match`.
 
 Allowed. Code before the `match` that doesn't touch the generic-typed values is duplicated into each concrete implementation. This is common for non-generic setup (logging, validation of non-generic args, etc.).
+
+After `match`, `T` is unspecified again, so cannot be addressed.
 
 ---
 

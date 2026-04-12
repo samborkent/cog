@@ -15,6 +15,7 @@ type Parser struct {
 	tokens   []tokens.Token
 	symbols  *SymbolTable
 	builtins map[string]BuiltinParser
+	filePath string
 
 	Errs              []error
 	i                 int
@@ -23,14 +24,10 @@ type Parser struct {
 	currentReturnType types.Type // return type of the enclosing procedure (for result wrapping)
 }
 
-func NewParser(tokens []tokens.Token, debug bool) (*Parser, error) {
-	return NewParserWithSymbols(tokens, NewSymbolTable(), debug)
-}
-
 // NewParserWithSymbols creates a parser that uses the provided symbol table.
 // This allows multiple parsers (one per file) to share a single symbol table
 // so that global declarations from one file are visible in all others.
-func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool) (*Parser, error) {
+func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool, fileName string) (*Parser, error) {
 	if len(tokens) == 0 {
 		return nil, errors.New("no tokens provided to parser")
 	}
@@ -268,8 +265,26 @@ func (p *Parser) synchronize() {
 
 func (p *Parser) error(t tokens.Token, msg string, scope ...string) {
 	if len(scope) > 0 {
-		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %v: %s", t, scope, msg))
+		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %v: %s", p.stringToken(t), scope, msg))
 	} else {
-		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %s", t, msg))
+		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %s", p.stringToken(t), msg))
 	}
+}
+
+func (p *Parser) stringToken(t tokens.Token) string {
+	if t.Literal == "" {
+		return fmt.Sprintf("%s:\tln %d, col %d: %s",
+			p.filePath, t.Ln, t.Col, t.Type,
+		)
+	}
+
+	if t.Type == tokens.Builtin {
+		return fmt.Sprintf("%s:\tln %d, col %d: @%s",
+			p.filePath, t.Ln, t.Col, t.Literal,
+		)
+	}
+
+	return fmt.Sprintf("%s:\tln %d, col %d: %s: %s",
+		p.filePath, t.Ln, t.Col, t.Type, t.Literal,
+	)
 }

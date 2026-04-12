@@ -7,7 +7,6 @@ import (
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
-	"github.com/samborkent/cog/internal/parser"
 )
 
 func parse(t *testing.T, src string) *ast.File {
@@ -20,7 +19,7 @@ func parse(t *testing.T, src string) *ast.File {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParser(toks, false)
+	p, err := NewTestParser(t, toks, false)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -46,7 +45,7 @@ func parseShouldError(t *testing.T, src string) {
 		return
 	}
 
-	p, err := parser.NewParser(toks, false)
+	p, err := NewTestParser(t, toks, false)
 	if err != nil {
 		return
 	}
