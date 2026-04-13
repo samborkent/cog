@@ -8,7 +8,9 @@ import (
 var _ Type = &Struct{}
 
 type Struct struct {
-	Fields    []*Field
+	Fields []*Field
+	// Only set for struct aliases with methods.
+	Methods   []*Method
 	IsComplex bool
 }
 

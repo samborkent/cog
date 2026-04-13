@@ -1,0 +1,21 @@
+package main
+
+Stringer ~ interface {
+    String : func() utf8
+}
+
+Print : func<T ~ Stringer>(x : T) = {
+    @print(x.String())
+}
+
+Foo ~ struct {
+    value : utf8
+}
+
+Foo.String : func() utf8 = {
+    return "Hello, world!"
+}
+
+main : proc() = {
+    Print(Foo{})
+}

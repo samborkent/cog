@@ -3,7 +3,7 @@
 version: '3'
 
 vars:
-  FILE: interfaces.cogs
+  FILE: interfaces.cog
   DEBUG: false
   REPLACE_LOCAL_COG: true
 

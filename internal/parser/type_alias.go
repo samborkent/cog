@@ -62,6 +62,17 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 		return nil
 	}
 
+	// Carry over methods registered during the global scan:
+	// findGlobalMethod attached methods to the original *Struct, but
+	// parseCombinedType just created a new *Struct that will replace it.
+	if newStruct, ok := typ.(*types.Struct); ok {
+		if existing, ok := p.symbols.Resolve(ident.Name); ok {
+			if oldStruct, ok := existing.Identifier.ValueType.(*types.Struct); ok {
+				newStruct.Methods = oldStruct.Methods
+			}
+		}
+	}
+
 	typeDecl.Identifier.ValueType = typ
 	typeDecl.Alias = typ
 

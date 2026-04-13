@@ -592,6 +592,24 @@ func (p *Parser) findGlobalMethod(ctx context.Context, exported bool) {
 		p.error(p.this(), err.Error(), "findGlobalMethod")
 		return
 	}
+
+	// Attach the method to the receiver's underlying struct so that
+	// interface satisfaction checks can find it.
+	if sym, ok := p.symbols.Resolve(receiverName); ok && sym.Identifier.ValueType != nil {
+		method := &types.Method{
+			Name:      methodName,
+			Procedure: procType,
+		}
+
+		switch v := sym.Identifier.ValueType.(type) {
+		case *types.Struct:
+			v.Methods = append(v.Methods, method)
+		case *types.Alias:
+			if s, ok := v.Underlying().(*types.Struct); ok {
+				s.Methods = append(s.Methods, method)
+			}
+		}
+	}
 }
 
 func (p *Parser) skipTypeParams(ctx context.Context) {

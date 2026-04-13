@@ -226,7 +226,49 @@ func Satisfies(concrete, constraint Type) bool {
 		return concrete.Kind() == constraint.Kind() && IsComparable(concrete)
 	}
 
+	// Interface satisfaction: check if concrete type implements all methods.
+	if iface, ok := constraint.Underlying().(*Interface); ok {
+		return Implements(concrete, iface)
+	}
+
 	return Equal(concrete, constraint)
+}
+
+// Implements reports whether a concrete type implements the given interface,
+// i.e. has all required methods with matching signatures.
+func Implements(concrete Type, iface *Interface) bool {
+	// Unwrap aliases to find the underlying struct.
+	underlying := concrete
+	for {
+		a, ok := underlying.(*Alias)
+		if !ok || a.Constraint != nil {
+			break
+		}
+
+		underlying = a.Underlying()
+	}
+
+	s, ok := underlying.(*Struct)
+	if !ok {
+		return false
+	}
+
+	for _, required := range iface.Methods {
+		found := false
+
+		for _, m := range s.Methods {
+			if m.Name == required.Name && Equal(m.Procedure, required.Procedure) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return false
+		}
+	}
+
+	return true
 }
 
 // isStructuralSentinel reports whether a type is one of the zero-value

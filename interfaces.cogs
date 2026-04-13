@@ -1,7 +1,0 @@
-Stringer ~ interface {
-    String : func() utf8
-}
-
-Print : func<T ~ Stringer>(x : T) = {
-    @print(x.String())
-}

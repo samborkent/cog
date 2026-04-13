@@ -96,14 +96,14 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 			switch expr := n.Expression.(type) {
 			case *ast.Identifier:
-				usedName = expr.Name
+				usedName = component.ConvertExport(expr.Name, expr.Exported, expr.Global)
 			case *ast.Selector:
 				leftMost, err := expr.LeftMost()
 				if err != nil {
 					return nil, err
 				}
 
-				usedName = leftMost.Name
+				usedName = component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
 			}
 
 			if err := t.symbols.MarkUsed(usedName); err != nil {
@@ -786,6 +786,13 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			enumName.Name = enumName.Name + titleCaser.String(n.Field.Name)
 
 			return enumName, nil
+		case types.GenericKind:
+			selExpr, err := t.convertExpr(n.Expression)
+			if err != nil {
+				return nil, err
+			}
+
+			return component.Selector(selExpr, n.Field.Name), nil
 		case types.StructKind:
 			structType, ok := leftMost.ValueType.Underlying().(*types.Struct)
 			if !ok {
