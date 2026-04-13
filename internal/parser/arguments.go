@@ -68,7 +68,7 @@ func (p *Parser) parseTypeArguments(ctx context.Context) []types.Type {
 //
 // Each parameter is an identifier, followed by ~, followed by one or more
 // constraint keywords separated by |.
-func (p *Parser) parseTypeParams(ctx context.Context) []*types.TypeParam {
+func (p *Parser) parseTypeParams(ctx context.Context) []*types.Alias {
 	if p.this().Type != tokens.LT {
 		p.error(p.this(), "expected opening < for type parameters", "parseTypeParams")
 		return nil
@@ -76,7 +76,7 @@ func (p *Parser) parseTypeParams(ctx context.Context) []*types.TypeParam {
 
 	p.advance("parseTypeParams <") // consume <
 
-	var params []*types.TypeParam
+	var params []*types.Alias
 
 	for !p.match(tokens.GT, tokens.EOF) {
 		if ctx.Err() != nil {
@@ -130,9 +130,16 @@ func (p *Parser) parseTypeParams(ctx context.Context) []*types.TypeParam {
 			constraints = append(constraints, constraint)
 		}
 
-		params = append(params, &types.TypeParam{
+		var constraintType types.Type
+		if len(constraints) == 1 {
+			constraintType = constraints[0]
+		} else {
+			constraintType = &types.Union{Variants: constraints}
+		}
+
+		params = append(params, &types.Alias{
 			Name:       name,
-			Constraint: &types.Union{Variants: constraints},
+			Constraint: constraintType,
 		})
 
 		if p.this().Type == tokens.Comma {

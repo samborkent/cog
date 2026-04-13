@@ -307,10 +307,10 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		ident := typeSymbol.Identifier
 
 		// If the symbol is a type parameter (inside a generic alias body),
-		// return the TypeParam directly.
-		if tp, ok := ident.ValueType.(*types.TypeParam); ok {
+		// return the type parameter alias directly.
+		if alias, ok := ident.ValueType.(*types.Alias); ok && alias.IsTypeParam() {
 			p.advance("parseType typeparam") // consume type param name
-			return tp
+			return alias
 		}
 
 		if types.IsNone(ident.ValueType) {
@@ -321,7 +321,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 			})
 		} else {
 			// Copy type parameters from the original type if it's an alias
-			var typeParams []*types.TypeParam
+			var typeParams []*types.Alias
 
 			if originalAlias, ok := ident.ValueType.(*types.Alias); ok {
 				typeParams = originalAlias.TypeParams

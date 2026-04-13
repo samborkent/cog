@@ -14,7 +14,7 @@ type Type struct {
 
 	Token          tokens.Token
 	Identifier     *Identifier
-	TypeParameters []*types.TypeParam
+	TypeParameters []*types.Alias
 	Alias          types.Type
 }
 

@@ -114,8 +114,8 @@ func TestInstantiate(t *testing.T) {
 
 		a := &Alias{
 			Name:       "List",
-			Derived:    &Slice{Element: &TypeParam{Name: "T", Constraint: Any}},
-			TypeParams: []*TypeParam{{Name: "T", Constraint: Any}},
+			Derived:    &Slice{Element: &Alias{Name: "T", Constraint: Any}},
+			TypeParams: []*Alias{{Name: "T", Constraint: Any}},
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Int32]})
 
@@ -135,10 +135,10 @@ func TestInstantiate(t *testing.T) {
 		a := &Alias{
 			Name: "Dict",
 			Derived: &Map{
-				Key:   &TypeParam{Name: "K", Constraint: Any},
-				Value: &TypeParam{Name: "V", Constraint: Any},
+				Key:   &Alias{Name: "K", Constraint: Any},
+				Value: &Alias{Name: "V", Constraint: Any},
 			},
-			TypeParams: []*TypeParam{
+			TypeParams: []*Alias{
 				{Name: "K", Constraint: Any},
 				{Name: "V", Constraint: Any},
 			},
@@ -166,11 +166,11 @@ func TestInstantiate(t *testing.T) {
 			Name: "Pair",
 			Derived: &Tuple{
 				Types: []Type{
-					&TypeParam{Name: "A", Constraint: Any},
-					&TypeParam{Name: "B", Constraint: Any},
+					&Alias{Name: "A", Constraint: Any},
+					&Alias{Name: "B", Constraint: Any},
 				},
 			},
-			TypeParams: []*TypeParam{
+			TypeParams: []*Alias{
 				{Name: "A", Constraint: Any},
 				{Name: "B", Constraint: Any},
 			},
@@ -200,8 +200,8 @@ func TestInstantiate(t *testing.T) {
 
 		a := &Alias{
 			Name:       "Maybe",
-			Derived:    &Option{Value: &TypeParam{Name: "T", Constraint: Any}},
-			TypeParams: []*TypeParam{{Name: "T", Constraint: Any}},
+			Derived:    &Option{Value: &Alias{Name: "T", Constraint: Any}},
+			TypeParams: []*Alias{{Name: "T", Constraint: Any}},
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Float64]})
 
@@ -221,7 +221,7 @@ func TestInstantiate(t *testing.T) {
 		a := &Alias{
 			Name:       "MyInt",
 			Derived:    Basics[Int32],
-			TypeParams: []*TypeParam{{Name: "T", Constraint: Any}},
+			TypeParams: []*Alias{{Name: "T", Constraint: Any}},
 		}
 
 		result := a.Instantiate(map[string]Type{"T": Basics[UTF8]})
@@ -236,14 +236,14 @@ func TestInstantiate(t *testing.T) {
 		proc := &Procedure{
 			Function: true,
 			Parameters: []*Parameter{
-				{Name: "x", Type: &TypeParam{Name: "T", Constraint: Any}},
+				{Name: "x", Type: &Alias{Name: "T", Constraint: Any}},
 			},
-			ReturnType: &TypeParam{Name: "T", Constraint: Any},
+			ReturnType: &Alias{Name: "T", Constraint: Any},
 		}
 		a := &Alias{
 			Name:       "MyFunc",
 			Derived:    proc,
-			TypeParams: []*TypeParam{{Name: "T", Constraint: Any}},
+			TypeParams: []*Alias{{Name: "T", Constraint: Any}},
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Int64]})
 

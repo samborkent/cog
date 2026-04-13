@@ -56,7 +56,7 @@ tasks:
       loc=$(find . -name '*.go' -not -path './tmp/*' | xargs cat | wc -l | tr -d ' ')
       loc_test=$(find . -name '*_test.go' -not -path './tmp/*' | xargs cat 2>/dev/null | wc -l | tr -d ' ')
       loc_src=$((loc - loc_test))
-      cov=$(GOEXPERIMENT=arenas go test . ./builtin/... ./internal/... ./cmd/... -coverprofile=/tmp/cog_cov.out -count=1 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | tail -1)
+      cov=$(GOEXPERIMENT=arenas go test . ./builtin/... ./internal/... ./cmd/... -coverprofile=/tmp/cog_cov.out -coverpkg=./... -count=1 2>&1 | grep -oE '[0-9]+\.[0-9]+%' | tail -1)
       total_cov=$(go tool cover -func=/tmp/cog_cov.out 2>/dev/null | grep total | awk '{print $NF}')
       echo "${date} ${commit} src=${loc_src} test=${loc_test} total=${loc} coverage=${total_cov}" >> stats.txt
       echo "Recorded: src=${loc_src} test=${loc_test} total=${loc} coverage=${total_cov}"

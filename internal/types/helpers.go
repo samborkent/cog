@@ -35,6 +35,17 @@ func AssignableTo(src, dst Type) bool {
 }
 
 func Equal(a, b Type) bool {
+	// Handle type parameter aliases before unwrapping, since Underlying()
+	// returns the constraint and loses the parameter name.
+	if aAlias, ok := a.(*Alias); ok && aAlias.IsTypeParam() {
+		bAlias, ok := b.(*Alias)
+		if !ok || !bAlias.IsTypeParam() {
+			return false
+		}
+
+		return aAlias.Name == bAlias.Name && Equal(aAlias.Constraint, bAlias.Constraint)
+	}
+
 	// Check Option before Underlying(), since Option.Underlying()
 	// unwraps to the inner Value type.
 	ao, aIsOpt := a.(*Option)
@@ -102,6 +113,10 @@ func Equal(a, b Type) bool {
 		return true
 	case *Union:
 		bt := bu.(*Union)
+		if at.Name != "" || bt.Name != "" {
+			return at.Name == bt.Name
+		}
+
 		if len(at.Variants) != len(bt.Variants) {
 			return false
 		}
@@ -161,16 +176,6 @@ func Equal(a, b Type) bool {
 		}
 
 		return true
-	case *TypeParam:
-		bt := bu.(*TypeParam)
-		if at.Name != bt.Name {
-			return false
-		}
-
-		return Equal(at.Constraint, bt.Constraint)
-	case *Generic:
-		bt := bu.(*Generic)
-		return at.name == bt.name
 	default:
 		// Basic types: Kind equality is sufficient.
 		return true
@@ -197,30 +202,28 @@ func Size(k Kind) int {
 }
 
 // Satisfies reports whether a concrete type satisfies the given constraint.
-// If constraint is any, all types satisfy it. If constraint is a *Generic,
-// the concrete type's kind must match one of the constraint's members.
-// Otherwise falls back to Equal.
+// If constraint is any, all types satisfy it. If constraint is a *Union,
+// satisfying any variant suffices. Structural sentinels are matched by Kind
+// with a comparability check. Otherwise falls back to Equal.
 func Satisfies(concrete, constraint Type) bool {
 	if constraint.Kind() == AnyKind {
 		return true
 	}
 
-	if g, ok := constraint.(*Generic); ok {
-		for _, member := range g.Constraints {
-			if member.Kind() == concrete.Kind() {
-				// For structural types used as comparable sentinels,
-				// verify the concrete type is actually comparable.
-				if isStructuralSentinel(member) {
-					if !IsComparable(concrete) {
-						continue
-					}
-				}
-
+	if u, ok := constraint.(*Union); ok {
+		for _, variant := range u.Variants {
+			if Satisfies(concrete, variant) {
 				return true
 			}
 		}
 
 		return false
+	}
+
+	// Structural sentinels (zero-value Struct, Array, etc.) used in the
+	// comparable constraint: match by Kind and verify comparability.
+	if isStructuralSentinel(constraint) {
+		return concrete.Kind() == constraint.Kind() && IsComparable(concrete)
 	}
 
 	return Equal(concrete, constraint)
@@ -238,6 +241,10 @@ func isStructuralSentinel(t Type) bool {
 		return len(v.Types) == 0
 	case *Set:
 		return v.Element == nil
+	case *Enum:
+		return v.ValueType == nil
+	case *Reference:
+		return v.Value == nil
 	default:
 		return false
 	}

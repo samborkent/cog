@@ -3,9 +3,10 @@ package types
 type Alias struct {
 	Name       string
 	Derived    Type
+	Constraint Type // non-nil when this alias acts as a type parameter
 	Exported   bool
 	Global     bool
-	TypeParams []*TypeParam
+	TypeParams []*Alias
 	lazy       func() Type
 }
 
@@ -29,6 +30,10 @@ func (a *Alias) ensureResolved() {
 }
 
 func (a *Alias) Kind() Kind {
+	if a.Constraint != nil {
+		return GenericKind
+	}
+
 	a.ensureResolved()
 
 	derived := a.Derived
@@ -45,6 +50,10 @@ func (a *Alias) String() string {
 }
 
 func (a *Alias) Underlying() Type {
+	if a.Constraint != nil {
+		return a.Constraint.Underlying()
+	}
+
 	a.ensureResolved()
 
 	alias, ok := a.Derived.(*Alias)
@@ -55,6 +64,41 @@ func (a *Alias) Underlying() Type {
 	return a.Derived
 }
 
+// IsTypeParam reports whether this alias acts as a type parameter.
+func (a *Alias) IsTypeParam() bool {
+	return a.Constraint != nil
+}
+
+// ConstraintString returns the constraint portion for display,
+// e.g. "any", "int", or "string | int".
+func (a *Alias) ConstraintString() string {
+	if a.Constraint == nil {
+		return ""
+	}
+
+	return a.Constraint.String()
+}
+
+// SatisfiedBy reports whether a concrete type satisfies this
+// type parameter's constraints (OR semantics: satisfies at least one).
+func (a *Alias) SatisfiedBy(concrete Type) bool {
+	if a.Constraint == nil {
+		return false
+	}
+
+	if union, ok := a.Constraint.(*Union); ok {
+		for _, v := range union.Variants {
+			if Satisfies(concrete, v) {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	return Satisfies(concrete, a.Constraint)
+}
+
 // Instantiate substitutes TypeParam references in derived with concrete types.
 // typeArgs maps type parameter names to their concrete replacements.
 func (a *Alias) Instantiate(typeArgs map[string]Type) Type {
@@ -62,16 +106,19 @@ func (a *Alias) Instantiate(typeArgs map[string]Type) Type {
 	return SubstituteType(a.Derived, typeArgs)
 }
 
-// SubstituteType recursively replaces TypeParam references with concrete types.
+// SubstituteType recursively replaces type parameter references with concrete types.
 func SubstituteType(t Type, args map[string]Type) Type {
 	switch v := t.(type) {
-	case *TypeParam:
-		if concrete, ok := args[v.Name]; ok {
-			return concrete
+	case *Alias:
+		if v.Constraint != nil {
+			// Type parameter: substitute if matched.
+			if concrete, ok := args[v.Name]; ok {
+				return concrete
+			}
+
+			return v
 		}
 
-		return v
-	case *Alias:
 		v.ensureResolved()
 		return SubstituteType(v.Derived, args)
 	case *Slice:

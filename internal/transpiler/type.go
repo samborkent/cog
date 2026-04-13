@@ -408,12 +408,12 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 	case types.AnyKind:
 		expr = &goast.Ident{Name: "any"}
 	case types.GenericKind:
-		tp, ok := typ.(*types.TypeParam)
-		if ok {
-			expr = &goast.Ident{Name: tp.Name}
-		} else {
-			expr = t.convertConstraint(typ)
+		tp, ok := typ.(*types.Alias)
+		if !ok || !tp.IsTypeParam() {
+			return nil, fmt.Errorf("unexpected generic kind for type %q", typ)
 		}
+
+		expr = &goast.Ident{Name: tp.Name}
 	default:
 		return nil, fmt.Errorf("unknown type %q", typ)
 	}
@@ -431,12 +431,12 @@ func (t *Transpiler) convertConstraint(typ types.Type) goast.Expr {
 		return component.Any
 	}
 
-	g, ok := typ.(*types.Generic)
+	u, ok := typ.(*types.Union)
 	if !ok {
 		return component.Any
 	}
 
-	switch g.String() {
+	switch u.Name {
 	case "comparable":
 		return component.Comparable
 	case "ordered":
@@ -465,10 +465,10 @@ func (t *Transpiler) convertConstraint(typ types.Type) goast.Expr {
 	}
 }
 
-// convertTypeParamConstraints converts a TypeParam's constraint list to a
+// convertTypeParamConstraints converts a type parameter's constraint list to a
 // single Go constraint expression. A single constraint maps directly; multiple
 // constraints are joined with | into a union interface.
-func (t *Transpiler) convertTypeParamConstraints(tp *types.TypeParam) goast.Expr {
+func (t *Transpiler) convertTypeParamConstraints(tp *types.Alias) goast.Expr {
 	if tp.Constraint == nil || tp.Constraint.Kind() == types.AnyKind {
 		return component.Any
 	}
@@ -478,6 +478,12 @@ func (t *Transpiler) convertTypeParamConstraints(tp *types.TypeParam) goast.Expr
 			if c.Kind() == types.AnyKind {
 				return component.Any
 			}
+		}
+
+		// Named constraint (builtin like "int", "comparable", etc.):
+		// convert as a single constraint directly.
+		if union.Name != "" {
+			return t.convertConstraint(union)
 		}
 
 		if len(union.Variants) == 1 {
@@ -523,7 +529,7 @@ func flattenBinaryOr(e goast.Expr, out *[]goast.Expr) {
 
 // convertTypeParams converts cog type parameters to a Go ast.FieldList
 // suitable for TypeSpec.TypeParams or FuncType.TypeParams.
-func (t *Transpiler) convertTypeParams(params []*types.TypeParam) *goast.FieldList {
+func (t *Transpiler) convertTypeParams(params []*types.Alias) *goast.FieldList {
 	if len(params) == 0 {
 		return nil
 	}

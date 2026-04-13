@@ -1,58 +1,61 @@
 package types
 
-var Generics = map[string]*Generic{
-	"complex": {Constraints: []Type{Basics[Complex32], Basics[Complex64], Basics[Complex128]}, name: "complex"},
-	"float":   {Constraints: []Type{Basics[Float16], Basics[Float32], Basics[Float64]}, name: "float"},
-	"int":     {Constraints: []Type{Basics[Int8], Basics[Int16], Basics[Int32], Basics[Int64], Basics[Int128]}, name: "int"},
-	"string":  {Constraints: []Type{Basics[ASCII], Basics[UTF8]}, name: "string"},
-	"uint":    {Constraints: []Type{Basics[Uint8], Basics[Uint16], Basics[Uint32], Basics[Uint64], Basics[Uint128]}, name: "uint"},
+// Constraints is the set of builtin named type constraints.
+// Each entry is a named Union whose Variants list the concrete types
+// that satisfy the constraint.
+var Constraints = map[string]*Union{
+	"complex": {Name: "complex", Variants: []Type{Basics[Complex32], Basics[Complex64], Basics[Complex128]}},
+	"float":   {Name: "float", Variants: []Type{Basics[Float16], Basics[Float32], Basics[Float64]}},
+	"int":     {Name: "int", Variants: []Type{Basics[Int8], Basics[Int16], Basics[Int32], Basics[Int64], Basics[Int128]}},
+	"string":  {Name: "string", Variants: []Type{Basics[ASCII], Basics[UTF8]}},
+	"uint":    {Name: "uint", Variants: []Type{Basics[Uint8], Basics[Uint16], Basics[Uint32], Basics[Uint64], Basics[Uint128]}},
 }
 
 func init() {
 	// Composite constraints reference other constraints, so they must be
 	// initialised after the base entries exist.
-	Generics["signed"] = &Generic{
-		Constraints: flatten(
-			Generics["int"].Constraints,
-			Generics["float"].Constraints,
-			Generics["complex"].Constraints,
+	Constraints["signed"] = &Union{
+		Name: "signed",
+		Variants: flatten(
+			Constraints["int"].Variants,
+			Constraints["float"].Variants,
+			Constraints["complex"].Variants,
 		),
-		name: "signed",
 	}
-	Generics["number"] = &Generic{
-		Constraints: flatten(
-			Generics["signed"].Constraints,
-			Generics["uint"].Constraints,
+	Constraints["number"] = &Union{
+		Name: "number",
+		Variants: flatten(
+			Constraints["signed"].Variants,
+			Constraints["uint"].Variants,
 		),
-		name: "number",
 	}
-	Generics["ordered"] = &Generic{
-		Constraints: flatten(
-			Generics["int"].Constraints,
-			Generics["uint"].Constraints,
-			Generics["float"].Constraints,
-			Generics["string"].Constraints,
+	Constraints["ordered"] = &Union{
+		Name: "ordered",
+		Variants: flatten(
+			Constraints["int"].Variants,
+			Constraints["uint"].Variants,
+			Constraints["float"].Variants,
+			Constraints["string"].Variants,
 		),
-		name: "ordered",
 	}
-	Generics["summable"] = &Generic{
-		Constraints: flatten(
-			Generics["number"].Constraints,
-			Generics["string"].Constraints,
+	Constraints["summable"] = &Union{
+		Name: "summable",
+		Variants: flatten(
+			Constraints["number"].Variants,
+			Constraints["string"].Variants,
 		),
-		name: "summable",
 	}
-	Generics["comparable"] = &Generic{
-		Constraints: flatten(
-			Generics["ordered"].Constraints,
-			Generics["complex"].Constraints,
+	Constraints["comparable"] = &Union{
+		Name: "comparable",
+		Variants: flatten(
+			Constraints["ordered"].Variants,
+			Constraints["complex"].Variants,
 			[]Type{Basics[Bool]},
 			// Sentinel zero-values: Satisfies matches by Kind(), so
 			// these allow any struct, array, enum, pointer, tuple,
 			// or set to satisfy comparable.
 			[]Type{&Struct{}, &Array{}, &Enum{}, &Reference{}, &Tuple{}, &Set{}},
 		),
-		name: "comparable",
 	}
 }
 
@@ -70,36 +73,17 @@ func flatten(slices ...[]Type) []Type {
 	return out
 }
 
-var _ Type = &Generic{}
-
-type Generic struct {
-	Constraints []Type
-	name        string
-}
-
-func (g *Generic) Kind() Kind {
-	return GenericKind
-}
-
-func (g *Generic) String() string {
-	return g.name
-}
-
-func (g *Generic) Underlying() Type {
-	return g
-}
-
 // LookupConstraint returns the builtin constraint type for the given name.
-// This covers all entries in the Generics map plus "any".
+// This covers all entries in the Constraints map plus "any".
 func LookupConstraint(name string) (Type, bool) {
 	if name == "any" {
 		return Any, true
 	}
 
-	g, ok := Generics[name]
+	u, ok := Constraints[name]
 	if !ok {
 		return nil, false
 	}
 
-	return g, true
+	return u, true
 }

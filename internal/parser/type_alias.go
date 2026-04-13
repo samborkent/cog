@@ -27,7 +27,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 	}
 
 	// Parse optional type parameters: <T ~ any, K ~ comparable>
-	var typeParams []*types.TypeParam
+	var typeParams []*types.Alias
 
 	if p.this().Type == tokens.LT {
 		typeParams = p.parseTypeParams(ctx)
@@ -89,6 +89,17 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 	// if p.symbols.Outer != nil && len(typeParams) == 0 {
 	p.symbols.Define(typeDecl.Identifier)
 	// }
+
+	if iface, ok := typeDecl.Identifier.ValueType.(*types.Interface); ok {
+		// Register interface methods as methods on the type for method call resolution.
+		for _, method := range iface.Methods {
+			p.symbols.DefineMethod(typeDecl.Identifier.Name, &ast.Identifier{
+				Name:      method.Name,
+				ValueType: method.Procedure,
+				Qualifier: ast.QualifierMethod,
+			})
+		}
+	}
 
 	return typeDecl
 }

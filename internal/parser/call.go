@@ -44,9 +44,9 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 
 			paramType := procType.Parameters[i].Type
 
-			// When the parameter type is a TypeParam, let the expression
+			// When the parameter type is a type param alias, let the expression
 			// infer its own type (like an untyped declaration).
-			if _, isTP := paramType.(*types.TypeParam); isTP {
+			if alias, ok := paramType.(*types.Alias); ok && alias.IsTypeParam() {
 				paramType = types.None
 			}
 
@@ -88,8 +88,8 @@ func (p *Parser) inferTypeArgs(
 			break
 		}
 
-		tp, ok := param.Type.(*types.TypeParam)
-		if !ok {
+		tp, ok := param.Type.(*types.Alias)
+		if !ok || !tp.IsTypeParam() {
 			continue
 		}
 

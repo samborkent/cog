@@ -379,20 +379,20 @@ func TestAliasResolution(t *testing.T) {
 	})
 }
 
-func TestGeneric(t *testing.T) {
+func TestConstraint(t *testing.T) {
 	t.Parallel()
 
-	g := Generics["int"]
-	if g.Kind() != GenericKind {
-		t.Error("Generic.Kind() != GenericKind")
+	g := Constraints["int"]
+	if g.Kind() != UnionKind {
+		t.Error("Constraint.Kind() != UnionKind")
 	}
 
 	if g.String() != "int" {
-		t.Errorf("Generic.String() = %q", g.String())
+		t.Errorf("Constraint.String() = %q", g.String())
 	}
 
 	if g.Underlying() != g {
-		t.Error("Generic.Underlying() != self")
+		t.Error("Constraint.Underlying() != self")
 	}
 }
 

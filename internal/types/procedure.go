@@ -6,7 +6,7 @@ import (
 
 type Procedure struct {
 	Function   bool
-	TypeParams []*TypeParam
+	TypeParams []*Alias
 	Parameters []*Parameter
 	ReturnType Type // may be nil
 }

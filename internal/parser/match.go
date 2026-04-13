@@ -41,7 +41,7 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 	var isGeneric bool
 
 	if !isUnion {
-		if tp, ok := subjectType.(*types.TypeParam); ok {
+		if tp, ok := subjectType.(*types.Alias); ok && tp.IsTypeParam() {
 			if tp.Constraint != nil && (tp.Constraint.Kind() == types.UnionKind || tp.Constraint.Kind() == types.AnyKind) {
 				isGeneric = true
 			}

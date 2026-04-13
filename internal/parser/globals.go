@@ -325,7 +325,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 	}
 
 	// Parse optional type parameters: <T ~ any, K ~ comparable>
-	var typeParams []*types.TypeParam
+	var typeParams []*types.Alias
 
 	if p.this().Type == tokens.LT {
 		typeParams = p.parseTypeParams(ctx)

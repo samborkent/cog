@@ -10,7 +10,7 @@ func TestProcedureStringWithTypeParams(t *testing.T) {
 
 		p := &Procedure{
 			Function: true,
-			TypeParams: []*TypeParam{
+			TypeParams: []*Alias{
 				{Name: "T", Constraint: Any},
 			},
 			Parameters: []*Parameter{
@@ -31,8 +31,8 @@ func TestProcedureStringWithTypeParams(t *testing.T) {
 
 		p := &Procedure{
 			Function: true,
-			TypeParams: []*TypeParam{
-				{Name: "T", Constraint: &Union{Variants: []Type{Generics["string"], Generics["int"]}}},
+			TypeParams: []*Alias{
+				{Name: "T", Constraint: &Union{Variants: []Type{Constraints["string"], Constraints["int"]}}},
 			},
 			Parameters: []*Parameter{},
 		}
@@ -48,8 +48,8 @@ func TestProcedureStringWithTypeParams(t *testing.T) {
 		t.Parallel()
 
 		p := &Procedure{
-			TypeParams: []*TypeParam{
-				{Name: "K", Constraint: Generics["comparable"]},
+			TypeParams: []*Alias{
+				{Name: "K", Constraint: Constraints["comparable"]},
 				{Name: "V", Constraint: Any},
 			},
 			Parameters: []*Parameter{},

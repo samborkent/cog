@@ -344,7 +344,7 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expression {
 	if typeToken != nil {
 		aliasType, ok := typeToken.(*types.Alias)
-		if ok {
+		if ok && !aliasType.IsTypeParam() {
 			typeToken = aliasType.Underlying()
 		}
 
@@ -598,9 +598,10 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 				var typName string
 
-				if kind == types.EnumKind || kind == types.ErrorKind {
+				switch kind {
+				case types.EnumKind, types.ErrorKind:
 					typName = symbol.Identifier.Name
-				} else {
+				default:
 					typName = symbolType.String()
 				}
 
@@ -831,6 +832,31 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				ProcedureType: t,
 			}
 
+			// Re-enter type parameter scope so methods are visible in the body.
+			if len(t.TypeParams) > 0 {
+				p.symbols = NewEnclosedSymbolTable(p.symbols)
+
+				for _, tp := range t.TypeParams {
+					p.symbols.Define(&ast.Identifier{
+						Name:      tp.Name,
+						ValueType: tp,
+						Qualifier: ast.QualifierType,
+					})
+
+					// Register interface methods from the constraint.
+					iface, ok := tp.Underlying().(*types.Interface)
+					if ok {
+						for _, method := range iface.Methods {
+							p.symbols.DefineMethod(tp.Name, &ast.Identifier{
+								Name:      method.Name,
+								ValueType: method.Procedure,
+								Qualifier: ast.QualifierMethod,
+							})
+						}
+					}
+				}
+			}
+
 			if len(t.Parameters) > 0 {
 				// Enter parameter scope
 				p.symbols = NewEnclosedSymbolTable(p.symbols)
@@ -854,6 +880,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			if len(t.Parameters) > 0 {
 				// Leave parameter scope
+				p.symbols = p.symbols.Outer
+			}
+
+			if len(t.TypeParams) > 0 {
+				// Leave type parameter scope
 				p.symbols = p.symbols.Outer
 			}
 
