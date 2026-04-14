@@ -712,6 +712,12 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 		}
 
+		// Register 'this' for method bodies.
+		if t.inMethod {
+			t.symbols.Define("this")
+			_ = t.symbols.MarkUsed("this")
+		}
+
 		// Track whether we're inside a func and reset usesDyn for this body.
 		prevInFunc := t.inFunc
 		prevUsesDyn := t.usesDyn

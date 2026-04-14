@@ -42,7 +42,13 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier) *ast
 	p.advance("parseMethod identifier") // consume identifier
 	p.advance("parseMethod :")          // consume :
 
+	prevReceiver := p.currentReceiver
+	p.currentReceiver = method.Receiver
+
 	decl := p.parseTypedDeclaration(ctx, methodSymbol.Identifier)
+
+	p.currentReceiver = prevReceiver
+
 	if decl == nil {
 		return nil
 	}

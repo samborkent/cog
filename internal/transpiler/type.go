@@ -212,7 +212,12 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		}
 
 		if len(procType.TypeParams) > 0 {
-			funcType.TypeParams = t.convertTypeParams(procType.TypeParams)
+			typeParams, err := t.convertTypeParams(procType.TypeParams)
+			if err != nil {
+				return nil, fmt.Errorf("converting procedure type parameters: %w", err)
+			}
+
+			funcType.TypeParams = typeParams
 		}
 
 		if procType.ReturnType != nil {
@@ -426,57 +431,72 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 // convertConstraint maps a cog constraint type to its Go equivalent.
 // For compound constraints (int, uint, etc.) it emits an inline tilde-union
 // with the Go-native subset of the constraint's types.
-func (t *Transpiler) convertConstraint(typ types.Type) goast.Expr {
+func (t *Transpiler) convertConstraint(typ types.Type) (goast.Expr, error) {
 	if typ.Kind() == types.AnyKind {
-		return component.Any
+		return component.Any, nil
+	} else if typ.Kind() == types.InterfaceKind {
+		iface, err := t.convertType(typ)
+		if err != nil {
+			return nil, fmt.Errorf("converting interface constraint: %w", err)
+		}
+
+		return iface, nil
 	}
 
 	u, ok := typ.(*types.Union)
 	if !ok {
-		return component.Any
+		// Concrete type used directly as a constraint (e.g. int64 in "int64 | utf8").
+		expr, err := t.convertType(typ)
+		if err != nil {
+			return nil, fmt.Errorf("converting concrete constraint type: %w", err)
+		}
+
+		return &goast.UnaryExpr{Op: gotoken.TILDE, X: expr}, nil
 	}
 
 	switch u.Name {
 	case "comparable":
-		return component.Comparable
+		return component.Comparable, nil
 	case "ordered":
 		t.addStdLibImport("cmp")
-		return component.CmpOrdered
+		return component.CmpOrdered, nil
 	case "int":
-		return component.TildeUnion(component.GoInt...)
+		return component.TildeUnion(component.GoInt...), nil
 	case "uint":
-		return component.TildeUnion(component.GoUint...)
+		return component.TildeUnion(component.GoUint...), nil
 	case "float":
-		return component.TildeUnion(component.GoFloat...)
+		return component.TildeUnion(component.GoFloat...), nil
 	case "complex":
-		return component.TildeUnion(component.GoComplex...)
+		return component.TildeUnion(component.GoComplex...), nil
 	case "string":
 		// cog string = ascii | utf8. ascii is Go []byte (no tilde constraint);
 		// utf8 is Go string. Only ~string is representable.
-		return component.TildeUnion(component.GoString...)
+		// TODO: handle ascii
+		return component.TildeUnion(component.GoString...), nil
 	case "signed":
-		return component.TildeUnion(append(append(component.GoInt, component.GoFloat...), component.GoComplex...)...)
+		return component.TildeUnion(append(append(component.GoInt, component.GoFloat...), component.GoComplex...)...), nil
 	case "number":
-		return component.TildeUnion(append(append(append(component.GoInt, component.GoUint...), component.GoFloat...), component.GoComplex...)...)
+		return component.TildeUnion(append(append(append(component.GoInt, component.GoUint...), component.GoFloat...), component.GoComplex...)...), nil
 	case "summable":
-		return component.TildeUnion(append(append(append(append(component.GoInt, component.GoUint...), component.GoFloat...), component.GoComplex...), component.GoString...)...)
+		return component.TildeUnion(append(append(append(append(component.GoInt, component.GoUint...), component.GoFloat...), component.GoComplex...), component.GoString...)...), nil
 	default:
-		return component.Any
+		return nil, fmt.Errorf("unknown constraint %q", u.Name)
 	}
 }
 
 // convertTypeParamConstraints converts a type parameter's constraint list to a
 // single Go constraint expression. A single constraint maps directly; multiple
 // constraints are joined with | into a union interface.
-func (t *Transpiler) convertTypeParamConstraints(tp *types.Alias) goast.Expr {
+func (t *Transpiler) convertTypeParamConstraints(tp *types.Alias) (goast.Expr, error) {
 	if tp.Constraint == nil || tp.Constraint.Kind() == types.AnyKind {
-		return component.Any
+		return component.Any, nil
 	}
 
 	if union, ok := tp.Constraint.(*types.Union); ok {
 		for _, c := range union.Variants {
+			// TODO: we should disallow any in constraint. Constraints cannot contain constraints which are wider than the constraint itself.
 			if c.Kind() == types.AnyKind {
-				return component.Any
+				return component.Any, nil
 			}
 		}
 
@@ -490,17 +510,19 @@ func (t *Transpiler) convertTypeParamConstraints(tp *types.Alias) goast.Expr {
 			return t.convertConstraint(union.Variants[0])
 		}
 
-		var leaves []goast.Expr
-		for _, c := range union.Variants {
-			flattenBinaryOr(t.convertConstraint(c), &leaves)
-		}
+		var expr goast.Expr
 
-		expr := leaves[0]
-		for _, leaf := range leaves[1:] {
-			expr = &goast.BinaryExpr{
-				X:  expr,
-				Op: gotoken.OR,
-				Y:  leaf,
+		for _, c := range union.Variants {
+			leaf, err := t.convertConstraint(c)
+			if err != nil {
+				return nil, fmt.Errorf("converting type parameter constraint: %w", err)
+			}
+
+			// Join with OR, keeping the tree left-associative and flat.
+			if expr == nil {
+				expr = leaf
+			} else {
+				expr = component.JoinOr(expr, leaf)
 			}
 		}
 
@@ -508,41 +530,30 @@ func (t *Transpiler) convertTypeParamConstraints(tp *types.Alias) goast.Expr {
 			Methods: &goast.FieldList{
 				List: []*goast.Field{{Type: expr}},
 			},
-		}
+		}, nil
 	}
 
 	return t.convertConstraint(tp.Constraint)
 }
 
-// flattenBinaryOr recursively collects the leaf operands of a BinaryExpr tree
-// joined by OR (|). Non-binary expressions are appended directly.
-func flattenBinaryOr(e goast.Expr, out *[]goast.Expr) {
-	if bin, ok := e.(*goast.BinaryExpr); ok && bin.Op == gotoken.OR {
-		flattenBinaryOr(bin.X, out)
-		flattenBinaryOr(bin.Y, out)
-
-		return
-	}
-
-	*out = append(*out, e)
-}
-
 // convertTypeParams converts cog type parameters to a Go ast.FieldList
 // suitable for TypeSpec.TypeParams or FuncType.TypeParams.
-func (t *Transpiler) convertTypeParams(params []*types.Alias) *goast.FieldList {
-	if len(params) == 0 {
-		return nil
-	}
-
+func (t *Transpiler) convertTypeParams(params []*types.Alias) (*goast.FieldList, error) {
 	fields := make([]*goast.Field, 0, len(params))
+
 	for _, tp := range params {
+		constraint, err := t.convertTypeParamConstraints(tp)
+		if err != nil {
+			return nil, fmt.Errorf("converting type parameter %q constraints: %w", tp.Name, err)
+		}
+
 		fields = append(fields, &goast.Field{
 			Names: []*goast.Ident{{Name: tp.Name}},
-			Type:  t.convertTypeParamConstraints(tp),
+			Type:  constraint,
 		})
 	}
 
-	return &goast.FieldList{List: fields}
+	return &goast.FieldList{List: fields}, nil
 }
 
 func (t *Transpiler) convertField(field *types.Field) (*goast.Field, error) {

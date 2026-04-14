@@ -21,7 +21,8 @@ type Parser struct {
 	i                 int
 	debug             bool
 	scriptMode        bool
-	currentReturnType types.Type // return type of the enclosing procedure (for result wrapping)
+	currentReturnType types.Type      // return type of the enclosing procedure (for result wrapping)
+	currentReceiver   *ast.Identifier // receiver of the enclosing method (for this keyword)
 }
 
 // NewParserWithSymbols creates a parser that uses the provided symbol table.

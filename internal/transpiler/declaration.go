@@ -223,7 +223,13 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			Specs: []goast.Spec{valueSpec},
 		}}, nil
 	case *ast.Method:
+		prevInMethod := t.inMethod
+		t.inMethod = true
+
 		decls, err := t.convertDecl(n.Declaration)
+
+		t.inMethod = prevInMethod
+
 		if err != nil {
 			return nil, err
 		}
@@ -258,7 +264,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		}
 
 		if len(n.TypeParameters) > 0 {
-			typeSpec.TypeParams = t.convertTypeParams(n.TypeParameters)
+			typeParams, err := t.convertTypeParams(n.TypeParameters)
+			if err != nil {
+				return nil, fmt.Errorf("converting type parameters: %w", err)
+			}
+
+			typeSpec.TypeParams = typeParams
 		}
 
 		decls = append(decls, &goast.GenDecl{

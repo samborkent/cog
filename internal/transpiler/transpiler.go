@@ -19,9 +19,9 @@ import (
 var titleCaser = cases.Title(language.English)
 
 type Transpiler struct {
-	files        map[uint16]*ast.File // file ID → file mapping
-	file         *ast.File            // current file being processed (for line directives)
-	fset         *gotoken.FileSet
+	files map[uint16]*ast.File // file ID → file mapping
+	file  *ast.File            // current file being processed (for line directives)
+	fset  *gotoken.FileSet
 
 	nodes        map[uint64]ast.Node
 	imports      map[string]*goast.ImportSpec // Key: import name
@@ -30,8 +30,9 @@ type Transpiler struct {
 	symbols        *SymbolTable
 	dynDefaults    map[string]ast.Expression // Default expressions for dynamic variables
 	inFunc         bool
-	usesDyn        bool // set during body conversion when a dyn var is read or written
-	needsContext   map[uint16]bool          // per-file tracking of context requirement by file ID
+	inMethod       bool            // set when transpiling a method body
+	usesDyn        bool            // set during body conversion when a dyn var is read or written
+	needsContext   map[uint16]bool // per-file tracking of context requirement by file ID
 	ifLabelCounter uint32
 
 	typeCache      map[types.Type]goast.Expr
@@ -157,7 +158,7 @@ func (t *Transpiler) currentFileNeedsContext() bool {
 	if t.file == nil {
 		return false
 	}
-	
+
 	// Find the file ID for the current file
 	var fileID uint16
 	for id, f := range t.files {
@@ -166,7 +167,7 @@ func (t *Transpiler) currentFileNeedsContext() bool {
 			break
 		}
 	}
-	
+
 	return t.needsContext[fileID]
 }
 

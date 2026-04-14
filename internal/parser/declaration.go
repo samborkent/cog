@@ -26,7 +26,7 @@ func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifie
 
 func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *ast.Declaration {
 	symbol, ok := p.symbols.Resolve(ident.Name)
-	if ok && symbol.Scope != ScanScope {
+	if ok && symbol.Scope != ScanScope && ident.Qualifier != ast.QualifierMethod {
 		p.error(ident.Token, "cannot redeclare variable", "parseDeclaration")
 		return nil
 	}

@@ -874,6 +874,28 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			prevReturnType := p.currentReturnType
 			p.currentReturnType = t.ReturnType
 
+			// If this is a method body, inject 'this' into scope.
+			if p.currentReceiver != nil {
+				receiverType := p.currentReceiver.ValueType
+
+				// Wrap in an alias so selector resolution can find
+				// fields by the receiver's name.
+				if _, isAlias := receiverType.(*types.Alias); !isAlias {
+					receiverType = &types.Alias{
+						Name:     p.currentReceiver.Name,
+						Derived:  receiverType,
+						Exported: p.currentReceiver.Exported,
+						Global:   p.currentReceiver.Global,
+					}
+				}
+
+				p.symbols.Define(&ast.Identifier{
+					Name:      "this",
+					ValueType: receiverType,
+					Qualifier: ast.QualifierImmutable,
+				})
+			}
+
 			body := p.parseBlockStatement(ctx)
 
 			p.currentReturnType = prevReturnType

@@ -89,6 +89,94 @@ Allowed. Code before the `match` that doesn't touch the generic-typed values is 
 
 After `match`, `T` is unspecified again, so cannot be addressed.
 
+### 8. Methods as plain functions with Go method wrappers
+
+Cog uses `export` keyword for visibility, not capitalization. The transpiler prefixes unexported uppercase names with `_` to prevent unwanted Go exports (e.g., `String` → `_String`). This breaks Go interface satisfaction, which requires exact method name matching.
+
+Monomorphization eliminates this conflict for cog-level generics, but Go stdlib interop (e.g. `fmt.Stringer`, `io.Reader`) still requires real Go methods with correct names. The solution is a **two-layer emission**:
+
+1. **Plain functions** — carry the method body, used by monomorphized generic code via direct calls. Named with receiver prefix: `Foo.String` → `_Foo_String(this _Foo)`.
+2. **Go method wrappers** — one-line forwarders that satisfy Go interfaces. Always use the **original cog name** (no `_` prefix), since methods are receiver-scoped and don't pollute the package namespace. An unexported type with exported methods is normal Go — the stdlib itself does this internally.
+
+The `export` keyword on methods controls **cog-level** visibility (enforced by the cog compiler when other cog packages import the type), not Go-level method naming. The Go wrapper always uses the original name for interface satisfaction.
+
+**Cog-level interface constraints** (e.g. `Stringer`) are still enforced at compile time only via `Satisfies`/`Implements`. No cog `interface` types are emitted into Go code — they exist purely for the cog type checker.
+
+This also sidesteps the Go restriction that methods cannot have type parameters (until Go 1.27+), since the monomorphized call path uses plain functions.
+
+**Example:**
+
+```cog
+Stringer ~ interface {
+    String : func() utf8
+}
+
+Print : func<T ~ Stringer>(x : T) = {
+    @print(x.String())
+}
+
+Foo ~ struct { value : utf8 }
+Foo.String : func() utf8 = { return "Hello, world!" }
+
+main : proc() = {
+    Print(Foo{})
+}
+```
+
+Transpiles to:
+
+```go
+// Plain function — method body lives here, called by monomorphized code
+func _Foo_String(this _Foo) string {
+    return "Hello, world!"
+}
+
+// Go method wrapper — satisfies Go interfaces (fmt.Stringer, etc.)
+func (this _Foo) String() string {
+    return _Foo_String(this)
+}
+
+// Monomorphized generic — calls plain function directly
+func _Print_Foo(x _Foo) {
+    builtin.Print(_Foo_String(x))
+}
+
+type _Foo struct { value string }
+
+func main() {
+    _Print_Foo(_Foo{})
+}
+```
+
+**Key properties:**
+- Monomorphized code calls `_Foo_String(x)` — no interface dispatch overhead
+- `_Foo` satisfies `fmt.Stringer` via the Go method wrapper — stdlib interop works
+- Method naming never conflicts — methods are receiver-scoped, not package-scoped
+- Wrapper is a single forwarding call — zero logic duplication
+
+### 9. Cog-only constraints — no Go-expressibility requirement
+
+Cog constraints do not need to be expressible as Go type constraints. They are enforced entirely by the cog compiler at compile time. Go only sees monomorphized concrete functions — no type parameters, no constraints.
+
+This means cog can support constraints that are impossible in Go:
+
+```cog
+// ascii is []byte in Go — no ~ support. Go can't express ~ascii.
+// interface inside a constraint — not allowed in Go.
+// type parameter on interface itself — not allowed in Go.
+stringer ~ string | interface<S ~ string> {
+    String : func() S
+}
+```
+
+The cog compiler checks at each call site: does the concrete type satisfy `stringer`? Either it's a `string` type (utf8 or ascii), or it has a `String() S` method where `S` satisfies `string`. This is pure cog type-system logic — Go never evaluates it.
+
+For monomorphized output, `Print<T ~ stringer>(x : T)` called with `Foo` just becomes `_Print_Foo(x _Foo)`. The constraint is erased.
+
+For the `default` fallback, the transpiler emits the **widest Go-safe approximation** of the cog constraint. Since the cog compiler already rejected all invalid call-site types, the Go constraint only needs to be wide enough to accept the remaining valid types. In many cases `any` suffices. For interface constraints with methods, the fallback emits a plain Go `interface { Method() ReturnType }` using the non-mangled method names (which exist as Go method wrappers per §8).
+
+**Consequence:** cog's constraint system is strictly more expressive than Go's. Constraints involving `ascii` (~`[]byte`), parameterized interfaces, interfaces nested inside union constraints, and structural matching beyond what Go supports are all valid. The cost is that `default` fallback constraints may be looser in Go than in cog — but this is safe because cog already guards the entry points.
+
 ---
 
 ## Transpilation Examples
@@ -287,7 +375,17 @@ type MonoInstance struct {
 - For monomorphized types: emit plain `process_int64(args...)` — no type args
 - For default-routed types: emit `process[int16](args...)` — keep Go generic syntax
 
-**4.6 — Constraint narrowing for fallback**
+**4.6 — Method-to-function lowering**
+- Each method declaration emits **two** Go declarations:
+  1. **Plain function**: `Foo.Method` → `func _Foo_Method(this _Foo, ...)` — carries the method body
+  2. **Go method wrapper**: `func (this _Foo) Method() { return _Foo_Method(this) }` — one-line forwarder for Go interface satisfaction
+- The wrapper always uses the **original cog method name** (no `_` prefix). Methods are receiver-scoped in Go, so this doesn't conflict with the package-level `_` prefix convention for unexported globals
+- Monomorphized bodies call the plain function directly: `x.Method()` where `x : Foo` → `_Foo_Method(x)`
+- Non-generic method calls (`foo.Method()` outside any generic context) also use the plain function
+- Go stdlib interop works because the wrapper satisfies Go interfaces (`fmt.Stringer`, `io.Reader`, etc.)
+- Inside `default` fallback bodies, method calls on unresolved `T` can use the Go method wrapper (since it exists as a real Go method), allowing Go generic-to-method dispatch
+
+**4.7 — Constraint narrowing for fallback**
 - The fallback's constraint must exclude monomorphized types
 - Build a new tilde-union from `constraint.Constraints` minus the concrete types with specific cases
 - Use existing `component.TildeUnion(...)` with the reduced set
@@ -383,8 +481,8 @@ combine : func<A ~ int, B ~ string>(a : A, b : B) = {
 | `internal/transpiler/statement.go` | 1 | Union match → `switch tag` emission |
 | `internal/transpiler/monomorphize.go` (new) | 4, 5, 6 | Call-site collection, concrete emission, rewriting |
 | `internal/transpiler/transpiler.go` | 4 | Pre-pass hook, instance tracking |
-| `internal/transpiler/declaration.go` | 4 | Concrete function emission |
-| `internal/transpiler/expression.go` | 4 | Call-site rewriting |
+| `internal/transpiler/declaration.go` | 4 | Concrete function emission, method-to-function lowering |
+| `internal/transpiler/expression.go` | 4 | Call-site rewriting, method call → function call rewriting |
 | `internal/transpiler/type.go` | 4 | Constraint narrowing for fallback |
 
 ---
@@ -393,8 +491,12 @@ combine : func<A ~ int, B ~ string>(a : A, b : B) = {
 
 1. **Builtin generic functions** (`@slice`, `@map`, `@if`): these are compiler-provided and don't have user-written `match` bodies. They continue to be transpiled as today (special-cased in the transpiler). Monomorphization only applies to user-defined generic functions.
 
-2. **Generic type aliases** (e.g., `Pair<K, V> ~ struct { ... }`): these are type-level, not function-level. They continue to use Go's generic type syntax. Monomorphization applies only to functions/procedures.
+2. **Generic type aliases** (e.g., `Pair<K, V> ~ struct { ... }`): these are type-level, not function-level. They continue to use Go's generic type syntax. Monomorphization applies only to functions/procedures. Note that cog-level constraints on generic type aliases are still checked by the cog compiler — the Go type parameters use a Go-safe approximation of the constraint (widened if necessary, per §9).
 
 3. **Recursive generic functions**: a generic function that calls itself with a different concrete type (e.g., `process<int32>` calling `process<int16>`) is legal as long as the recursive call uses a concrete type (matched in a case branch). The call-site collector must transitively discover these.
 
 4. **Code size**: monomorphization trades binary size for speed. For most cog programs (CLIs, servers) this is a good trade. If it becomes a concern, the `default` fallback naturally limits duplication.
+
+5. **`default` case with interface constraints**: in a `default` fallback body, method calls on `T`-typed values cannot be lowered to direct function calls because the concrete type is unknown. However, because Go method wrappers exist on each type (§8), the `default` fallback can use normal Go generic method dispatch — `x.Method()` works in Go generics when the constraint interface requires `Method()`. The fallback's constraint is emitted as a Go `interface { Method() ReturnType }` using the original (non-mangled) method names. No special handling needed.
+
+6. **Non-generic methods**: methods on non-generic types (e.g., `Foo.String` called as `foo.String()` outside any generic context) also use the two-layer emission: plain function `_Foo_String(this)` + Go method wrapper `func (_Foo) String()`. Non-generic call sites use the plain function for consistency. This can be implemented independently of monomorphization as an early transpiler change — it unifies the calling convention across generic and non-generic code.

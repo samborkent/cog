@@ -413,6 +413,10 @@ outerLoop:
     }
 
     methodCaller.Export()
+
+    Print(FooLoo{
+        value = "Hello, world!",
+    })
 }
 
 // Generic function: type parameter on the func type.
@@ -541,7 +545,7 @@ case ascii:
 // string can be either ascii or utf8.
 // this is determined at compile time.
 // argument type determines return type as well.
-export upper : func[S string](str : S) S = {
+export upper : func<S ~ string>(str : S) S = {
     switch type str {
     case ascii:
         return @go.strings.Upper(@cast[utf8](str))
@@ -561,7 +565,7 @@ handleRequest : proc(req: Request) Response ! RequestError {
 // if-expression builtin function (called with @if)
 // else is an optional argument denoted with :?
 // if an optional argument is ommited, it will have the zero value of the type
-if : func[T any](expr: bool, thenExpr: T, elseExpr:? T) T = {
+if : func<T ~ any>(expr: bool, thenExpr: T, elseExpr:? T) T = {
     if expr {
         return thenExpr
     } else {

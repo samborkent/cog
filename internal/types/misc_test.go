@@ -1,6 +1,10 @@
 package types
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/samborkent/cog/internal/tokens"
+)
 
 func TestAssignableTo(t *testing.T) {
 	t.Parallel()
@@ -20,6 +24,10 @@ func TestAssignableTo(t *testing.T) {
 		{"wrong T to T?", int64Type, &Option{Value: utf8Type}, false},
 		{"T to alias(T?)", utf8Type, &Alias{Name: "Opt", Derived: &Option{Value: utf8Type}}, true},
 		{"wrong T to alias(T?)", int64Type, &Alias{Name: "Opt", Derived: &Option{Value: utf8Type}}, false},
+		{"int64 to any", int64Type, Any, true},
+		{"utf8 to any", utf8Type, Any, true},
+		{"any to any", Any, Any, true},
+		{"any to int64", Any, int64Type, false},
 	}
 
 	for _, tt := range tests {
@@ -46,6 +54,15 @@ func TestAnyType(t *testing.T) {
 
 	if Any.Underlying() != Any {
 		t.Error("Any.Underlying() != Any")
+	}
+}
+
+func TestAnyNotInLookup(t *testing.T) {
+	t.Parallel()
+
+	// any is a constraint, not a standalone type — it must not be in Lookup.
+	if _, ok := Lookup[tokens.Any]; ok {
+		t.Error("tokens.Any should not be in Lookup map (any is constraint-only)")
 	}
 }
 

@@ -9,6 +9,11 @@ func AssignableTo(src, dst Type) bool {
 		return true
 	}
 
+	// Any concrete type is assignable to any.
+	if dst.Kind() == AnyKind {
+		return true
+	}
+
 	// Allow assigning T to T? (Option[T]).
 	if opt, ok := dst.(*Option); ok {
 		return Equal(src, opt.Value)
