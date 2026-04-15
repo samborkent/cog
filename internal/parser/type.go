@@ -35,51 +35,28 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 
 	typ := p.parseType(ctx)
 
+	// Propagate exported/global flags to tuple types parsed by parseType.
+	if t, ok := typ.(*types.Tuple); ok {
+		t.Exported = exported
+		t.Global = global
+	}
+
 	switch p.this().Type {
-	case tokens.BitAnd:
-		// Disambiguate: if & is on a different line than the previous token,
-		// it is a reference method declaration, not a tuple separator.
-		if p.this().Ln != p.prev().Ln {
-			return typ
+	case tokens.BitXor:
+		// Either (concrete two-type union with Left/Right)
+		p.advance("parseCombinedType either ^") // consume ^
+
+		right := p.parseType(ctx)
+		if right == nil {
+			return nil
 		}
 
-		// Tuple
-		tuple := &types.Tuple{
-			Types:    make([]types.Type, 1, types.TupleMaxTypes),
+		return &types.Either{
+			Left:     typ,
+			Right:    right,
 			Exported: exported,
 			Global:   global,
 		}
-
-		// Put parsed type as first type.
-		tuple.Types[0] = typ
-
-		for p.this().Type == tokens.BitAnd {
-			p.advance("parseCombinedType tuple &") // consume &
-
-			next := p.parseType(ctx)
-			if next != nil {
-				tuple.Types = append(tuple.Types, next)
-			}
-		}
-
-		return tuple
-	case tokens.Pipe:
-		// Union
-		union := &types.Union{
-			Variants: []types.Type{typ},
-			Exported: exported,
-		}
-
-		for p.this().Type == tokens.Pipe {
-			p.advance("parseCombinedType union |") // consume |
-
-			next := p.parseType(ctx)
-			if next != nil {
-				union.Variants = append(union.Variants, next)
-			}
-		}
-
-		return union
 	case tokens.Not:
 		// Result type: T ! E
 		p.advance("parseCombinedType result !") // consume !
@@ -111,7 +88,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 // canStartType reports whether the current token can begin a type expression.
 func (p *Parser) canStartType() bool {
 	switch p.this().Type {
-	case tokens.Interface, tokens.LBracket, tokens.Map, tokens.Set,
+	case tokens.Interface, tokens.LBracket, tokens.LParen, tokens.Map, tokens.Set,
 		tokens.Struct, tokens.BitAnd, tokens.Function, tokens.Procedure:
 		return true
 	case tokens.Identifier:
@@ -126,6 +103,43 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 	switch p.this().Type {
 	case tokens.Interface:
 		return p.parseInterface(ctx)
+	case tokens.LParen:
+		// Tuple type: (T1, T2, ...)
+		p.advance("parseType (") // consume (
+
+		first := p.parseType(ctx)
+		if first == nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.Comma {
+			p.error(p.this(), "expected ',' after first tuple element type", "parseType")
+			return nil
+		}
+
+		tuple := &types.Tuple{
+			Types: make([]types.Type, 1, types.TupleMaxTypes),
+		}
+
+		tuple.Types[0] = first
+
+		for p.this().Type == tokens.Comma {
+			p.advance("parseType tuple ,") // consume ,
+
+			next := p.parseType(ctx)
+			if next != nil {
+				tuple.Types = append(tuple.Types, next)
+			}
+		}
+
+		if p.this().Type != tokens.RParen {
+			p.error(p.this(), "expected ')' to close tuple type", "parseType")
+			return nil
+		}
+
+		p.advance("parseType )") // consume )
+
+		return tuple
 	case tokens.LBracket:
 		p.advance("parseType [") // consume [
 

@@ -17,8 +17,8 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 
 	subjectType := n.Subject.Type()
 
-	if subjectType.Kind() == types.UnionKind {
-		unionType := subjectType.(*types.Union)
+	if subjectType.Kind() == types.EitherKind {
+		eitherType := subjectType.(*types.Either)
 
 		if len(n.Cases) == 0 {
 			return nil, nil // Or return empty block.
@@ -27,9 +27,9 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 		var leftCase, rightCase *ast.MatchCase
 
 		for _, c := range n.Cases {
-			if types.Equal(c.MatchType, unionType.Variants[0]) {
+			if types.Equal(c.MatchType, eitherType.Left) {
 				leftCase = c
-			} else if types.Equal(c.MatchType, unionType.Variants[1]) {
+			} else if types.Equal(c.MatchType, eitherType.Right) {
 				rightCase = c
 			}
 		}

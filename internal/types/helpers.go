@@ -116,6 +116,9 @@ func Equal(a, b Type) bool {
 		}
 
 		return true
+	case *Either:
+		bt := bu.(*Either)
+		return Equal(at.Left, bt.Left) && Equal(at.Right, bt.Right)
 	case *Union:
 		bt := bu.(*Union)
 		if at.Name != "" || bt.Name != "" {

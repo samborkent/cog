@@ -135,13 +135,13 @@ main : proc() = {}`)
 		}
 	})
 
-	// NOTE: Either union match tests are omitted from parser tests because
-	// the expression parser currently greedily consumes '{' after a union-typed
-	// identifier as a union literal initialization.
-	// The Either paths are covered in transpiler tests where the union value
+	// NOTE: Either match tests are omitted from parser tests because
+	// the expression parser currently greedily consumes '{' after an either-typed
+	// identifier as an either literal initialization.
+	// The Either paths are covered in transpiler tests where the either value
 	// is passed as a function parameter.
 
-	t.Run("error_non_union_subject", func(t *testing.T) {
+	t.Run("error_non_either_subject", func(t *testing.T) {
 		t.Parallel()
 
 		parseShouldError(t, `package p

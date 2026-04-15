@@ -357,24 +357,20 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 				List: fields,
 			},
 		}
-	case types.UnionKind:
-		unionType, ok := typ.(*types.Union)
+	case types.EitherKind:
+		eitherType, ok := typ.(*types.Either)
 		if !ok {
-			return nil, errors.New("unable to assert union type")
+			return nil, errors.New("unable to assert either type")
 		}
 
-		if len(unionType.Variants) != 2 {
-			return nil, errors.New("transpiling union types as variables requires exactly 2 variants")
-		}
-
-		leftType, err := t.convertType(unionType.Variants[0])
+		leftType, err := t.convertType(eitherType.Left)
 		if err != nil {
-			return nil, fmt.Errorf("converting union left type: %w", err)
+			return nil, fmt.Errorf("converting either left type: %w", err)
 		}
 
-		rightType, err := t.convertType(unionType.Variants[1])
+		rightType, err := t.convertType(eitherType.Right)
 		if err != nil {
-			return nil, fmt.Errorf("converting union right type: %w", err)
+			return nil, fmt.Errorf("converting either right type: %w", err)
 		}
 
 		t.addCogImport()

@@ -48,6 +48,7 @@ const (
 	StructKind
 
 	// Combined types
+	EitherKind
 	TupleKind
 	UnionKind
 
@@ -117,6 +118,8 @@ func (t Kind) String() string {
 		return "struct"
 	case TupleKind:
 		return "tuple"
+	case EitherKind:
+		return "either"
 	case UnionKind:
 		return "union"
 	case OptionKind:

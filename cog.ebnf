@@ -146,8 +146,7 @@ combined_type
     | error_type
     | interface_type
     | procedure_type
-    | type, "&", type, { "&", type }     (* tuple *)
-    | type, "|", type                    (* union, exactly 2 types *)
+    | type, "^", type                    (* either, exactly 2 types *)
     | type, "!", type                    (* result type: value ! error *)
     | type;
 
@@ -187,7 +186,8 @@ parameter
     = IDENTIFIER, [ "?" ], ":", combined_type, [ "=", expression ];
 
 type
-    = "[", "]", type                                   (* slice *)
+    = "(", type, ",", type, { ",", type }, ")"  (* tuple *)
+    | "[", "]", type                                   (* slice *)
     | "[", ( INT | IDENTIFIER ), "]", type             (* array *)
     | "map", "<", type, ",", type, ">"                 (* map *)
     | "set", "<", type, ">"                            (* set *)

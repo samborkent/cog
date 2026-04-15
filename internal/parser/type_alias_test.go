@@ -29,7 +29,7 @@ main : proc() = {}`)
 	t.Run("tuple", func(t *testing.T) {
 		t.Parallel()
 		f := parse(t, `package p
-Pair ~ int32 & utf8
+Pair ~ (int32, utf8)
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
@@ -38,15 +38,15 @@ main : proc() = {}`)
 		}
 	})
 
-	t.Run("union", func(t *testing.T) {
+	t.Run("either", func(t *testing.T) {
 		t.Parallel()
 		f := parse(t, `package p
-Either ~ int32 | utf8
+Either ~ int32 ^ utf8
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
-		if ta.Alias.Kind() != types.UnionKind {
-			t.Errorf("expected UnionKind, got %s", ta.Alias.Kind())
+		if ta.Alias.Kind() != types.EitherKind {
+			t.Errorf("expected EitherKind, got %s", ta.Alias.Kind())
 		}
 	})
 
@@ -269,7 +269,7 @@ main : proc() = {}`)
 	t.Run("two_params", func(t *testing.T) {
 		t.Parallel()
 		f := parse(t, `package p
-Pair<A ~ any, B ~ any> ~ A & B
+Pair<A ~ any, B ~ any> ~ (A, B)
 main : proc() = {}`)
 		ta := stmtAs[*ast.Type](t, f, 0)
 

@@ -64,10 +64,15 @@ func TestEqual(t *testing.T) {
 		{"different tuple element", &Tuple{Types: []Type{utf8Type, int64Type}}, &Tuple{Types: []Type{utf8Type, int8Type}}, false},
 		{"different tuple length", &Tuple{Types: []Type{utf8Type, int64Type}}, &Tuple{Types: []Type{utf8Type, int64Type, boolType}}, false},
 
-		// Unions
+		// Either
+		{"same either", &Either{Left: utf8Type, Right: int64Type}, &Either{Left: utf8Type, Right: int64Type}, true},
+		{"different either left", &Either{Left: utf8Type, Right: int64Type}, &Either{Left: asciiType, Right: int64Type}, false},
+		{"different either right", &Either{Left: utf8Type, Right: int64Type}, &Either{Left: utf8Type, Right: int8Type}, false},
+
+		// Unions (constraints)
 		{"same union", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{utf8Type, int64Type}}, true},
-		{"different union either", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{asciiType, int64Type}}, false},
-		{"different union or", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{utf8Type, int8Type}}, false},
+		{"different union left", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{asciiType, int64Type}}, false},
+		{"different union right", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{utf8Type, int8Type}}, false},
 
 		// Structs
 		{"same struct", &Struct{Fields: []*Field{{Name: "x", Type: int64Type}}}, &Struct{Fields: []*Field{{Name: "x", Type: int64Type}}}, true},

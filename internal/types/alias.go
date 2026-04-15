@@ -140,6 +140,13 @@ func SubstituteType(t Type, args map[string]Type) Type {
 		}
 
 		return &Tuple{Types: types, Exported: v.Exported, Global: v.Global}
+	case *Either:
+		return &Either{
+			Left:     SubstituteType(v.Left, args),
+			Right:    SubstituteType(v.Right, args),
+			Exported: v.Exported,
+			Global:   v.Global,
+		}
 	case *Union:
 		variants := make([]Type, len(v.Variants))
 		for i, variant := range v.Variants {

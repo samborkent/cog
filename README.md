@@ -11,7 +11,7 @@ The following basic features are missing that need to be implemented before Cog 
 ### Bugs
 - When declaring type alias in script mode, the type gets placed in global scope, instead of inside of main.
     This is required for method declaration, so we need to manually disallow using a type which is only defined later in the file in script mode.
-- Syntax ambiguity `&` method reference receiver vs tuple parsing  vs bitwise AND
+- Syntax ambiguity `&` method reference receiver vs bitwise AND
 
 ### Features
 - Remove `@ref` allocator.
@@ -40,8 +40,8 @@ The following basic features are missing that need to be implemented before Cog 
     - Enum `enum<any>`
     - Map `map<comparable, any>`
     - Set `set<comparable>` (alias for `map<comparable, struct{}>`)
-    - Either `this | that`
-    - Tuple `this & that & other`
+    - Either `this ^ that`
+    - Tuple `(this, that, other)`
     - Option `foo : uint64?; if foo? { ... }`
     - Result `bar : int64 ! MyError; if bar? { use bar } if !bar? { handle bar! }`
     - `ascii` string where every character is a single byte
@@ -52,11 +52,12 @@ The following basic features are missing that need to be implemented before Cog 
     - `uint128` (using [lukechampine.com/uint128](lukechampine.com/uint128))
     - `float16` (using [github.com/x448/float16](github.com/x448/float16))
     - `complex32` (using `float16`)
+    - Type constraints `String ~ utf8 | ascii`
 - Typed composite literals: `[]int8{5, 4, 3}`, `[5]int8{...}`, `map<ascii, int8>{...}`, `set<ascii>{...}`
 - Clear builtin functions with `@` prefix
     - `@print(msg any)` print to std out
-    - `@if<T any>(if : bool, then : T, else :? T)` conditional expression
-    - `@cast<B, A any>(x A) B` bitwise type cast (target must be same size or larger)
+    - `@if<T ~ any>(if : bool, then : T, else :? T)` conditional expression
+    - `@cast<B, A ~ any>(x A) B` bitwise type cast (target must be same size or larger)
 - Allocation builtins with generic type arguments:
     - `@ref<T valueType>() &T`
     - `@slice<T any, I uint>(len : I, cap :? I = len) []T`
@@ -511,9 +512,9 @@ planet ~ struct {
     )
 }
 
-Tuple ~ utf8 & uint64 & bool
+Tuple ~ (utf8, uint64, bool)
 
-Either ~ utf8 | uint64
+Either ~ utf8 ^ uint64
 
 Option ~ utf8?
 

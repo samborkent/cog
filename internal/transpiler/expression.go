@@ -1045,15 +1045,15 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			},
 			Args: []goast.Expr{component.UTF8Lit(n.Value.String())},
 		}, nil
-	case *ast.UnionLiteral:
+	case *ast.EitherLiteral:
 		expr, err := t.convertExpr(n.Value)
 		if err != nil {
-			return nil, fmt.Errorf("converting union literal value: %w", err)
+			return nil, fmt.Errorf("converting either literal value: %w", err)
 		}
 
-		goType, err := t.convertType(n.UnionType)
+		goType, err := t.convertType(n.EitherType)
 		if err != nil {
-			return nil, fmt.Errorf("converting union literal type: %w", err)
+			return nil, fmt.Errorf("converting either literal type: %w", err)
 		}
 
 		var eltExpr goast.Expr

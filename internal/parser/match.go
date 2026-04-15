@@ -36,11 +36,11 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 
 	subjectType := node.Subject.Type()
 
-	isUnion := subjectType.Kind() == types.UnionKind
+	isEither := subjectType.Kind() == types.EitherKind
 
 	var isGeneric bool
 
-	if !isUnion {
+	if !isEither {
 		if tp, ok := subjectType.(*types.Alias); ok && tp.IsTypeParam() {
 			if tp.Constraint != nil && (tp.Constraint.Kind() == types.UnionKind || tp.Constraint.Kind() == types.AnyKind) {
 				isGeneric = true
@@ -48,8 +48,8 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 		}
 	}
 
-	if !isUnion && !isGeneric {
-		p.error(p.this(), fmt.Sprintf("match subject must be an Either union or a generic type parameter bounded by a union or any, got %s", subjectType.String()), "parseMatch")
+	if !isEither && !isGeneric {
+		p.error(p.this(), fmt.Sprintf("match subject must be an either type or a generic type parameter bounded by a union or any, got %s", subjectType.String()), "parseMatch")
 		return nil
 	}
 

@@ -464,9 +464,9 @@ planet ~ struct {
 }
 
 // TODO: temporarily disabled, not fully implemented.
-// Tuple ~ utf8 & uint64 & bool
+// Tuple ~ (utf8, uint64, bool)
 
-Either ~ utf8 | uint64
+Either ~ utf8 ^ uint64
 
 Option ~ utf8?
 
@@ -526,7 +526,7 @@ Dict<K ~ comparable, V ~ any> ~ map<K, V>
 
 // Multiple type params with any constraint.
 // TODO: temporarily disabled, not fully implemented.
-// Pair<A ~ any, B ~ any> ~ A & B
+// Pair<A ~ any, B ~ any> ~ (A, B)
 
 // Multi-constraint union: T must be string or int.
 TagSlice<T ~ string | int> ~ []T

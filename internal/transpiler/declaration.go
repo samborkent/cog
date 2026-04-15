@@ -423,13 +423,13 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 func mustBeVariable(t types.Kind) bool {
 	switch t {
 	case types.ArrayKind,
+		types.EitherKind,
 		types.MapKind,
 		types.ProcedureKind,
 		types.SetKind,
 		types.SliceKind,
 		types.StructKind,
-		types.TupleKind,
-		types.UnionKind:
+		types.TupleKind:
 		return true
 	default:
 		return false

@@ -360,11 +360,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			// TODO: handle none type
 
 			typeToken = optionType.Value
-		case types.UnionKind:
-			// Handle union literal.
-			unionType, ok := typeToken.(*types.Union)
+		case types.EitherKind:
+			// Handle either literal.
+			eitherType, ok := typeToken.(*types.Either)
 			if !ok {
-				p.error(p.this(), "unable to assert union type", "primary")
+				p.error(p.this(), "unable to assert either type", "primary")
 				return nil
 			}
 
@@ -376,30 +376,22 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				return nil
 			}
 
-			var (
-				matched bool
-				isRight bool
-			)
+			var isRight bool
 
-			for i, variant := range unionType.Variants {
-				if types.Equal(expr.Type(), variant) {
-					matched = true
-					isRight = i > 0
-
-					break
-				}
-			}
-
-			if !matched {
-				p.error(p.this(), fmt.Sprintf("expression of type %q not in union type %q", expr.Type().String(), unionType.String()), "primary")
+			if types.Equal(expr.Type(), eitherType.Left) {
+				// matched left
+			} else if types.Equal(expr.Type(), eitherType.Right) {
+				isRight = true
+			} else {
+				p.error(p.this(), fmt.Sprintf("expression of type %q not in either type %q", expr.Type().String(), eitherType.String()), "primary")
 				return nil
 			}
 
-			return &ast.UnionLiteral{
-				Token:     token,
-				UnionType: unionType,
-				Value:     expr,
-				IsRight:   isRight,
+			return &ast.EitherLiteral{
+				Token:      token,
+				EitherType: eitherType,
+				Value:      expr,
+				IsRight:    isRight,
 			}
 		}
 	}
@@ -733,8 +725,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			case *ast.TupleLiteral:
 				literal.TupleType = t
 				return literal
-			case *ast.UnionLiteral:
-				literal.UnionType = t
+			case *ast.EitherLiteral:
+				literal.EitherType = t
 				return literal
 			}
 

@@ -37,6 +37,7 @@ func TestKindString(t *testing.T) {
 		{SetKind, "set"},
 		{StructKind, "struct"},
 		{TupleKind, "tuple"},
+		{EitherKind, "either"},
 		{UnionKind, "union"},
 		{OptionKind, "option"},
 		{ProcedureKind, "proc"},
@@ -153,8 +154,8 @@ func TestTupleString(t *testing.T) {
 	t.Parallel()
 
 	tu := &Tuple{Types: []Type{Basics[UTF8], Basics[Int64]}}
-	if got := tu.String(); got != "utf8 & int64" {
-		t.Errorf("Tuple.String() = %q, want \"utf8 & int64\"", got)
+	if got := tu.String(); got != "(utf8, int64)" {
+		t.Errorf("Tuple.String() = %q, want \"(utf8, int64)\"", got)
 	}
 
 	if tu.Kind() != TupleKind {
@@ -198,6 +199,19 @@ func TestUnionString(t *testing.T) {
 
 	if u.Kind() != UnionKind {
 		t.Error("Union.Kind() != UnionKind")
+	}
+}
+
+func TestEitherString(t *testing.T) {
+	t.Parallel()
+
+	e := &Either{Left: Basics[UTF8], Right: Basics[Int64]}
+	if got := e.String(); got != "utf8 ^ int64" {
+		t.Errorf("Either.String() = %q, want \"utf8 ^ int64\"", got)
+	}
+
+	if e.Kind() != EitherKind {
+		t.Error("Either.Kind() != EitherKind")
 	}
 }
 
