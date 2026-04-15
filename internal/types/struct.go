@@ -9,12 +9,16 @@ var _ Type = &Struct{}
 
 type Struct struct {
 	Fields []*Field
+	// Only set for struct aliases with methods.
+	Methods   []*Method
+	IsComplex bool
 }
 
 type Field struct {
-	Name     string
-	Type     Type
-	Exported bool
+	Name        string
+	Type        Type
+	Exported    bool
+	PointerLike bool
 }
 
 func (s *Struct) Kind() Kind {

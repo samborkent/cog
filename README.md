@@ -6,6 +6,21 @@ The following basic features are missing that need to be implemented before Cog 
 
 - Go-to-Cog type conversions
 
+## TODO:
+
+### Bugs
+- When declaring type alias in script mode, the type gets placed in global scope, instead of inside of main.
+    This is required for method declaration, so we need to manually disallow using a type which is only defined later in the file in script mode.
+- Syntax ambiguity `&` method reference receiver vs bitwise AND
+
+### Features
+- Remove `@ref` allocator.
+- Change `@cast` signature to `@cast<B, A any>(x A) B?`. Return type will only be set if lossless cast is possible.
+- Define builtin functions as `cog` functions.
+- Design how iterators should work.
+    - Range over int (or other literal) should not be possible.
+    - Instead we should range over an iterator function which takes literal as argument.
+
 ## Features
 
 ### Implemented
@@ -25,24 +40,26 @@ The following basic features are missing that need to be implemented before Cog 
     - Enum `enum<any>`
     - Map `map<comparable, any>`
     - Set `set<comparable>` (alias for `map<comparable, struct{}>`)
-    - Either `this | that`
-    - Tuple `this & that & other`
+    - Either `this ^ that`
+    - Tuple `(this, that, other)`
     - Option `foo : uint64?; if foo? { ... }`
     - Result `bar : int64 ! MyError; if bar? { use bar } if !bar? { handle bar! }`
     - `ascii` string where every character is a single byte
     - `utf8` alias for Go `string`
     - Struct with explicit field exports
+    - Interface `Stringer ~ interface { String : func() utf8 }`
     - `int128` (using [github.com/ryanavella/wide](github.com/ryanavella/wide))
     - `uint128` (using [lukechampine.com/uint128](lukechampine.com/uint128))
     - `float16` (using [github.com/x448/float16](github.com/x448/float16))
     - `complex32` (using `float16`)
+    - Type constraints `String ~ utf8 | ascii`
 - Typed composite literals: `[]int8{5, 4, 3}`, `[5]int8{...}`, `map<ascii, int8>{...}`, `set<ascii>{...}`
 - Clear builtin functions with `@` prefix
     - `@print(msg any)` print to std out
-    - `@if<T any>(if : bool, then : T, else :? T)` conditional expression
-    - `@cast<B, A any>(x A) B` bitwise type cast (target must be same size or larger)
+    - `@if<T ~ any>(if : bool, then : T, else :? T)` conditional expression
+    - `@cast<B, A ~ any>(x A) B` bitwise type cast (target must be same size or larger)
 - Allocation builtins with generic type arguments:
-    - `@ptr<T valueType>() *T`
+    - `@ref<T valueType>() &T`
     - `@slice<T any, I uint>(len : I, cap :? I = len) []T`
     - `@map<K comparable, V any, I uint>(cap :? I = 8) map<K, V>`
     - `@set<K comparable, I uint>(cap :? I = 8) set<K>`
@@ -99,8 +116,9 @@ The following basic features are missing that need to be implemented before Cog 
 - Generic type aliases with type parameters and constraints
     - Declaration: `List<T ~ any> ~ []T`, `Dict<K ~ comparable, V ~ any> ~ map<K, V>`
     - Instantiation: `names : List<utf8>`, `lookup : Dict<utf8, int64>`
-    - Builtin constraints: `any`, `comparable`, `ordered`, `number`, `string`, `int`, `uint`, `float`, `complex`, `signed`
+    - Builtin constraints: `any`, `comparable`, `ordered`, `number`, `string`, `int`, `uint`, `float`, `complex`, `signed`, `summable`
     - Union constraints: `T ~ string | int`
+    - Interface constraints: `T ~ Stringer`
     - Constraint validation at instantiation
 - Generic functions with type parameters on the `func` type
     - Declaration: `genFunc : func<T ~ any>(x : T) = { ... }`
@@ -109,6 +127,22 @@ The following basic features are missing that need to be implemented before Cog 
     - Explicit type arguments: `genFunc<utf8>("hello")`
     - Constraint validation and type argument mismatch errors
     - Transpiles to Go generics: `func genFunc[T any](x T) { ... }`
+- Interfaces
+    - Declaration: `Stringer ~ interface { String : func() utf8 }`
+    - Used as generic constraints: `func<T ~ Stringer>(x : T) = { x.String() }`
+    - Struct satisfaction: a struct satisfies an interface if it declares methods matching every interface method signature
+- Methods on struct types
+    - Declaration: `Foo.GetValue : func() utf8 = { return this.value }`
+    - Procedure methods: `Foo.DoSomething : proc() = { ... }`
+    - Exported methods: `export Foo.String : func() utf8 = { ... }`
+    - Reference receiver: `&Foo.Mutate : proc() = { ... }` (pointer receiver in Go output)
+    - Methods can be declared in any order relative to the struct definition
+    - Method names are scoped to their receiver type (no conflict with global names)
+- `this` keyword
+    - Available inside method bodies only — refers to the receiver instance
+    - Supports field access: `this.value`
+    - Supports method calls: `this.Method()`
+    - Using `this` outside a method body is an error
 
 ### Partly implemented
 
@@ -117,7 +151,7 @@ The following basic features are missing that need to be implemented before Cog 
 ### Planned
 
 - Result type `T ! E` with typed error handling
-    - Also allow `interface{ String() string }` and `interface{ Error() string }` as error types (requires interface implementation)
+    - Also allow `interface{ String() string }` and `interface{ Error() string }` as error types
 - Type qualifiers
     - `comp` for compile time constants. Similar to Zig' `comptime`. When used on variables, like C++ `constexpr`, when used for functions like C++ `consteval`.
 - Variables need to be passed to scope explicitely (no catch all closures)
@@ -127,14 +161,15 @@ The following basic features are missing that need to be implemented before Cog 
     - `switch t { type uint64: ... }`
     - For `t ~ any | interface | union`
 - Select statement
-- Generics: additional builtin generic constraints not yet implemented:
-    - `signed ~ int | float | complex`
 - Conversion builtins:
     - `@convert<A, B any>(x A) B` to cast types instead of `float32()`, etc.
         - Will perform best-effort conversion, allowing some precision loss and handling overflows.
 - Additional types:
     - `signal<T any>` alias of `chan<T any>struct{}`
+- Range operator `0..4 == [0, 1, 2, 3]`
 - Builtin operations for 2D / 3D / 4D slices.
+- Implement flat AST.
+- Fork and rework float16, uint128 and int128 imported packages.
 - Builtin `upx` binary packer for smaller binaries.
 - LSP
 - Adaptive GC (https://github.com/samborkent/adaptive-gc)
@@ -148,15 +183,6 @@ The following basic features are missing that need to be implemented before Cog 
 * `=` - assign a value to a value identifier
 * `:=` - short hand for `: <inferred type> =`
 * `~` - declare a type alias
-
-## TODO
-
-- Range operator `0..4 == [0, 1, 2, 3]`
-- Design how iterators should work.
-    - Range over int (or other literal) should not be possible.
-    - Instead we should range over an iterator function which takes literal as argument.
-- Fork and rework float16, uint128 and int128 imported packages.
-- Implement flat AST.
 
 ## Example code
 
@@ -390,8 +416,8 @@ outerLoop:
 
 	what := @if<uint64, bool>(5 != 6, 10, 6)
 
-	ptr := @ptr<utf8>()
-	_ = ptr
+	ref := @ref<utf8>()
+	_ = ref
 
 	arg : uint64 = 10
 	_ = @slice<int32>(arg)
@@ -486,9 +512,9 @@ planet ~ struct {
     )
 }
 
-Tuple ~ utf8 & uint64 & bool
+Tuple ~ (utf8, uint64, bool)
 
-Either ~ utf8 | uint64
+Either ~ utf8 ^ uint64
 
 Option ~ utf8?
 
@@ -521,4 +547,26 @@ Map ~ map<utf8, uint64>
 array : [3]uint64 = {1, 2, 3}
 slice : []utf8 = {"foo", "bar", "baz", "qux"}
 SliceType ~ []uint64
+
+// Interfaces and methods.
+Stringer ~ interface {
+    String : func() utf8
+}
+
+Print : func<T ~ Stringer>(x : T) = {
+    @print(x.String())
+}
+
+export Foo ~ struct {
+    value : utf8
+}
+
+export Foo.String : func() utf8 = {
+    return this.value
+}
+
+// Reference receiver method (pointer receiver in Go output).
+&Foo.SetValue : proc(v : utf8) = {
+    this.value = v
+}
 ```

@@ -1,2 +1,4 @@
 .agents/
+.vscode/
 tmp/
+.env

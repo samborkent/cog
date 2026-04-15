@@ -27,6 +27,7 @@ main : proc() = {
 
 	t.Run("infer_int64", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 genFunc : func<T ~ any>(x : T) = {
 	@print(x)
@@ -41,6 +42,7 @@ main : proc() = {
 
 	t.Run("explicit_type_arg", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 genFunc : func<T ~ any>(x : T) = {
 	@print(x)
@@ -55,6 +57,7 @@ main : proc() = {
 
 	t.Run("infer_with_return_type", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 identity : func<T ~ any>(x : T) T = {
 	return x
@@ -70,6 +73,7 @@ main : proc() = {
 
 	t.Run("explicit_with_return_type", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 identity : func<T ~ any>(x : T) T = {
 	return x
@@ -85,6 +89,7 @@ main : proc() = {
 
 	t.Run("constrained_number", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 showNum : func<T ~ number>(x : T) = {
 	@print(x)
@@ -99,6 +104,7 @@ main : proc() = {
 
 	t.Run("forward_reference", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	genFunc("hello")
@@ -157,6 +163,7 @@ main : proc() = {
 
 	t.Run("infer_call_with_comparison_in_same_scope", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 genFunc : func<T ~ any>(x : T) = {
 	@print(x)
@@ -185,21 +192,26 @@ main : proc() = {
 		// Get the main proc body and find the call.
 		mainDecl := stmtAs[*ast.Declaration](t, f, 1)
 		procLit := mainDecl.Assignment.Expression.(*ast.ProcedureLiteral)
+
 		block := procLit.Body
 		if len(block.Statements) == 0 {
 			t.Fatal("expected statements in main block")
 		}
+
 		exprStmt, ok := block.Statements[0].(*ast.ExpressionStatement)
 		if !ok {
 			t.Fatalf("expected ExpressionStatement, got %T", block.Statements[0])
 		}
+
 		call, ok := exprStmt.Expression.(*ast.Call)
 		if !ok {
 			t.Fatalf("expected Call, got %T", exprStmt.Expression)
 		}
+
 		if len(call.TypeArgs) != 1 {
 			t.Fatalf("expected 1 type arg, got %d", len(call.TypeArgs))
 		}
+
 		if call.TypeArgs[0].Kind() != types.UTF8 {
 			t.Errorf("expected inferred type arg utf8, got %s", call.TypeArgs[0])
 		}
@@ -208,6 +220,7 @@ main : proc() = {
 	// Critical #1: zero-arg calls must not corrupt parser state.
 	t.Run("zero_arg_proc_call", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 noArgs : proc() = {
 	@print("hello")
@@ -222,6 +235,7 @@ main : proc() = {
 
 	t.Run("zero_arg_func_call", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 getVal : func() int64 = {
 	return 42
@@ -264,6 +278,7 @@ main : proc() = {
 	// Major #9: concrete type constraints (not just keywords).
 	t.Run("concrete_type_constraint", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 intOnly : func<T ~ int32 | int64>(x : T) = {
 	@print(x)
@@ -278,27 +293,34 @@ main : proc() = {
 		// Verify the first func's type parameter has concrete type constraints.
 		decl := stmtAs[*ast.Declaration](t, f, 0)
 		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
+
 		procType := procLit.ProcedureType.(*types.Procedure)
 		if len(procType.TypeParams) != 1 {
 			t.Fatalf("expected 1 type param, got %d", len(procType.TypeParams))
 		}
+
 		tp := procType.TypeParams[0]
 		if tp.Name != "T" {
 			t.Errorf("expected type param name T, got %s", tp.Name)
 		}
-		if len(tp.Constraints) != 2 {
-			t.Fatalf("expected 2 constraints, got %d", len(tp.Constraints))
+
+		union, ok := tp.Constraint.(*types.Union)
+		if !ok || len(union.Variants) != 2 {
+			t.Fatalf("expected 2 constraints, got %v", tp.Constraint)
 		}
-		if tp.Constraints[0].Kind() != types.Int32 {
-			t.Errorf("expected first constraint int32, got %s", tp.Constraints[0])
+
+		if union.Variants[0].Kind() != types.Int32 {
+			t.Errorf("expected first constraint int32, got %s", union.Variants[0])
 		}
-		if tp.Constraints[1].Kind() != types.Int64 {
-			t.Errorf("expected second constraint int64, got %s", tp.Constraints[1])
+
+		if union.Variants[1].Kind() != types.Int64 {
+			t.Errorf("expected second constraint int64, got %s", union.Variants[1])
 		}
 	})
 
 	t.Run("single_concrete_type_constraint", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 utf8Only : func<T ~ utf8>(x : T) = {
 	@print(x)

@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
@@ -96,33 +98,57 @@ func (s *SymbolTable) Define(ident *ast.Identifier) {
 
 	s.table[ident.Name] = symbol
 
-	if ident.Name != "" && ident.Qualifier != ast.QualifierType {
-		switch ident.ValueType.Kind() {
-		case types.StructKind:
-			structType, ok := ident.ValueType.Underlying().(*types.Struct)
-			if !ok {
-				break
-			}
+	// TODO: investigate why this check was here
+	// if ident.Qualifier != ast.QualifierType {
+	switch ident.ValueType.Kind() {
+	case types.StructKind:
+		structType, ok := ident.ValueType.Underlying().(*types.Struct)
+		if !ok {
+			break
+		}
 
-			_, ok = s.fields[ident.Name]
-			if ok {
-				break
-			}
+		_, ok = s.fields[ident.Name]
+		if ok {
+			break
+		}
 
-			s.fields[ident.Name] = make(map[string]Symbol, len(structType.Fields))
+		s.fields[ident.Name] = make(map[string]Symbol, len(structType.Fields))
 
-			for _, field := range structType.Fields {
-				s.fields[ident.Name][field.Name] = Symbol{
-					Identifier: &ast.Identifier{
-						Name:      field.Name,
-						ValueType: field.Type,
-						Exported:  field.Exported,
-					},
-					Scope: StructScope,
-				}
+		for _, field := range structType.Fields {
+			s.fields[ident.Name][field.Name] = Symbol{
+				Identifier: &ast.Identifier{
+					Name:      field.Name,
+					ValueType: field.Type,
+					Exported:  field.Exported,
+				},
+				Scope: StructScope,
 			}
 		}
 	}
+	// }
+}
+
+func (s *SymbolTable) DefineMethod(receiver string, method *ast.Identifier) error {
+	if method.Qualifier != ast.QualifierMethod {
+		panic("DefineMethod may only be called for method identifiers")
+	}
+
+	_, ok := s.fields[receiver]
+	if !ok {
+		s.fields[receiver] = make(map[string]Symbol)
+	}
+
+	_, ok = s.fields[receiver][method.Name]
+	if ok {
+		return fmt.Errorf("method name conflict: field with name %q already exists for type %q", method.Name, receiver)
+	}
+
+	s.fields[receiver][method.Name] = Symbol{
+		Identifier: method,
+		Scope:      StructScope,
+	}
+
+	return nil
 }
 
 func (s *SymbolTable) DefineEnumValue(selector string, field *ast.Identifier) {
@@ -186,6 +212,7 @@ func (s *SymbolTable) ResolveField(typeName, field string) (Symbol, bool) {
 	}
 
 	symbol, ok := fields[field]
+
 	return symbol, ok
 }
 

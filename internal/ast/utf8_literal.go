@@ -50,6 +50,7 @@ func (l *UTF8Literal) stringTo(out *strings.Builder) {
 func (l *UTF8Literal) String() string {
 	var out strings.Builder
 	l.stringTo(&out)
+
 	return out.String()
 }
 

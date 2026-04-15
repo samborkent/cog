@@ -42,6 +42,7 @@ func (e *TupleLiteral) stringTo(out *strings.Builder) {
 func (e *TupleLiteral) String() string {
 	var out strings.Builder
 	e.stringTo(&out)
+
 	return out.String()
 }
 

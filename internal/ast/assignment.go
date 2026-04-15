@@ -35,5 +35,6 @@ func (a *Assignment) stringTo(out *strings.Builder) {
 func (a *Assignment) String() string {
 	var out strings.Builder
 	a.stringTo(&out)
+
 	return out.String()
 }

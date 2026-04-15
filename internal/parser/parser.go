@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
@@ -14,22 +15,20 @@ type Parser struct {
 	tokens   []tokens.Token
 	symbols  *SymbolTable
 	builtins map[string]BuiltinParser
+	filePath string
 
 	Errs              []error
 	i                 int
 	debug             bool
 	scriptMode        bool
-	currentReturnType types.Type // return type of the enclosing procedure (for result wrapping)
-}
-
-func NewParser(tokens []tokens.Token, debug bool) (*Parser, error) {
-	return NewParserWithSymbols(tokens, NewSymbolTable(), debug)
+	currentReturnType types.Type      // return type of the enclosing procedure (for result wrapping)
+	currentReceiver   *ast.Identifier // receiver of the enclosing method (for this keyword)
 }
 
 // NewParserWithSymbols creates a parser that uses the provided symbol table.
 // This allows multiple parsers (one per file) to share a single symbol table
 // so that global declarations from one file are visible in all others.
-func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool) (*Parser, error) {
+func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool, fileName string) (*Parser, error) {
 	if len(tokens) == 0 {
 		return nil, errors.New("no tokens provided to parser")
 	}
@@ -86,7 +85,7 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.File, err
 		"if":    p.parseBuiltinIf,
 		"map":   p.parseBuiltinMap,
 		"print": p.parseBuiltinPrint,
-		"ptr":   p.parseBuiltinPtr,
+		"ref":   p.parseBuiltinRef,
 		"set":   p.parseBuiltinSet,
 		"slice": p.parseBuiltinSlice,
 	}
@@ -144,7 +143,8 @@ tokenLoop:
 			tokens.Switch,
 			tokens.Return,
 			tokens.Break,
-			tokens.Continue:
+			tokens.Continue,
+			tokens.BitAnd:
 			node := p.parseStatement(ctx)
 			if node != nil {
 				f.Statements = append(f.Statements, node)
@@ -168,7 +168,7 @@ tokenLoop:
 		case tokens.EOF:
 			break tokenLoop
 		default:
-			p.error(p.this(), "unknown token", "Parse")
+			p.error(p.this(), "unexpected token", "Parse")
 			p.synchronize()
 		}
 
@@ -215,6 +215,25 @@ func (p *Parser) advance(scope string) {
 		return
 	}
 
+	if p.debug && p.this().Type != tokens.Comment {
+		from := p.this().Type.String()
+		if slices.Contains([]tokens.Type{
+			tokens.Identifier, tokens.StringLiteral, tokens.IntLiteral, tokens.FloatLiteral,
+		}, p.this().Type) {
+			from = p.this().Literal
+		}
+
+		to := p.next().Type.String()
+		if slices.Contains([]tokens.Type{
+			tokens.Identifier, tokens.StringLiteral, tokens.IntLiteral, tokens.FloatLiteral,
+		}, p.next().Type) {
+			to = p.next().Literal
+		}
+
+		_, _ = fmt.Printf("ADVANCE: ln %d, col %d:\t%s\t\tfrom %q,\tto %q\n",
+			p.this().Ln, p.this().Col, scope, from, to)
+	}
+
 	p.i++
 }
 
@@ -247,8 +266,26 @@ func (p *Parser) synchronize() {
 
 func (p *Parser) error(t tokens.Token, msg string, scope ...string) {
 	if len(scope) > 0 {
-		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %v: %s", t, scope, msg))
+		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %v: %s", p.stringToken(t), scope, msg))
 	} else {
-		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %s", t, msg))
+		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %s", p.stringToken(t), msg))
 	}
+}
+
+func (p *Parser) stringToken(t tokens.Token) string {
+	if t.Literal == "" {
+		return fmt.Sprintf("%s:\tln %d, col %d: %s",
+			p.filePath, t.Ln, t.Col, t.Type,
+		)
+	}
+
+	if t.Type == tokens.Builtin {
+		return fmt.Sprintf("%s:\tln %d, col %d: @%s",
+			p.filePath, t.Ln, t.Col, t.Literal,
+		)
+	}
+
+	return fmt.Sprintf("%s:\tln %d, col %d: %s: %s",
+		p.filePath, t.Ln, t.Col, t.Type, t.Literal,
+	)
 }

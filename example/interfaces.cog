@@ -1,0 +1,17 @@
+package main
+
+Stringer ~ interface {
+    String : func() utf8
+}
+
+Print : func<T ~ Stringer>(x : T) = {
+    @print(x.String())
+}
+
+export FooLoo ~ struct {
+    value : utf8
+}
+
+export FooLoo.String : func() utf8 = {
+    return this.value
+}

@@ -7,6 +7,7 @@ func TestParseGoImport(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 goimport (
 	"strings"
@@ -23,6 +24,7 @@ func TestParseGoCallExpression(t *testing.T) {
 
 	t.Run("valid", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 goimport (
 	"strings"

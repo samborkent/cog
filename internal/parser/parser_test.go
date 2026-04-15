@@ -4,13 +4,22 @@ import (
 	"testing"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/parser"
+	"github.com/samborkent/cog/internal/tokens"
 )
+
+func NewTestParser(t *testing.T, tokens []tokens.Token, debug bool) (*parser.Parser, error) {
+	t.Helper()
+
+	return parser.NewParserWithSymbols(tokens, parser.NewSymbolTable(), debug, "")
+}
 
 func TestParse(t *testing.T) {
 	t.Parallel()
 
 	t.Run("file_name", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {}`)
 		if f.Name != "test.cog" {
@@ -24,6 +33,7 @@ main : proc() = {}`)
 A ~ B
 B ~ int32
 main : proc() = {}`)
+
 		ta := stmtAs[*ast.Type](t, f, 0)
 		if ta.Identifier.Name != "A" {
 			t.Errorf("expected name 'A', got %q", ta.Identifier.Name)

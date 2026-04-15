@@ -16,7 +16,18 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			Text:  p.this().Literal,
 		}
 		p.advance("parseStatement comment")
+
 		return node
+	case tokens.BitAnd:
+		// Skip, get it with prev in identifier case.
+		p.advance("parseStatement ref") // consume &
+
+		if p.this().Type != tokens.Identifier {
+			p.error(p.this(), "expected identifier after '&'", "parseStatement")
+			return nil
+		}
+
+		return p.parseStatement(ctx)
 	case tokens.Break, tokens.Continue:
 		node := &ast.Branch{
 			Token: p.this(),
@@ -69,6 +80,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		if p.scriptMode {
 			p.error(p.this(), "export keyword not allowed in script files", "parseStatement")
 			p.advance("parseStatement export script") // consume export
+
 			return nil
 		}
 
@@ -79,7 +91,16 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 
 		p.advance("parseStatement export") // consume export
 
+		var reference bool
+
 		switch p.this().Type {
+		case tokens.BitAnd:
+			// Reference method receiver.
+			reference = true
+
+			p.advance("parseStatement export ref") // consume &
+
+			fallthrough
 		case tokens.Identifier:
 			ident := &ast.Identifier{
 				Token:     p.this(),
@@ -115,9 +136,21 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				}
 
 				return nil
+			case tokens.Dot:
+				// Method declaration
+				if node := p.parseMethod(ctx, ident); node != nil {
+					if reference {
+						node.Reference = true
+					}
+
+					return node
+				}
+
+				return nil
 			default:
 				p.error(p.this(), "unexpected token following exported identifier", "parseStatement")
 				p.advance("parseStatement export error") // consume unknown token
+
 				return nil
 			}
 		default:
@@ -139,6 +172,9 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		case tokens.Dynamic:
 			qualifier = ast.QualifierDynamic
 		}
+
+		// Check if previous token was &, for reference method receiver.
+		reference := p.prev().Type == tokens.BitAnd
 
 		ident := &ast.Identifier{
 			Token:     p.this(),
@@ -168,7 +204,8 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		} else if p.next().Type == tokens.Dot {
 			if _, isImport := p.symbols.ResolveCogImport(p.this().Literal); isImport {
 				// Imported package selector: e.g. pkg.Func(...)
-			} else {
+			} else if p.symbols.Outer == nil {
+				// Only consume in global scope, for method declarations.
 				p.advance("parseStatement ident") // consume identifier
 			}
 		} else {
@@ -177,7 +214,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 
 		switch p.this().Type {
 		case tokens.Assign: // Assignment
-			if p.symbols.Outer == nil {
+			if !p.scriptMode && p.symbols.Outer == nil {
 				p.error(p.this(), "no assignment allowed in package scope, use declaration instead", "parseStatement")
 				return nil
 			}
@@ -246,7 +283,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			}
 
 			return nil
-		case tokens.Identifier: // Procedure call
+		case tokens.Identifier: // Procedure / method call
 			identToken := p.this()
 
 			callExpr := p.expression(ctx, types.None)
@@ -265,12 +302,33 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			}
 
 			return nil
+		case tokens.Dot:
+			if p.symbols.Outer == nil {
+				// Method declaration (only possible in global scope)
+				if node := p.parseMethod(ctx, ident); node != nil {
+					if reference {
+						node.Reference = true
+					}
+
+					return node
+				}
+
+				return nil
+			}
+
+			fallthrough
 		default:
 			p.error(p.this(), "unexpected token found after identifier", "parseStatement")
 			return nil
 		}
 	case tokens.If:
 		if node := p.parseIfStatement(ctx); node != nil {
+			return node
+		}
+
+		return nil
+	case tokens.Match:
+		if node := p.parseMatch(ctx); node != nil {
 			return node
 		}
 
@@ -326,7 +384,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		// Skip, get it with prev in identifier case.
 		p.advance("parseStatement var") // consume var
 
-		if p.symbols.Outer == nil {
+		if !p.scriptMode && p.symbols.Outer == nil {
 			p.error(p.this(), "variable declarations are not allowed in package scope", "parseStatement")
 			return nil
 		}
@@ -337,6 +395,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 	default:
 		p.error(p.this(), "unknown token", "parseStatement")
 		p.advance("parseStatement unknown") // consume unknown token
+
 		return nil
 	}
 }

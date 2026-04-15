@@ -11,15 +11,15 @@ var _ Expression = &Call{}
 type Call struct {
 	expression
 
-	Identifier *Identifier
-	Package    string // non-empty when calling an imported package's function
+	Expression Expression // *Identfier or *Selector
+	Package    string     // non-empty when calling an imported package's function
 	Arguments  []Expression
 	ReturnType types.Type
 	TypeArgs   []types.Type // explicit or inferred type arguments for generic calls
 }
 
 func (c *Call) Pos() (uint32, uint16) {
-	return c.Identifier.Pos()
+	return c.Expression.Pos()
 }
 
 func (c *Call) Hash() uint64 {
@@ -32,16 +32,19 @@ func (c *Call) stringTo(out *strings.Builder) {
 		_ = out.WriteByte('.')
 	}
 
-	c.Identifier.stringTo(out)
+	c.Expression.stringTo(out)
 
 	if len(c.TypeArgs) > 0 {
 		_ = out.WriteByte('<')
+
 		for i, ta := range c.TypeArgs {
 			if i > 0 {
 				_, _ = out.WriteString(", ")
 			}
+
 			_, _ = out.WriteString(ta.String())
 		}
+
 		_ = out.WriteByte('>')
 	}
 
@@ -61,6 +64,7 @@ func (c *Call) stringTo(out *strings.Builder) {
 func (c *Call) String() string {
 	var out strings.Builder
 	c.stringTo(&out)
+
 	return out.String()
 }
 

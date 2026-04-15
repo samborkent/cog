@@ -61,7 +61,7 @@ main : proc() = {}`)
 	t.Run("tuple_type", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-Pair ~ int32 & utf8
+Pair ~ (int32, utf8)
 main : proc() = {}`)
 		mustContain(t, got, "type _Pair struct")
 	})
@@ -74,10 +74,10 @@ main : proc() = {}`)
 		mustContain(t, got, "type _MaybeInt")
 	})
 
-	t.Run("union_type", func(t *testing.T) {
+	t.Run("either_type", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-Either ~ int32 | utf8
+Either ~ int32 ^ utf8
 main : proc() = {}`)
 		mustContain(t, got, "type _Either")
 	})

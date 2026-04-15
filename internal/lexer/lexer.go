@@ -12,16 +12,22 @@ import (
 )
 
 type Lexer struct {
-	scan scanner.Scanner
+	scan    scanner.Scanner
+	fileID  uint16
 }
 
 func NewLexer(r io.Reader) *Lexer {
+	return NewLexerWithFileID(r, 0)
+}
+
+func NewLexerWithFileID(r io.Reader, fileID uint16) *Lexer {
 	var s scanner.Scanner
 	s.Init(r)
 	s.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
 
 	return &Lexer{
-		scan: s,
+		scan:   s,
+		fileID: fileID,
 	}
 }
 
@@ -52,8 +58,9 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 
 		//nolint:gosec // G115: integer overflow conversion
 		t := tokens.Token{
-			Ln:  uint32(s.Line),
-			Col: uint16(s.Column),
+			Ln:     uint32(s.Line),
+			Col:    uint16(s.Column),
+			FileID: l.fileID,
 		}
 
 		tokenType, ok := tokens.Runes[tok]
@@ -62,37 +69,44 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 			case tokens.Assign:
 				if s.Peek() == '=' {
 					t.Type = tokens.Equal
+
 					s.Next()
 				}
 			case tokens.Colon:
 				switch s.Peek() {
 				case '=':
 					t.Type = tokens.Declaration
+
 					s.Next()
 				}
 			case tokens.GT:
 				if s.Peek() == '=' {
 					t.Type = tokens.GTEqual
+
 					s.Next()
 				}
 			case tokens.LT:
 				if s.Peek() == '=' {
 					t.Type = tokens.LTEqual
+
 					s.Next()
 				}
 			case tokens.Not:
 				if s.Peek() == '=' {
 					t.Type = tokens.NotEqual
+
 					s.Next()
 				}
 			case tokens.BitAnd:
 				if s.Peek() == '&' {
 					t.Type = tokens.And
+
 					s.Next()
 				}
 			case tokens.Pipe:
 				if s.Peek() == '|' {
 					t.Type = tokens.Or
+
 					s.Next()
 				}
 			case tokens.Builtin:
@@ -106,6 +120,7 @@ func (l *Lexer) Parse(ctx context.Context) ([]tokens.Token, error) {
 			}
 
 			toks = append(toks, t)
+
 			continue
 		}
 

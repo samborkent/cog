@@ -39,7 +39,6 @@ func (e *Enum) String() string {
 	// _ = out.WriteByte(')')
 
 	// return out.String()
-
 	var str strings.Builder
 	str.WriteString("enum<" + e.ValueType.String() + "> {")
 

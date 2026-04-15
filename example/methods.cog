@@ -1,0 +1,44 @@
+package main
+
+// order shouldn't matter
+Struct.Unordered : proc() = {}
+
+// type _Struct struct{}
+
+Struct ~ struct {}
+
+// func _Function() {}
+
+Function : proc() = {}
+
+// func (_Struct) Method()
+
+Struct.Method : proc() = {}
+
+// type Exported struct{}
+
+export Exported ~ struct {
+    Method : uint64
+}
+
+// error: field name conflict
+// Exported.Method : proc() = {}
+
+// func (Exported) _Other()
+
+Exported.Other : proc() = {}
+
+// func (Exported) Export()
+
+export Exported.Export : proc() = {
+    @print("Exported.Export")
+}
+
+// func (_Struct) Export()
+
+// error: exported method not allowed on unexported type
+// export Struct.Export : proc() = {}
+
+// func (*Struct) Method2()
+
+&Struct.Method2 : proc() = {}

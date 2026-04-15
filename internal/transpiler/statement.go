@@ -17,10 +17,12 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 	switch n := node.(type) {
 	case *ast.Comment:
 		text := n.Text
+
 		commentLn, _ := n.Pos()
 		if commentLn != t.lastSourceLine {
 			text = "\n" + text
 		}
+
 		return []goast.Stmt{&goast.DeclStmt{Decl: t.commentDecl(text)[0]}}, nil
 	case *ast.Assignment:
 		ident := &goast.Ident{Name: "_"}
@@ -41,6 +43,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 				// Dynamic variable assignment via struct field.
 				t.usesDyn = true
+
 				val, err := t.convertExpr(n.Expression)
 				if err != nil {
 					return nil, err
@@ -126,6 +129,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 					},
 				},
 			}
+
 			break
 		}
 
@@ -214,8 +218,10 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 				return nil, err
 			}
 
-			var key goast.Expr
-			var val goast.Expr
+			var (
+				key goast.Expr
+				val goast.Expr
+			)
 
 			tok := gotoken.ILLEGAL
 
@@ -290,6 +296,13 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 				Label: &goast.Ident{Name: n.Label.Label.Name},
 				Stmt:  noOp,
 			})
+		}
+
+		returnStmts = stmts
+	case *ast.Match:
+		stmts, err := t.convertMatch(n)
+		if err != nil {
+			return nil, err
 		}
 
 		returnStmts = stmts

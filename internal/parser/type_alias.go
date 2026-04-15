@@ -19,13 +19,15 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 		}
 	}
 
+	ident.Qualifier = ast.QualifierType
+
 	typeDecl := &ast.Type{
 		Token:      p.this(),
 		Identifier: ident,
 	}
 
 	// Parse optional type parameters: <T ~ any, K ~ comparable>
-	var typeParams []*types.TypeParam
+	var typeParams []*types.Alias
 
 	if p.this().Type == tokens.LT {
 		typeParams = p.parseTypeParams(ctx)
@@ -60,6 +62,17 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 		return nil
 	}
 
+	// Carry over methods registered during the global scan:
+	// findGlobalMethod attached methods to the original *Struct, but
+	// parseCombinedType just created a new *Struct that will replace it.
+	if newStruct, ok := typ.(*types.Struct); ok {
+		if existing, ok := p.symbols.Resolve(ident.Name); ok {
+			if oldStruct, ok := existing.Identifier.ValueType.(*types.Struct); ok {
+				newStruct.Methods = oldStruct.Methods
+			}
+		}
+	}
+
 	typeDecl.Identifier.ValueType = typ
 	typeDecl.Alias = typ
 
@@ -83,8 +96,20 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 	}
 
 	// Define type if in inner scope
-	if p.symbols.Outer != nil && len(typeParams) == 0 {
-		p.symbols.Define(typeDecl.Identifier)
+	// TODO: find out why we had these restrictions.
+	// if p.symbols.Outer != nil && len(typeParams) == 0 {
+	p.symbols.Define(typeDecl.Identifier)
+	// }
+
+	if iface, ok := typeDecl.Identifier.ValueType.(*types.Interface); ok {
+		// Register interface methods as methods on the type for method call resolution.
+		for _, method := range iface.Methods {
+			p.symbols.DefineMethod(typeDecl.Identifier.Name, &ast.Identifier{
+				Name:      method.Name,
+				ValueType: method.Procedure,
+				Qualifier: ast.QualifierMethod,
+			})
+		}
 	}
 
 	return typeDecl

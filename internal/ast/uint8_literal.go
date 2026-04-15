@@ -47,6 +47,7 @@ func (l *Uint8Literal) stringTo(out *strings.Builder) {
 func (l *Uint8Literal) String() string {
 	var out strings.Builder
 	l.stringTo(&out)
+
 	return out.String()
 }
 

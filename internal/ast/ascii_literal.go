@@ -55,6 +55,7 @@ func (l *ASCIILiteral) stringTo(out *strings.Builder) {
 func (l *ASCIILiteral) String() string {
 	var out strings.Builder
 	l.stringTo(&out)
+
 	return out.String()
 }
 

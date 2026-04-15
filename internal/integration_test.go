@@ -24,12 +24,13 @@ func transpileSource(t *testing.T, src string) string {
 	t.Helper()
 
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
 	}
 
-	p, err := parser.NewParser(toks, false)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -40,6 +41,7 @@ func transpileSource(t *testing.T, src string) string {
 	}
 
 	tr := transpiler.NewTranspiler(f)
+
 	gofile, err := tr.Transpile()
 	if err != nil {
 		t.Fatalf("transpile error: %v", err)
@@ -90,7 +92,7 @@ func tryTranspile(ctx context.Context, src string) (string, error) {
 		return "", fmt.Errorf("lexer: %w", err)
 	}
 
-	p, err := parser.NewParser(toks, false)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
 	if err != nil {
 		return "", fmt.Errorf("parser init: %w", err)
 	}
@@ -192,12 +194,13 @@ func TestMissingPackageProducesError(t *testing.T) {
 	src := `main : proc() = {}`
 
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
 	}
 
-	p, err := parser.NewParser(toks, false)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -269,12 +272,13 @@ a := 2
 
 main : proc() = {}`
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
 	}
 
-	p, err := parser.NewParser(toks, true)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), true, "")
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -640,6 +644,7 @@ result := @go.strings.ToUpper("hello")
 main : proc() = {
     @print(result)
 }`
+
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
@@ -658,6 +663,7 @@ main : proc() = {
     str := @go.strings.ToUpper("hello")
     @print(str)
 }`
+
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
@@ -680,6 +686,7 @@ main : proc() = {
     str := @go.strings.ToUpper("hello")
     @print(str)
 }`
+
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 
@@ -787,7 +794,6 @@ main : proc() = {
 // The files map is filename → cog source.
 func transpilePackage(t *testing.T, files map[string]string) string {
 	t.Helper()
-	ctx := t.Context()
 
 	type lexedFile struct {
 		name   string
@@ -799,6 +805,7 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 	for name := range files {
 		names = append(names, name)
 	}
+
 	sort.Strings(names)
 
 	lexed := make([]lexedFile, 0, len(files))
@@ -806,7 +813,7 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 	for _, name := range names {
 		l := lexer.NewLexer(strings.NewReader(files[name]))
 
-		toks, err := l.Parse(ctx)
+		toks, err := l.Parse(t.Context())
 		if err != nil {
 			t.Fatalf("lexer error (%s): %v", name, err)
 		}
@@ -819,18 +826,18 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false)
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", lf.name, err)
 		}
 
-		p.FindGlobals(ctx)
+		p.FindGlobals(t.Context())
 		parsers[i] = p
 	}
 
 	astFiles := make([]*ast.File, len(lexed))
 	for i, lf := range lexed {
-		f, err := parsers[i].ParseOnly(ctx, lf.name)
+		f, err := parsers[i].ParseOnly(t.Context(), lf.name)
 		if err != nil {
 			t.Fatalf("parser parse (%s): %v", lf.name, err)
 		}
@@ -854,7 +861,9 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 }
 
 // tryTranspilePackage is the error-returning variant of transpilePackage.
-func tryTranspilePackage(ctx context.Context, files map[string]string) (string, error) {
+func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) {
+	t.Helper()
+
 	type lexedFile struct {
 		name   string
 		tokens []tokens.Token
@@ -864,6 +873,7 @@ func tryTranspilePackage(ctx context.Context, files map[string]string) (string, 
 	for name := range files {
 		names = append(names, name)
 	}
+
 	sort.Strings(names)
 
 	lexed := make([]lexedFile, 0, len(files))
@@ -871,7 +881,7 @@ func tryTranspilePackage(ctx context.Context, files map[string]string) (string, 
 	for _, name := range names {
 		l := lexer.NewLexer(strings.NewReader(files[name]))
 
-		toks, err := l.Parse(ctx)
+		toks, err := l.Parse(t.Context())
 		if err != nil {
 			return "", fmt.Errorf("lexer (%s): %w", name, err)
 		}
@@ -883,18 +893,18 @@ func tryTranspilePackage(ctx context.Context, files map[string]string) (string, 
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false)
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name)
 		if err != nil {
 			return "", fmt.Errorf("parser init (%s): %w", lf.name, err)
 		}
 
-		p.FindGlobals(ctx)
+		p.FindGlobals(t.Context())
 		parsers[i] = p
 	}
 
 	astFiles := make([]*ast.File, len(lexed))
 	for i, lf := range lexed {
-		f, err := parsers[i].ParseOnly(ctx, lf.name)
+		f, err := parsers[i].ParseOnly(t.Context(), lf.name)
 		if err != nil {
 			return "", fmt.Errorf("parser parse (%s): %w", lf.name, err)
 		}
@@ -974,7 +984,7 @@ x : int64 = 2
 `,
 	}
 
-	_, err := tryTranspilePackage(t.Context(), files)
+	_, err := tryTranspilePackage(t, files)
 	if err == nil {
 		t.Fatal("expected error for duplicate global declaration, got none")
 	}
@@ -1025,6 +1035,7 @@ main : proc() = {
 `
 
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
@@ -1032,7 +1043,7 @@ main : proc() = {
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false)
+	p, err := parser.NewParserWithSymbols(toks, symbols, false, "test.cog")
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -1070,7 +1081,7 @@ main : proc() = {
 `,
 	}
 
-	_, err := tryTranspilePackage(t.Context(), files)
+	_, err := tryTranspilePackage(t, files)
 	if err == nil {
 		t.Fatal("expected error for duplicate main across files, got nil")
 	}
@@ -1174,6 +1185,7 @@ main : proc() = {
 // mustContain checks that 'got' contains 'want'.
 func mustContain(t *testing.T, got, want string) {
 	t.Helper()
+
 	if !strings.Contains(got, want) {
 		t.Errorf("expected %q to contain %q", got, want)
 	}
@@ -1182,6 +1194,7 @@ func mustContain(t *testing.T, got, want string) {
 // mustNotContain checks that 'got' does not contain 'want'.
 func mustNotContain(t *testing.T, got, want string) {
 	t.Helper()
+
 	if strings.Contains(got, want) {
 		t.Errorf("expected %q not to contain %q", got, want)
 	}
@@ -1200,6 +1213,7 @@ main : proc() = {
 `
 
 	l := lexer.NewLexer(strings.NewReader(src))
+
 	toks, err := l.Parse(t.Context())
 	if err != nil {
 		t.Fatalf("lexer error: %v", err)
@@ -1207,7 +1221,7 @@ main : proc() = {
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false)
+	p, err := parser.NewParserWithSymbols(toks, symbols, false, "")
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}

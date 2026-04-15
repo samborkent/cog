@@ -28,14 +28,15 @@ const (
 	Uint128
 	UTF8
 
-	// Pointer type
-	PointerKind
+	// Reference type
+	ReferenceKind
 
 	// Generic type
 	GenericKind
 
 	// Any type
 	AnyKind
+	InterfaceKind
 
 	// Container types
 	ArrayKind
@@ -47,6 +48,7 @@ const (
 	StructKind
 
 	// Combined types
+	EitherKind
 	TupleKind
 	UnionKind
 
@@ -98,7 +100,7 @@ func (t Kind) String() string {
 		return "uint128"
 	case UTF8:
 		return "utf8"
-	case PointerKind:
+	case ReferenceKind:
 		return "&"
 	case GenericKind:
 		return "generic"
@@ -116,6 +118,8 @@ func (t Kind) String() string {
 		return "struct"
 	case TupleKind:
 		return "tuple"
+	case EitherKind:
+		return "either"
 	case UnionKind:
 		return "union"
 	case OptionKind:
@@ -166,4 +170,7 @@ var Lookup = map[tokens.Type]Type{
 	// Procedure type
 	tokens.Procedure: &Procedure{},
 	tokens.Function:  &Procedure{Function: true},
+
+	// Interface type
+	tokens.Interface: &Interface{},
 }

@@ -45,6 +45,7 @@ func main() {
 	if strings.HasSuffix(files[0], ".cogs") {
 		projectRoot := filepath.Dir(files[0])
 		runScript(ctx, projectRoot, files[0], "")
+
 		return
 	}
 
@@ -71,6 +72,7 @@ func discoverFiles(input string) []string {
 		if !strings.HasSuffix(input, ".cog") && !strings.HasSuffix(input, ".cogs") {
 			panic("invalid file extension, must be .cog or .cogs")
 		}
+
 		return []string{input}
 	}
 
@@ -100,14 +102,15 @@ func discoverFiles(input string) []string {
 }
 
 // lexFile lexes a single .cog file and returns its token stream.
-func lexFile(ctx context.Context, path string) ([]tokens.Token, error) {
+func lexFile(ctx context.Context, path string, fileID uint16) ([]tokens.Token, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("opening %q: %w", path, err)
 	}
+
 	defer func() { _ = file.Close() }()
 
-	l := lexer.NewLexer(file)
+	l := lexer.NewLexerWithFileID(file, fileID)
 
 	toks, err := l.Parse(ctx)
 	if err != nil {
@@ -122,7 +125,7 @@ func lexFile(ctx context.Context, path string) ([]tokens.Token, error) {
 // in cmd/{scriptName}/ with package main and a func main() wrapping the body.
 // If goModuleName is empty, the script name is used and go.mod is written.
 func runScript(ctx context.Context, projectRoot string, scriptPath string, goModuleName string) {
-	toks, err := lexFile(ctx, scriptPath)
+	toks, err := lexFile(ctx, scriptPath, 0)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -160,6 +163,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 	// Determine script name from file name (without extension).
 	scriptName := strings.TrimSuffix(filepath.Base(scriptPath), ".cogs")
+
 	standalone := goModuleName == ""
 	if standalone {
 		goModuleName = scriptName
@@ -200,6 +204,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 		if err := t.Print(outFile, gofile); err != nil {
 			_ = outFile.Close()
+
 			panic(fmt.Errorf("printing output: %w", err))
 		}
 
@@ -211,25 +216,27 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 			if replaceLocalCog {
 				gomod += "\nreplace github.com/samborkent/cog => ./..\n"
 			}
+
 			if err := os.WriteFile(filepath.Join("tmp", "go.mod"), []byte(gomod), 0o600); err != nil {
 				panic(fmt.Errorf("writing go.mod: %w", err))
 			}
 
 			tidy := exec.Command("go", "mod", "tidy")
+
 			tidy.Dir = "tmp"
 			if out, err := tidy.CombinedOutput(); err != nil {
 				panic(fmt.Errorf("go mod tidy: %s\n%w", out, err))
 			}
 		}
-	} else {
-		// fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
-
-		// if err := t.Print(os.Stdout, gofile); err != nil {
-		// 	panic(fmt.Errorf("printing output: %w", err))
-		// }
-
-		// fmt.Println()
 	}
+
+	// fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
+
+	// if err := t.Print(os.Stdout, gofile); err != nil {
+	// 	panic(fmt.Errorf("printing output: %w", err))
+	// }
+
+	// fmt.Println()
 }
 
 // compiledPackage holds the output of compiling a single cog package.
@@ -244,14 +251,15 @@ type compiledPackage struct {
 type lexedFile struct {
 	path   string
 	tokens []tokens.Token
+	fileID uint16
 }
 
 // runProject compiles the entry package and all its imported packages.
-func runProject(ctx context.Context, projectRoot string, entryFiles []string) {
+func runProject(ctx context.Context, projectRoot string, entryFiles []string) error {
 	// Step 1: Lex and validate the entry package.
-	entryLexed, entryPkgName := lexAndValidate(ctx, entryFiles)
-	if entryLexed == nil {
-		return
+	entryLexed, entryPkgName, err := lexAndValidate(ctx, entryFiles)
+	if err != nil {
+		return err
 	}
 
 	// The Go module name for the transpiled project matches the entry package name.
@@ -259,15 +267,15 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) {
 
 	// Step 2: FindGlobals on the entry package (discovers globals + import paths).
 	entrySymbols := parser.NewSymbolTable()
+
 	entryParsers := findGlobals(ctx, entryLexed, entrySymbols)
 	if entryParsers == nil {
-		return
+		return fmt.Errorf("failed to find globals")
 	}
 
 	// A package that declares a main proc must be named "main".
 	if _, hasMain := entrySymbols.Resolve("main"); hasMain && entryPkgName != "main" {
-		fmt.Printf("package %q declares a main proc but is not named \"main\"\n", entryPkgName)
-		return
+		return fmt.Errorf("package %q declares a main proc but is not named \"main\"", entryPkgName)
 	}
 
 	// Step 3: Process imported packages.
@@ -276,8 +284,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) {
 	for _, imp := range entrySymbols.CogImports() {
 		pkg := compileImportedPackage(ctx, projectRoot, imp.Path)
 		if pkg == nil {
-			fmt.Printf("failed to compile imported package %q\n", imp.Path)
-			return
+			return fmt.Errorf("failed to compile imported package %q", imp.Path)
 		}
 
 		importedPkgs[imp.Path] = pkg
@@ -301,7 +308,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) {
 			fmt.Printf("--- %s ---\n%s\n\n", lf.path, f)
 
 			if err != nil {
-				return
+				return err
 			}
 		}
 	}
@@ -321,6 +328,8 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) {
 	for _, sf := range scriptFiles {
 		runScript(ctx, projectRoot, sf, goModuleName)
 	}
+
+	return nil
 }
 
 // discoverScripts finds all .cogs files in the given directory.
@@ -331,10 +340,12 @@ func discoverScripts(dir string) []string {
 	}
 
 	var scripts []string
+
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".cogs") {
 			continue
 		}
+
 		scripts = append(scripts, filepath.Join(dir, entry.Name()))
 	}
 
@@ -344,26 +355,25 @@ func discoverScripts(dir string) []string {
 }
 
 // lexAndValidate lexes all files and validates they declare the same package.
-func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string) {
+func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string, error) {
 	lexed := make([]lexedFile, 0, len(files))
 
-	for _, path := range files {
-		toks, err := lexFile(ctx, path)
+	for i, path := range files {
+		toks, err := lexFile(ctx, path, uint16(i))
 		if err != nil {
-			fmt.Println(err.Error())
-			return nil, ""
+			return nil, "", err
 		}
 
-		lexed = append(lexed, lexedFile{path: path, tokens: toks})
+		lexed = append(lexed, lexedFile{path: path, tokens: toks, fileID: uint16(i)})
 	}
 
 	dirName := filepath.Base(filepath.Dir(files[0]))
+
 	var pkgName string
 
 	for _, lf := range lexed {
 		if len(lf.tokens) < 2 || lf.tokens[0].Type != tokens.Package {
-			fmt.Printf("%s: missing package declaration\n", lf.path)
-			return nil, ""
+			return nil, "", fmt.Errorf("%s: missing package declaration", lf.path)
 		}
 
 		name := lf.tokens[1].Literal
@@ -371,17 +381,15 @@ func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string) {
 		if pkgName == "" {
 			pkgName = name
 
-			if pkgName != "main" && pkgName != dirName {
-				fmt.Printf("%s: package %q does not match directory name %q\n", lf.path, pkgName, dirName)
-				return nil, ""
+			if pkgName != "main" && dirName != "." && pkgName != dirName {
+				return nil, "", fmt.Errorf("%s: package %q does not match directory name %q", lf.path, pkgName, dirName)
 			}
 		} else if name != pkgName {
-			fmt.Printf("%s: declares package %q, but other files use %q\n", lf.path, name, pkgName)
-			return nil, ""
+			return nil, "", fmt.Errorf("%s: declares package %q, but other files use %q", lf.path, name, pkgName)
 		}
 	}
 
-	return lexed, pkgName
+	return lexed, pkgName, nil
 }
 
 // findGlobals runs FindGlobals on all files with a shared symbol table.
@@ -389,7 +397,7 @@ func findGlobals(ctx context.Context, lexed []lexedFile, symbols *parser.SymbolT
 	parsers := make([]*parser.Parser, len(lexed))
 
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, debug)
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, debug, lf.path)
 		if err != nil {
 			fmt.Println(err.Error())
 			return nil
@@ -407,12 +415,14 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 	pkgDir := filepath.Join(projectRoot, filepath.FromSlash(importPath))
 	files := discoverFiles(pkgDir)
 
-	lexed, pkgName := lexAndValidate(ctx, files)
-	if lexed == nil {
+	lexed, pkgName, err := lexAndValidate(ctx, files)
+	if err != nil {
+		fmt.Println(err.Error())
 		return nil
 	}
 
 	symbols := parser.NewSymbolTable()
+
 	parsers := findGlobals(ctx, lexed, symbols)
 	if parsers == nil {
 		return nil
@@ -423,6 +433,7 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		ln, col := sym.Identifier.Token.Ln, sym.Identifier.Token.Col
 		fmt.Printf("%s:%d:%d: imported package %q must not declare a main proc\n",
 			files[0], ln, col, pkgName)
+
 		return nil
 	}
 
@@ -474,16 +485,18 @@ func outputProject(goModuleName string, entry *compiledPackage, imported map[str
 	if write {
 		// Write go.mod so `go run .` works from tmp/.
 		// Only declare the module and Go version; `go mod tidy` resolves all dependencies.
-		gomod := fmt.Sprintf("module %s\n\ngo 1.26.1\n", goModuleName)
+		gomod := fmt.Sprintf("module %s\n\ngo 1.26.2\n", goModuleName)
 		if replaceLocalCog {
 			gomod += "\nreplace github.com/samborkent/cog => ./..\n"
 		}
+
 		if err := os.WriteFile(filepath.Join("tmp", "go.mod"), []byte(gomod), 0o600); err != nil {
 			panic(fmt.Errorf("writing go.mod: %w", err))
 		}
 
 		// Run go mod tidy to resolve all dependencies.
 		tidy := exec.Command("go", "mod", "tidy")
+
 		tidy.Dir = "tmp"
 		if out, err := tidy.CombinedOutput(); err != nil {
 			panic(fmt.Errorf("go mod tidy: %s\n%w", out, err))
@@ -525,6 +538,7 @@ func transpileAndOutput(goModuleName string, pkg *compiledPackage) {
 
 			if err := t.Print(outFile, gofiles[i]); err != nil {
 				_ = outFile.Close()
+
 				panic(fmt.Errorf("printing output: %w", err))
 			}
 

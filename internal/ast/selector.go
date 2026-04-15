@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/samborkent/cog/internal/tokens"
@@ -13,7 +15,7 @@ type Selector struct {
 	expression
 
 	Token      tokens.Token
-	Identifier *Identifier
+	Expression Expression // *Identifier or *Selector
 	Field      *Identifier
 }
 
@@ -26,17 +28,45 @@ func (e *Selector) Hash() uint64 {
 }
 
 func (e *Selector) stringTo(out *strings.Builder) {
-	_, _ = out.WriteString(e.Identifier.Name)
+	e.Expression.stringTo(out)
 	_ = out.WriteByte('.')
-	_, _ = out.WriteString(e.Field.Name)
+	e.Field.stringTo(out)
 }
 
 func (e *Selector) String() string {
 	var out strings.Builder
 	e.stringTo(&out)
+
 	return out.String()
 }
 
 func (e *Selector) Type() types.Type {
 	return e.Field.Type()
+}
+
+func (e *Selector) LeftMost() (*Identifier, error) {
+	var leftMost *Identifier
+
+	// Find left-most identifier of selector.
+	current := e
+
+selectorLoop:
+	for {
+		switch sel := current.Expression.(type) {
+		case *Selector:
+			current = sel
+			continue
+		case *Identifier:
+			leftMost = sel
+			break selectorLoop
+		default:
+			return nil, fmt.Errorf("unexpected type %T found in selector expression", current.Expression)
+		}
+	}
+
+	if leftMost == nil {
+		return nil, errors.New("unable to find left-most identifier in selector expression")
+	}
+
+	return leftMost, nil
 }

@@ -8,39 +8,6 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-// wrapResultLiteral wraps an expression in a ResultLiteral for assignment
-// to a result-typed variable. It determines whether the expression is the
-// error or value variant based on the expression type's kind.
-// Returns nil if the expression type doesn't match either variant.
-func wrapResultLiteral(tok tokens.Token, resultType types.Type, expr ast.Expression) *ast.ResultLiteral {
-	isError := expr.Type().Kind() == types.ErrorKind
-
-	return &ast.ResultLiteral{
-		Token:      tok,
-		ResultType: resultType,
-		Value:      expr,
-		IsError:    isError,
-	}
-}
-
-// resultExprState checks whether an expression assigned to a result type
-// is a valid value or error variant and returns the corresponding check state.
-// Returns (state, true) if the expression matches a variant, or (0, false)
-// if it matches the full result type (e.g. a function call returning T ! E).
-func resultExprState(resolved *types.Result, expr ast.Expression) (checkState, bool) {
-	exprType := expr.Type()
-
-	if exprType.Kind() == types.ErrorKind {
-		return checkError, true
-	}
-
-	if types.Equal(exprType, resolved.Value) || types.AssignableTo(exprType, resolved.Value) {
-		return checkValue, true
-	}
-
-	return 0, false
-}
-
 func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier) *ast.Declaration {
 	identType := p.parseCombinedType(ctx, ident.Exported, ident.Global)
 	if identType == nil {
@@ -59,7 +26,7 @@ func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifie
 
 func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *ast.Declaration {
 	symbol, ok := p.symbols.Resolve(ident.Name)
-	if ok && symbol.Scope != ScanScope {
+	if ok && symbol.Scope != ScanScope && ident.Qualifier != ast.QualifierMethod {
 		p.error(ident.Token, "cannot redeclare variable", "parseDeclaration")
 		return nil
 	}
@@ -111,7 +78,9 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 		node.Assignment.Identifier.ValueType = exprType
 	}
 
-	p.symbols.Define(ident)
+	if ident.Qualifier != ast.QualifierMethod {
+		p.symbols.Define(ident)
+	}
 
 	// Static result analysis: if the assigned expression's type matches the
 	// result's value or error type, we know statically which variant it is.
@@ -124,4 +93,37 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 	}
 
 	return node
+}
+
+// resultExprState checks whether an expression assigned to a result type
+// is a valid value or error variant and returns the corresponding check state.
+// Returns (state, true) if the expression matches a variant, or (0, false)
+// if it matches the full result type (e.g. a function call returning T ! E).
+func resultExprState(resolved *types.Result, expr ast.Expression) (checkState, bool) {
+	exprType := expr.Type()
+
+	if exprType.Kind() == types.ErrorKind {
+		return checkError, true
+	}
+
+	if types.Equal(exprType, resolved.Value) || types.AssignableTo(exprType, resolved.Value) {
+		return checkValue, true
+	}
+
+	return 0, false
+}
+
+// wrapResultLiteral wraps an expression in a ResultLiteral for assignment
+// to a result-typed variable. It determines whether the expression is the
+// error or value variant based on the expression type's kind.
+// Returns nil if the expression type doesn't match either variant.
+func wrapResultLiteral(tok tokens.Token, resultType types.Type, expr ast.Expression) *ast.ResultLiteral {
+	isError := expr.Type().Kind() == types.ErrorKind
+
+	return &ast.ResultLiteral{
+		Token:      tok,
+		ResultType: resultType,
+		Value:      expr,
+		IsError:    isError,
+	}
 }

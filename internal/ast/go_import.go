@@ -39,5 +39,6 @@ func (g *GoImport) stringTo(out *strings.Builder) {
 func (g *GoImport) String() string {
 	var out strings.Builder
 	g.stringTo(&out)
+
 	return out.String()
 }

@@ -20,6 +20,16 @@ type (
 	Uint128           = u128.Uint128
 )
 
+func (s Set[T]) Copy() Set[T] {
+	cpy := make(Set[T], len(s))
+
+	for k := range s {
+		cpy[k] = struct{}{}
+	}
+
+	return cpy
+}
+
 // Float16Fromfloat32 converts a float32 to a Float16.
 func Float16Fromfloat32(f float32) Float16 {
 	return f16.Fromfloat32(f)
@@ -40,6 +50,7 @@ func Uint128FromString(s string) Uint128 {
 func Int128FromString(s string) Int128 {
 	v := new(big.Int)
 	v.SetString(s, 10)
+
 	return wide.Int128FromBigInt(v)
 }
 
@@ -57,6 +68,12 @@ func HashASCII[Out ~uint64, In ~[]byte](in In) Out {
 type Option[T any] struct {
 	Value T
 	Set   bool
+}
+
+type Either[L any, R any] struct {
+	Left    L
+	Right   R
+	IsRight bool
 }
 
 type Result[T any, E any] struct {
@@ -135,6 +152,7 @@ func Uint128ToInt128(v Uint128) Int128 {
 func Int128ToUint128(v Int128) Uint128 {
 	lo := v.Uint64()
 	hi := v.RShiftN(64).Uint64()
+
 	return u128.New(lo, hi)
 }
 

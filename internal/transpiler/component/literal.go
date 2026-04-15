@@ -32,6 +32,11 @@ func Ident(ident *ast.Identifier) *goast.Ident {
 	return cachedIdent(ConvertExport(ident.Name, ident.Exported, ident.Global))
 }
 
+// IdentName converts a simple string name to a cached Go *ast.Ident.
+func IdentName(name string) *goast.Ident {
+	return cachedIdent(name)
+}
+
 // BoolLit returns a pre-allocated Go *ast.Ident for "true" or "false".
 func BoolLit(value bool) *goast.Ident {
 	if value {

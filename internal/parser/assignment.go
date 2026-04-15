@@ -62,6 +62,7 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 	if resultType, ok := symbol.Type().Underlying().(*types.Result); ok {
 		if state, isVariant := resultExprState(resultType, expr); isVariant {
 			node.Expression = wrapResultLiteral(node.Token, symbol.Type(), expr)
+
 			p.symbols.MarkChecked(ident.Name, state)
 		} else {
 			// Reassignment from an unknown result variant invalidates previous checks.

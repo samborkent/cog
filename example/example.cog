@@ -289,8 +289,8 @@ outerLoop:
 
 	what := @if<uint64, bool>(5 != 6, 10, 6)
 
-	ptr := @ptr<utf8>()
-	_ = ptr
+	ref := @ref<utf8>()
+	_ = ref
 
 	arg : uint64 = 10
 	_ = @slice<int32>(arg)
@@ -390,6 +390,33 @@ outerLoop:
     // Generic function with return type: T flows through.
     idResult := identity("identity")
     @print(idResult)
+
+    fooVal := "hello"
+    var barRef := &fooVal
+
+    bazVal := "world"
+    barRef = &bazVal
+
+    _ = barRef
+
+    FooRef : &utf8 = &fooVal
+    BarRef : &ascii = &"hello"
+
+    BazRefType ~ &complex128
+
+    var methodCaller : Exported = {
+        Method = 42,
+    }
+
+    methodCaller = Exported{
+        Method = 67,
+    }
+
+    methodCaller.Export()
+
+    Print(FooLoo{
+        value = "Hello, world!",
+    })
 }
 
 // Generic function: type parameter on the func type.
@@ -437,9 +464,9 @@ planet ~ struct {
 }
 
 // TODO: temporarily disabled, not fully implemented.
-// Tuple ~ utf8 & uint64 & bool
+// Tuple ~ (utf8, uint64, bool)
 
-Either ~ utf8 | uint64
+Either ~ utf8 ^ uint64
 
 Option ~ utf8?
 
@@ -499,7 +526,7 @@ Dict<K ~ comparable, V ~ any> ~ map<K, V>
 
 // Multiple type params with any constraint.
 // TODO: temporarily disabled, not fully implemented.
-// Pair<A ~ any, B ~ any> ~ A & B
+// Pair<A ~ any, B ~ any> ~ (A, B)
 
 // Multi-constraint union: T must be string or int.
 TagSlice<T ~ string | int> ~ []T
@@ -518,7 +545,7 @@ case ascii:
 // string can be either ascii or utf8.
 // this is determined at compile time.
 // argument type determines return type as well.
-export upper : func[S string](str : S) S = {
+export upper : func<S ~ string>(str : S) S = {
     switch type str {
     case ascii:
         return @go.strings.Upper(@cast[utf8](str))
@@ -538,7 +565,7 @@ handleRequest : proc(req: Request) Response ! RequestError {
 // if-expression builtin function (called with @if)
 // else is an optional argument denoted with :?
 // if an optional argument is ommited, it will have the zero value of the type
-if : func[T any](expr: bool, thenExpr: T, elseExpr:? T) T = {
+if : func<T ~ any>(expr: bool, thenExpr: T, elseExpr:? T) T = {
     if expr {
         return thenExpr
     } else {

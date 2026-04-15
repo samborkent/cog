@@ -47,5 +47,6 @@ func (p *Parameter) stringTo(out *strings.Builder) {
 func (p *Parameter) String() string {
 	var out strings.Builder
 	p.stringTo(&out)
+
 	return out.String()
 }

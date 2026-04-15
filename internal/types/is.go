@@ -55,5 +55,61 @@ func IsUint(t Type) bool {
 }
 
 func IsBasic(t Type) bool {
-	return IsBool(t) || IsNumber(t) || IsString(t)
+	return IsBool(t) || IsNumber(t) || IsString(t) || t.Kind() == ArrayKind ||
+		// Basic (non-pointer containing) structs are also basic types.
+		(t.Kind() == StructKind && !t.Underlying().(*Struct).IsComplex)
+}
+
+// IsComparable reports whether a type supports == in Go.
+// Slices, maps, and functions are not comparable. Structs and arrays
+// are comparable only if all their elements/fields are comparable.
+func IsComparable(t Type) bool {
+	switch v := t.Underlying().(type) {
+	case *Basic:
+		return true
+	case *Enum:
+		return true
+	case *Reference:
+		return true
+	case *Set:
+		if v.Element == nil {
+			// Zero value is comparable.
+			return true
+		}
+
+		return IsComparable(v.Element)
+	case *Struct:
+		for _, f := range v.Fields {
+			if !IsComparable(f.Type) {
+				return false
+			}
+		}
+
+		return true
+	case *Array:
+		if v.Element == nil {
+			// Zero value is comparable.
+			return true
+		}
+
+		return IsComparable(v.Element)
+	case *Tuple:
+		for _, elem := range v.Types {
+			if !IsComparable(elem) {
+				return false
+			}
+		}
+
+		return true
+	case *Slice, *Map, *Procedure:
+		return false
+	default:
+		return true
+	}
+}
+
+// Pointer types are types which are pointer types under the hood.
+func IsPointer(t Type) bool {
+	kind := t.Kind()
+	return kind == ReferenceKind || kind == SliceKind || kind == SetKind || kind == MapKind || kind == ProcedureKind
 }

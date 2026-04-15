@@ -47,6 +47,7 @@ func (l *Float32Literal) stringTo(out *strings.Builder) {
 func (l *Float32Literal) String() string {
 	var out strings.Builder
 	l.stringTo(&out)
+
 	return out.String()
 }
 

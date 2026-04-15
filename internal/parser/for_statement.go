@@ -16,10 +16,13 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 
 	p.advance("parseForStatement for") // consume for
 
-	var valueVar *ast.Identifier
-	var indexVar *ast.Identifier
+	var (
+		valueVar *ast.Identifier
+		indexVar *ast.Identifier
+	)
 
 	// TODO: add support for value and index variables
+
 	switch p.this().Type {
 	case tokens.LBrace:
 		// Infinite loop, no range.
@@ -126,6 +129,7 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 		if valueVar != nil {
 			node.Value = valueVar
 		}
+
 		if indexVar != nil {
 			node.Index = indexVar
 		}

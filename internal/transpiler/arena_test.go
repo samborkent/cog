@@ -16,12 +16,12 @@ main : proc() = {
 		mustContain(t, got, "make([]int64,")
 	})
 
-	t.Run("ptr only no arena", func(t *testing.T) {
+	t.Run("ref only no arena", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
 main : proc() = {
-	ptr := @ptr<int64>()
-	@print(ptr)
+	ref := @ref<int64>()
+	@print(ref)
 }`)
 		mustNotContain(t, got, "cog.NewArena()")
 		mustContain(t, got, "new(int64)")
@@ -54,17 +54,17 @@ main : proc() = {
 		mustContain(t, got, "_arena.Free()")
 	})
 
-	t.Run("var-len slice plus ptr no arena for ptr", func(t *testing.T) {
+	t.Run("var-len slice plus ref no arena for ref", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
 main : proc() = {
 	n := 10
 	xs := @slice<int64>(n)
 	ys := @slice<int64>(n)
-	ptr := @ptr<int64>()
+	ref := @ref<int64>()
 	@print(xs)
 	@print(ys)
-	@print(ptr)
+	@print(ref)
 }`)
 		mustContain(t, got, "cog.NewArena()")
 		mustContain(t, got, "cog.MakeSlice[int64]")

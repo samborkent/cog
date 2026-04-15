@@ -42,14 +42,18 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Builtin:
 		return t.convertBuiltin(n)
 	case *ast.Call:
-		procType, ok := n.Identifier.ValueType.(*types.Procedure)
+		procType, ok := n.Expression.Type().(*types.Procedure)
 		if !ok {
-			return nil, fmt.Errorf("failed to assert procedure type for %q", n.Identifier.Name)
+			return nil, fmt.Errorf("failed to assert procedure type for %q", n.Expression)
 		}
 
 		args := make([]goast.Expr, 0, len(procType.Parameters))
 
-		if !procType.Function && t.needsContext {
+		if !procType.Function && t.currentFileNeedsContext() {
+			if err := t.symbols.MarkUsed("ctx"); err != nil {
+				return nil, err
+			}
+
 			// Pass context variable to all procedures.
 			args = append(args, component.ContextVar)
 		}
@@ -74,6 +78,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 					// Add zero value of parameter type.
 					args = append(args, component.ZeroValue(argType))
+
 					continue
 				}
 
@@ -87,19 +92,76 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		if n.Package == "" {
-			if err := t.symbols.MarkUsed(n.Identifier.Name); err != nil {
+			var usedName string
+
+			switch expr := n.Expression.(type) {
+			case *ast.Identifier:
+				usedName = component.ConvertExport(expr.Name, expr.Exported, expr.Global)
+			case *ast.Selector:
+				leftMost, err := expr.LeftMost()
+				if err != nil {
+					return nil, err
+				}
+
+				usedName = component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
+			}
+
+			if err := t.symbols.MarkUsed(usedName); err != nil {
 				return nil, fmt.Errorf("marking call identifier used: %w", err)
 			}
 		}
 
 		var fun goast.Expr
+
 		if n.Package != "" {
-			fun = &goast.SelectorExpr{
-				X:   &goast.Ident{Name: n.Package},
-				Sel: component.Ident(n.Identifier),
+			switch sel := n.Expression.(type) {
+			case *ast.Identifier:
+				fun = &goast.SelectorExpr{
+					X:   &goast.Ident{Name: n.Package},
+					Sel: component.Ident(sel),
+				}
+			case *ast.Selector:
+				var fields []*goast.Ident
+
+				selExpr := sel.Expression
+
+			selCallLoop:
+				for {
+					switch subsel := selExpr.(type) {
+					case *ast.Selector:
+						fields = append(fields, component.Ident(subsel.Field))
+						selExpr = subsel.Expression
+					case *ast.Identifier:
+						fields = append(fields, component.Ident(subsel))
+						break selCallLoop
+					default:
+						return nil, fmt.Errorf("unexpected type %T encounterd in selector call expression", selExpr)
+					}
+				}
+
+				var x goast.Expr = &goast.Ident{Name: n.Package}
+
+				for _, field := range slices.Backward(fields) {
+					x = &goast.SelectorExpr{
+						X:   x,
+						Sel: field,
+					}
+				}
+
+				fun = &goast.SelectorExpr{
+					X:   x,
+					Sel: component.Ident(sel.Field),
+				}
+			default:
+				return nil, fmt.Errorf("unexpected type in call expression: %T", sel)
 			}
 		} else {
-			fun = component.Ident(n.Identifier)
+			expr, err := t.convertExpr(n.Expression)
+			if err != nil {
+				return nil, err
+			}
+
+			fun = expr
 		}
 
 		// Wrap in IndexExpr/IndexListExpr for generic calls with type arguments.
@@ -110,6 +172,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				if err != nil {
 					return nil, fmt.Errorf("converting type argument %d: %w", i, err)
 				}
+
 				indices[i] = converted
 			}
 
@@ -195,6 +258,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 
 			t.usesDyn = true
+
 			return component.DynRead(name), nil
 		}
 
@@ -648,9 +712,16 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 		}
 
+		// Register 'this' for method bodies.
+		if t.inMethod {
+			t.symbols.Define("this")
+			_ = t.symbols.MarkUsed("this")
+		}
+
 		// Track whether we're inside a func and reset usesDyn for this body.
 		prevInFunc := t.inFunc
 		prevUsesDyn := t.usesDyn
+
 		t.usesDyn = false
 		if procType, ok := n.ProcedureType.(*types.Procedure); ok {
 			t.inFunc = procType.Function
@@ -690,18 +761,23 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}, nil
 	case *ast.Selector:
 		// Check if this is a package import selector (pkg.Symbol).
-		if types.IsNone(n.Identifier.ValueType) {
+		if types.IsNone(n.Expression.Type()) {
 			return &goast.SelectorExpr{
-				X:   &goast.Ident{Name: n.Identifier.Name},
+				X:   component.IdentName(n.Expression.String()),
 				Sel: component.Ident(n.Field),
 			}, nil
 		}
 
-		name := component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global)
+		leftMost, err := n.LeftMost()
+		if err != nil {
+			return nil, err
+		}
+
+		name := component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
 
 		ident, ok := t.symbols.Resolve(name)
 		if !ok {
-			return nil, fmt.Errorf("%s: unknown selector identifier", n.Identifier.Token)
+			return nil, fmt.Errorf("%s: unknown selector identifier", leftMost.Token)
 		}
 
 		if err := t.symbols.MarkUsed(name); err != nil {
@@ -710,16 +786,23 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		var exported bool
 
-		switch n.Identifier.ValueType.Kind() {
+		switch leftMost.ValueType.Kind() {
 		case types.EnumKind, types.ErrorKind:
 			enumName := ident
 			enumName.Name = enumName.Name + titleCaser.String(n.Field.Name)
 
 			return enumName, nil
+		case types.GenericKind:
+			selExpr, err := t.convertExpr(n.Expression)
+			if err != nil {
+				return nil, err
+			}
+
+			return component.Selector(selExpr, n.Field.Name), nil
 		case types.StructKind:
-			structType, ok := n.Identifier.ValueType.Underlying().(*types.Struct)
+			structType, ok := leftMost.ValueType.Underlying().(*types.Struct)
 			if !ok {
-				return nil, fmt.Errorf("unable to assert struct type for %q", n.Identifier.Name)
+				return nil, fmt.Errorf("unable to assert struct type for %q", leftMost.Name)
 			}
 
 			field := structType.Field(n.Field.Name)
@@ -728,11 +811,11 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 
 			return &goast.SelectorExpr{
-				X:   component.Ident(n.Identifier),
-				Sel: &goast.Ident{Name: component.ConvertExport(n.Field.Name, exported, false)},
+				X:   component.Ident(leftMost),
+				Sel: component.IdentName(component.ConvertExport(n.Field.Name, exported, false)),
 			}, nil
 		default:
-			return nil, fmt.Errorf("%q: unknown type found for selector expression %q", n, n.Identifier.ValueType)
+			return nil, fmt.Errorf("%q: unknown type found for selector expression %q", n, leftMost.ValueType)
 		}
 	case *ast.SetLiteral:
 		// TODO: handle not directly comparable types
@@ -843,6 +926,11 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("encountered struct literal with non-struct type %q", n.Type())
 		}
 
+		literalType, err := t.convertType(n.Type())
+		if err != nil {
+			return nil, fmt.Errorf("converting struct literal type: %w", err)
+		}
+
 		for _, val := range n.Values {
 			expr, err := t.convertExpr(val.Value)
 			if err != nil {
@@ -863,6 +951,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		return &goast.CompositeLit{
+			Type: literalType,
 			Elts: exprs,
 		}, nil
 	case *ast.Suffix:
@@ -956,38 +1045,32 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			},
 			Args: []goast.Expr{component.UTF8Lit(n.Value.String())},
 		}, nil
-	case *ast.UnionLiteral:
-		unionType, ok := n.UnionType.Underlying().(*types.Union)
-		if !ok {
-			return nil, fmt.Errorf("unable to assert union type")
-		}
-
+	case *ast.EitherLiteral:
 		expr, err := t.convertExpr(n.Value)
 		if err != nil {
-			return nil, fmt.Errorf("converting union literal value: %w", err)
+			return nil, fmt.Errorf("converting either literal value: %w", err)
 		}
 
-		if n.Tag {
-			return &goast.CompositeLit{
-				Type: &goast.Ident{Name: component.ConvertExport(unionType.String(), unionType.Exported, unionType.Global)},
-				Elts: []goast.Expr{
-					&goast.KeyValueExpr{
-						Key:   &goast.Ident{Name: "Or"},
-						Value: expr,
-					},
-					&goast.KeyValueExpr{
-						Key:   &goast.Ident{Name: "Tag"},
-						Value: &goast.Ident{Name: "true"},
-					},
-				},
-			}, nil
+		goType, err := t.convertType(n.EitherType)
+		if err != nil {
+			return nil, fmt.Errorf("converting either literal type: %w", err)
+		}
+
+		var eltExpr goast.Expr
+		if n.IsRight {
+			eltExpr = component.KeyValue(component.IdentName("Right"), expr)
+		} else {
+			eltExpr = component.KeyValue(component.IdentName("Left"), expr)
+		}
+
+		kvs := []goast.Expr{eltExpr}
+		if n.IsRight {
+			kvs = append(kvs, component.KeyValue(component.IdentName("IsRight"), component.IdentName("true")))
 		}
 
 		return &goast.CompositeLit{
-			Elts: []goast.Expr{&goast.KeyValueExpr{
-				Key:   &goast.Ident{Name: "Either"},
-				Value: expr,
-			}},
+			Type: goType,
+			Elts: kvs,
 		}, nil
 	case *ast.ResultLiteral:
 		_, ok := n.ResultType.Underlying().(*types.Result)
@@ -1078,6 +1161,8 @@ func convertUnaryOperator(t tokens.Type) (gotoken.Token, error) {
 		return gotoken.NOT, nil
 	case tokens.Minus:
 		return gotoken.SUB, nil
+	case tokens.BitAnd:
+		return gotoken.AND, nil
 	default:
 		return gotoken.ILLEGAL, fmt.Errorf("unknown unary operator %s", t.String())
 	}

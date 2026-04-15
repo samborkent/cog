@@ -18,7 +18,7 @@ const (
 	BuiltinIf    Builtins = "if"
 	BuiltinMap   Builtins = "map"
 	BuiltinPrint Builtins = "print"
-	BuiltinPtr   Builtins = "ptr"
+	BuiltinRef   Builtins = "ref"
 	BuiltinSet   Builtins = "set"
 	BuiltinSlice Builtins = "slice"
 )
@@ -138,18 +138,18 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 		t.addBuiltinImport()
 
 		return component.BuiltinPrint(arg), nil
-	case BuiltinPtr:
+	case BuiltinRef:
 		if len(node.TypeArguments) != 1 {
-			return nil, fmt.Errorf("@ptr expects 1 type argument, got %d", len(node.TypeArguments))
+			return nil, fmt.Errorf("@ref expects 1 type argument, got %d", len(node.TypeArguments))
 		}
 
 		if len(node.Arguments) > 0 {
-			return nil, fmt.Errorf("@ptr cannot take any arguments, got %d", len(node.Arguments))
+			return nil, fmt.Errorf("@ref cannot take any arguments, got %d", len(node.Arguments))
 		}
 
 		valueType, err := t.convertType(node.TypeArguments[0])
 		if err != nil {
-			return nil, fmt.Errorf("converting @ptr value type: %w", err)
+			return nil, fmt.Errorf("converting @ref value type: %w", err)
 		}
 
 		return component.BuiltinPtr(valueType), nil
@@ -387,30 +387,35 @@ func (t *Transpiler) castNormalize(arg goast.Expr, kind types.Kind) (goast.Expr,
 		}, nil
 	case types.Float32:
 		t.addStdLibImport("math")
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("math")}, Sel: &goast.Ident{Name: "Float32bits"}},
 			Args: []goast.Expr{arg},
 		}, nil
 	case types.Float64:
 		t.addStdLibImport("math")
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("math")}, Sel: &goast.Ident{Name: "Float64bits"}},
 			Args: []goast.Expr{arg},
 		}, nil
 	case types.Complex32:
 		t.addCogImport()
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Complex32Bits"}},
 			Args: []goast.Expr{arg},
 		}, nil
 	case types.Complex64:
 		t.addCogImport()
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Complex64Bits"}},
 			Args: []goast.Expr{arg},
 		}, nil
 	case types.Complex128:
 		t.addCogImport()
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Complex128Bits"}},
 			Args: []goast.Expr{arg},
@@ -419,6 +424,7 @@ func (t *Transpiler) castNormalize(arg goast.Expr, kind types.Kind) (goast.Expr,
 		return arg, nil
 	case types.Int128:
 		t.addCogImport()
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Int128ToUint128"}},
 			Args: []goast.Expr{arg},
@@ -432,9 +438,11 @@ func (t *Transpiler) castNormalize(arg goast.Expr, kind types.Kind) (goast.Expr,
 func (t *Transpiler) castWiden(arg goast.Expr, srcBits, dstBits int) goast.Expr {
 	if dstBits == 128 {
 		t.addCogImport()
+
 		if srcBits < 64 {
 			arg = &goast.CallExpr{Fun: &goast.Ident{Name: "uint64"}, Args: []goast.Expr{arg}}
 		}
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Uint128From64"}},
 			Args: []goast.Expr{arg},
@@ -470,36 +478,42 @@ func (t *Transpiler) castDenormalize(arg goast.Expr, kind types.Kind) (goast.Exp
 		return &goast.CallExpr{Fun: &goast.Ident{Name: "int64"}, Args: []goast.Expr{arg}}, nil
 	case types.Float16:
 		t.addCogImport()
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Float16Frombits"}},
 			Args: []goast.Expr{arg},
 		}, nil
 	case types.Float32:
 		t.addStdLibImport("math")
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("math")}, Sel: &goast.Ident{Name: "Float32frombits"}},
 			Args: []goast.Expr{arg},
 		}, nil
 	case types.Float64:
 		t.addStdLibImport("math")
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("math")}, Sel: &goast.Ident{Name: "Float64frombits"}},
 			Args: []goast.Expr{arg},
 		}, nil
 	case types.Complex32:
 		t.addCogImport()
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Complex32FromBits"}},
 			Args: []goast.Expr{arg},
 		}, nil
 	case types.Complex64:
 		t.addCogImport()
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Complex64FromBits"}},
 			Args: []goast.Expr{arg},
 		}, nil
 	case types.Complex128:
 		t.addCogImport()
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Complex128FromBits"}},
 			Args: []goast.Expr{arg},
@@ -509,6 +523,7 @@ func (t *Transpiler) castDenormalize(arg goast.Expr, kind types.Kind) (goast.Exp
 		return arg, nil
 	case types.Int128:
 		t.addCogImport()
+
 		return &goast.CallExpr{
 			Fun:  &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Uint128ToInt128"}},
 			Args: []goast.Expr{arg},

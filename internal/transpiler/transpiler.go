@@ -19,8 +19,8 @@ import (
 var titleCaser = cases.Title(language.English)
 
 type Transpiler struct {
-	files []*ast.File
-	file  *ast.File // current file being processed (for line directives)
+	files map[uint16]*ast.File // file ID → file mapping
+	file  *ast.File            // current file being processed (for line directives)
 	fset  *gotoken.FileSet
 
 	nodes        map[uint64]ast.Node
@@ -30,8 +30,9 @@ type Transpiler struct {
 	symbols        *SymbolTable
 	dynDefaults    map[string]ast.Expression // Default expressions for dynamic variables
 	inFunc         bool
-	usesDyn        bool // set during body conversion when a dyn var is read or written
-	needsContext   bool
+	inMethod       bool            // set when transpiling a method body
+	usesDyn        bool            // set during body conversion when a dyn var is read or written
+	needsContext   map[uint16]bool // per-file tracking of context requirement by file ID
 	ifLabelCounter uint32
 
 	typeCache      map[types.Type]goast.Expr
@@ -46,10 +47,12 @@ func NewTranspiler(files ...*ast.File) *Transpiler {
 
 func NewTranspilerWithModule(goModulePath string, files ...*ast.File) *Transpiler {
 	nodes := make(map[uint64]ast.Node)
+	fileMap := make(map[uint16]*ast.File)
 
-	for _, f := range files {
+	for i, f := range files {
 		nodes[f.Hash()] = f
 		nodes[f.Package.Hash()] = f.Package
+		fileMap[uint16(i)] = f
 
 		for _, stmt := range f.Statements {
 			nodes[stmt.Hash()] = stmt
@@ -57,12 +60,13 @@ func NewTranspilerWithModule(goModulePath string, files ...*ast.File) *Transpile
 	}
 
 	return &Transpiler{
-		files:        files,
+		files:        fileMap,
 		fset:         gotoken.NewFileSet(),
 		nodes:        nodes,
 		goModulePath: goModulePath,
 		symbols:      NewSymbolTable(),
 		dynDefaults:  make(map[string]ast.Expression),
+		needsContext: make(map[uint16]bool),
 		typeCache:    make(map[types.Type]goast.Expr),
 		dynComments:  make(map[string]string),
 		skipComments: make(map[uint64]struct{}),
@@ -74,14 +78,22 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 		return nil, err
 	}
 
+	// Get files in order by ID
+	fileIDs := make([]uint16, 0, len(t.files))
+	for id := range t.files {
+		fileIDs = append(fileIDs, id)
+	}
+
+	slices.Sort(fileIDs)
+
 	// Count total statements across all files.
 	totalStmts := 0
-	for _, f := range t.files {
-		totalStmts += len(f.Statements)
+	for _, id := range fileIDs {
+		totalStmts += len(t.files[id].Statements)
 	}
 
 	gofile := &goast.File{
-		Name:  goast.NewIdent(t.files[0].Package.Identifier.Name),
+		Name:  goast.NewIdent(t.files[fileIDs[0]].Package.Identifier.Name),
 		Decls: make([]goast.Decl, 0, totalStmts),
 	}
 	errs := make([]error, 0)
@@ -92,7 +104,8 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	dynDecls := t.buildDynDecls()
 	gofile.Decls = append(gofile.Decls, dynDecls...)
 
-	for _, f := range t.files {
+	for _, id := range fileIDs {
+		f := t.files[id]
 		t.file = f // set current file for line directives
 
 		for _, stmt := range f.Statements {
@@ -106,14 +119,7 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 			switch s := stmt.(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
-					alias := goStdLibAlias(imprt.Name)
-					t.imports[imprt.Name] = &goast.ImportSpec{
-						Name: &goast.Ident{Name: alias},
-						Path: &goast.BasicLit{
-							Kind:  gotoken.STRING,
-							Value: `"` + imprt.Name + `"`,
-						},
-					}
+					t.addStdLibImport(imprt.Name)
 				}
 			case *ast.Import:
 				t.addCogImports(s)
@@ -148,17 +154,45 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 // TranspileFiles produces one *goast.File per input *ast.File.
 // Shared constructs (dyn struct types) are emitted in the first file.
 // Each output file gets its own import declarations.
+// currentFileNeedsContext returns true if the current file being processed needs context support
+func (t *Transpiler) currentFileNeedsContext() bool {
+	if t.file == nil {
+		return false
+	}
+
+	// Find the file ID for the current file
+	var fileID uint16
+
+	for id, f := range t.files {
+		if f == t.file {
+			fileID = id
+			break
+		}
+	}
+
+	return t.needsContext[fileID]
+}
+
 func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 	if err := t.predeclareGlobals(); err != nil {
 		return nil, err
 	}
 
-	pkgName := t.files[0].Package.Identifier.Name
+	// Get files in order by ID
+	fileIDs := make([]uint16, 0, len(t.files))
+	for id := range t.files {
+		fileIDs = append(fileIDs, id)
+	}
+
+	slices.Sort(fileIDs)
+
+	pkgName := t.files[fileIDs[0]].Package.Identifier.Name
 	errs := make([]error, 0)
 
 	gofiles := make([]*goast.File, len(t.files))
 
-	for fi, f := range t.files {
+	for i, id := range fileIDs {
+		f := t.files[id]
 		t.file = f
 		t.imports = make(map[string]*goast.ImportSpec)
 		t.lastSourceLine = 0
@@ -169,7 +203,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 		}
 
 		// Emit dyn struct types in the first file only.
-		if fi == 0 {
+		if i == 0 {
 			gofile.Decls = append(gofile.Decls, t.buildDynDecls()...)
 		}
 
@@ -183,14 +217,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 			switch s := stmt.(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
-					alias := goStdLibAlias(imprt.Name)
-					t.imports[imprt.Name] = &goast.ImportSpec{
-						Name: &goast.Ident{Name: alias},
-						Path: &goast.BasicLit{
-							Kind:  gotoken.STRING,
-							Value: `"` + imprt.Name + `"`,
-						},
-					}
+					t.addStdLibImport(imprt.Name)
 				}
 			case *ast.Import:
 				t.addCogImports(s)
@@ -213,7 +240,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 		}
 
 		t.finalizeImports(gofile)
-		gofiles[fi] = gofile
+		gofiles[i] = gofile
 	}
 
 	if err := errors.Join(errs...); err != nil {
@@ -240,25 +267,27 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 	// declarations and imports which stay at file level.
 	mainBody := make([]goast.Stmt, 0)
 
-	for _, f := range t.files {
+	// Get files in order by ID
+	fileIDs := make([]uint16, 0, len(t.files))
+	for id := range t.files {
+		fileIDs = append(fileIDs, id)
+	}
+
+	slices.Sort(fileIDs)
+
+	for _, id := range fileIDs {
+		f := t.files[id]
 		t.file = f
 
 		for _, stmt := range f.Statements {
 			switch s := stmt.(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
-					alias := goStdLibAlias(imprt.Name)
-					t.imports[imprt.Name] = &goast.ImportSpec{
-						Name: &goast.Ident{Name: alias},
-						Path: &goast.BasicLit{
-							Kind:  gotoken.STRING,
-							Value: `"` + imprt.Name + `"`,
-						},
-					}
+					t.addStdLibImport(imprt.Name)
 				}
 			case *ast.Import:
 				t.addCogImports(s)
-			case *ast.Type:
+			case *ast.Method, *ast.Type:
 				gonodes, err := t.convertDecl(s)
 				if err != nil {
 					errs = append(errs, fmt.Errorf("\t%s: %w", s.String(), err))
@@ -302,7 +331,16 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 func (t *Transpiler) predeclareGlobals() error {
 	errs := make([]error, 0)
 
-	for _, f := range t.files {
+	// Get files in order by ID
+	fileIDs := make([]uint16, 0, len(t.files))
+	for id := range t.files {
+		fileIDs = append(fileIDs, id)
+	}
+
+	slices.Sort(fileIDs)
+
+	for _, id := range fileIDs {
+		f := t.files[id]
 		for i, stmt := range f.Statements {
 			switch s := stmt.(type) {
 			case *ast.Declaration:
@@ -321,6 +359,7 @@ func (t *Transpiler) predeclareGlobals() error {
 					if i+1 < len(f.Statements) {
 						if comment, ok := f.Statements[i+1].(*ast.Comment); ok {
 							declLn, _ := s.Pos()
+
 							commentLn, _ := comment.Pos()
 							if commentLn == declLn {
 								t.dynComments[name] = comment.Text
@@ -340,7 +379,26 @@ func (t *Transpiler) predeclareGlobals() error {
 
 				if s.Assignment.Identifier.Name != "main" && s.Assignment.Expression != nil {
 					if procType, ok := s.Assignment.Expression.Type().(*types.Procedure); ok && !procType.Function {
-						t.needsContext = true
+						// Find the file ID for this file
+						for id, file := range t.files {
+							if file == f {
+								t.needsContext[id] = true
+								break
+							}
+						}
+					}
+				}
+			case *ast.Method:
+				if s.Declaration.Assignment.Expression.Type().Kind() == types.ProcedureKind {
+					procType, ok := s.Declaration.Assignment.Expression.Type().(*types.Procedure)
+					if ok && !procType.Function {
+						// Find the file ID for this file
+						for id, file := range t.files {
+							if file == f {
+								t.needsContext[id] = true
+								break
+							}
+						}
 					}
 				}
 			case *ast.Type:
@@ -360,6 +418,7 @@ func (t *Transpiler) predeclareGlobals() error {
 func (t *Transpiler) addCogImports(node *ast.Import) {
 	for _, imprt := range node.Imports {
 		importPath := imprt.Name
+
 		goPath := importPath
 		if t.goModulePath != "" {
 			goPath = t.goModulePath + "/" + importPath
@@ -370,6 +429,7 @@ func (t *Transpiler) addCogImports(node *ast.Import) {
 			for i > 0 && importPath[i-1] != '/' {
 				i--
 			}
+
 			pkgName = importPath[i:]
 		}
 
@@ -478,9 +538,8 @@ func (t *Transpiler) addBuiltinImport() {
 func (t *Transpiler) addStdLibImport(name string) {
 	_, ok := t.imports[name]
 	if !ok {
-		alias := goStdLibAlias(name)
 		t.imports[name] = &goast.ImportSpec{
-			Name: &goast.Ident{Name: alias},
+			Name: &goast.Ident{Name: goStdLibAlias(name)},
 			Path: &goast.BasicLit{
 				Kind:  gotoken.STRING,
 				Value: `"` + name + `"`,

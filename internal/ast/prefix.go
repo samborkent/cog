@@ -34,12 +34,20 @@ func (p *Prefix) stringTo(out *strings.Builder) {
 func (p *Prefix) String() string {
 	var out strings.Builder
 	p.stringTo(&out)
+
 	return out.String()
 }
 
 func (p *Prefix) Type() types.Type {
 	if p.Right.Type() == nil {
 		panic("prefix with nil type detected")
+	}
+
+	// Return
+	if p.Operator.Type == tokens.BitAnd {
+		return &types.Reference{
+			Value: p.Right.Type(),
+		}
 	}
 
 	return p.Right.Type()

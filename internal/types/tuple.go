@@ -34,13 +34,17 @@ func (t *Tuple) String() string {
 
 	var out strings.Builder
 
+	_, _ = out.WriteString("(")
+
 	for i, typ := range t.Types {
 		_, _ = out.WriteString(typ.String())
 
 		if i < len(t.Types)-1 {
-			_, _ = out.WriteString(" & ")
+			_, _ = out.WriteString(", ")
 		}
 	}
+
+	_, _ = out.WriteString(")")
 
 	return out.String()
 }

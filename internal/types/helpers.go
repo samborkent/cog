@@ -9,10 +9,16 @@ func AssignableTo(src, dst Type) bool {
 		return true
 	}
 
+	// Any concrete type is assignable to any.
+	if dst.Kind() == AnyKind {
+		return true
+	}
+
 	// Allow assigning T to T? (Option[T]).
 	if opt, ok := dst.(*Option); ok {
 		return Equal(src, opt.Value)
 	}
+
 	if a, ok := dst.(*Alias); ok {
 		if opt, ok := a.Underlying().(*Option); ok {
 			return Equal(src, opt.Value)
@@ -23,6 +29,7 @@ func AssignableTo(src, dst Type) bool {
 	if r, ok := dst.(*Result); ok {
 		return Equal(src, r.Value) || Equal(src, r.Error)
 	}
+
 	if a, ok := dst.(*Alias); ok {
 		if r, ok := a.Underlying().(*Result); ok {
 			return Equal(src, r.Value) || Equal(src, r.Error)
@@ -33,6 +40,17 @@ func AssignableTo(src, dst Type) bool {
 }
 
 func Equal(a, b Type) bool {
+	// Handle type parameter aliases before unwrapping, since Underlying()
+	// returns the constraint and loses the parameter name.
+	if aAlias, ok := a.(*Alias); ok && aAlias.IsTypeParam() {
+		bAlias, ok := b.(*Alias)
+		if !ok || !bAlias.IsTypeParam() {
+			return false
+		}
+
+		return aAlias.Name == bAlias.Name && Equal(aAlias.Constraint, bAlias.Constraint)
+	}
+
 	// Check Option before Underlying(), since Option.Underlying()
 	// unwraps to the inner Value type.
 	ao, aIsOpt := a.(*Option)
@@ -42,6 +60,7 @@ func Equal(a, b Type) bool {
 	if !aIsOpt {
 		ao, aIsOpt = a.Underlying().(*Option)
 	}
+
 	if !bIsOpt {
 		bo, bIsOpt = b.Underlying().(*Option)
 	}
@@ -49,6 +68,7 @@ func Equal(a, b Type) bool {
 	if aIsOpt != bIsOpt {
 		return false
 	}
+
 	if aIsOpt {
 		return Equal(ao.Value, bo.Value)
 	}
@@ -72,6 +92,7 @@ func Equal(a, b Type) bool {
 		if at.Length.String() != bt.Length.String() {
 			return false
 		}
+
 		return Equal(at.Element, bt.Element)
 	case *Map:
 		bt := bu.(*Map)
@@ -79,23 +100,42 @@ func Equal(a, b Type) bool {
 	case *Set:
 		bt := bu.(*Set)
 		return Equal(at.Element, bt.Element)
-	case *Pointer:
-		bt := bu.(*Pointer)
+	case *Reference:
+		bt := bu.(*Reference)
 		return Equal(at.Value, bt.Value)
 	case *Tuple:
 		bt := bu.(*Tuple)
 		if len(at.Types) != len(bt.Types) {
 			return false
 		}
+
 		for i := range at.Types {
 			if !Equal(at.Types[i], bt.Types[i]) {
 				return false
 			}
 		}
+
 		return true
+	case *Either:
+		bt := bu.(*Either)
+		return Equal(at.Left, bt.Left) && Equal(at.Right, bt.Right)
 	case *Union:
 		bt := bu.(*Union)
-		return Equal(at.Either, bt.Either) && Equal(at.Or, bt.Or)
+		if at.Name != "" || bt.Name != "" {
+			return at.Name == bt.Name
+		}
+
+		if len(at.Variants) != len(bt.Variants) {
+			return false
+		}
+
+		for i := range at.Variants {
+			if !Equal(at.Variants[i], bt.Variants[i]) {
+				return false
+			}
+		}
+
+		return true
 	case *Result:
 		bt := bu.(*Result)
 		return Equal(at.Value, bt.Value) && Equal(at.Error, bt.Error)
@@ -104,14 +144,17 @@ func Equal(a, b Type) bool {
 		if len(at.Fields) != len(bt.Fields) {
 			return false
 		}
+
 		for i := range at.Fields {
 			if at.Fields[i].Name != bt.Fields[i].Name {
 				return false
 			}
+
 			if !Equal(at.Fields[i].Type, bt.Fields[i].Type) {
 				return false
 			}
 		}
+
 		return true
 	case *Enum:
 		bt := bu.(*Enum)
@@ -121,9 +164,11 @@ func Equal(a, b Type) bool {
 		if at.Function != bt.Function {
 			return false
 		}
+
 		if len(at.Parameters) != len(bt.Parameters) {
 			return false
 		}
+
 		for i := range at.Parameters {
 			if !Equal(at.Parameters[i].Type, bt.Parameters[i].Type) {
 				return false
@@ -133,27 +178,12 @@ func Equal(a, b Type) bool {
 		if (at.ReturnType == nil) != (bt.ReturnType == nil) {
 			return false
 		}
+
 		if at.ReturnType != nil && !Equal(at.ReturnType, bt.ReturnType) {
 			return false
 		}
+
 		return true
-	case *TypeParam:
-		bt := bu.(*TypeParam)
-		if at.Name != bt.Name {
-			return false
-		}
-		if len(at.Constraints) != len(bt.Constraints) {
-			return false
-		}
-		for i := range at.Constraints {
-			if !Equal(at.Constraints[i], bt.Constraints[i]) {
-				return false
-			}
-		}
-		return true
-	case *Generic:
-		bt := bu.(*Generic)
-		return at.name == bt.name
 	default:
 		// Basic types: Kind equality is sufficient.
 		return true
@@ -180,31 +210,73 @@ func Size(k Kind) int {
 }
 
 // Satisfies reports whether a concrete type satisfies the given constraint.
-// If constraint is any, all types satisfy it. If constraint is a *Generic,
-// the concrete type's kind must match one of the constraint's members.
-// Otherwise falls back to Equal.
+// If constraint is any, all types satisfy it. If constraint is a *Union,
+// satisfying any variant suffices. Structural sentinels are matched by Kind
+// with a comparability check. Otherwise falls back to Equal.
 func Satisfies(concrete, constraint Type) bool {
 	if constraint.Kind() == AnyKind {
 		return true
 	}
 
-	if g, ok := constraint.(*Generic); ok {
-		for _, member := range g.Constraints {
-			if member.Kind() == concrete.Kind() {
-				// For structural types used as comparable sentinels,
-				// verify the concrete type is actually comparable.
-				if isStructuralSentinel(member) {
-					if !IsComparable(concrete) {
-						continue
-					}
-				}
+	if u, ok := constraint.(*Union); ok {
+		for _, variant := range u.Variants {
+			if Satisfies(concrete, variant) {
 				return true
 			}
 		}
+
 		return false
 	}
 
+	// Structural sentinels (zero-value Struct, Array, etc.) used in the
+	// comparable constraint: match by Kind and verify comparability.
+	if isStructuralSentinel(constraint) {
+		return concrete.Kind() == constraint.Kind() && IsComparable(concrete)
+	}
+
+	// Interface satisfaction: check if concrete type implements all methods.
+	if iface, ok := constraint.Underlying().(*Interface); ok {
+		return Implements(concrete, iface)
+	}
+
 	return Equal(concrete, constraint)
+}
+
+// Implements reports whether a concrete type implements the given interface,
+// i.e. has all required methods with matching signatures.
+func Implements(concrete Type, iface *Interface) bool {
+	// Unwrap aliases to find the underlying struct.
+	underlying := concrete
+	for {
+		a, ok := underlying.(*Alias)
+		if !ok || a.Constraint != nil {
+			break
+		}
+
+		underlying = a.Underlying()
+	}
+
+	s, ok := underlying.(*Struct)
+	if !ok {
+		return false
+	}
+
+	for _, required := range iface.Methods {
+		found := false
+
+		for _, m := range s.Methods {
+			if m.Name == required.Name && Equal(m.Procedure, required.Procedure) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return false
+		}
+	}
+
+	return true
 }
 
 // isStructuralSentinel reports whether a type is one of the zero-value
@@ -219,43 +291,11 @@ func isStructuralSentinel(t Type) bool {
 		return len(v.Types) == 0
 	case *Set:
 		return v.Element == nil
-	default:
-		return false
-	}
-}
-
-// IsComparable reports whether a type supports == in Go.
-// Slices, maps, and functions are not comparable. Structs and arrays
-// are comparable only if all their elements/fields are comparable.
-func IsComparable(t Type) bool {
-	switch v := t.Underlying().(type) {
-	case *Basic:
-		return true
 	case *Enum:
-		return true
-	case *Pointer:
-		return true
-	case *Set:
-		return IsComparable(v.Element)
-	case *Struct:
-		for _, f := range v.Fields {
-			if !IsComparable(f.Type) {
-				return false
-			}
-		}
-		return true
-	case *Array:
-		return IsComparable(v.Element)
-	case *Tuple:
-		for _, elem := range v.Types {
-			if !IsComparable(elem) {
-				return false
-			}
-		}
-		return true
-	case *Slice, *Map, *Procedure:
-		return false
+		return v.ValueType == nil
+	case *Reference:
+		return v.Value == nil
 	default:
-		return true
+		return false
 	}
 }

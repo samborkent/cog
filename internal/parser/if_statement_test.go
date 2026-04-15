@@ -7,6 +7,7 @@ func TestParseIfStatement(t *testing.T) {
 
 	t.Run("simple", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	if true {
@@ -20,6 +21,7 @@ main : proc() = {
 
 	t.Run("if_else", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	if true {

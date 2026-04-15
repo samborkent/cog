@@ -7,6 +7,7 @@ func TestParseBlockStatement(t *testing.T) {
 
 	t.Run("scoping", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	if true {

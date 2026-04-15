@@ -36,6 +36,7 @@ func (e *GoCallExpression) stringTo(out *strings.Builder) {
 func (e *GoCallExpression) String() string {
 	var out strings.Builder
 	e.stringTo(&out)
+
 	return out.String()
 }
 

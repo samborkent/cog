@@ -1,6 +1,7 @@
 package transpiler
 
 import (
+	"errors"
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
@@ -16,10 +17,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 	switch n := node.(type) {
 	case *ast.Comment:
 		text := n.Text
+
 		commentLn, _ := n.Pos()
 		if commentLn != t.lastSourceLine {
 			text = "\n" + text
 		}
+
 		return t.commentDecl(text), nil
 	case *ast.Declaration:
 		if n.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
@@ -57,6 +60,18 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		prevUsesDyn := t.usesDyn
 		t.usesDyn = false
 
+		// Pre-define ctx and dyn in the symbol table for main so that
+		// the body conversion can reference them (e.g. passing ctx to procs).
+		if n.Assignment.Identifier.Name == "main" {
+			if len(t.symbols.dynamics) > 0 {
+				t.symbols.Define("dyn")
+			}
+
+			if t.currentFileNeedsContext() {
+				t.symbols.Define("ctx")
+			}
+		}
+
 		expr, err := t.convertExpr(n.Assignment.Expression)
 		if err != nil {
 			return nil, err
@@ -84,7 +99,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			if n.Assignment.Identifier.Name == "main" {
 				hasDynVars := len(t.symbols.dynamics) > 0
 
-				if hasDynVars || t.needsContext {
+				if hasDynVars || t.currentFileNeedsContext() {
 					if hasDynVars {
 						// Main with dynamic variables: init dyn struct.
 						dynIdent := t.symbols.Define("dyn")
@@ -115,7 +130,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 							Elts: structElts,
 						}
 
-						if t.needsContext {
+						if t.currentFileNeedsContext() {
 							// Also seed context for proc propagation.
 							ctxIdent := t.symbols.Define("ctx")
 							if err := t.symbols.MarkUsed("ctx"); err != nil {
@@ -137,9 +152,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					} else {
 						// Main with procs but no dynamic variables: just init context.
 						ctxIdent := t.symbols.Define("ctx")
-						if err := t.symbols.MarkUsed("ctx"); err != nil {
-							return nil, fmt.Errorf("marking ctx used: %w", err)
-						}
 
 						funcDecl.Body.List = append(
 							[]goast.Stmt{component.ContextMain(ctxIdent)},
@@ -147,14 +159,8 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 						)
 					}
 
-					if t.needsContext {
-						t.imports["ctx"] = &goast.ImportSpec{
-							Name: &goast.Ident{Name: goStdLibAlias("context")},
-							Path: &goast.BasicLit{
-								Kind:  gotoken.STRING,
-								Value: `"context"`,
-							},
-						}
+					if t.currentFileNeedsContext() {
+						t.addStdLibImport("context")
 
 						// Remove context argument for main func.
 						funcDecl.Type.Params.List = funcDecl.Type.Params.List[1:]
@@ -174,8 +180,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				}
 			}
 
+			if t.currentFileNeedsContext() {
+				t.addStdLibImport("context")
+			}
+
 			t.injectArena(funcDecl.Body)
-			
+
 			// Return function declaration for procedures
 			return []goast.Decl{funcDecl}, nil
 		}
@@ -195,8 +205,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			compositeLiteral.Type = &goast.Ident{Name: litName}
 		}
 
-
-
 		valueSpec := &goast.ValueSpec{
 			Names:  []*goast.Ident{ident},
 			Values: []goast.Expr{expr},
@@ -215,6 +223,30 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			Tok:   tok,
 			Specs: []goast.Spec{valueSpec},
 		}}, nil
+	case *ast.Method:
+		prevInMethod := t.inMethod
+		t.inMethod = true
+
+		decls, err := t.convertDecl(n.Declaration)
+
+		t.inMethod = prevInMethod
+
+		if err != nil {
+			return nil, err
+		}
+
+		if len(decls) != 1 {
+			return nil, fmt.Errorf("transpilation of method declaration resulted in an unexpected number of declarations: %d", len(decls))
+		}
+
+		funcDecl, ok := decls[0].(*goast.FuncDecl)
+		if !ok {
+			return nil, errors.New("unable to assert function declartion during method transpilation")
+		}
+
+		funcDecl.Recv = component.Receiver(n.Receiver, n.Reference)
+
+		return decls, nil
 	case *ast.Type:
 		if n.Alias.Kind() == types.EnumKind || n.Alias.Kind() == types.ErrorKind {
 			return t.convertEnumDecl(n)
@@ -233,7 +265,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		}
 
 		if len(n.TypeParameters) > 0 {
-			typeSpec.TypeParams = t.convertTypeParams(n.TypeParameters)
+			typeParams, err := t.convertTypeParams(n.TypeParameters)
+			if err != nil {
+				return nil, fmt.Errorf("converting type parameters: %w", err)
+			}
+
+			typeSpec.TypeParams = typeParams
 		}
 
 		decls = append(decls, &goast.GenDecl{
@@ -261,8 +298,10 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 }
 
 func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
-	var valueType types.Type
-	var values []*types.EnumValue
+	var (
+		valueType types.Type
+		values    []*types.EnumValue
+	)
 
 	switch a := n.Alias.(type) {
 	case *types.Enum:
@@ -274,6 +313,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		} else {
 			valueType = types.Basics[types.UTF8]
 		}
+
 		values = a.Values
 	default:
 		return nil, fmt.Errorf("cannot convert type %q to enum", n.Alias)
@@ -384,13 +424,13 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 func mustBeVariable(t types.Kind) bool {
 	switch t {
 	case types.ArrayKind,
+		types.EitherKind,
 		types.MapKind,
 		types.ProcedureKind,
 		types.SetKind,
 		types.SliceKind,
 		types.StructKind,
-		types.TupleKind,
-		types.UnionKind:
+		types.TupleKind:
 		return true
 	default:
 		return false

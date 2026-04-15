@@ -55,19 +55,24 @@ func TestEqual(t *testing.T) {
 		{"different option", &Option{Value: utf8Type}, &Option{Value: int64Type}, false},
 		{"option vs non-option", &Option{Value: utf8Type}, utf8Type, false},
 
-		// Pointers
-		{"same pointer", &Pointer{Value: int64Type}, &Pointer{Value: int64Type}, true},
-		{"different pointer", &Pointer{Value: int64Type}, &Pointer{Value: int8Type}, false},
+		// References
+		{"same pointer", &Reference{Value: int64Type}, &Reference{Value: int64Type}, true},
+		{"different pointer", &Reference{Value: int64Type}, &Reference{Value: int8Type}, false},
 
 		// Tuples
 		{"same tuple", &Tuple{Types: []Type{utf8Type, int64Type}}, &Tuple{Types: []Type{utf8Type, int64Type}}, true},
 		{"different tuple element", &Tuple{Types: []Type{utf8Type, int64Type}}, &Tuple{Types: []Type{utf8Type, int8Type}}, false},
 		{"different tuple length", &Tuple{Types: []Type{utf8Type, int64Type}}, &Tuple{Types: []Type{utf8Type, int64Type, boolType}}, false},
 
-		// Unions
-		{"same union", &Union{Either: utf8Type, Or: int64Type}, &Union{Either: utf8Type, Or: int64Type}, true},
-		{"different union either", &Union{Either: utf8Type, Or: int64Type}, &Union{Either: asciiType, Or: int64Type}, false},
-		{"different union or", &Union{Either: utf8Type, Or: int64Type}, &Union{Either: utf8Type, Or: int8Type}, false},
+		// Either
+		{"same either", &Either{Left: utf8Type, Right: int64Type}, &Either{Left: utf8Type, Right: int64Type}, true},
+		{"different either left", &Either{Left: utf8Type, Right: int64Type}, &Either{Left: asciiType, Right: int64Type}, false},
+		{"different either right", &Either{Left: utf8Type, Right: int64Type}, &Either{Left: utf8Type, Right: int8Type}, false},
+
+		// Unions (constraints)
+		{"same union", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{utf8Type, int64Type}}, true},
+		{"different union left", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{asciiType, int64Type}}, false},
+		{"different union right", &Union{Variants: []Type{utf8Type, int64Type}}, &Union{Variants: []Type{utf8Type, int8Type}}, false},
 
 		// Structs
 		{"same struct", &Struct{Fields: []*Field{{Name: "x", Type: int64Type}}}, &Struct{Fields: []*Field{{Name: "x", Type: int64Type}}}, true},
@@ -101,9 +106,290 @@ func TestEqual(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			got := Equal(tt.a, tt.b)
 			if got != tt.want {
 				t.Errorf("Equal(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsNone(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		typ  Type
+		want bool
+	}{
+		{"nil", nil, true},
+		{"None", None, true},
+		{"int64", Basics[Int64], false},
+		{"slice", &Slice{Element: Basics[Int64]}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := IsNone(tt.typ); got != tt.want {
+				t.Errorf("IsNone(%v) = %v, want %v", tt.typ, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsBool(t *testing.T) {
+	t.Parallel()
+
+	if !IsBool(Basics[Bool]) {
+		t.Error("IsBool(bool) = false")
+	}
+
+	if IsBool(Basics[Int64]) {
+		t.Error("IsBool(int64) = true")
+	}
+}
+
+func TestIsComplex(t *testing.T) {
+	t.Parallel()
+
+	for _, k := range []Kind{Complex32, Complex64, Complex128} {
+		if !IsComplex(Basics[k]) {
+			t.Errorf("IsComplex(%s) = false", Basics[k])
+		}
+	}
+
+	if IsComplex(Basics[Float64]) {
+		t.Error("IsComplex(float64) = true")
+	}
+}
+
+func TestIsFloat(t *testing.T) {
+	t.Parallel()
+
+	for _, k := range []Kind{Float16, Float32, Float64} {
+		if !IsFloat(Basics[k]) {
+			t.Errorf("IsFloat(%s) = false", Basics[k])
+		}
+	}
+
+	if IsFloat(Basics[Int64]) {
+		t.Error("IsFloat(int64) = true")
+	}
+}
+
+func TestIsInt(t *testing.T) {
+	t.Parallel()
+
+	for _, k := range []Kind{Int8, Int16, Int32, Int64, Int128} {
+		if !IsInt(Basics[k]) {
+			t.Errorf("IsInt(%s) = false", Basics[k])
+		}
+	}
+
+	if IsInt(Basics[Uint64]) {
+		t.Error("IsInt(uint64) = true")
+	}
+}
+
+func TestIsUint(t *testing.T) {
+	t.Parallel()
+
+	for _, k := range []Kind{Uint8, Uint16, Uint32, Uint64, Uint128} {
+		if !IsUint(Basics[k]) {
+			t.Errorf("IsUint(%s) = false", Basics[k])
+		}
+	}
+
+	if IsUint(Basics[Int64]) {
+		t.Error("IsUint(int64) = true")
+	}
+}
+
+func TestIsFixed(t *testing.T) {
+	t.Parallel()
+
+	if !IsFixed(Basics[Int32]) {
+		t.Error("IsFixed(int32) = false")
+	}
+
+	if !IsFixed(Basics[Uint16]) {
+		t.Error("IsFixed(uint16) = false")
+	}
+
+	if IsFixed(Basics[Float64]) {
+		t.Error("IsFixed(float64) = true")
+	}
+}
+
+func TestIsNumber(t *testing.T) {
+	t.Parallel()
+
+	if !IsNumber(Basics[Int64]) {
+		t.Error("IsNumber(int64) = false")
+	}
+
+	if !IsNumber(Basics[Float32]) {
+		t.Error("IsNumber(float32) = false")
+	}
+
+	if !IsNumber(Basics[Complex64]) {
+		t.Error("IsNumber(complex64) = false")
+	}
+
+	if !IsNumber(Basics[Uint128]) {
+		t.Error("IsNumber(uint128) = false")
+	}
+
+	if IsNumber(Basics[Bool]) {
+		t.Error("IsNumber(bool) = true")
+	}
+}
+
+func TestIsReal(t *testing.T) {
+	t.Parallel()
+
+	if !IsReal(Basics[Int64]) {
+		t.Error("IsReal(int64) = false")
+	}
+
+	if !IsReal(Basics[Uint32]) {
+		t.Error("IsReal(uint32) = false")
+	}
+
+	if !IsReal(Basics[Float64]) {
+		t.Error("IsReal(float64) = false")
+	}
+	// Complex is real via IsSigned.
+	if !IsReal(Basics[Complex64]) {
+		t.Error("IsReal(complex64) = false")
+	}
+
+	if IsReal(Basics[Bool]) {
+		t.Error("IsReal(bool) = true")
+	}
+}
+
+func TestIsSigned(t *testing.T) {
+	t.Parallel()
+
+	if !IsSigned(Basics[Int64]) {
+		t.Error("IsSigned(int64) = false")
+	}
+
+	if !IsSigned(Basics[Float32]) {
+		t.Error("IsSigned(float32) = false")
+	}
+
+	if !IsSigned(Basics[Complex128]) {
+		t.Error("IsSigned(complex128) = false")
+	}
+
+	if IsSigned(Basics[Uint64]) {
+		t.Error("IsSigned(uint64) = true")
+	}
+}
+
+func TestIsString(t *testing.T) {
+	t.Parallel()
+
+	if !IsString(Basics[ASCII]) {
+		t.Error("IsString(ascii) = false")
+	}
+
+	if !IsString(Basics[UTF8]) {
+		t.Error("IsString(utf8) = false")
+	}
+
+	if IsString(Basics[Int64]) {
+		t.Error("IsString(int64) = true")
+	}
+}
+
+func TestIsSummable(t *testing.T) {
+	t.Parallel()
+
+	if !IsSummable(Basics[Int64]) {
+		t.Error("IsSummable(int64) = false")
+	}
+
+	if !IsSummable(Basics[UTF8]) {
+		t.Error("IsSummable(utf8) = false")
+	}
+
+	if IsSummable(Basics[Bool]) {
+		t.Error("IsSummable(bool) = true")
+	}
+}
+
+func TestIsIterator(t *testing.T) {
+	t.Parallel()
+
+	if !IsIterator(Basics[UTF8]) {
+		t.Error("IsIterator(utf8) = false")
+	}
+
+	if !IsIterator(Basics[ASCII]) {
+		t.Error("IsIterator(ascii) = false")
+	}
+
+	if !IsIterator(&Slice{Element: Basics[Int64]}) {
+		t.Error("IsIterator([]int64) = false")
+	}
+
+	if !IsIterator(&Array{Element: Basics[Int64], Length: mockExpr{str: "3"}}) {
+		t.Error("IsIterator([3]int64) = false")
+	}
+
+	if !IsIterator(&Map{Key: Basics[UTF8], Value: Basics[Int64]}) {
+		t.Error("IsIterator(map) = false")
+	}
+
+	if !IsIterator(&Set{Element: Basics[UTF8]}) {
+		t.Error("IsIterator(set) = false")
+	}
+
+	if !IsIterator(&Enum{ValueType: Basics[UTF8]}) {
+		t.Error("IsIterator(enum) = false")
+	}
+
+	if IsIterator(Basics[Int64]) {
+		t.Error("IsIterator(int64) = true")
+	}
+}
+
+func TestIsComparable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		typ  Type
+		want bool
+	}{
+		{"basic int64", Basics[Int64], true},
+		{"basic bool", Basics[Bool], true},
+		{"reference", &Reference{Value: Basics[Int64]}, true},
+		{"enum", &Enum{ValueType: Basics[Int64]}, true},
+		{"struct with comparable fields", &Struct{Fields: []*Field{{Name: "x", Type: Basics[Int64]}}}, true},
+		{"struct with slice field", &Struct{Fields: []*Field{{Name: "x", Type: &Slice{Element: Basics[Int64]}}}}, false},
+		{"array of comparable", &Array{Element: Basics[Int64]}, true},
+		{"array of slice", &Array{Element: &Slice{Element: Basics[Int64]}}, false},
+		{"tuple of comparable", &Tuple{Types: []Type{Basics[Int64], Basics[UTF8]}}, true},
+		{"tuple with map", &Tuple{Types: []Type{Basics[Int64], &Map{Key: Basics[UTF8], Value: Basics[Int64]}}}, false},
+		{"slice", &Slice{Element: Basics[Int64]}, false},
+		{"map", &Map{Key: Basics[UTF8], Value: Basics[Int64]}, false},
+		{"set with comparable element", &Set{Element: Basics[Int64]}, true},
+		{"set with slice element", &Set{Element: &Slice{Element: Basics[Int64]}}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := IsComparable(tt.typ); got != tt.want {
+				t.Errorf("IsComparable(%v) = %v, want %v", tt.typ, got, tt.want)
 			}
 		})
 	}

@@ -56,6 +56,7 @@ func (s *Switch) stringTo(out *strings.Builder) {
 func (s *Switch) String() string {
 	var out strings.Builder
 	s.stringTo(&out)
+
 	return out.String()
 }
 
@@ -93,6 +94,7 @@ func (c *Case) stringTo(out *strings.Builder) {
 func (c *Case) String() string {
 	var out strings.Builder
 	c.stringTo(&out)
+
 	return out.String()
 }
 
@@ -127,5 +129,6 @@ func (d *Default) stringTo(out *strings.Builder) {
 func (d *Default) String() string {
 	var out strings.Builder
 	d.stringTo(&out)
+
 	return out.String()
 }

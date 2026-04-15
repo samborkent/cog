@@ -56,17 +56,23 @@ tokenLoop:
 			}
 
 			p.advance("findGlobals export") // consume export
+
 			exported = true
 		}
 
 		qualifier := ast.QualifierImmutable
 
 		switch p.this().Type {
+		case tokens.BitAnd:
+			// Reference receiver method.
+			p.advance("findGlobals &") // consume &
 		case tokens.Dynamic:
 			qualifier = ast.QualifierDynamic
+
 			p.advance("findGlobals dyn") // consume dyn
 		case tokens.Variable:
 			qualifier = ast.QualifierVariable
+
 			p.advance("findGlobals var") // consume var
 		}
 
@@ -83,6 +89,8 @@ tokenLoop:
 			switch p.next().Type {
 			case tokens.Colon, tokens.Declaration:
 				p.findGlobalDecl(ctx, exported, qualifier)
+			case tokens.Dot:
+				p.findGlobalMethod(ctx, exported)
 			case tokens.Tilde:
 				p.findGlobalType(ctx, exported)
 			case tokens.LT:
@@ -130,6 +138,7 @@ func (p *Parser) findScriptImports(ctx context.Context) {
 			p.parseImport()
 		case tokens.GoImport:
 			p.advance("findScriptImports goimport") // consume goimport
+
 			if p.this().Type == tokens.LParen {
 				p.skipGrouped(ctx)
 			}
@@ -157,6 +166,7 @@ func (p *Parser) preRegisterTypeNames(ctx context.Context) {
 			}
 
 			p.advance("preRegister export") // consume export
+
 			exported = true
 		}
 
@@ -192,6 +202,7 @@ func (p *Parser) preRegisterTypeNames(ctx context.Context) {
 			p.next().Type == tokens.LT {
 			p.advance("preRegister proc") // consume token
 			p.skipTypeParams(ctx)
+
 			continue
 		}
 
@@ -212,6 +223,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 		// Report redeclare error and advance past the identifier to avoid an infinite loop
 		p.error(p.this(), "cannot redeclare variable", "findGlobalDecl")
 		p.advance("findGlobalDecl redeclare") // consume identifier to make progress
+
 		return
 	}
 
@@ -313,7 +325,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 	}
 
 	// Parse optional type parameters: <T ~ any, K ~ comparable>
-	var typeParams []*types.TypeParam
+	var typeParams []*types.Alias
 
 	if p.this().Type == tokens.LT {
 		typeParams = p.parseTypeParams(ctx)
@@ -365,6 +377,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 			if p.this().Type != tokens.Identifier {
 				p.error(p.this(), "expected identifier in enum literal", "findGlobalType")
 				p.advance("findGlobalType enum recovery") // skip bad token
+
 				continue
 			}
 
@@ -465,6 +478,12 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 	if !preRegistered {
 		p.symbols.DefineGlobal(ident)
+	} else {
+		// For pre-registered types, we still need to register struct fields
+		// since they weren't available during pre-registration.
+		if alias.Kind() == types.StructKind {
+			p.symbols.Define(ident)
+		}
 	}
 }
 
@@ -510,6 +529,85 @@ func (p *Parser) skipGrouped(ctx context.Context) {
 
 		if parenIndex == 0 {
 			return
+		}
+	}
+}
+
+func (p *Parser) findGlobalMethod(ctx context.Context, exported bool) {
+	// Parse method declaration: Type.Method : proc() = ...
+	// Current token is the receiver type name.
+	receiverName := p.this().Literal
+	p.advance("findGlobalMethod receiver") // consume receiver type name
+
+	if p.this().Type != tokens.Dot {
+		p.error(p.this(), "expected . after receiver type name", "findGlobalMethod")
+		return
+	}
+
+	p.advance("findGlobalMethod .") // consume .
+
+	if p.this().Type != tokens.Identifier {
+		p.error(p.this(), "expected method name after .", "findGlobalMethod")
+		return
+	}
+
+	methodName := p.this().Literal
+
+	// Create a placeholder method identifier to register in the symbol table.
+	methodIdent := &ast.Identifier{
+		Token:     p.this(),
+		Name:      methodName,
+		Exported:  exported,
+		Qualifier: ast.QualifierMethod,
+		Global:    true,
+	}
+
+	p.advance("findGlobalMethod method") // consume identifier
+
+	if p.this().Type != tokens.Colon {
+		p.error(p.this(), "expected function type definition after method declaration", "findGlobalMethod")
+		return
+	}
+
+	p.advance("findGlobalMethod :") // consume :
+
+	procType := p.parseProcedureType(ctx, exported, true)
+	if procType == nil {
+		return
+	}
+
+	methodIdent.ValueType = procType
+
+	if p.this().Type != tokens.Assign {
+		p.error(p.this(), "expected function body assignment after method type definition", "findGlobalMethod")
+		return
+	}
+
+	p.advance("findGlobalMethod =") // consume =
+
+	p.skipScope(ctx)
+
+	// Register the method in the symbol table so it's available for forward references.
+	if err := p.symbols.DefineMethod(receiverName, methodIdent); err != nil {
+		p.error(p.this(), err.Error(), "findGlobalMethod")
+		return
+	}
+
+	// Attach the method to the receiver's underlying struct so that
+	// interface satisfaction checks can find it.
+	if sym, ok := p.symbols.Resolve(receiverName); ok && sym.Identifier.ValueType != nil {
+		method := &types.Method{
+			Name:      methodName,
+			Procedure: procType,
+		}
+
+		switch v := sym.Identifier.ValueType.(type) {
+		case *types.Struct:
+			v.Methods = append(v.Methods, method)
+		case *types.Alias:
+			if s, ok := v.Underlying().(*types.Struct); ok {
+				s.Methods = append(s.Methods, method)
+			}
 		}
 	}
 }

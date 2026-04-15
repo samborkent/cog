@@ -11,6 +11,7 @@ func TestExpressionExtended(t *testing.T) {
 
 	t.Run("index_expression", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	xs : []int64 = {1, 2, 3}
@@ -24,6 +25,7 @@ main : proc() = {
 
 	t.Run("boolean_or", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	if true || false {
@@ -37,6 +39,7 @@ main : proc() = {
 
 	t.Run("equality_not_equal", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 1
@@ -51,6 +54,7 @@ main : proc() = {
 
 	t.Run("comparison_gt", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 5
@@ -65,6 +69,7 @@ main : proc() = {
 
 	t.Run("comparison_lt", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 5
@@ -79,6 +84,7 @@ main : proc() = {
 
 	t.Run("comparison_gte", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 5
@@ -93,6 +99,7 @@ main : proc() = {
 
 	t.Run("comparison_lte", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 5
@@ -107,6 +114,7 @@ main : proc() = {
 
 	t.Run("term_addition", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 1 + 2 + 3
@@ -119,6 +127,7 @@ main : proc() = {
 
 	t.Run("term_subtraction", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 10 - 3
@@ -131,6 +140,7 @@ main : proc() = {
 
 	t.Run("factor_multiply", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 3 * 4
@@ -143,6 +153,7 @@ main : proc() = {
 
 	t.Run("factor_divide", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 10 / 2
@@ -160,6 +171,7 @@ main : proc() = {
 	x := -42
 	@print(x)
 }`)
+
 		d := stmtAs[*ast.Declaration](t, f, 0)
 		if d.Assignment.Expression == nil {
 			t.Fatal("expected expression in main body")
@@ -168,6 +180,7 @@ main : proc() = {
 
 	t.Run("not_operator", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := !true
@@ -180,6 +193,7 @@ main : proc() = {
 
 	t.Run("string_concatenation", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	s := "hello" + " " + "world"
@@ -192,6 +206,7 @@ main : proc() = {
 
 	t.Run("complex_expression", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := (1 + 2) * 3 - 4 / 2
@@ -204,6 +219,7 @@ main : proc() = {
 
 	t.Run("enum_dot_access", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 Color ~ enum<utf8> {
 	Red := "red",
@@ -220,6 +236,7 @@ main : proc() = {
 
 	t.Run("call_expression", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 add : func(a : int64, b : int64) int64 = {
 	return a + b
@@ -235,6 +252,7 @@ main : proc() = {
 
 	t.Run("nested_calls", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 double : func(x : int64) int64 = {
 	return x * 2
@@ -250,6 +268,7 @@ main : proc() = {
 
 	t.Run("grouped_expression", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := (1 + 2)
@@ -262,6 +281,7 @@ main : proc() = {
 
 	t.Run("bool_literal_false", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := false
@@ -278,6 +298,7 @@ func TestForStatementExtended(t *testing.T) {
 
 	t.Run("for_value_index", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	xs := @slice<int64>(3)
@@ -293,6 +314,7 @@ main : proc() = {
 
 	t.Run("for_value_only", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	xs := @slice<int64>(3)
@@ -311,6 +333,7 @@ func TestSwitchStatement(t *testing.T) {
 
 	t.Run("basic_switch", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := 1
@@ -328,6 +351,7 @@ main : proc() = {
 
 	t.Run("bool_switch", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	switch {
@@ -348,6 +372,7 @@ func TestBuiltinExtended(t *testing.T) {
 
 	t.Run("map_with_capacity", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	m := @map<utf8, int64>(10)
@@ -360,6 +385,7 @@ main : proc() = {
 
 	t.Run("set_with_capacity", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	s := @set<int64>(5)
@@ -372,6 +398,7 @@ main : proc() = {
 
 	t.Run("print_two_args", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	@print("x:")
@@ -384,6 +411,7 @@ main : proc() = {
 
 	t.Run("slice_with_capacity", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	xs := @slice<utf8>(0, 10)
@@ -396,6 +424,7 @@ main : proc() = {
 
 	t.Run("if_with_strings", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	x := @if(true, "yes", "no")

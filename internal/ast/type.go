@@ -14,7 +14,7 @@ type Type struct {
 
 	Token          tokens.Token
 	Identifier     *Identifier
-	TypeParameters []*types.TypeParam
+	TypeParameters []*types.Alias
 	Alias          types.Type
 }
 
@@ -40,6 +40,7 @@ func (s *Type) stringTo(out *strings.Builder) {
 			if i > 0 {
 				_, _ = out.WriteString(", ")
 			}
+
 			_, _ = out.WriteString(tp.Name)
 			_, _ = out.WriteString(" ~ ")
 			_, _ = out.WriteString(tp.ConstraintString())
@@ -55,5 +56,6 @@ func (s *Type) stringTo(out *strings.Builder) {
 func (s *Type) String() string {
 	var out strings.Builder
 	s.stringTo(&out)
+
 	return out.String()
 }

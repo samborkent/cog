@@ -35,5 +35,6 @@ func (f *File) stringTo(out *strings.Builder) {
 func (f *File) String() string {
 	var out strings.Builder
 	f.stringTo(&out)
+
 	return out.String()
 }

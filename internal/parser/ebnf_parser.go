@@ -219,11 +219,38 @@ func (p *Parser) factor(ctx context.Context, typeToken types.Type) ast.Expressio
 }
 
 func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression {
-	if p.match(tokens.Not, tokens.Minus) {
+	if p.match(tokens.Not, tokens.Minus, tokens.BitAnd) {
+		// Previous operator is stored, to disallow double references.
+		prevOperator := p.prev()
+		if prevOperator.Type == tokens.LParen && p.i >= 2 && p.tokens[p.i-2].Type == tokens.BitAnd {
+			prevOperator = p.tokens[p.i-2]
+		}
+
 		operator := p.this()
 		p.advance("unary operator") // consume operator
-		right := p.unary(ctx, typeToken)
 
+		exprType := typeToken
+
+		if operator.Type == tokens.BitAnd {
+			// Special reference handling.
+			if prevOperator.Type == tokens.BitAnd {
+				p.error(p.this(), "double reference is not allowed", "unary")
+				return nil
+			}
+
+			if typeToken != types.None && typeToken.Kind() == types.ReferenceKind {
+				// If a type is specified, we need to pass the reference underlying type to the expression parsing.
+				refType, ok := typeToken.(*types.Reference)
+				if !ok {
+					p.error(p.this(), "unable to assert reference type", "unary")
+					return nil
+				}
+
+				exprType = refType.Value
+			}
+		}
+
+		right := p.unary(ctx, exprType)
 		if right == nil {
 			return nil
 		}
@@ -317,7 +344,7 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expression {
 	if typeToken != nil {
 		aliasType, ok := typeToken.(*types.Alias)
-		if ok {
+		if ok && !aliasType.IsTypeParam() {
 			typeToken = aliasType.Underlying()
 		}
 
@@ -333,11 +360,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			// TODO: handle none type
 
 			typeToken = optionType.Value
-		case types.UnionKind:
-			// Handle union literal.
-			unionType, ok := typeToken.(*types.Union)
+		case types.EitherKind:
+			// Handle either literal.
+			eitherType, ok := typeToken.(*types.Either)
 			if !ok {
-				p.error(p.this(), "unable to assert union type", "primary")
+				p.error(p.this(), "unable to assert either type", "primary")
 				return nil
 			}
 
@@ -349,19 +376,22 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				return nil
 			}
 
-			isEither := types.Equal(expr.Type(), unionType.Either)
-			isOr := types.Equal(expr.Type(), unionType.Or)
+			var isRight bool
 
-			if !isEither && !isOr {
-				p.error(p.this(), fmt.Sprintf("expression of type %q not in union type %q", expr.Type().String(), unionType.String()), "primary")
+			if types.Equal(expr.Type(), eitherType.Left) {
+				// matched left
+			} else if types.Equal(expr.Type(), eitherType.Right) {
+				isRight = true
+			} else {
+				p.error(p.this(), fmt.Sprintf("expression of type %q not in either type %q", expr.Type().String(), eitherType.String()), "primary")
 				return nil
 			}
 
-			return &ast.UnionLiteral{
-				Token:     token,
-				UnionType: unionType,
-				Value:     expr,
-				Tag:       isOr,
+			return &ast.EitherLiteral{
+				Token:      token,
+				EitherType: eitherType,
+				Value:      expr,
+				IsRight:    isRight,
 			}
 		}
 	}
@@ -448,10 +478,28 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			p.error(p.this(), "undefined identifier", "primary")
+
 			return nil
 		}
 
 		p.advance("primary identifier") // consume identifier
+
+		if symbol.Identifier.Qualifier == ast.QualifierType && p.this().Type == tokens.LBrace {
+			// Named struct literal
+			literal := p.primary(ctx, symbol.Type())
+			if literal == nil {
+				return nil
+			}
+
+			literal.(*ast.StructLiteral).StructType = &types.Alias{
+				Name:     symbol.Identifier.Name,
+				Derived:  literal.Type(),
+				Exported: symbol.Identifier.Exported,
+				Global:   symbol.Identifier.Global,
+			}
+
+			return literal
+		}
 
 		switch p.this().Type {
 		case tokens.LParen:
@@ -465,13 +513,14 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			if len(procType.TypeParams) > 0 {
 				// Generic call with type inference.
 				args := p.parseCallArguments(ctx, procType)
+
 				typeArgs, returnType := p.inferTypeArgs(procType, args)
 				if typeArgs == nil {
 					return nil
 				}
 
 				return &ast.Call{
-					Identifier: symbol.Identifier,
+					Expression: symbol.Identifier,
 					Arguments:  args,
 					ReturnType: returnType,
 					TypeArgs:   typeArgs,
@@ -479,7 +528,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			return &ast.Call{
-				Identifier: symbol.Identifier,
+				Expression: symbol.Identifier,
 				Arguments:  p.parseCallArguments(ctx, procType),
 				ReturnType: procType.ReturnType,
 			}
@@ -510,50 +559,128 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			return &ast.Call{
-				Identifier: symbol.Identifier,
+				Expression: symbol.Identifier,
 				Arguments:  args,
 				ReturnType: returnType,
 				TypeArgs:   typeArgs,
 			}
 		case tokens.Dot:
-			// TODO: recursive selector expression
+			symbolType := symbol.Type()
+			kind := symbolType.Kind()
+
+			if symbol.Identifier.Qualifier == ast.QualifierType &&
+				kind != types.EnumKind && kind != types.ErrorKind {
+				p.error(p.this(), fmt.Sprintf("%q is a type, not a value: cannot invoke methods on types", symbol.Identifier.Name), "primary")
+				return nil
+			}
 
 			// Selector expression
 			selector := p.this()
 
-			p.advance("primary identifier .") // consume .
+			var (
+				expr     ast.Expression = symbol.Identifier
+				selected *ast.Identifier
+			)
 
-			if p.this().Type != tokens.Identifier {
-				p.error(p.this(), "expected field identifier after . selector", "primary")
-				return nil
+			for p.this().Type == tokens.Dot && p.this().Type != tokens.EOF {
+				p.advance("primary identifier .") // consume .
+
+				if p.this().Type != tokens.Identifier {
+					p.error(p.this(), "expected field identifier after . selector", "primary")
+					return nil
+				}
+
+				var typName string
+
+				switch kind {
+				case types.EnumKind, types.ErrorKind:
+					typName = symbol.Identifier.Name
+				default:
+					typName = symbolType.String()
+				}
+
+				field, ok := p.symbols.ResolveField(typName, p.this().Literal)
+				if !ok {
+					p.error(p.this(), fmt.Sprintf("undefined field %q for selector %q", p.this().Literal, typName), "primary")
+					return nil
+				}
+
+				field.Identifier.Token = p.this()
+
+				p.advance("primary identifier field") // consume field identifier
+
+				// For enum selectors, wrap the field type in an alias so the enum
+				// type can be inferred downstream.  For struct fields, preserve the
+				// original field type (e.g. float64) so arithmetic works correctly.
+				if field.Scope == EnumScope {
+					field.Identifier.ValueType = &types.Alias{
+						Name:     symbol.Identifier.Name,
+						Derived:  symbol.Type(),
+						Exported: symbol.Identifier.Exported,
+						Global:   symbol.Identifier.Global,
+					}
+				}
+
+				if selected != nil {
+					// If there is already a selected field, add it to selector expression.
+					expr = &ast.Selector{
+						Token:      selector,
+						Expression: expr,
+						Field:      selected,
+					}
+				}
+
+				// Change selected to the right most selected field.
+				selected = field.Identifier
+
+				// Update symbolType for chained selector expressions.
+				symbolType = field.Type()
 			}
 
-			field, ok := p.symbols.ResolveField(symbol.Identifier.Name, p.this().Literal)
-			if !ok {
-				p.error(p.this(), "undefined field", "primary")
-				return nil
+			expr = &ast.Selector{
+				Token:      selector,
+				Expression: expr,
+				Field:      selected,
 			}
 
-			field.Identifier.Token = p.this()
+			if p.match(tokens.LParen, tokens.LT) {
+				// Method call expression
+				if expr.Type().Kind() != types.ProcedureKind {
+					p.error(p.prev(), fmt.Sprintf("cannot call expression: expression of type %q is not a function", expr.Type()))
+					return nil
+				}
 
-			p.advance("primary identifier field") // consume field identifier
+				procType, ok := expr.Type().(*types.Procedure)
+				if !ok {
+					panic("unable to cast procedure kind expressions to type in call parsing")
+				}
 
-			// For enum selectors, wrap the field type in an alias so the enum
-			// type can be inferred downstream.  For struct fields, preserve the
-			// original field type (e.g. float64) so arithmetic works correctly.
-			if field.Scope == EnumScope {
-				field.Identifier.ValueType = &types.Alias{
-					Name:     symbol.Identifier.Name,
-					Derived:  symbol.Type(),
-					Exported: symbol.Identifier.Exported,
-					Global:   symbol.Identifier.Global,
+				var typeArgs []types.Type
+
+				if p.this().Type == tokens.LT {
+					typeArgs = p.parseTypeArguments(ctx)
+					if typeArgs == nil {
+						return nil
+					}
+				}
+
+				args := p.parseCallArguments(ctx, procType)
+				if args == nil {
+					return nil
+				}
+
+				return &ast.Call{
+					Expression: expr,
+					Arguments:  args,
+					ReturnType: procType.ReturnType,
+					TypeArgs:   typeArgs,
 				}
 			}
 
 			return &ast.Selector{
 				Token:      selector,
-				Identifier: symbol.Identifier,
-				Field:      field.Identifier,
+				Expression: expr,
+				Field:      selected,
 			}
 		default:
 			// Variable reference
@@ -600,8 +727,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			case *ast.TupleLiteral:
 				literal.TupleType = t
 				return literal
-			case *ast.UnionLiteral:
-				literal.UnionType = t
+			case *ast.EitherLiteral:
+				literal.EitherType = t
 				return literal
 			}
 
@@ -699,6 +826,31 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				ProcedureType: t,
 			}
 
+			// Re-enter type parameter scope so methods are visible in the body.
+			if len(t.TypeParams) > 0 {
+				p.symbols = NewEnclosedSymbolTable(p.symbols)
+
+				for _, tp := range t.TypeParams {
+					p.symbols.Define(&ast.Identifier{
+						Name:      tp.Name,
+						ValueType: tp,
+						Qualifier: ast.QualifierType,
+					})
+
+					// Register interface methods from the constraint.
+					iface, ok := tp.Underlying().(*types.Interface)
+					if ok {
+						for _, method := range iface.Methods {
+							p.symbols.DefineMethod(tp.Name, &ast.Identifier{
+								Name:      method.Name,
+								ValueType: method.Procedure,
+								Qualifier: ast.QualifierMethod,
+							})
+						}
+					}
+				}
+			}
+
 			if len(t.Parameters) > 0 {
 				// Enter parameter scope
 				p.symbols = NewEnclosedSymbolTable(p.symbols)
@@ -716,12 +868,39 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			prevReturnType := p.currentReturnType
 			p.currentReturnType = t.ReturnType
 
+			// If this is a method body, inject 'this' into scope.
+			if p.currentReceiver != nil {
+				receiverType := p.currentReceiver.ValueType
+
+				// Wrap in an alias so selector resolution can find
+				// fields by the receiver's name.
+				if _, isAlias := receiverType.(*types.Alias); !isAlias {
+					receiverType = &types.Alias{
+						Name:     p.currentReceiver.Name,
+						Derived:  receiverType,
+						Exported: p.currentReceiver.Exported,
+						Global:   p.currentReceiver.Global,
+					}
+				}
+
+				p.symbols.Define(&ast.Identifier{
+					Name:      "this",
+					ValueType: receiverType,
+					Qualifier: ast.QualifierImmutable,
+				})
+			}
+
 			body := p.parseBlockStatement(ctx)
 
 			p.currentReturnType = prevReturnType
 
 			if len(t.Parameters) > 0 {
 				// Leave parameter scope
+				p.symbols = p.symbols.Outer
+			}
+
+			if len(t.TypeParams) > 0 {
+				// Leave type parameter scope
 				p.symbols = p.symbols.Outer
 			}
 
@@ -941,6 +1120,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			p.advance("primary complex32 }") // consume }
 
 			realLit, realOk := realPart.(*ast.Float16Literal)
+
 			imagLit, imagOk := imagPart.(*ast.Float16Literal)
 			if !realOk || !imagOk {
 				p.error(token, "complex32 literal requires float16 literal values", "primary")
@@ -968,6 +1148,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			p.error(p.this(), fmt.Sprintf("unexpected type %q for expression starting with {", typeToken.String()), "primary")
+
 			return nil
 		}
 	default:

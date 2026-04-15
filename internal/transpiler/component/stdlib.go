@@ -40,5 +40,27 @@ func TildeUnion(names ...string) goast.Expr {
 			Y:  &goast.UnaryExpr{Op: gotoken.TILDE, X: &goast.Ident{Name: name}},
 		}
 	}
+
 	return expr
+}
+
+// JoinOr concatenates two OR-chains into a single flat left-associative chain.
+func JoinOr(left, right goast.Expr) goast.Expr {
+	leaves := append(orLeaves(left), orLeaves(right)...)
+
+	expr := leaves[0]
+	for _, leaf := range leaves[1:] {
+		expr = &goast.BinaryExpr{X: expr, Op: gotoken.OR, Y: leaf}
+	}
+
+	return expr
+}
+
+func orLeaves(e goast.Expr) []goast.Expr {
+	bin, ok := e.(*goast.BinaryExpr)
+	if !ok || bin.Op != gotoken.OR {
+		return []goast.Expr{e}
+	}
+
+	return append(orLeaves(bin.X), orLeaves(bin.Y)...)
 }

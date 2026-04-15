@@ -27,6 +27,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 			Exported: exported,
 			Global:   global,
 		}
+
 		return p.parseErrorType(ctx, ident)
 	case tokens.Function, tokens.Procedure:
 		return p.parseProcedureType(ctx, exported, global)
@@ -34,53 +35,28 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 
 	typ := p.parseType(ctx)
 
+	// Propagate exported/global flags to tuple types parsed by parseType.
+	if t, ok := typ.(*types.Tuple); ok {
+		t.Exported = exported
+		t.Global = global
+	}
+
 	switch p.this().Type {
-	case tokens.BitAnd:
-		// Tuple
-		tuple := &types.Tuple{
-			Types:    make([]types.Type, 1, types.TupleMaxTypes),
+	case tokens.BitXor:
+		// Either (concrete two-type union with Left/Right)
+		p.advance("parseCombinedType either ^") // consume ^
+
+		right := p.parseType(ctx)
+		if right == nil {
+			return nil
+		}
+
+		return &types.Either{
+			Left:     typ,
+			Right:    right,
 			Exported: exported,
 			Global:   global,
 		}
-
-		// Put parsed type as first type.
-		tuple.Types[0] = typ
-
-		for p.this().Type == tokens.BitAnd {
-			p.advance("parseCombinedType tuple &") // consume &
-
-			next := p.parseType(ctx)
-			if next != nil {
-				tuple.Types = append(tuple.Types, next)
-			}
-		}
-
-		return tuple
-	case tokens.Pipe:
-		// Union
-		union := &types.Union{
-			Either:   typ,
-			Exported: exported,
-		}
-
-		if p.this().Type != tokens.Pipe {
-			p.error(p.this(), "expected | in union type declaration", "parseCombinedType")
-			return nil
-		}
-
-		p.advance("parseCombinedType union |") // consume |
-
-		next := p.parseType(ctx)
-		if next != nil {
-			union.Or = next
-		}
-
-		if p.this().Type == tokens.Pipe {
-			p.error(p.this(), "union can only contain two types", "parseCombinedType")
-			return nil
-		}
-
-		return union
 	case tokens.Not:
 		// Result type: T ! E
 		p.advance("parseCombinedType result !") // consume !
@@ -109,8 +85,62 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 	return typ
 }
 
+// canStartType reports whether the current token can begin a type expression.
+func (p *Parser) canStartType() bool {
+	switch p.this().Type {
+	case tokens.Interface, tokens.LBracket, tokens.LParen, tokens.Map, tokens.Set,
+		tokens.Struct, tokens.BitAnd, tokens.Function, tokens.Procedure:
+		return true
+	case tokens.Identifier:
+		return true
+	}
+	// Check for built-in type keywords (int64, utf8, etc.).
+	_, ok := types.Lookup[p.this().Type]
+
+	return ok
+}
+
 func (p *Parser) parseType(ctx context.Context) types.Type {
 	switch p.this().Type {
+	case tokens.Interface:
+		return p.parseInterface(ctx)
+	case tokens.LParen:
+		// Tuple type: (T1, T2, ...)
+		p.advance("parseType (") // consume (
+
+		first := p.parseType(ctx)
+		if first == nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.Comma {
+			p.error(p.this(), "expected ',' after first tuple element type", "parseType")
+			return nil
+		}
+
+		tuple := &types.Tuple{
+			Types: make([]types.Type, 1, types.TupleMaxTypes),
+		}
+
+		tuple.Types[0] = first
+
+		for p.this().Type == tokens.Comma {
+			p.advance("parseType tuple ,") // consume ,
+
+			next := p.parseType(ctx)
+			if next != nil {
+				tuple.Types = append(tuple.Types, next)
+			}
+		}
+
+		if p.this().Type != tokens.RParen {
+			p.error(p.this(), "expected ')' to close tuple type", "parseType")
+			return nil
+		}
+
+		p.advance("parseType )") // consume )
+
+		return tuple
 	case tokens.LBracket:
 		p.advance("parseType [") // consume [
 
@@ -232,6 +262,24 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		return &types.Set{Element: elemType}
 	case tokens.Struct:
 		return p.parseStruct(ctx)
+	case tokens.BitAnd:
+		// Reference type parsing
+		p.advance("parseType &") // consume &
+
+		valType := p.parseType(ctx)
+		if valType == nil {
+			return nil
+		}
+
+		// TODO: check if this is correct.
+		if types.IsPointer(valType) {
+			p.error(p.this(), fmt.Sprintf("reference of pointer type %q not allowed", valType.Kind()), "parseType")
+			return nil
+		}
+
+		return &types.Reference{
+			Value: valType,
+		}
 	}
 
 	typ, ok := types.Lookup[p.this().Type]
@@ -294,10 +342,10 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		ident := typeSymbol.Identifier
 
 		// If the symbol is a type parameter (inside a generic alias body),
-		// return the TypeParam directly.
-		if tp, ok := ident.ValueType.(*types.TypeParam); ok {
+		// return the type parameter alias directly.
+		if alias, ok := ident.ValueType.(*types.Alias); ok && alias.IsTypeParam() {
 			p.advance("parseType typeparam") // consume type param name
-			return tp
+			return alias
 		}
 
 		if types.IsNone(ident.ValueType) {
@@ -308,7 +356,8 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 			})
 		} else {
 			// Copy type parameters from the original type if it's an alias
-			var typeParams []*types.TypeParam
+			var typeParams []*types.Alias
+
 			if originalAlias, ok := ident.ValueType.(*types.Alias); ok {
 				typeParams = originalAlias.TypeParams
 			}
@@ -398,6 +447,7 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 	if len(typeArgs) != len(genAlias.TypeParams) {
 		p.error(p.this(), fmt.Sprintf("wrong number of type arguments for %q: expected %d, got %d",
 			alias.Name, len(genAlias.TypeParams), len(typeArgs)), "instantiateGenericAlias")
+
 		return nil
 	}
 
@@ -407,6 +457,7 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 		if !tp.SatisfiedBy(arg) {
 			p.error(p.this(), fmt.Sprintf("type argument %q does not satisfy constraint %q for parameter %q",
 				arg.String(), tp.ConstraintString(), tp.Name), "instantiateGenericAlias")
+
 			return nil
 		}
 	}
@@ -420,6 +471,58 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 	return genAlias.Instantiate(argMap)
 }
 
+func (p *Parser) parseInterface(ctx context.Context) types.Type {
+	p.advance("parseInterface interface") // consume interface
+
+	if p.this().Type != tokens.LBrace {
+		p.error(p.this(), "expected { after interface declaration", "parseInterface")
+		return nil
+	}
+
+	p.advance("parseInterface {") // consume {
+
+	methods := []*types.Method{}
+
+	for p.this().Type != tokens.RBrace {
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		if p.this().Type != tokens.Identifier {
+			p.error(p.this(), "unexpected token found in interface declaration", "parseInterface")
+			return nil
+		}
+
+		method := &types.Method{
+			Name: p.this().Literal,
+		}
+
+		p.advance("parseInterface identifier") // consume identifier
+
+		if p.this().Type != tokens.Colon {
+			p.error(p.this(), "expected : after method name in interface method", "parseInterface")
+			return nil
+		}
+
+		p.advance("parseInterface :") // consume :
+
+		methodType := p.parseProcedureType(ctx, true, false)
+		if methodType == nil {
+			return nil
+		}
+
+		method.Procedure = methodType
+
+		methods = append(methods, method)
+	}
+
+	p.advance("parseInterface }") // consume }
+
+	return &types.Interface{
+		Methods: methods,
+	}
+}
+
 func (p *Parser) parseStruct(ctx context.Context) types.Type {
 	p.advance("parseStruct struct") // consume struct
 
@@ -431,6 +534,8 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 	p.advance("parseStruct {") // consume {
 
 	fields := []*types.Field{}
+
+	isComplex := false
 
 	for p.this().Type != tokens.RBrace {
 		if ctx.Err() != nil {
@@ -450,10 +555,15 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 						return nil
 					}
 
+					if field.PointerLike {
+						isComplex = true
+					}
+
 					fields = append(fields, field)
 				}
 
 				p.advance("parseStruct export )") // consume )
+
 				continue
 			}
 
@@ -479,7 +589,8 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 	p.advance("parseStruct }") // consume }
 
 	return &types.Struct{
-		Fields: fields,
+		Fields:    fields,
+		IsComplex: isComplex,
 	}
 }
 
@@ -498,7 +609,18 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 
 	p.advance("parseField :") // consume :
 
-	field.Type = p.parseCombinedType(ctx, exported, false)
+	fieldType := p.parseCombinedType(ctx, exported, false)
+	if fieldType == nil {
+		return nil
+	}
+
+	field.Type = fieldType
+
+	if field.Type.Kind() == types.StructKind {
+		field.PointerLike = field.Type.Underlying().(*types.Struct).IsComplex
+	} else {
+		field.PointerLike = types.IsPointer(field.Type)
+	}
 
 	return field
 }
@@ -614,6 +736,18 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 
 	if p.this().Type == tokens.Assign {
 		// No return type.
+		return procType
+	}
+
+	// Only attempt to parse a return type when the current token can
+	// actually begin a type expression. Without this check, contexts where
+	// a procedure type has no return type and no '=' (interface methods,
+	// struct proc fields, etc.) would incorrectly try to parse the next
+	// token (e.g. '}') as a return type.
+	//
+	// This mirrors the Go specification grammar where Result is optional:
+	//   Signature = Parameters [ Result ]
+	if !p.canStartType() {
 		return procType
 	}
 

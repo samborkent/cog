@@ -314,4 +314,446 @@ main : proc() = {
 }`)
 		mustContain(t, got, ".Neg()")
 	})
+
+	t.Run("struct_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+Point ~ struct {
+	x : int32
+	y : int32
+}
+main : proc() = {
+	p : Point = {
+		x = 1,
+		y = 2,
+	}
+	@print(p.x)
+}`)
+		mustContain(t, got, "x:")
+		mustContain(t, got, "y:")
+	})
+
+	t.Run("exported_struct_field", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+Point ~ struct {
+	export x : int32
+	y : int32
+}
+main : proc() = {
+	p : Point = {
+		x = 1,
+		y = 2,
+	}
+	@print(p.x)
+}`)
+		mustContain(t, got, "X:")
+		mustContain(t, got, "y:")
+	})
+
+	t.Run("option_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	var x : int64? = 42
+	if x? {
+		@print(x)
+	}
+}`)
+		mustContain(t, got, "Set")
+		mustContain(t, got, "Value")
+	})
+
+	t.Run("option_question_mark", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	var x : int64? = 42
+	ok := x?
+	@print(ok)
+}`)
+		mustContain(t, got, ".Set")
+	})
+
+	t.Run("result_error_access", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+MyErr ~ error { Fail }
+main : proc() = {
+	var r : int64 ! MyErr = 1
+	if !r? {
+		e := r!
+		@print(e)
+	}
+}`)
+		mustContain(t, got, ".Error")
+	})
+
+	t.Run("map_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	m : map<utf8, int64> = {
+		"one" : 1,
+		"two" : 2,
+	}
+	@print(m)
+}`)
+		mustContain(t, got, "map[string]int64")
+	})
+
+	t.Run("array_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	a : [3]int32 = {1, 2, 3}
+	@print(a)
+}`)
+		mustContain(t, got, "[3]int32")
+	})
+
+	t.Run("slice_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	xs : []int64 = {1, 2, 3}
+	@print(xs)
+}`)
+		mustContain(t, got, "[]int64")
+	})
+
+	t.Run("set_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	s : set<int64> = {1, 2, 3}
+	@print(s)
+}`)
+		mustContain(t, got, "cog.Set")
+	})
+
+	t.Run("uint8_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : uint8 = 42
+main : proc() = {}`)
+		mustContain(t, got, "42")
+	})
+
+	t.Run("uint16_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : uint16 = 42
+main : proc() = {}`)
+		mustContain(t, got, "42")
+	})
+
+	t.Run("uint32_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : uint32 = 42
+main : proc() = {}`)
+		mustContain(t, got, "42")
+	})
+
+	t.Run("int8_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : int8 = 42
+main : proc() = {}`)
+		mustContain(t, got, "42")
+	})
+
+	t.Run("int16_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : int16 = 42
+main : proc() = {}`)
+		mustContain(t, got, "42")
+	})
+
+	t.Run("int32_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : int32 = 42
+main : proc() = {}`)
+		mustContain(t, got, "42")
+	})
+
+	t.Run("float32_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : float32 = 3.14
+main : proc() = {}`)
+		mustContain(t, got, "3.14")
+	})
+
+	t.Run("float64_literal", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+x : float64 = 3.14
+main : proc() = {}`)
+		mustContain(t, got, "3.14")
+	})
+
+	t.Run("multiline_string", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, "package p\ns := \"hello\\nworld\"\nmain : proc() = {}")
+		mustContain(t, got, "hello")
+	})
+}
+
+func TestConvertBinaryOperator(t *testing.T) {
+	t.Parallel()
+
+	t.Run("comparison_gt", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := 5
+	if x > 3 {
+		@print("gt")
+	}
+}`)
+		mustContain(t, got, ">")
+	})
+
+	t.Run("comparison_lt", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := 5
+	if x < 3 {
+		@print("lt")
+	}
+}`)
+		mustContain(t, got, "<")
+	})
+
+	t.Run("comparison_gte", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := 5
+	if x >= 3 {
+		@print("gte")
+	}
+}`)
+		mustContain(t, got, ">=")
+	})
+
+	t.Run("comparison_lte", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := 5
+	if x <= 3 {
+		@print("lte")
+	}
+}`)
+		mustContain(t, got, "<=")
+	})
+
+	t.Run("equality_ne", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := 1
+	if x != 2 {
+		@print("ne")
+	}
+}`)
+		mustContain(t, got, "!=")
+	})
+
+	t.Run("boolean_and", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	if true && false {
+		@print("and")
+	}
+}`)
+		mustContain(t, got, "&&")
+	})
+
+	t.Run("boolean_or", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	if true || false {
+		@print("or")
+	}
+}`)
+		mustContain(t, got, "||")
+	})
+
+	t.Run("multiply", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := 3 * 4
+	@print(x)
+}`)
+		mustContain(t, got, "*")
+	})
+
+	t.Run("divide", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := 10 / 2
+	@print(x)
+}`)
+		mustContain(t, got, "/")
+	})
+
+	t.Run("subtract", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := 10 - 3
+	@print(x)
+}`)
+		mustContain(t, got, "-")
+	})
+}
+
+func TestConvertUnaryOperator(t *testing.T) {
+	t.Parallel()
+
+	t.Run("negation", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := -42
+	@print(x)
+}`)
+		mustContain(t, got, "-42")
+	})
+
+	t.Run("not", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := !true
+	@print(x)
+}`)
+		mustContain(t, got, "!")
+	})
+}
+
+func TestConvertReassignment(t *testing.T) {
+	t.Parallel()
+
+	t.Run("variable_reassign", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	var x : int64 = 0
+	x = x + 1
+	@print(x)
+}`)
+		mustContain(t, got, "x + 1")
+	})
+}
+
+func TestConvertIndex(t *testing.T) {
+	t.Parallel()
+
+	got := transpile(t, `package p
+main : proc() = {
+	xs : []int64 = {1, 2, 3}
+	x := xs[0]
+	@print(x)
+}`)
+	mustContain(t, got, "[0]")
+}
+
+func TestConvertSwitch(t *testing.T) {
+	t.Parallel()
+
+	got := transpile(t, `package p
+main : proc() = {
+	x := 1
+	switch x {
+	case 1:
+		@print("one")
+	case 2:
+		@print("two")
+	}
+}`)
+	mustContain(t, got, "switch")
+	mustContain(t, got, "case")
+}
+
+func TestConvertForRange(t *testing.T) {
+	t.Parallel()
+
+	got := transpile(t, `package p
+main : proc() = {
+	xs := @slice<int64>(3)
+	for v in xs {
+		@print(v)
+	}
+}`)
+	mustContain(t, got, "range")
+}
+
+func TestConvertForRangeIndex(t *testing.T) {
+	t.Parallel()
+
+	got := transpile(t, `package p
+main : proc() = {
+	xs := @slice<int64>(3)
+	for v, i in xs {
+		@print(i)
+		@print(v)
+	}
+}`)
+	mustContain(t, got, "range")
+}
+
+func TestConvertEnum(t *testing.T) {
+	t.Parallel()
+
+	got := transpile(t, `package p
+Color ~ enum<utf8> {
+	Red := "red",
+	Blue := "blue",
+}
+main : proc() = {
+	c := Color.Red
+	@print(c)
+}`)
+	mustContain(t, got, "Color")
+	mustContain(t, got, "Red")
+}
+
+func TestConvertMapBuiltin(t *testing.T) {
+	t.Parallel()
+
+	t.Run("with_capacity", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	m := @map<utf8, int64>(10)
+	@print(m)
+}`)
+		mustContain(t, got, "make(map[string]int64,")
+	})
+}
+
+func TestConvertSetBuiltin(t *testing.T) {
+	t.Parallel()
+
+	t.Run("with_capacity", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	s := @set<int64>(5)
+	@print(s)
+}`)
+		mustContain(t, got, "make(cog.Set[int64],")
+	})
 }
