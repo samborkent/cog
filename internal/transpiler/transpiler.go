@@ -83,6 +83,7 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	for id := range t.files {
 		fileIDs = append(fileIDs, id)
 	}
+
 	slices.Sort(fileIDs)
 
 	// Count total statements across all files.
@@ -161,6 +162,7 @@ func (t *Transpiler) currentFileNeedsContext() bool {
 
 	// Find the file ID for the current file
 	var fileID uint16
+
 	for id, f := range t.files {
 		if f == t.file {
 			fileID = id
@@ -181,6 +183,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 	for id := range t.files {
 		fileIDs = append(fileIDs, id)
 	}
+
 	slices.Sort(fileIDs)
 
 	pkgName := t.files[fileIDs[0]].Package.Identifier.Name
@@ -269,6 +272,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 	for id := range t.files {
 		fileIDs = append(fileIDs, id)
 	}
+
 	slices.Sort(fileIDs)
 
 	for _, id := range fileIDs {
@@ -332,6 +336,7 @@ func (t *Transpiler) predeclareGlobals() error {
 	for id := range t.files {
 		fileIDs = append(fileIDs, id)
 	}
+
 	slices.Sort(fileIDs)
 
 	for _, id := range fileIDs {

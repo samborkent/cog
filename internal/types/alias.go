@@ -120,6 +120,7 @@ func SubstituteType(t Type, args map[string]Type) Type {
 		}
 
 		v.ensureResolved()
+
 		return SubstituteType(v.Derived, args)
 	case *Slice:
 		return &Slice{Element: SubstituteType(v.Element, args)}

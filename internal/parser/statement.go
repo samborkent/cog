@@ -97,6 +97,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		case tokens.BitAnd:
 			// Reference method receiver.
 			reference = true
+
 			p.advance("parseStatement export ref") // consume &
 
 			fallthrough

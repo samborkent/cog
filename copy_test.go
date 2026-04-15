@@ -14,7 +14,9 @@ func TestCopy(t *testing.T) {
 		// Test int
 		t.Run("int", func(t *testing.T) {
 			t.Parallel()
+
 			original := 42
+
 			result := Copy(original)
 			if result != original {
 				t.Errorf("Copy(%v) = %v, want %v", original, result, original)
@@ -24,7 +26,9 @@ func TestCopy(t *testing.T) {
 		// Test string
 		t.Run("string", func(t *testing.T) {
 			t.Parallel()
+
 			original := "hello"
+
 			result := Copy(original)
 			if result != original {
 				t.Errorf("Copy(%v) = %v, want %v", original, result, original)
@@ -34,7 +38,9 @@ func TestCopy(t *testing.T) {
 		// Test bool
 		t.Run("bool", func(t *testing.T) {
 			t.Parallel()
+
 			original := true
+
 			result := Copy(original)
 			if result != original {
 				t.Errorf("Copy(%v) = %v, want %v", original, result, original)
@@ -44,7 +50,9 @@ func TestCopy(t *testing.T) {
 		// Test float64
 		t.Run("float64", func(t *testing.T) {
 			t.Parallel()
+
 			original := 3.14
+
 			result := Copy(original)
 			if result != original {
 				t.Errorf("Copy(%v) = %v, want %v", original, result, original)
@@ -54,6 +62,7 @@ func TestCopy(t *testing.T) {
 
 	t.Run("slice_basic_type", func(t *testing.T) {
 		t.Parallel()
+
 		original := []int{1, 2, 3, 4, 5}
 		copied := Copy(original)
 
@@ -69,6 +78,7 @@ func TestCopy(t *testing.T) {
 
 		// Modifying copy should not affect original
 		copied[0] = 999
+
 		if original[0] != 1 {
 			t.Error("Modifying copy affected original slice")
 		}
@@ -107,6 +117,7 @@ func TestCopy(t *testing.T) {
 
 	t.Run("map_basic_type", func(t *testing.T) {
 		t.Parallel()
+
 		original := map[string]int{
 			"a": 1,
 			"b": 2,
@@ -121,12 +132,14 @@ func TestCopy(t *testing.T) {
 
 		// Modifying copy should not affect original
 		copied["a"] = 999
+
 		if original["a"] != 1 {
 			t.Error("Modifying copy affected original map")
 		}
 
 		// Adding to copy should not affect original
 		copied["d"] = 4
+
 		if _, exists := original["d"]; exists {
 			t.Error("Adding to copy affected original map")
 		}
@@ -155,6 +168,7 @@ func TestCopy(t *testing.T) {
 		person := copied["alice"]
 		person.Name = "Charlie"
 		copied["alice"] = person
+
 		if original["alice"].Name != "Alice" {
 			t.Error("Modifying copy affected original map")
 		}
@@ -306,6 +320,7 @@ func TestCopy(t *testing.T) {
 		t.Parallel()
 
 		var original []int
+
 		copied := Copy(original)
 
 		// Should have same values (both nil)
@@ -327,7 +342,7 @@ func TestCopy(t *testing.T) {
 			Age      int
 			Address  *Address
 			Friends  []string
-			Metadata map[string]interface{}
+			Metadata map[string]any
 		}
 
 		original := Person{
@@ -338,7 +353,7 @@ func TestCopy(t *testing.T) {
 				City:   "New York",
 			},
 			Friends: []string{"Bob", "Charlie"},
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"role":   "developer",
 				"skills": []string{"go", "python"},
 			},
@@ -373,6 +388,7 @@ func TestCopy(t *testing.T) {
 
 		skills := copied.Metadata["skills"].([]string)
 		skills[0] = "java"
+
 		if original.Metadata["skills"].([]string)[0] != "go" {
 			t.Error("Modifying nested slice in copied.Metadata affected original")
 		}

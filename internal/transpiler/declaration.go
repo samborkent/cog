@@ -66,6 +66,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			if len(t.symbols.dynamics) > 0 {
 				t.symbols.Define("dyn")
 			}
+
 			if t.currentFileNeedsContext() {
 				t.symbols.Define("ctx")
 			}

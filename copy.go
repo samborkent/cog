@@ -38,6 +38,7 @@ func copyVal(v reflect.Value) reflect.Value {
 	case reflect.Pointer:
 		pointer := reflect.New(v.Type().Elem())
 		pointer.Elem().Set(copyVal(v.Elem()))
+
 		return pointer
 	case reflect.Slice:
 		if v.IsNil() {

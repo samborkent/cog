@@ -96,6 +96,7 @@ func (p *Parser) canStartType() bool {
 	}
 	// Check for built-in type keywords (int64, utf8, etc.).
 	_, ok := types.Lookup[p.this().Type]
+
 	return ok
 }
 

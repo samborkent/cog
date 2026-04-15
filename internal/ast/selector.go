@@ -49,6 +49,7 @@ func (e *Selector) LeftMost() (*Identifier, error) {
 
 	// Find left-most identifier of selector.
 	current := e
+
 selectorLoop:
 	for {
 		switch sel := current.Expression.(type) {

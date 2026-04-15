@@ -577,8 +577,10 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			// Selector expression
 			selector := p.this()
 
-			var expr ast.Expression = symbol.Identifier
-			var selected *ast.Identifier
+			var (
+				expr     ast.Expression = symbol.Identifier
+				selected *ast.Identifier
+			)
 
 			for p.this().Type == tokens.Dot && p.this().Type != tokens.EOF {
 				p.advance("primary identifier .") // consume .

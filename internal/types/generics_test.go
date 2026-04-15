@@ -136,7 +136,6 @@ func TestGenericConstraints(t *testing.T) {
 			// 	// comparable by kind; skip basic-type check.
 			// 	continue
 			// }
-
 			if !IsComparable(member) {
 				t.Errorf("%s is in comparable but does not support ==", member)
 			}

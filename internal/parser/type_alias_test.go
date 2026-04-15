@@ -136,6 +136,7 @@ Handler ~ struct {
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
+
 		s, ok := ta.Alias.Underlying().(*types.Struct)
 		if !ok {
 			t.Fatal("expected *types.Struct")

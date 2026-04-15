@@ -255,6 +255,7 @@ Adder.Add : func(n : int64) int64 = {
 main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
+
 		procType, ok := m.Declaration.Assignment.Identifier.ValueType.(*types.Procedure)
 		if !ok {
 			t.Fatal("expected procedure type")
