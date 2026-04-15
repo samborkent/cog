@@ -70,12 +70,14 @@ builtin_statement
     = "@", IDENTIFIER, [ type_arguments ], "(", call_arguments, ")";
 
 exported_statement
-    = IDENTIFIER, ( ":", typed_declaration
+    = [ "&" ], IDENTIFIER, ".", IDENTIFIER, ":", typed_declaration  (* exported method, optionally by reference *)
+    | IDENTIFIER, ( ":", typed_declaration
                    | ":=", declaration
                    | [ type_param_list ], "~", combined_type );
 
 identifier_statement
-    = IDENTIFIER, ( "=", expression                              (* assignment *)
+    = [ "&" ], IDENTIFIER, ".", IDENTIFIER, ":", typed_declaration  (* method declaration, optionally by reference *)
+    | IDENTIFIER, ( "=", expression                              (* assignment *)
                   | ":", ( labeled_statement | typed_declaration ) (* typed decl or label *)
                   | ":=", expression                              (* inferred decl *)
                   | [ type_param_list ], "~", combined_type       (* type alias, possibly generic *)
@@ -141,6 +143,8 @@ block
 
 combined_type
     = enum_type
+    | error_type
+    | interface_type
     | procedure_type
     | type, "&", type, { "&", type }     (* tuple *)
     | type, "|", type                    (* union, exactly 2 types *)
@@ -153,6 +157,15 @@ enum_type
 enum_value
     = IDENTIFIER, ":=", expression;
 
+error_type
+    = "error", [ "<", type, ">" ], "{", { enum_value, [ "," ] }, "}";
+
+interface_type
+    = "interface", "{", { interface_method }, "}";
+
+interface_method
+    = IDENTIFIER, ":", procedure_type;
+
 procedure_type
     = ( "proc" | "func" ), [ type_param_list ], "(", [ parameter_list ], ")", [ combined_type ];
 
@@ -163,7 +176,8 @@ type_param
     = IDENTIFIER, "~", type_constraint;
 
 type_constraint
-    = "any" | "number" | "ordered" | "comparable" | "string" | "int" | "uint" | "float" | "complex" | "signed"
+    = "any" | "number" | "ordered" | "comparable" | "string" | "int" | "uint" | "float" | "complex" | "signed" | "summable"
+    | IDENTIFIER                                       (* interface or type alias constraint *)
     | type, { "|", type };                             (* union constraint *)
 
 parameter_list
@@ -230,10 +244,11 @@ unary
 primary
     = INT | FLOAT | STRING
     | "true" | "false"
+    | "this"                                            (* receiver reference in method bodies *)
     | "(", expression, ")"                             (* grouped expression *)
     | builtin_expression
     | IDENTIFIER, ( [ type_arguments ], "(", call_arguments, ")"  (* function call, possibly generic *)
-                  | ".", IDENTIFIER, [ "(", call_arguments, ")" ]  (* selector or package call *)
+                  | ".", IDENTIFIER, [ "(", call_arguments, ")" ]  (* selector or method call *)
                   | )                                   (* variable reference *)
     | typed_literal
     | composite_literal;
@@ -248,6 +263,23 @@ primary
    - if val?  { val is safe }       — direct check, persists after if block.
    - if !val? { val! is safe }      — negated check, scoped to block only.
    - if !val? { ... } else { val }  — value safe in else of negated check.
+*)
+
+
+(* === this keyword (semantic, not syntactic) === *)
+(* "this" is an identifier injected into scope only inside method bodies.
+   It refers to the receiver instance of the enclosing method.
+   Using "this" outside a method body produces an "undefined identifier" error.
+   "this" supports selector access: this.field, this.method().
+*)
+
+
+(* === Interface satisfaction (semantic, not syntactic) === *)
+(* A struct type satisfies an interface if it has methods for every method
+   declared in the interface, with matching name and procedure signature.
+   This is checked when a type argument is bound to a type parameter whose
+   constraint is (or contains) an interface type.
+   Only struct types can satisfy interfaces — other concrete types cannot.
 *)
 
 

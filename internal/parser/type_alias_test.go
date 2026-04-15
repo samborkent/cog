@@ -125,6 +125,31 @@ main : proc() = {}`)
 		}
 	})
 
+	t.Run("struct_with_proc_field_no_return", func(t *testing.T) {
+		t.Parallel()
+
+		// proc() with no return type and no '=' must not confuse the parser.
+		f := parse(t, `package p
+Handler ~ struct {
+	callback : proc()
+}
+main : proc() = {}`)
+
+		ta := stmtAs[*ast.Type](t, f, 0)
+		s, ok := ta.Alias.Underlying().(*types.Struct)
+		if !ok {
+			t.Fatal("expected *types.Struct")
+		}
+
+		if len(s.Fields) != 1 {
+			t.Fatalf("expected 1 field, got %d", len(s.Fields))
+		}
+
+		if s.Fields[0].Type.Kind() != types.ProcedureKind {
+			t.Errorf("expected ProcedureKind field, got %s", s.Fields[0].Type.Kind())
+		}
+	})
+
 	t.Run("enum", func(t *testing.T) {
 		t.Parallel()
 		f := parse(t, `package p
@@ -427,5 +452,135 @@ main : proc() = {
 		if len(f.Statements) < 2 {
 			t.Fatal("expected at least 2 statements")
 		}
+	})
+}
+
+func TestParseInterface(t *testing.T) {
+	t.Parallel()
+
+	t.Run("single_method", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+Stringer ~ interface {
+	String : func() utf8
+}
+main : proc() = {}`)
+
+		ta := stmtAs[*ast.Type](t, f, 0)
+		if ta.Identifier.Name != "Stringer" {
+			t.Errorf("expected name 'Stringer', got %q", ta.Identifier.Name)
+		}
+
+		if ta.Alias.Kind() != types.InterfaceKind {
+			t.Errorf("expected InterfaceKind, got %s", ta.Alias.Kind())
+		}
+
+		iface, ok := ta.Alias.(*types.Interface)
+		if !ok {
+			t.Fatal("expected *types.Interface")
+		}
+
+		if len(iface.Methods) != 1 {
+			t.Fatalf("expected 1 method, got %d", len(iface.Methods))
+		}
+
+		if iface.Methods[0].Name != "String" {
+			t.Errorf("expected method name 'String', got %q", iface.Methods[0].Name)
+		}
+	})
+
+	t.Run("multi_method", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+ReadWriter ~ interface {
+	Read : func() int64
+	Write : proc(data : utf8)
+}
+main : proc() = {}`)
+
+		ta := stmtAs[*ast.Type](t, f, 0)
+
+		iface, ok := ta.Alias.(*types.Interface)
+		if !ok {
+			t.Fatal("expected *types.Interface")
+		}
+
+		if len(iface.Methods) != 2 {
+			t.Fatalf("expected 2 methods, got %d", len(iface.Methods))
+		}
+
+		if iface.Methods[0].Name != "Read" {
+			t.Errorf("expected first method 'Read', got %q", iface.Methods[0].Name)
+		}
+
+		if iface.Methods[1].Name != "Write" {
+			t.Errorf("expected second method 'Write', got %q", iface.Methods[1].Name)
+		}
+	})
+
+	t.Run("empty_interface", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+Empty ~ interface {}
+main : proc() = {}`)
+
+		ta := stmtAs[*ast.Type](t, f, 0)
+
+		iface, ok := ta.Alias.(*types.Interface)
+		if !ok {
+			t.Fatal("expected *types.Interface")
+		}
+
+		if len(iface.Methods) != 0 {
+			t.Errorf("expected 0 methods, got %d", len(iface.Methods))
+		}
+	})
+
+	t.Run("interface_as_constraint", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+Stringer ~ interface {
+	String : func() utf8
+}
+export Foo ~ struct {
+	value : utf8
+}
+export Foo.String : func() utf8 = {
+	return this.value
+}
+Print : func<T ~ Stringer>(x : T) = {
+	@print(x.String())
+}
+main : proc() = {
+	Print(Foo{
+		value = "test",
+	})
+}`)
+
+		if len(f.Statements) < 5 {
+			t.Fatalf("expected at least 5 statements, got %d", len(f.Statements))
+		}
+	})
+
+	t.Run("missing_brace_errors", func(t *testing.T) {
+		t.Parallel()
+
+		parseShouldError(t, `package p
+Bad ~ interface
+main : proc() = {}`)
+	})
+
+	t.Run("non_method_in_body_errors", func(t *testing.T) {
+		t.Parallel()
+
+		parseShouldError(t, `package p
+Bad ~ interface {
+	123
+}
+main : proc() = {}`)
 	})
 }

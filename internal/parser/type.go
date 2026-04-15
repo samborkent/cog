@@ -37,6 +37,12 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 
 	switch p.this().Type {
 	case tokens.BitAnd:
+		// Disambiguate: if & is on a different line than the previous token,
+		// it is a reference method declaration, not a tuple separator.
+		if p.this().Ln != p.prev().Ln {
+			return typ
+		}
+
 		// Tuple
 		tuple := &types.Tuple{
 			Types:    make([]types.Type, 1, types.TupleMaxTypes),
@@ -100,6 +106,20 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 	}
 
 	return typ
+}
+
+// canStartType reports whether the current token can begin a type expression.
+func (p *Parser) canStartType() bool {
+	switch p.this().Type {
+	case tokens.Interface, tokens.LBracket, tokens.Map, tokens.Set,
+		tokens.Struct, tokens.BitAnd, tokens.Function, tokens.Procedure:
+		return true
+	case tokens.Identifier:
+		return true
+	}
+	// Check for built-in type keywords (int64, utf8, etc.).
+	_, ok := types.Lookup[p.this().Type]
+	return ok
 }
 
 func (p *Parser) parseType(ctx context.Context) types.Type {
@@ -701,6 +721,18 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 
 	if p.this().Type == tokens.Assign {
 		// No return type.
+		return procType
+	}
+
+	// Only attempt to parse a return type when the current token can
+	// actually begin a type expression. Without this check, contexts where
+	// a procedure type has no return type and no '=' (interface methods,
+	// struct proc fields, etc.) would incorrectly try to parse the next
+	// token (e.g. '}') as a return type.
+	//
+	// This mirrors the Go specification grammar where Result is optional:
+	//   Signature = Parameters [ Result ]
+	if !p.canStartType() {
 		return procType
 	}
 
