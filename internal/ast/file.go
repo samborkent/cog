@@ -7,9 +7,10 @@ var _ Statement = &File{}
 type File struct {
 	statement
 
-	Name       string
-	Package    *Package
-	Statements []Statement
+	Name         string
+	Package      *Package
+	Statements   []Statement
+	ContainsMain bool
 }
 
 func (f *File) Pos() (uint32, uint16) {

@@ -8,6 +8,7 @@ import (
 	"maps"
 	"path"
 	"slices"
+	"strings"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/transpiler/component"
@@ -202,6 +203,10 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 			Decls: make([]goast.Decl, 0, len(f.Statements)),
 		}
 
+		if t.files[id].ContainsMain {
+			gofile.Decls = append(gofile.Decls, t.setMemoryLimit())
+		}
+
 		// Emit dyn struct types in the first file only.
 		if i == 0 {
 			gofile.Decls = append(gofile.Decls, t.buildDynDecls()...)
@@ -307,16 +312,39 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 		}
 	}
 
+	t.addStdLibImport("context")
+	t.addStdLibImport("os/signal")
+	t.addStdLibImport("syscall")
+
+	var ctxIdent *goast.Ident
+
+	if t.usesDyn {
+		ctxIden, ok := t.symbols.Resolve("ctx")
+		if !ok {
+			return nil, fmt.Errorf("ctx identifier not found in symbol table for main function with dynamic variables")
+		}
+
+		ctxIdent = ctxIden
+	} else {
+		ctxIdent = t.symbols.Define("ctx")
+	}
+
+	if err := t.symbols.MarkUsed("ctx"); err != nil {
+		return nil, fmt.Errorf("marking ctx used: %w", err)
+	}
+
 	// Wrap everything in func main().
 	mainFunc := &goast.FuncDecl{
 		Name: &goast.Ident{Name: "main"},
 		Type: &goast.FuncType{Params: &goast.FieldList{}},
-		Body: &goast.BlockStmt{List: mainBody},
+		Body: &goast.BlockStmt{
+			List: append(component.Signal(ctxIdent, t.usesDyn), append([]goast.Stmt{component.AdaptiveGC(ctxIdent)}, mainBody...)...),
+		},
 	}
 
 	t.injectArena(mainFunc.Body)
 
-	gofile.Decls = append(gofile.Decls, mainFunc)
+	gofile.Decls = append(gofile.Decls, t.setMemoryLimit(), mainFunc)
 
 	t.finalizeImports(gofile)
 
@@ -548,6 +576,19 @@ func (t *Transpiler) addStdLibImport(name string) {
 	}
 }
 
+func (t *Transpiler) addGoImport(name string) {
+	_, ok := t.imports[name]
+	if !ok {
+		t.imports[name] = &goast.ImportSpec{
+			Name: &goast.Ident{Name: "_" + strings.ReplaceAll(path.Base(name), "-", "")},
+			Path: &goast.BasicLit{
+				Kind:  gotoken.STRING,
+				Value: `"` + name + `"`,
+			},
+		}
+	}
+}
+
 // goStdLibAlias returns the aliased import name for a Go standard library package.
 // For example, "strings" becomes "go_strings" and "path/filepath" becomes "go_filepath".
 func goStdLibAlias(importPath string) string {
@@ -592,4 +633,12 @@ func (t *Transpiler) attachLineDecl(decls []goast.Decl, node ast.Node) {
 		Tok: gotoken.IMPORT,
 		Doc: &goast.CommentGroup{List: []*goast.Comment{comment}},
 	}
+}
+
+func (t *Transpiler) setMemoryLimit() (initFunc *goast.FuncDecl) {
+	t.addStdLibImport("runtime/debug")
+	t.addGoImport("github.com/pbnjay/memory")
+	t.addGoImport("github.com/samborkent/adaptive-gc")
+
+	return component.SetMemoryLimit()
 }

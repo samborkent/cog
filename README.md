@@ -172,7 +172,7 @@ The following basic features are missing that need to be implemented before Cog 
 - Fork and rework float16, uint128 and int128 imported packages.
 - Builtin `upx` binary packer for smaller binaries.
 - LSP
-- Adaptive GC (https://github.com/samborkent/adaptive-gc)
+- Adaptive GC (github.com/samborkent/adaptive-gc)
 - Automatic struct alignment?
 
 ## Syntax

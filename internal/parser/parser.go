@@ -145,8 +145,14 @@ tokenLoop:
 			tokens.Break,
 			tokens.Continue,
 			tokens.BitAnd:
+			ident := p.this().Literal
+
 			node := p.parseStatement(ctx)
 			if node != nil {
+				if ident == "main" {
+					f.ContainsMain = true
+				}
+
 				f.Statements = append(f.Statements, node)
 			} else {
 				p.synchronize()

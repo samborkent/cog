@@ -15,6 +15,10 @@ const (
 	dynVar        = "dyn"
 	dynKeyType    = "cogDynKey"
 	dynStructType = "cogDyn"
+
+	signalPkg            = "go_signal"
+	syscallPkg           = "go_syscall"
+	syscallNotifyContext = "NotifyContext"
 )
 
 var (
@@ -27,11 +31,34 @@ var (
 		X:   ContextPackage,
 		Sel: &goast.Ident{Name: contextType},
 	}
-	ContextVar = &goast.Ident{Name: contextVar}
+	ContextVar        = &goast.Ident{Name: contextVar}
+	ContextBackground = &goast.CallExpr{
+		Fun: &goast.SelectorExpr{
+			X:   ContextPackage,
+			Sel: &goast.Ident{Name: contextBackground},
+		},
+	}
 
 	DynVar        = &goast.Ident{Name: dynVar}
 	DynKeyType    = &goast.Ident{Name: dynKeyType}
 	DynStructType = &goast.Ident{Name: dynStructType}
+
+	SignalPkg           = &goast.Ident{Name: signalPkg}
+	SignalNotifyContext = &goast.SelectorExpr{
+		X:   SignalPkg,
+		Sel: &goast.Ident{Name: syscallNotifyContext},
+	}
+	SyscallPkg    = &goast.Ident{Name: syscallPkg}
+	SyscallSigInt = &goast.SelectorExpr{
+		X:   SyscallPkg,
+		Sel: &goast.Ident{Name: "SIGINT"},
+	}
+	SyscallSigTerm = &goast.SelectorExpr{
+		X:   SyscallPkg,
+		Sel: &goast.Ident{Name: "SIGTERM"},
+	}
+
+	StopIdent = &goast.Ident{Name: "_stop"}
 )
 
 func ContextMain(ident *goast.Ident) *goast.DeclStmt {
@@ -163,5 +190,37 @@ func DynWrite(fieldName string, val goast.Expr) *goast.AssignStmt {
 			},
 		},
 		Rhs: []goast.Expr{val},
+	}
+}
+
+func Signal(ctxIdent *goast.Ident, passCtx bool) []goast.Stmt {
+	var ctxArg goast.Expr = ContextBackground
+	if passCtx {
+		ctxArg = ctxIdent
+	}
+
+	return []goast.Stmt{
+		&goast.AssignStmt{
+			Lhs: []goast.Expr{
+				ctxIdent,
+				StopIdent,
+			},
+			Tok: gotoken.DEFINE,
+			Rhs: []goast.Expr{
+				&goast.CallExpr{
+					Fun: SignalNotifyContext,
+					Args: []goast.Expr{
+						ctxArg,
+						SyscallSigInt,
+						SyscallSigTerm,
+					},
+				},
+			},
+		},
+		&goast.DeferStmt{
+			Call: &goast.CallExpr{
+				Fun: StopIdent,
+			},
+		},
 	}
 }

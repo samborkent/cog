@@ -97,6 +97,28 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 			// For procedure declarations, return function declaration instead of variable declaration
 			if n.Assignment.Identifier.Name == "main" {
+				t.addStdLibImport("context")
+				t.addStdLibImport("os/signal")
+				t.addStdLibImport("syscall")
+
+				var ctxIdent *goast.Ident
+
+				if bodyUsesDyn {
+					ctxIdent, ok = t.symbols.Resolve("ctx")
+					if !ok {
+						return nil, fmt.Errorf("ctx identifier not found in symbol table for main function with dynamic variables")
+					}
+				} else {
+					ctxIdent = t.symbols.Define("ctx")
+				}
+
+				if err := t.symbols.MarkUsed("ctx"); err != nil {
+					return nil, fmt.Errorf("marking ctx used: %w", err)
+				}
+
+				// Add signal notify context.
+				funcDecl.Body.List = append(component.Signal(ctxIdent, bodyUsesDyn), append([]goast.Stmt{component.AdaptiveGC(ctxIdent)}, funcDecl.Body.List...)...)
+
 				hasDynVars := len(t.symbols.dynamics) > 0
 
 				if hasDynVars || t.currentFileNeedsContext() {
@@ -149,19 +171,9 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 								},
 							}, funcDecl.Body.List...)
 						}
-					} else {
-						// Main with procs but no dynamic variables: just init context.
-						ctxIdent := t.symbols.Define("ctx")
-
-						funcDecl.Body.List = append(
-							[]goast.Stmt{component.ContextMain(ctxIdent)},
-							funcDecl.Body.List...,
-						)
 					}
 
 					if t.currentFileNeedsContext() {
-						t.addStdLibImport("context")
-
 						// Remove context argument for main func.
 						funcDecl.Type.Params.List = funcDecl.Type.Params.List[1:]
 					}
