@@ -4,7 +4,7 @@
 
 Cog is a custom programming language that transpiles to Go. The codebase lives at `/Users/sam/git/cog`.
 
-- **Go version**: 1.26.1, darwin-arm64, `GOEXPERIMENT=arenas`
+- **Go version**: 1.26.2, darwin-arm64, `GOEXPERIMENT=arenas`
 - **Branch**: `feature/any`
 - **Module**: `github.com/samborkent/cog`
 - **Build**: `task compile` compiles example code; `GOEXPERIMENT=arenas go test ./...` runs tests

@@ -138,11 +138,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 				return nil
 			case tokens.Dot:
 				// Method declaration
-				if node := p.parseMethod(ctx, ident); node != nil {
-					if reference {
-						node.Reference = true
-					}
-
+				if node := p.parseMethod(ctx, nil, ident.Name, true, reference); node != nil {
 					return node
 				}
 
@@ -153,6 +149,80 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 
 				return nil
 			}
+		case tokens.LParen:
+			// Exported method with explicit receiver: export (f : Type).Method
+			p.advance("parseStatement export (") // consume (
+
+			qualifier := ast.QualifierImmutable
+
+			if p.this().Type == tokens.Variable {
+				qualifier = ast.QualifierVariable
+				p.advance("parseStatement export var") // consume var
+			}
+
+			if p.this().Type != tokens.Identifier {
+				p.error(p.this(), "expected identifier after ( in exported method declaration", "parseStatement")
+				return nil
+			}
+
+			receiverIdent := &ast.Identifier{
+				Token:     p.this(),
+				Name:      p.this().Literal,
+				Qualifier: qualifier,
+			}
+
+			p.advance("parseStatement export receiver identifier") // consume identifier
+
+			if p.this().Type != tokens.Colon {
+				p.error(p.this(), "expected : after receiver variable in exported method declaration", "parseStatement")
+				return nil
+			}
+
+			p.advance("parseStatement export :") // consume :
+
+			exportRef := false
+
+			if p.this().Type == tokens.BitAnd {
+				exportRef = true
+				p.advance("parseStatement export &") // consume &
+			}
+
+			if p.this().Type != tokens.Identifier {
+				p.error(p.this(), "expected type identifier after : in exported method declaration", "parseStatement")
+				return nil
+			}
+
+			typeSymbol, ok := p.symbols.Resolve(p.this().Literal)
+			if !ok || typeSymbol.Identifier.Qualifier != ast.QualifierType {
+				p.error(p.this(), "unknown type found in type declaration", "parseType")
+				return nil
+			}
+
+			receiverIdent.ValueType = &types.Alias{
+				Name:    typeSymbol.Identifier.Name,
+				Derived: typeSymbol.Identifier.ValueType,
+			}
+
+			p.advance("parseStatement export receiver type") // consume identifier
+
+			if p.this().Type != tokens.RParen {
+				p.error(p.this(), "expected ) after receiver in exported method declaration", "parseStatement")
+				return nil
+			}
+
+			p.advance("parseStatement export )") // consume )
+
+			method := p.parseMethod(ctx,
+				receiverIdent,
+				typeSymbol.Identifier.Name,
+				true,
+				exportRef,
+			)
+			if method == nil {
+				return nil
+			}
+
+			return method
 		default:
 			p.error(p.this(), "unexpected token found after export", "parseStatement")
 			return nil
@@ -283,12 +353,47 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 			}
 
 			return nil
-		case tokens.Identifier: // Procedure / method call
+		case tokens.Identifier: // Procedure / method call or selector assignment
 			identToken := p.this()
 
 			callExpr := p.expression(ctx, types.None)
 			if callExpr == nil {
 				return nil
+			}
+
+			// Selector assignment: f.value = "changed"
+			if p.this().Type == tokens.Assign {
+				selector, ok := callExpr.(*ast.Selector)
+				if !ok {
+					p.error(p.this(), "invalid assignment target", "parseStatement")
+					return nil
+				}
+
+				// Resolve the receiver and check mutability.
+				symbol, ok := p.symbols.Resolve(ident.Name)
+				if !ok {
+					p.error(ident.Token, "unknown identifier", "parseStatement")
+					return nil
+				}
+
+				if symbol.Identifier.Qualifier != ast.QualifierVariable {
+					p.error(ident.Token, "cannot assign to field of immutable receiver", "parseStatement")
+
+					// Skip the rest of the assignment to continue parsing.
+					p.advance("parseStatement error =") // consume =
+					_ = p.expression(ctx, types.None)
+
+					return nil
+				}
+
+				// Build a selector identifier for the assignment.
+				selectorIdent := &ast.Identifier{
+					Token:     ident.Token,
+					Name:      ident.Name + "." + selector.Field.Name,
+					Qualifier: ast.QualifierVariable,
+				}
+
+				return p.parseAssignment(ctx, selectorIdent)
 			}
 
 			return &ast.ExpressionStatement{
@@ -305,11 +410,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		case tokens.Dot:
 			if p.symbols.Outer == nil {
 				// Method declaration (only possible in global scope)
-				if node := p.parseMethod(ctx, ident); node != nil {
-					if reference {
-						node.Reference = true
-					}
-
+				if node := p.parseMethod(ctx, nil, ident.Name, false, reference); node != nil {
 					return node
 				}
 
@@ -327,6 +428,79 @@ func (p *Parser) parseStatement(ctx context.Context) ast.Statement {
 		}
 
 		return nil
+	case tokens.LParen:
+		p.advance("parseStatement (") // consume (
+
+		qualifier := ast.QualifierImmutable
+
+		if p.this().Type == tokens.Variable {
+			qualifier = ast.QualifierVariable
+			p.advance("parseStatement var") // consume var
+		}
+
+		if p.this().Type != tokens.Identifier {
+			p.error(p.this(), "expected identifier after ( in method declaration", "parseStatement")
+			return nil
+		}
+
+		receiverIdent := &ast.Identifier{
+			Token:     p.this(),
+			Name:      p.this().Literal,
+			Qualifier: qualifier,
+		}
+
+		p.advance("parseStatement receiver identifier") // consume identifier
+
+		if p.this().Type != tokens.Colon {
+			p.error(p.this(), "expected : after receiver variable in method declaration", "parseStatement")
+			return nil
+		}
+
+		p.advance("parseStatement :") // consume :
+
+		reference := false
+
+		if p.this().Type == tokens.BitAnd {
+			reference = true
+			p.advance("parseStatement &") // consume &
+		}
+
+		if p.this().Type != tokens.Identifier {
+			p.error(p.this(), "expected type identifier after : in method declaration", "parseStatement")
+			return nil
+		}
+
+		typeSymbol, ok := p.symbols.Resolve(p.this().Literal)
+		if !ok || typeSymbol.Identifier.Qualifier != ast.QualifierType {
+			p.error(p.this(), "unknown type found in type declaration", "parseType")
+			return nil
+		}
+
+		receiverIdent.ValueType = &types.Alias{
+			Name:    typeSymbol.Identifier.Name,
+			Derived: typeSymbol.Identifier.ValueType,
+		}
+
+		p.advance("parseStatement receiver type") // consume identifier
+
+		if p.this().Type != tokens.RParen {
+			p.error(p.this(), "expected ) after receiver in method declaration", "parseStatement")
+			return nil
+		}
+
+		p.advance("parseStatement )") // consume (
+
+		method := p.parseMethod(ctx,
+			receiverIdent,
+			typeSymbol.Identifier.Name,
+			false,
+			reference,
+		)
+		if method == nil {
+			return nil
+		}
+
+		return method
 	case tokens.Match:
 		if node := p.parseMatch(ctx); node != nil {
 			return node

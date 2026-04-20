@@ -13,5 +13,41 @@ export FooLoo ~ struct {
 }
 
 export FooLoo.String : func() utf8 = {
-    return this.value
+    return "value"
 }
+
+&FooLoo.String1 : func() utf8 = {
+    return "value"
+}
+
+(f : FooLoo).String2 : func() utf8 = {
+    return f.value
+}
+
+(f : &FooLoo).String3 : func() utf8 = {
+    return f.value
+}
+
+(var f : &FooLoo).String4 : proc() utf8 = {
+    return f.value
+}
+
+export (var f : &FooLoo).String5 : proc() utf8 = {
+    return f.value
+}
+
+// // Should fail, cannot address immutable f.
+// (f : &FooLoo).String6 : proc() utf8 = {
+//     f.value = "changed"
+//     return f.value
+// }
+
+// // Should fail, func cannot have variable pointer receiver.
+// (var f : &FooLoo).String7 : func() utf8 = {
+//     return f.value
+// }
+
+// // Should fail, duplicate method name.
+// export (var f : &FooLoo).String : proc() utf8 = {
+//     return f.value
+// }

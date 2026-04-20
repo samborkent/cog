@@ -1,4 +1,7 @@
 .agents/
+.graymatter/
+.kilo/
+.kilocode/
 .vscode/
 tmp/
 .env

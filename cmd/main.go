@@ -181,7 +181,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 	}
 
 	// Transpile the script file.
-	t := transpiler.NewTranspilerWithModule(goModuleName, f)
+	t := transpiler.NewTranspilerWithModule(goModuleName, []*ast.File{f})
 
 	gofile, err := t.TranspileScript()
 	if err != nil {
@@ -212,7 +212,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 		// Only write go.mod when running as a standalone script (not part of a project).
 		if standalone {
-			gomod := fmt.Sprintf("module %s\n\ngo 1.26.1\n", goModuleName)
+			gomod := fmt.Sprintf("module %s\n\ngo 1.26.2\n", goModuleName)
 			if replaceLocalCog {
 				gomod += "\nreplace github.com/samborkent/cog => ./..\n"
 			}
@@ -498,6 +498,7 @@ func outputProject(goModuleName string, entry *compiledPackage, imported map[str
 		tidy := exec.Command("go", "mod", "tidy")
 
 		tidy.Dir = "tmp"
+
 		if out, err := tidy.CombinedOutput(); err != nil {
 			panic(fmt.Errorf("go mod tidy: %s\n%w", out, err))
 		}
@@ -506,7 +507,7 @@ func outputProject(goModuleName string, entry *compiledPackage, imported map[str
 
 // transpileAndOutput transpiles a single package and writes/prints its Go files.
 func transpileAndOutput(goModuleName string, pkg *compiledPackage) {
-	t := transpiler.NewTranspilerWithModule(goModuleName, pkg.astFiles...)
+	t := transpiler.NewTranspilerWithModule(goModuleName, pkg.astFiles)
 
 	gofiles, err := t.TranspileFiles()
 	if err != nil {

@@ -70,6 +70,23 @@ tokenLoop:
 			qualifier = ast.QualifierDynamic
 
 			p.advance("findGlobals dyn") // consume dyn
+		case tokens.LParen:
+			// Receiver variable: (f : Type) or (var f : &Type)
+			p.advance("findGlobals (") // consume (
+
+			if p.this().Type == tokens.Variable {
+				p.advance("findGlobals var") // consume var
+			}
+
+			p.advance("findGlobals ident") // consume receiver identifier
+
+			if p.this().Type == tokens.Colon {
+				p.advance("findGlobals :") // consume :
+			}
+
+			if p.this().Type == tokens.BitAnd {
+				p.advance("findGlobals &") // consume &
+			}
 		case tokens.Variable:
 			qualifier = ast.QualifierVariable
 
@@ -89,7 +106,7 @@ tokenLoop:
 			switch p.next().Type {
 			case tokens.Colon, tokens.Declaration:
 				p.findGlobalDecl(ctx, exported, qualifier)
-			case tokens.Dot:
+			case tokens.Dot, tokens.RParen:
 				p.findGlobalMethod(ctx, exported)
 			case tokens.Tilde:
 				p.findGlobalType(ctx, exported)
@@ -538,6 +555,10 @@ func (p *Parser) findGlobalMethod(ctx context.Context, exported bool) {
 	// Current token is the receiver type name.
 	receiverName := p.this().Literal
 	p.advance("findGlobalMethod receiver") // consume receiver type name
+
+	if p.this().Type == tokens.RParen {
+		p.advance("findGlobalMethod )") // consume )
+	}
 
 	if p.this().Type != tokens.Dot {
 		p.error(p.this(), "expected . after receiver type name", "findGlobalMethod")

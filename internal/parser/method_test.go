@@ -17,8 +17,8 @@ func TestParseMethod(t *testing.T) {
 Foo ~ struct {
 	value : utf8
 }
-Foo.GetValue : func() utf8 = {
-	return this.value
+(f : Foo).GetValue : func() utf8 = {
+	return f.value
 }
 main : proc() = {}`)
 
@@ -29,8 +29,8 @@ main : proc() = {}`)
 			t.Fatal("method receiver is nil")
 		}
 
-		if m.Receiver.Name != "Foo" {
-			t.Errorf("expected receiver name Foo, got %q", m.Receiver.Name)
+		if m.Receiver.Name != "f" {
+			t.Errorf("expected receiver name f, got %q", m.Receiver.Name)
 		}
 
 		if m.Declaration == nil {
@@ -49,8 +49,8 @@ main : proc() = {}`)
 Foo ~ struct {
 	x : int64
 }
-Foo.Self : func() int64 = {
-	return this.x
+(f : Foo).Self : func() int64 = {
+	return f.x
 }
 main : proc() = {}`)
 
@@ -99,15 +99,15 @@ String ~ utf8
 Foo ~ struct {
 	value : utf8
 }
-Foo.String : func() utf8 = {
-	return this.value
+(f : Foo).String : func() utf8 = {
+	return f.value
 }
 main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 2)
 
-		if m.Receiver.Name != "Foo" {
-			t.Errorf("expected receiver Foo, got %q", m.Receiver.Name)
+		if m.Receiver.Name != "f" {
+			t.Errorf("expected receiver f, got %q", m.Receiver.Name)
 		}
 
 		if m.Declaration.Assignment.Identifier.Name != "String" {
@@ -122,8 +122,8 @@ main : proc() = {}`)
 export Foo ~ struct {
 	value : utf8
 }
-export Foo.GetValue : func() utf8 = {
-	return this.value
+export (f : Foo).GetValue : func() utf8 = {
+	return f.value
 }
 main : proc() = {}`)
 
@@ -141,18 +141,23 @@ main : proc() = {}`)
 Foo ~ struct {
 	value : utf8
 }
-&Foo.GetRef : func() utf8 = {
-	return this.value
+(f : &Foo).GetRef : func() utf8 = {
+	return f.value
 }
 main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		if !m.Reference {
+		if m.Type.Kind() != types.ReferenceKind {
 			t.Error("expected reference receiver")
 		}
 
-		if m.Receiver.Name != "Foo" {
+		refType, ok := m.Type.(*types.Reference)
+		if !ok {
+			t.Fatalf("unable to cast reference receiver type")
+		}
+
+		if refType.Value.String() != "Foo" {
 			t.Errorf("expected receiver Foo, got %q", m.Receiver.Name)
 		}
 	})
@@ -167,11 +172,11 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		if !m.Reference {
+		if m.Type.Kind() != types.ReferenceKind {
 			t.Error("expected reference receiver")
 		}
 
-		if !m.Declaration.Assignment.Identifier.Exported {
+		if !m.Export {
 			t.Error("expected exported method")
 		}
 	})
@@ -183,8 +188,8 @@ main : proc() = {}`)
 Foo ~ struct {
 	name : utf8
 }
-Foo.Greet : proc() = {
-	@print(this.name)
+(f : Foo).Greet : proc() = {
+	@print(f.name)
 }
 main : proc() = {}`)
 
@@ -203,11 +208,11 @@ Point ~ struct {
 	x : int64
 	y : int64
 }
-Point.GetX : func() int64 = {
-	return this.x
+(p : Point).GetX : func() int64 = {
+	return p.x
 }
-Point.GetY : func() int64 = {
-	return this.y
+(p : Point).GetY : func() int64 = {
+	return p.y
 }
 main : proc() = {}`)
 
@@ -249,8 +254,8 @@ main : proc() = {}`)
 Adder ~ struct {
 	base : int64
 }
-Adder.Add : func(n : int64) int64 = {
-	return this.base + n
+(a : Adder).Add : func(n : int64) int64 = {
+	return a.base + n
 }
 main : proc() = {}`)
 
@@ -282,5 +287,42 @@ main : proc() = {}`)
 		if len(f.Statements) < 3 {
 			t.Fatalf("expected at least 3 statements, got %d", len(f.Statements))
 		}
+	})
+
+	t.Run("immutable_receiver_field_assign_errors", func(t *testing.T) {
+		t.Parallel()
+
+		parseShouldError(t, `package p
+Foo ~ struct { value : utf8 }
+(f : &Foo).Mutate : proc() utf8 = {
+	f.value = "changed"
+	return f.value
+}
+main : proc() = {}`)
+	})
+
+	t.Run("var_receiver_on_func_errors", func(t *testing.T) {
+		t.Parallel()
+
+		parseShouldError(t, `package p
+Foo ~ struct { value : utf8 }
+(var f : &Foo).Get : func() utf8 = {
+	return f.value
+}
+main : proc() = {}`)
+	})
+
+	t.Run("duplicate_method_name_errors", func(t *testing.T) {
+		t.Parallel()
+
+		parseShouldError(t, `package p
+Foo ~ struct { value : utf8 }
+Foo.String : func() utf8 = {
+	return "foo"
+}
+(var f : &Foo).String : proc() utf8 = {
+	return f.value
+}
+main : proc() = {}`)
 	})
 }

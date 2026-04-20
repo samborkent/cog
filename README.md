@@ -21,6 +21,10 @@ The following basic features are missing that need to be implemented before Cog 
     - Range over int (or other literal) should not be possible.
     - Instead we should range over an iterator function which takes literal as argument.
 
+### Improvements
+- Get rid of symbol table in transpiler if possible.
+- Defining receiver vars should use regular symbol table, instead of custom fields (e.g. t.inMethod, p.currentReceiver)
+
 ## Features
 
 ### Implemented
@@ -132,17 +136,17 @@ The following basic features are missing that need to be implemented before Cog 
     - Used as generic constraints: `func<T ~ Stringer>(x : T) = { x.String() }`
     - Struct satisfaction: a struct satisfies an interface if it declares methods matching every interface method signature
 - Methods on struct types
-    - Declaration: `Foo.GetValue : func() utf8 = { return this.value }`
-    - Procedure methods: `Foo.DoSomething : proc() = { ... }`
-    - Exported methods: `export Foo.String : func() utf8 = { ... }`
-    - Reference receiver: `&Foo.Mutate : proc() = { ... }` (pointer receiver in Go output)
+    - Shorthand: `Foo.GetValue : func() utf8 = { ... }` (no receiver variable)
+    - Reference shorthand: `&Foo.Mutate : proc() = { ... }` (pointer receiver in Go output)
+    - Explicit receiver: `(f : Foo).GetValue : func() utf8 = { return f.value }`
+    - Explicit reference receiver: `(f : &Foo).Get : func() utf8 = { return f.value }`
+    - Mutable receiver: `(var f : &Foo).Set : proc(v : utf8) = { f.value = v }`
+    - Exported methods: `export Foo.String : func() utf8 = { ... }` or `export (f : Foo).String : func() utf8 = { ... }`
     - Methods can be declared in any order relative to the struct definition
     - Method names are scoped to their receiver type (no conflict with global names)
-- `this` keyword
-    - Available inside method bodies only — refers to the receiver instance
-    - Supports field access: `this.value`
-    - Supports method calls: `this.Method()`
-    - Using `this` outside a method body is an error
+    - `func` methods cannot have a `var` receiver (pure functions cannot mutate state)
+    - Duplicate method names on the same type are rejected
+    - Selector assignment (`f.value = x`) requires a `var` receiver
 
 ### Partly implemented
 
@@ -561,12 +565,21 @@ export Foo ~ struct {
     value : utf8
 }
 
+// Shorthand method (no receiver variable).
 export Foo.String : func() utf8 = {
-    return this.value
+    return "value"
 }
 
-// Reference receiver method (pointer receiver in Go output).
-&Foo.SetValue : proc(v : utf8) = {
-    this.value = v
+// Reference shorthand (pointer receiver in Go output).
+&Foo.Mutate : proc() = {}
+
+// Explicit receiver: access fields via receiver variable.
+(f : Foo).GetValue : func() utf8 = {
+    return f.value
+}
+
+// Mutable reference receiver: can assign to fields.
+(var f : &Foo).SetValue : proc(v : utf8) = {
+    f.value = v
 }
 ```

@@ -64,24 +64,31 @@ statement
     | switch_statement
     | "return", [ expression, { ",", expression } ]
     | builtin_statement
+    | method_declaration
     | identifier_statement;
 
 builtin_statement
     = "@", IDENTIFIER, [ type_arguments ], "(", call_arguments, ")";
 
 exported_statement
-    = [ "&" ], IDENTIFIER, ".", IDENTIFIER, ":", typed_declaration  (* exported method, optionally by reference *)
+    = [ "&" ], IDENTIFIER, ".", IDENTIFIER, ":", typed_declaration  (* exported shorthand method, optionally by reference *)
+    | "(", [ "var" ], IDENTIFIER, ":", [ "&" ], IDENTIFIER, ")", ".", IDENTIFIER, ":", typed_declaration  (* exported explicit receiver method *)
     | IDENTIFIER, ( ":", typed_declaration
                    | ":=", declaration
                    | [ type_param_list ], "~", combined_type );
 
 identifier_statement
-    = [ "&" ], IDENTIFIER, ".", IDENTIFIER, ":", typed_declaration  (* method declaration, optionally by reference *)
+    = [ "&" ], IDENTIFIER, ".", IDENTIFIER, ":", typed_declaration  (* shorthand method declaration, optionally by reference *)
     | IDENTIFIER, ( "=", expression                              (* assignment *)
                   | ":", ( labeled_statement | typed_declaration ) (* typed decl or label *)
                   | ":=", expression                              (* inferred decl *)
                   | [ type_param_list ], "~", combined_type       (* type alias, possibly generic *)
+                  | ".", IDENTIFIER, "=", expression              (* selector assignment *)
+                  | ".", IDENTIFIER, [ type_arguments ], "(", call_arguments, ")"  (* method call *)
                   | [ type_arguments ], "(", call_arguments, ")" );(* call, possibly with explicit type args *)
+
+method_declaration
+    = "(", [ "var" ], IDENTIFIER, ":", [ "&" ], IDENTIFIER, ")", ".", IDENTIFIER, ":", typed_declaration;
 
 labeled_statement
     = for_statement | if_statement | match_statement | switch_statement;
@@ -266,11 +273,13 @@ primary
 *)
 
 
-(* === this keyword (semantic, not syntactic) === *)
-(* "this" is an identifier injected into scope only inside method bodies.
-   It refers to the receiver instance of the enclosing method.
-   Using "this" outside a method body produces an "undefined identifier" error.
-   "this" supports selector access: this.field, this.method().
+(* === Method receiver rules (semantic, not syntactic) === *)
+(* Methods with explicit receiver "(f : Type)" or "(f : &Type)" bind the
+   receiver to the named variable for use in the method body.
+   "var" on the receiver allows mutation: field assignment requires "var".
+   "func" methods cannot have a "var" receiver (pure functions cannot mutate).
+   Duplicate method names on the same type are rejected.
+   Selector assignment (f.field = val) requires a "var" receiver.
 *)
 
 

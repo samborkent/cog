@@ -71,8 +71,6 @@ func AdaptiveGC(ctxIdent *goast.Ident) *goast.ExprStmt {
 			Fun: autoAdapt,
 			Args: []goast.Expr{
 				ctxIdent,
-				&goast.Ident{Name: "0"},
-				&goast.Ident{Name: "1"},
 			},
 		},
 	}

@@ -8,6 +8,7 @@ import (
 	goprinter "go/printer"
 	gotoken "go/token"
 
+	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
 	"github.com/samborkent/cog/internal/parser"
 	"github.com/samborkent/cog/internal/transpiler"
@@ -34,7 +35,7 @@ func transpile(t *testing.T, src string) string {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspiler(f)
+	tr := transpiler.NewTranspiler([]*ast.File{f})
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -73,7 +74,7 @@ func transpileWithPrint(t *testing.T, src string) string {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspiler(f)
+	tr := transpiler.NewTranspiler([]*ast.File{f})
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -127,7 +128,7 @@ func mustFailTranspile(t *testing.T, src, want string) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspiler(f)
+	tr := transpiler.NewTranspiler([]*ast.File{f})
 
 	_, err = tr.Transpile()
 	if err == nil {

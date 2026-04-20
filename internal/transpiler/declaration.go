@@ -101,27 +101,23 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				t.addStdLibImport("os/signal")
 				t.addStdLibImport("syscall")
 
-				var ctxIdent *goast.Ident
+				hasDynVars := len(t.symbols.dynamics) > 0
+				needsContext := t.currentFileNeedsContext()
+				// Only pass existing ctx to Signal when dyn init creates one for proc propagation.
+				passCtx := hasDynVars && needsContext
 
-				if bodyUsesDyn {
-					ctxIdent, ok = t.symbols.Resolve("ctx")
-					if !ok {
-						return nil, fmt.Errorf("ctx identifier not found in symbol table for main function with dynamic variables")
-					}
-				} else {
-					ctxIdent = t.symbols.Define("ctx")
-				}
+				ctxIdent := t.symbols.Define("ctx")
 
 				if err := t.symbols.MarkUsed("ctx"); err != nil {
 					return nil, fmt.Errorf("marking ctx used: %w", err)
 				}
 
-				// Add signal notify context.
-				funcDecl.Body.List = append(component.Signal(ctxIdent, bodyUsesDyn), append([]goast.Stmt{component.AdaptiveGC(ctxIdent)}, funcDecl.Body.List...)...)
+				// Add signal notify context and adaptive GC.
+				body := component.Signal(ctxIdent, passCtx)
+				body = append(body, component.AdaptiveGC(ctxIdent))
+				funcDecl.Body.List = append(body, funcDecl.Body.List...)
 
-				hasDynVars := len(t.symbols.dynamics) > 0
-
-				if hasDynVars || t.currentFileNeedsContext() {
+				if hasDynVars || needsContext {
 					if hasDynVars {
 						// Main with dynamic variables: init dyn struct.
 						dynIdent := t.symbols.Define("dyn")
@@ -152,13 +148,8 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 							Elts: structElts,
 						}
 
-						if t.currentFileNeedsContext() {
+						if needsContext {
 							// Also seed context for proc propagation.
-							ctxIdent := t.symbols.Define("ctx")
-							if err := t.symbols.MarkUsed("ctx"); err != nil {
-								return nil, fmt.Errorf("marking ctx used: %w", err)
-							}
-
 							body := component.DynMainInit(dynIdent, ctxIdent, structLit)
 							funcDecl.Body.List = append(body, funcDecl.Body.List...)
 						} else {
@@ -173,7 +164,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 						}
 					}
 
-					if t.currentFileNeedsContext() {
+					if needsContext {
 						// Remove context argument for main func.
 						funcDecl.Type.Params.List = funcDecl.Type.Params.List[1:]
 					}
@@ -181,7 +172,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 				t.injectArena(funcDecl.Body)
 
-				return []goast.Decl{funcDecl}, nil
+				return []goast.Decl{t.setMemoryLimit(), funcDecl}, nil
 			}
 
 			// Non-main proc: inject dyn preamble only when body uses dyn.
@@ -239,7 +230,23 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		prevInMethod := t.inMethod
 		t.inMethod = true
 
+		recType, err := t.convertType(n.Type)
+		if err != nil {
+			return nil, err
+		}
+
+		var recIdent *goast.Ident
+
+		if n.Receiver != nil {
+			t.symbols = NewEnclosedSymbolTable(t.symbols)
+			recIdent = t.symbols.Define(n.Receiver.Name)
+		}
+
 		decls, err := t.convertDecl(n.Declaration)
+
+		if n.Receiver != nil {
+			t.symbols = t.symbols.Outer
+		}
 
 		t.inMethod = prevInMethod
 
@@ -256,7 +263,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			return nil, errors.New("unable to assert function declartion during method transpilation")
 		}
 
-		funcDecl.Recv = component.Receiver(n.Receiver, n.Reference)
+		funcDecl.Recv = component.Receiver(recIdent, recType)
 
 		return decls, nil
 	case *ast.Type:

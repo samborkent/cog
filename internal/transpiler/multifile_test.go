@@ -68,7 +68,7 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 		astFiles[i] = af
 	}
 
-	tr := transpiler.NewTranspilerWithModule("testmod", astFiles...)
+	tr := transpiler.NewTranspilerWithModule("testmod", astFiles)
 
 	gofiles, err := tr.TranspileFiles()
 	if err != nil {
@@ -111,7 +111,7 @@ func transpileWithModule(t *testing.T, moduleName, src string) string {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspilerWithModule(moduleName, f)
+	tr := transpiler.NewTranspilerWithModule(moduleName, []*ast.File{f})
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -261,7 +261,7 @@ main : proc() = {}
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspilerWithModule("mymod", f)
+	tr := transpiler.NewTranspilerWithModule("mymod", []*ast.File{f})
 
 	gofile, err := tr.Transpile()
 	if err != nil {

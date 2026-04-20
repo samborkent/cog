@@ -3,22 +3,18 @@ package component
 import (
 	goast "go/ast"
 	gotoken "go/token"
-
-	"github.com/samborkent/cog/internal/ast"
 )
 
-var This = []*goast.Ident{{Name: "this"}}
+func Receiver(receiver *goast.Ident, typ goast.Expr) *goast.FieldList {
+	var names []*goast.Ident
 
-func Receiver(ident *ast.Identifier, reference bool) *goast.FieldList {
-	var typ goast.Expr = Ident(ident)
-
-	if reference {
-		typ = &goast.StarExpr{X: typ}
+	if receiver != nil {
+		names = []*goast.Ident{receiver}
 	}
 
 	return &goast.FieldList{
 		List: []*goast.Field{{
-			Names: This,
+			Names: names,
 			Type:  typ,
 		}},
 	}

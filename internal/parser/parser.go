@@ -21,8 +21,8 @@ type Parser struct {
 	i                 int
 	debug             bool
 	scriptMode        bool
-	currentReturnType types.Type      // return type of the enclosing procedure (for result wrapping)
-	currentReceiver   *ast.Identifier // receiver of the enclosing method (for this keyword)
+	currentReturnType types.Type // return type of the enclosing procedure (for result wrapping)
+	definedMethods    map[string]struct{}
 }
 
 // NewParserWithSymbols creates a parser that uses the provided symbol table.
@@ -34,10 +34,11 @@ func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug boo
 	}
 
 	p := &Parser{
-		tokens:  tokens,
-		symbols: symbols,
-		Errs:    make([]error, 0),
-		debug:   debug,
+		tokens:         tokens,
+		symbols:        symbols,
+		Errs:           make([]error, 0),
+		debug:          debug,
+		definedMethods: make(map[string]struct{}),
 	}
 
 	return p, nil
@@ -56,11 +57,12 @@ func NewScriptParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, deb
 	}
 
 	p := &Parser{
-		tokens:     tokens,
-		symbols:    symbols,
-		Errs:       make([]error, 0),
-		debug:      debug,
-		scriptMode: true,
+		tokens:         tokens,
+		symbols:        symbols,
+		Errs:           make([]error, 0),
+		debug:          debug,
+		scriptMode:     true,
+		definedMethods: make(map[string]struct{}),
 	}
 
 	return p, nil
@@ -144,7 +146,8 @@ tokenLoop:
 			tokens.Return,
 			tokens.Break,
 			tokens.Continue,
-			tokens.BitAnd:
+			tokens.BitAnd,
+			tokens.LParen:
 			ident := p.this().Literal
 
 			node := p.parseStatement(ctx)

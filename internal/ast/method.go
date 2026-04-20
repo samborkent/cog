@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/samborkent/cog/internal/tokens"
+	"github.com/samborkent/cog/internal/types"
 )
 
 var _ Statement = &Declaration{}
@@ -12,8 +13,9 @@ type Method struct {
 	statement
 
 	Token       tokens.Token
+	Export      bool
 	Receiver    *Identifier
-	Reference   bool
+	Type        types.Type
 	Declaration *Declaration
 }
 
@@ -30,11 +32,16 @@ func (s *Method) stringTo(out *strings.Builder) {
 		_, _ = out.WriteString("export ")
 	}
 
-	if s.Reference {
-		_ = out.WriteByte('&')
+	if s.Receiver != nil {
+		_ = out.WriteByte('(')
+		_, _ = out.WriteString(s.Receiver.Name)
+		_, _ = out.WriteString(" : ")
+		_, _ = out.WriteString(s.Type.String())
+		_ = out.WriteByte(')')
+	} else {
+		_, _ = out.WriteString(s.Type.String())
 	}
 
-	_, _ = out.WriteString(s.Receiver.Name)
 	_ = out.WriteByte('.')
 
 	s.Declaration.Assignment.stringTo(out)

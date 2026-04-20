@@ -550,8 +550,8 @@ Stringer ~ interface {
 export Foo ~ struct {
 	value : utf8
 }
-export Foo.String : func() utf8 = {
-	return this.value
+export (f : Foo).String : func() utf8 = {
+	return f.value
 }
 Print : func<T ~ Stringer>(x : T) = {
 	@print(x.String())

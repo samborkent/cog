@@ -40,7 +40,7 @@ func transpileSource(t *testing.T, src string) string {
 		t.Fatalf("parser parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspiler(f)
+	tr := transpiler.NewTranspiler([]*ast.File{f})
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -57,6 +57,47 @@ func transpileSource(t *testing.T, src string) string {
 }
 
 // runGenerated compiles and runs generated Go code, returning its output.
+// projectRoot returns the absolute path to the module root (the directory containing go.mod).
+func projectRoot(t *testing.T) string {
+	t.Helper()
+
+	// We are in internal/, so go up one level.
+	dir, err := filepath.Abs(filepath.Join(".", ".."))
+	if err != nil {
+		t.Fatalf("resolving project root: %v", err)
+	}
+
+	return dir
+}
+
+// goModCacheDir returns the on-disk directory for a module from the Go module cache.
+func goModCacheDir(t *testing.T, module string) string {
+	t.Helper()
+
+	out, err := exec.Command("go", "mod", "download", "-json", module+"@latest").CombinedOutput()
+	if err != nil {
+		t.Fatalf("go mod download %s: %v\n%s", module, err, out)
+	}
+
+	// Parse "Dir" field from JSON output.
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, `"Dir"`) {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				dir := strings.TrimSpace(parts[1])
+				dir = strings.Trim(dir, `",`)
+
+				return dir
+			}
+		}
+	}
+
+	t.Fatalf("could not find Dir in go mod download output for %s:\n%s", module, out)
+
+	return ""
+}
+
 func runGenerated(t *testing.T, code string) (string, error) {
 	t.Helper()
 
@@ -67,12 +108,37 @@ func runGenerated(t *testing.T, code string) (string, error) {
 		t.Fatalf("write generated file: %v", err)
 	}
 
+	root := projectRoot(t)
+
+	// Write a go.mod so the generated code can resolve its imports.
+	goMod := fmt.Sprintf(`module main
+
+go 1.26.2
+
+require (
+	github.com/samborkent/cog v0.0.0
+	github.com/samborkent/adaptive-gc v0.0.0
+	github.com/pbnjay/memory v0.0.0
+)
+
+replace (
+	github.com/samborkent/cog => %s
+	github.com/samborkent/adaptive-gc => %s
+	github.com/pbnjay/memory => %s
+)
+`, root, filepath.Join(root, "..", "adaptive-gc"), goModCacheDir(t, "github.com/pbnjay/memory"))
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+
 	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
 	defer cancel()
 
 	binPath := filepath.Join(tmpDir, "bin")
 
-	build := exec.CommandContext(ctx, "go", "build", "-ldflags=-s -w", "-o", binPath, srcPath)
+	build := exec.CommandContext(ctx, "go", "build", "-ldflags=-s -w", "-o", binPath, ".")
+	build.Dir = tmpDir
 	if out, err := build.CombinedOutput(); err != nil {
 		return string(out), err
 	}
@@ -102,7 +168,7 @@ func tryTranspile(ctx context.Context, src string) (string, error) {
 		return "", fmt.Errorf("parser parse: %w", err)
 	}
 
-	tr := transpiler.NewTranspiler(f)
+	tr := transpiler.NewTranspiler([]*ast.File{f})
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -472,8 +538,9 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
-	if strings.Contains(code, "\"context\"") {
-		t.Fatalf("expected no context import for simple main, got:\n%s", code)
+	// Context is always present for signal handling + adaptive GC.
+	if !strings.Contains(code, "context") {
+		t.Fatalf("expected context import for signal handling, got:\n%s", code)
 	}
 
 	t.Parallel()
@@ -502,8 +569,9 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
-	if strings.Contains(code, "\"context\"") {
-		t.Fatalf("expected no context for program with only func (no proc), got:\n%s", code)
+	// Context is always present for signal handling + adaptive GC.
+	if !strings.Contains(code, "context") {
+		t.Fatalf("expected context import for signal handling, got:\n%s", code)
 	}
 
 	t.Parallel()
@@ -530,8 +598,9 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
-	if strings.Contains(code, "\"context\"") {
-		t.Fatalf("expected no context import for dyn var without procs, got:\n%s", code)
+	// Context is always present for signal handling + adaptive GC.
+	if !strings.Contains(code, "context") {
+		t.Fatalf("expected context import for signal handling, got:\n%s", code)
 	}
 
 	if !strings.Contains(code, "cogDyn") {
@@ -845,7 +914,7 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 		astFiles[i] = f
 	}
 
-	tr := transpiler.NewTranspiler(astFiles...)
+	tr := transpiler.NewTranspiler(astFiles)
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -912,7 +981,7 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 		astFiles[i] = f
 	}
 
-	tr := transpiler.NewTranspiler(astFiles...)
+	tr := transpiler.NewTranspiler(astFiles)
 
 	gofile, err := tr.Transpile()
 	if err != nil {

@@ -42,11 +42,17 @@ type Transpiler struct {
 	lastSourceLine uint32              // tracks the source line of the previous statement
 }
 
-func NewTranspiler(files ...*ast.File) *Transpiler {
-	return NewTranspilerWithModule("", files...)
+type TranspilerOption func(*Transpiler)
+
+func NewTranspiler(files []*ast.File, opts ...TranspilerOption) *Transpiler {
+	return newTranspilerWithOptions("", files, opts...)
 }
 
-func NewTranspilerWithModule(goModulePath string, files ...*ast.File) *Transpiler {
+func NewTranspilerWithModule(goModulePath string, files []*ast.File, opts ...TranspilerOption) *Transpiler {
+	return newTranspilerWithOptions(goModulePath, files, opts...)
+}
+
+func newTranspilerWithOptions(goModulePath string, files []*ast.File, opts ...TranspilerOption) *Transpiler {
 	nodes := make(map[uint64]ast.Node)
 	fileMap := make(map[uint16]*ast.File)
 
@@ -60,7 +66,7 @@ func NewTranspilerWithModule(goModulePath string, files ...*ast.File) *Transpile
 		}
 	}
 
-	return &Transpiler{
+	t := &Transpiler{
 		files:        fileMap,
 		fset:         gotoken.NewFileSet(),
 		nodes:        nodes,
@@ -72,6 +78,12 @@ func NewTranspilerWithModule(goModulePath string, files ...*ast.File) *Transpile
 		dynComments:  make(map[string]string),
 		skipComments: make(map[uint64]struct{}),
 	}
+
+	for _, opt := range opts {
+		opt(t)
+	}
+
+	return t
 }
 
 func (t *Transpiler) Transpile() (*goast.File, error) {
@@ -316,29 +328,23 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 	t.addStdLibImport("os/signal")
 	t.addStdLibImport("syscall")
 
-	var ctxIdent *goast.Ident
+	// Only pass existing ctx to Signal when dyn init creates one for proc propagation.
+	passCtx := t.usesDyn && t.currentFileNeedsContext()
 
-	if t.usesDyn {
-		ctxIden, ok := t.symbols.Resolve("ctx")
-		if !ok {
-			return nil, fmt.Errorf("ctx identifier not found in symbol table for main function with dynamic variables")
-		}
-
-		ctxIdent = ctxIden
-	} else {
-		ctxIdent = t.symbols.Define("ctx")
-	}
+	ctxIdent := t.symbols.Define("ctx")
 
 	if err := t.symbols.MarkUsed("ctx"); err != nil {
 		return nil, fmt.Errorf("marking ctx used: %w", err)
 	}
 
 	// Wrap everything in func main().
+	adjustedBody := append([]goast.Stmt{component.AdaptiveGC(ctxIdent)}, mainBody...)
+
 	mainFunc := &goast.FuncDecl{
 		Name: &goast.Ident{Name: "main"},
 		Type: &goast.FuncType{Params: &goast.FieldList{}},
 		Body: &goast.BlockStmt{
-			List: append(component.Signal(ctxIdent, t.usesDyn), append([]goast.Stmt{component.AdaptiveGC(ctxIdent)}, mainBody...)...),
+			List: append(component.Signal(ctxIdent, passCtx), adjustedBody...),
 		},
 	}
 
@@ -635,7 +641,7 @@ func (t *Transpiler) attachLineDecl(decls []goast.Decl, node ast.Node) {
 	}
 }
 
-func (t *Transpiler) setMemoryLimit() (initFunc *goast.FuncDecl) {
+func (t *Transpiler) setMemoryLimit() *goast.FuncDecl {
 	t.addStdLibImport("runtime/debug")
 	t.addGoImport("github.com/pbnjay/memory")
 	t.addGoImport("github.com/samborkent/adaptive-gc")
