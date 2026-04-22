@@ -9,11 +9,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Int8Literal{}
+var _ Expr = &Int8Literal{}
 
 type Int8Literal struct {
-	expression
-
 	Token tokens.Token
 	Value int8
 }

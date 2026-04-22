@@ -6,15 +6,13 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Switch{}
+var _ Node = &Switch{}
 
 type Switch struct {
-	statement
-
 	Token      tokens.Token
 	Label      *Label
 	Identifier *Identifier // may be nil
-	// Condition Expression // may be nil
+	// Condition Expr // may be nil
 	Cases   []*Case
 	Default *Default // may be nil
 }
@@ -60,14 +58,12 @@ func (s *Switch) String() string {
 	return out.String()
 }
 
-var _ Statement = &Case{}
+var _ Node = &Case{}
 
 type Case struct {
-	statement
-
 	Token     tokens.Token
-	Condition Expression
-	Body      []Statement
+	Condition ExprValue
+	Body      []NodeValue
 }
 
 func (c *Case) Pos() (ln uint32, col uint16) {
@@ -81,12 +77,12 @@ func (c *Case) Hash() uint64 {
 func (c *Case) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString(c.Token.Type.String())
 	_ = out.WriteByte(' ')
-	c.Condition.stringTo(out)
+	c.Condition.expr.stringTo(out)
 	_, _ = out.WriteString(":\n")
 
 	for _, stmt := range c.Body {
 		_ = out.WriteByte('\t')
-		stmt.stringTo(out)
+		stmt.node.stringTo(out)
 		_ = out.WriteByte('\n')
 	}
 }
@@ -98,13 +94,11 @@ func (c *Case) String() string {
 	return out.String()
 }
 
-var _ Statement = &Default{}
+var _ Node = &Default{}
 
 type Default struct {
-	statement
-
 	Token tokens.Token
-	Body  []Statement
+	Body  []NodeValue
 }
 
 func (d *Default) Pos() (ln uint32, col uint16) {
@@ -121,7 +115,7 @@ func (d *Default) stringTo(out *strings.Builder) {
 
 	for _, stmt := range d.Body {
 		_ = out.WriteByte('\t')
-		stmt.stringTo(out)
+		stmt.node.stringTo(out)
 		_ = out.WriteByte('\n')
 	}
 }

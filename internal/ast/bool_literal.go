@@ -8,11 +8,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &BoolLiteral{}
+var _ Expr = &BoolLiteral{}
 
 type BoolLiteral struct {
-	expression
-
 	Token tokens.Token
 	Value bool
 }

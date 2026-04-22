@@ -6,11 +6,9 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Comment{}
+var _ Node = &Comment{}
 
 type Comment struct {
-	statement
-
 	Token tokens.Token
 	Text  string
 }

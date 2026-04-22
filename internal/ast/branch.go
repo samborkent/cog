@@ -6,11 +6,9 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Branch{}
+var _ Node = &Branch{}
 
 type Branch struct {
-	statement
-
 	Token tokens.Token // break or continue token
 	Label *Identifier
 }

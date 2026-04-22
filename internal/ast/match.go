@@ -6,7 +6,7 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Match{}
+var _ Node = &Match{}
 
 // Match represents a match statement:
 //
@@ -15,10 +15,8 @@ var _ Statement = &Match{}
 //	    ...
 //	}
 type Match struct {
-	statement
-
 	Token   tokens.Token
-	Subject Expression
+	Subject ExprValue
 	Binding *Identifier // Optional binding variable.
 	Cases   []*MatchCase
 	Default *Default
@@ -40,7 +38,7 @@ func (m *Match) stringTo(out *strings.Builder) {
 		out.WriteString(" := ")
 	}
 
-	m.Subject.stringTo(out)
+	m.Subject.expr.stringTo(out)
 	out.WriteString(" {\n")
 
 	for _, c := range m.Cases {

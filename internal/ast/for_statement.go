@@ -6,16 +6,14 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &ForStatement{}
+var _ Node = &ForStatement{}
 
 type ForStatement struct {
-	statement
-
 	Token tokens.Token
 	Label *Label
 	Value *Identifier
 	Index *Identifier
-	Range Expression
+	Range ExprValue
 	Loop  *Block
 }
 
@@ -47,8 +45,8 @@ func (s *ForStatement) stringTo(out *strings.Builder) {
 		_, _ = out.WriteString(" in ")
 	}
 
-	if s.Range != nil {
-		s.Range.stringTo(out)
+	if s.Range.NodeKind != KindNone {
+		s.Range.expr.stringTo(out)
 		_ = out.WriteByte(' ')
 	}
 

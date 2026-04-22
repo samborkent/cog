@@ -6,14 +6,12 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &IfStatement{}
+var _ Node = &IfStatement{}
 
 type IfStatement struct {
-	statement
-
 	Token       tokens.Token
 	Label       *Label
-	Condition   Expression
+	Condition   ExprValue
 	Consequence *Block
 	Alternative *Block
 }
@@ -33,7 +31,7 @@ func (s *IfStatement) stringTo(out *strings.Builder) {
 	}
 
 	_, _ = out.WriteString("if (")
-	s.Condition.stringTo(out)
+	s.Condition.expr.stringTo(out)
 	_, _ = out.WriteString(") ")
 	s.Consequence.stringTo(out)
 

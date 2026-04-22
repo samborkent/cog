@@ -6,13 +6,11 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &ExpressionStatement{}
+var _ Node = &ExpressionStatement{}
 
 type ExpressionStatement struct {
-	statement
-
-	Token      tokens.Token
-	Expression Expression
+	Token tokens.Token
+	Expr  ExprValue
 }
 
 func (s *ExpressionStatement) Hash() uint64 {
@@ -24,7 +22,7 @@ func (s *ExpressionStatement) Pos() (uint32, uint16) {
 }
 
 func (s *ExpressionStatement) stringTo(out *strings.Builder) {
-	s.Expression.stringTo(out)
+	s.Expr.expr.stringTo(out)
 }
 
 func (s *ExpressionStatement) String() string {

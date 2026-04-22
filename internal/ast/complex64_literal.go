@@ -8,11 +8,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Complex64Literal{}
+var _ Expr = &Complex64Literal{}
 
 type Complex64Literal struct {
-	expression
-
 	Token tokens.Token
 	Value complex64
 }

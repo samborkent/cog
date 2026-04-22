@@ -7,15 +7,13 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &GoCallExpression{}
+var _ Expr = &GoCallExpression{}
 
 type GoCallExpression struct {
-	expression
-
 	Token          tokens.Token
 	Import         *Identifier
 	CallIdentifier *Identifier
-	Arguments      []Expression
+	Arguments      []ExprValue
 }
 
 func (e *GoCallExpression) Pos() (uint32, uint16) {

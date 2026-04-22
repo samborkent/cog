@@ -13,11 +13,9 @@ import (
 
 type float16 = f16.Float16
 
-var _ Expression = &Float16Literal{}
+var _ Expr = &Float16Literal{}
 
 type Float16Literal struct {
-	expression
-
 	Token tokens.Token
 	Value float16
 }

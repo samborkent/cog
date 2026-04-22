@@ -7,19 +7,17 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &MapLiteral{}
+var _ Expr = &MapLiteral{}
 
 type MapLiteral struct {
-	expression
-
 	Token   tokens.Token
 	MapType types.Type
 	Pairs   []*KeyValue
 }
 
 type KeyValue struct {
-	Key   Expression
-	Value Expression
+	Key   ExprValue
+	Value ExprValue
 }
 
 func (l *MapLiteral) Pos() (uint32, uint16) {
@@ -34,9 +32,9 @@ func (l *MapLiteral) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString("({")
 
 	for i, pair := range l.Pairs {
-		pair.Key.stringTo(out)
+		pair.Key.expr.stringTo(out)
 		_, _ = out.WriteString(": ")
-		pair.Value.stringTo(out)
+		pair.Value.expr.stringTo(out)
 
 		if i < len(l.Pairs)-1 {
 			_, _ = out.WriteString(", ")

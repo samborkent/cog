@@ -7,11 +7,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Statement = &Declaration{}
+var _ Node = &Declaration{}
 
 type Method struct {
-	statement
-
 	Token       tokens.Token
 	Export      bool
 	Receiver    *Identifier

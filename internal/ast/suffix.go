@@ -7,13 +7,11 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Suffix{}
+var _ Expr = &Suffix{}
 
 type Suffix struct {
-	expression
-
 	Operator tokens.Token
-	Left     Expression
+	Left     ExprValue
 }
 
 func (p *Suffix) Pos() (uint32, uint16) {
@@ -26,7 +24,7 @@ func (p *Suffix) Hash() uint64 {
 
 func (p *Suffix) stringTo(out *strings.Builder) {
 	_ = out.WriteByte('(')
-	p.Left.stringTo(out)
+	p.Left.expr.stringTo(out)
 	_, _ = out.WriteString(p.Operator.Type.String())
 	_ = out.WriteByte(')')
 }
@@ -39,10 +37,6 @@ func (p *Suffix) String() string {
 }
 
 func (p *Suffix) Type() types.Type {
-	if p.Left.Type() == nil {
-		panic("suffix with nil type detected")
-	}
-
 	// ? suffix is always a boolean check (option: is set?, result: is OK?).
 	if p.Operator.Type == tokens.Question {
 		return types.Basics[types.Bool]
@@ -50,7 +44,7 @@ func (p *Suffix) Type() types.Type {
 
 	// ! suffix extracts the error value from a result type.
 	if p.Operator.Type == tokens.Not {
-		underlying := p.Left.Type()
+		underlying := p.Left.expr.Type()
 		if alias, ok := underlying.(*types.Alias); ok {
 			underlying = alias.Underlying()
 		}
@@ -62,5 +56,5 @@ func (p *Suffix) Type() types.Type {
 		panic("! suffix on non-result type")
 	}
 
-	return p.Left.Type()
+	return p.Left.expr.Type()
 }

@@ -6,11 +6,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Statement = &Declaration{}
+var _ Node = &Declaration{}
 
 type Declaration struct {
-	statement
-
 	Assignment *Assignment
 }
 
@@ -34,7 +32,7 @@ func (d *Declaration) stringTo(out *strings.Builder) {
 		_, _ = out.WriteString("dyn ")
 	}
 
-	if d.Assignment.Expression == nil {
+	if d.Assignment.Expr.NodeKind == KindNone {
 		d.Assignment.Identifier.stringTo(out)
 		_, _ = out.WriteString(" : ")
 		_, _ = out.WriteString(d.Assignment.Identifier.ValueType.String())
@@ -45,7 +43,7 @@ func (d *Declaration) stringTo(out *strings.Builder) {
 	if d.Assignment.Identifier.ValueType == nil || d.Assignment.Identifier.ValueType == types.None {
 		d.Assignment.Identifier.stringTo(out)
 		_, _ = out.WriteString(" := ")
-		d.Assignment.Expression.stringTo(out)
+		d.Assignment.Expr.expr.stringTo(out)
 
 		return
 	}

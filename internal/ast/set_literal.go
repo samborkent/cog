@@ -7,14 +7,12 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &SetLiteral{}
+var _ Expr = &SetLiteral{}
 
 type SetLiteral struct {
-	expression
-
 	Token   tokens.Token
 	SetType types.Type
-	Values  []Expression
+	Values  []ExprValue
 }
 
 func (l *SetLiteral) Pos() (uint32, uint16) {
@@ -29,7 +27,7 @@ func (l *SetLiteral) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString("({")
 
 	for i, v := range l.Values {
-		v.stringTo(out)
+		v.expr.stringTo(out)
 
 		if i < len(l.Values)-1 {
 			_, _ = out.WriteString(", ")

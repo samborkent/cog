@@ -7,15 +7,13 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Builtin{}
+var _ Node = &Builtin{}
 
 type Builtin struct {
-	expression
-
 	Token         tokens.Token
 	Name          string
 	TypeArguments []types.Type
-	Arguments     []Expression
+	Arguments     []ExprValue
 	ReturnType    types.Type
 }
 
@@ -48,7 +46,7 @@ func (b *Builtin) stringTo(out *strings.Builder) {
 	_ = out.WriteByte('(')
 
 	for i, arg := range b.Arguments {
-		arg.stringTo(out)
+		arg.expr.stringTo(out)
 
 		if i < len(b.Arguments)-1 {
 			_, _ = out.WriteString(", ")

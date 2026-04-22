@@ -9,14 +9,12 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Selector{}
+var _ Expr = &Selector{}
 
 type Selector struct {
-	expression
-
-	Token      tokens.Token
-	Expression Expression // *Identifier or *Selector
-	Field      *Identifier
+	Token tokens.Token
+	Expr  ExprValue // *Identifier or *Selector
+	Field *Identifier
 }
 
 func (e *Selector) Pos() (uint32, uint16) {
@@ -28,7 +26,7 @@ func (e *Selector) Hash() uint64 {
 }
 
 func (e *Selector) stringTo(out *strings.Builder) {
-	e.Expression.stringTo(out)
+	e.Expr.expr.stringTo(out)
 	_ = out.WriteByte('.')
 	e.Field.stringTo(out)
 }
@@ -52,15 +50,15 @@ func (e *Selector) LeftMost() (*Identifier, error) {
 
 selectorLoop:
 	for {
-		switch sel := current.Expression.(type) {
-		case *Selector:
-			current = sel
+		switch current.Expr.NodeKind {
+		case KindSelector:
+			current = current.Expr.expr.(*Selector)
 			continue
-		case *Identifier:
-			leftMost = sel
+		case KindIdentifier:
+			leftMost = current.Expr.expr.(*Identifier)
 			break selectorLoop
 		default:
-			return nil, fmt.Errorf("unexpected type %T found in selector expression", current.Expression)
+			return nil, fmt.Errorf("unexpected type %T found in selector expression", current.Expr)
 		}
 	}
 

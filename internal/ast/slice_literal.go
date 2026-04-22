@@ -7,14 +7,12 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &SliceLiteral{}
+var _ Expr = &SliceLiteral{}
 
 type SliceLiteral struct {
-	expression
-
 	Token       tokens.Token
 	ElementType types.Type
-	Values      []Expression
+	Values      []ExprValue
 }
 
 func (l *SliceLiteral) Pos() (uint32, uint16) {
@@ -29,7 +27,7 @@ func (l *SliceLiteral) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString("({")
 
 	for i, v := range l.Values {
-		v.stringTo(out)
+		v.expr.stringTo(out)
 
 		if i < len(l.Values)-1 {
 			_, _ = out.WriteString(", ")
@@ -49,10 +47,6 @@ func (l *SliceLiteral) String() string {
 }
 
 func (l *SliceLiteral) Type() types.Type {
-	if l.ElementType == nil {
-		panic("slice with nil element type detected")
-	}
-
 	return &types.Slice{
 		Element: l.ElementType,
 	}

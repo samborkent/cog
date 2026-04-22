@@ -6,14 +6,12 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Assignment{}
+var _ Node = &Assignment{}
 
 type Assignment struct {
-	statement
-
 	Token      tokens.Token
 	Identifier *Identifier
-	Expression Expression
+	Expr       ExprValue
 }
 
 func (a *Assignment) Pos() (uint32, uint16) {
@@ -29,7 +27,7 @@ func (a *Assignment) stringTo(out *strings.Builder) {
 	_ = out.WriteByte(' ')
 	_, _ = out.WriteString(a.Token.Type.String())
 	_ = out.WriteByte(' ')
-	a.Expression.stringTo(out)
+	a.Expr.expr.stringTo(out)
 }
 
 func (a *Assignment) String() string {

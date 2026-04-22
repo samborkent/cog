@@ -6,13 +6,11 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Block{}
+var _ Node = &Block{}
 
 type Block struct {
-	statement
-
 	Start, End tokens.Token
-	Statements []Statement
+	Statements []NodeValue
 }
 
 func (b *Block) Pos() (uint32, uint16) {
@@ -39,7 +37,7 @@ func (b *Block) stringTo(out *strings.Builder) {
 		}
 
 		_ = out.WriteByte('\t')
-		stmt.stringTo(out)
+		stmt.node.stringTo(out)
 		_ = out.WriteByte('\n')
 	}
 

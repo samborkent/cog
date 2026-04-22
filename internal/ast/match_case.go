@@ -14,7 +14,7 @@ type MatchCase struct {
 	Token     tokens.Token
 	MatchType types.Type
 	Tilde     bool
-	Body      []Statement
+	Body      []NodeValue
 }
 
 func (m *MatchCase) Pos() (uint32, uint16) {
@@ -36,7 +36,7 @@ func (m *MatchCase) stringTo(out *strings.Builder) {
 	_, _ = out.WriteString(":\n")
 
 	for _, stmt := range m.Body {
-		stmt.stringTo(out)
+		stmt.node.stringTo(out)
 	}
 }
 

@@ -19,7 +19,8 @@ Where node stores a pointer to a specific node matching Kind. Store AST as `[]No
 
 ## 2. Flat AST (follows 1)
 
-Nodes don't store pointers to other nodes, but instead store a `type NodeIndex uint32`. This index is used to index into the flat `[]Node` AST. Nodes can be added with `append`, and removed if needed by replacing index with `Node{}`.
+Nodes don't store pointers to other nodes, but instead store a `type NodeIndex uint32`. This index is used to index into two flat AST slices: `[]Nodes` & `[]Expressions` AST. Nodes can be added with `append`, and removed if needed by replacing index with `Node{}`.
+`Nodes[0]` & `[]Expressions` must be an empty node with `ZeroKind`, so unset nodes can use `NodeKind == 0` / `NodeIndex == 0`.
 
 ## 3. Text-based transpiler
 

@@ -18,11 +18,9 @@ const (
 	// QualifierConstant
 )
 
-var _ Expression = &Identifier{}
+var _ Expr = &Identifier{}
 
 type Identifier struct {
-	expression
-
 	Token     tokens.Token
 	Name      string
 	ValueType types.Type

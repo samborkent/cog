@@ -7,14 +7,12 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &ResultLiteral{}
+var _ Expr = &ResultLiteral{}
 
 type ResultLiteral struct {
-	expression
-
 	Token      tokens.Token
 	ResultType types.Type
-	Value      Expression
+	Value      ExprValue
 	IsError    bool // False: Value (success), True: Error
 }
 
@@ -27,7 +25,7 @@ func (e *ResultLiteral) Hash() uint64 {
 }
 
 func (e *ResultLiteral) stringTo(out *strings.Builder) {
-	e.Value.stringTo(out)
+	e.Value.expr.stringTo(out)
 }
 
 func (e *ResultLiteral) String() string {

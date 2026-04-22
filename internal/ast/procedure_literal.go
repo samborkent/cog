@@ -7,11 +7,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &ProcedureLiteral{}
+var _ Expr = &ProcedureLiteral{}
 
 type ProcedureLiteral struct {
-	expression
-
 	Body          *Block
 	ProcedureType types.Type
 }
@@ -32,11 +30,11 @@ func (l *ProcedureLiteral) stringTo(out *strings.Builder) {
 			_ = out.WriteByte('\n')
 		}
 
-		ln, col := stmt.Pos()
+		ln, col := stmt.node.Pos()
 		fmt.Fprintf(out, "ln %d, col %d:", ln, col)
 
 		_ = out.WriteByte('\t')
-		stmt.stringTo(out)
+		stmt.node.stringTo(out)
 		_ = out.WriteByte('\n')
 	}
 

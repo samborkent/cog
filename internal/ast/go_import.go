@@ -6,11 +6,9 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &GoImport{}
+var _ Node = &GoImport{}
 
 type GoImport struct {
-	statement
-
 	Token   tokens.Token
 	Imports []*Identifier
 }

@@ -7,14 +7,15 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &EitherLiteral{}
+var (
+	_ Node = &EitherLiteral{}
+	_ Expr = &EitherLiteral{}
+)
 
 type EitherLiteral struct {
-	expression
-
 	Token      tokens.Token
 	EitherType types.Type
-	Value      Expression
+	Value      ExprValue
 	IsRight    bool
 }
 
@@ -27,7 +28,7 @@ func (e *EitherLiteral) Hash() uint64 {
 }
 
 func (e *EitherLiteral) stringTo(out *strings.Builder) {
-	e.Value.stringTo(out)
+	e.Value.expr.stringTo(out)
 }
 
 func (e *EitherLiteral) String() string {
@@ -38,9 +39,5 @@ func (e *EitherLiteral) String() string {
 }
 
 func (e *EitherLiteral) Type() types.Type {
-	if e.EitherType == nil {
-		panic("either with nil type detected")
-	}
-
 	return e.EitherType
 }

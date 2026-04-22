@@ -6,11 +6,9 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &IfStatement{}
+var _ Node = &IfStatement{}
 
 type Label struct {
-	statement
-
 	Token tokens.Token
 	Label *Identifier
 }

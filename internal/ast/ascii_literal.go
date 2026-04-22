@@ -16,11 +16,9 @@ const (
 
 type ascii = []byte
 
-var _ Expression = &ASCIILiteral{}
+var _ Expr = &ASCIILiteral{}
 
 type ASCIILiteral struct {
-	expression
-
 	Token tokens.Token
 	Value ascii
 }

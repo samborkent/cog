@@ -12,11 +12,9 @@ import (
 
 type int128 = wide.Int128
 
-var _ Expression = &Int128Literal{}
+var _ Expr = &Int128Literal{}
 
 type Int128Literal struct {
-	expression
-
 	Token tokens.Token
 	Value int128
 }

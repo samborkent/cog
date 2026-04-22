@@ -6,15 +6,13 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Statement = &Parameter{}
+var _ Node = &Parameter{}
 
 type Parameter struct {
-	statement
-
 	Identifier *Identifier
 	ValueType  types.Type
 	Optional   bool
-	Default    Expression // optional
+	Default    ExprValue // optional
 }
 
 func (p *Parameter) Pos() (uint32, uint16) {
@@ -38,9 +36,9 @@ func (p *Parameter) stringTo(out *strings.Builder) {
 
 	_, _ = out.WriteString(p.ValueType.String())
 
-	if p.Default != nil {
+	if p.Default.NodeKind != KindNone {
 		_, _ = out.WriteString(" = ")
-		p.Default.stringTo(out)
+		p.Default.expr.stringTo(out)
 	}
 }
 

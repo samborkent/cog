@@ -9,11 +9,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Uint16Literal{}
+var _ Expr = &Uint16Literal{}
 
 type Uint16Literal struct {
-	expression
-
 	Token tokens.Token
 	Value uint16
 }

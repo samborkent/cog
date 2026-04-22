@@ -2,14 +2,12 @@ package ast
 
 import "strings"
 
-var _ Statement = &File{}
+var _ Node = &File{}
 
 type File struct {
-	statement
-
 	Name         string
 	Package      *Package
-	Statements   []Statement
+	Statements   []NodeValue
 	ContainsMain bool
 }
 
@@ -28,7 +26,7 @@ func (f *File) stringTo(out *strings.Builder) {
 	f.Package.stringTo(out)
 
 	for _, stmt := range f.Statements {
-		stmt.stringTo(out)
+		stmt.node.stringTo(out)
 		_ = out.WriteByte('\n')
 	}
 }

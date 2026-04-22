@@ -6,20 +6,18 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Call{}
+var _ Expr = &Call{}
 
 type Call struct {
-	expression
-
-	Expression Expression // *Identfier or *Selector
-	Package    string     // non-empty when calling an imported package's function
-	Arguments  []Expression
+	Expr       ExprValue // *Identfier or *Selector
+	Package    string    // non-empty when calling an imported package's function
+	Arguments  []ExprValue
 	ReturnType types.Type
 	TypeArgs   []types.Type // explicit or inferred type arguments for generic calls
 }
 
 func (c *Call) Pos() (uint32, uint16) {
-	return c.Expression.Pos()
+	return c.Expr.expr.Pos()
 }
 
 func (c *Call) Hash() uint64 {
@@ -32,7 +30,7 @@ func (c *Call) stringTo(out *strings.Builder) {
 		_ = out.WriteByte('.')
 	}
 
-	c.Expression.stringTo(out)
+	c.Expr.expr.stringTo(out)
 
 	if len(c.TypeArgs) > 0 {
 		_ = out.WriteByte('<')
@@ -51,7 +49,7 @@ func (c *Call) stringTo(out *strings.Builder) {
 	_ = out.WriteByte('(')
 
 	for i, arg := range c.Arguments {
-		arg.stringTo(out)
+		arg.expr.stringTo(out)
 
 		if i < len(c.Arguments)-1 {
 			_, _ = out.WriteString(", ")
@@ -68,11 +66,6 @@ func (c *Call) String() string {
 	return out.String()
 }
 
-// TODO: return a proper return type here
 func (c *Call) Type() types.Type {
-	if c.ReturnType == nil {
-		panic("call with nil return type detected")
-	}
-
 	return c.ReturnType
 }

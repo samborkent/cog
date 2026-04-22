@@ -6,12 +6,11 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Return{}
+var _ Node = &Return{}
 
 type Return struct {
-	statement
 	Token  tokens.Token
-	Values []Expression
+	Values []ExprValue
 }
 
 func (r *Return) Pos() (uint32, uint16) {
@@ -27,7 +26,7 @@ func (r *Return) stringTo(out *strings.Builder) {
 	_ = out.WriteByte(' ')
 
 	for i, v := range r.Values {
-		v.stringTo(out)
+		v.expr.stringTo(out)
 
 		if i < len(r.Values)-1 {
 			_, _ = out.WriteString(", ")

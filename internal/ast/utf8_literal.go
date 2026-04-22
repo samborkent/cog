@@ -9,11 +9,9 @@ import (
 
 type utf8 = string
 
-var _ Expression = &UTF8Literal{}
+var _ Expr = &UTF8Literal{}
 
 type UTF8Literal struct {
-	expression
-
 	Token tokens.Token
 	Value utf8
 }

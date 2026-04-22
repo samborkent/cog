@@ -7,11 +7,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Statement = &Type{}
+var _ Node = &Type{}
 
 type Type struct {
-	statement
-
 	Token          tokens.Token
 	Identifier     *Identifier
 	TypeParameters []*types.Alias

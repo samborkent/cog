@@ -7,14 +7,12 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &TupleLiteral{}
+var _ Expr = &TupleLiteral{}
 
 type TupleLiteral struct {
-	expression
-
 	Token     tokens.Token
 	TupleType types.Type
-	Values    []Expression
+	Values    []ExprValue
 }
 
 func (e *TupleLiteral) Pos() (uint32, uint16) {
@@ -29,7 +27,7 @@ func (e *TupleLiteral) stringTo(out *strings.Builder) {
 	_ = out.WriteByte('{')
 
 	for i, val := range e.Values {
-		val.stringTo(out)
+		val.expr.stringTo(out)
 
 		if i < len(e.Values)-1 {
 			_, _ = out.WriteString(", ")

@@ -9,11 +9,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Float64Literal{}
+var _ Expr = &Float64Literal{}
 
 type Float64Literal struct {
-	expression
-
 	Token tokens.Token
 	Value float64
 }

@@ -7,13 +7,11 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Prefix{}
+var _ Expr = &Prefix{}
 
 type Prefix struct {
-	expression
-
 	Operator tokens.Token
-	Right    Expression
+	Right    ExprValue
 }
 
 func (p *Prefix) Pos() (uint32, uint16) {
@@ -27,7 +25,7 @@ func (p *Prefix) Hash() uint64 {
 func (p *Prefix) stringTo(out *strings.Builder) {
 	_ = out.WriteByte('(')
 	_, _ = out.WriteString(p.Operator.Type.String())
-	p.Right.stringTo(out)
+	p.Right.expr.stringTo(out)
 	_ = out.WriteByte(')')
 }
 
@@ -39,16 +37,12 @@ func (p *Prefix) String() string {
 }
 
 func (p *Prefix) Type() types.Type {
-	if p.Right.Type() == nil {
-		panic("prefix with nil type detected")
-	}
-
 	// Return
 	if p.Operator.Type == tokens.BitAnd {
 		return &types.Reference{
-			Value: p.Right.Type(),
+			Value: p.Right.expr.Type(),
 		}
 	}
 
-	return p.Right.Type()
+	return p.Right.expr.Type()
 }

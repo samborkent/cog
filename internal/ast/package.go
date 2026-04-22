@@ -6,11 +6,9 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Package{}
+var _ Node = &Package{}
 
 type Package struct {
-	statement
-
 	Token      tokens.Token
 	Identifier *Identifier
 }

@@ -7,14 +7,12 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Index{}
+var _ Expr = &Index{}
 
 type Index struct {
-	expression
-
 	Token      tokens.Token
-	Identifier Expression
-	Index      Expression
+	Identifier ExprValue
+	Index      ExprValue
 }
 
 func (e *Index) Pos() (ln uint32, col uint16) {
@@ -26,9 +24,9 @@ func (e *Index) Hash() uint64 {
 }
 
 func (e *Index) stringTo(out *strings.Builder) {
-	e.Identifier.stringTo(out)
+	e.Identifier.expr.stringTo(out)
 	_ = out.WriteByte('[')
-	e.Index.stringTo(out)
+	e.Index.expr.stringTo(out)
 	_ = out.WriteByte(']')
 }
 
@@ -40,15 +38,15 @@ func (e *Index) String() string {
 }
 
 func (e *Index) Type() types.Type {
-	switch t := e.Identifier.Type().(type) {
-	case *types.Array:
-		return t.Element
-	case *types.Map:
-		return t.Value
-	case *types.Set:
-		return t.Element
-	case *types.Slice:
-		return t.Element
+	switch e.Identifier.TypeKind {
+	case types.ArrayKind:
+		return e.Identifier.expr.Type().(*types.Array).Element
+	case types.MapKind:
+		return e.Identifier.expr.Type().(*types.Map).Value
+	case types.SetKind:
+		return e.Identifier.expr.Type().(*types.Set).Element
+	case types.SliceKind:
+		return e.Identifier.expr.Type().(*types.Slice).Element
 	default:
 		panic("indexing non-indexable type")
 	}

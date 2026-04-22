@@ -14,11 +14,9 @@ func Complex32To64(c complex32) complex64 {
 	return complex(c[0].Float32(), c[1].Float32())
 }
 
-var _ Expression = &Complex32Literal{}
+var _ Expr = &Complex32Literal{}
 
 type Complex32Literal struct {
-	expression
-
 	Token tokens.Token
 	Value complex32
 }
