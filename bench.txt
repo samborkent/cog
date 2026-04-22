@@ -1,0 +1,10 @@
+2026-04-22 12:16
+BenchmarkLexing-10                           844            128737 ns/op          430043 B/op       1009 allocs/op
+BenchmarkParsing-10                          447            256105 ns/op          664629 B/op       4633 allocs/op
+BenchmarkTranspiling-10                      399            281826 ns/op          546915 B/op       9397 allocs/op
+BenchmarkPrinting-10                         206            569274 ns/op          442730 B/op       2702 allocs/op
+BenchmarkTranspileAndPrint-10                133            902995 ns/op          998236 B/op      12102 allocs/op
+BenchmarkFullPipeline-10                     100           1229467 ns/op         1679398 B/op      16741 allocs/op
+BenchmarkGoBuild-10                            1         124992375 ns/op           13688 B/op         63 allocs/op
+BenchmarkLargeFile-10                         81           1262587 ns/op         1672130 B/op      16741 allocs/op
+BenchmarkMultiFileTranspile-10               129            926002 ns/op         1008683 B/op      12104 allocs/op
