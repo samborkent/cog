@@ -9,7 +9,8 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
+// TODO: take label ident and fill in inside this method
+func (p *Parser) parseForStatement(ctx context.Context, labelIdent *ast.Identifier) ast.NodeValue {
 	node := &ast.ForStatement{
 		Token: p.this(),
 	}
@@ -31,7 +32,7 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 		case tokens.In:
 			if p.this().Type != tokens.Identifier {
 				p.error(p.this(), "expected identifier for loop variable", "parseForStatement")
-				return nil
+				return ast.ZeroNode
 			}
 
 			valueVar = &ast.Identifier{
@@ -45,7 +46,7 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 		case tokens.Comma:
 			if p.this().Type != tokens.Identifier {
 				p.error(p.this(), "expected identifier for loop value variable", "parseForStatement")
-				return nil
+				return ast.ZeroNode
 			}
 
 			// Skip _ value variable.
@@ -62,7 +63,7 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 
 			if p.this().Type != tokens.Identifier {
 				p.error(p.this(), "expected identifier for loop index variable", "parseForStatement")
-				return nil
+				return ast.ZeroNode
 			}
 
 			indexVar = &ast.Identifier{
@@ -76,21 +77,21 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 
 			if p.this().Type != tokens.In {
 				p.error(p.this(), "expected in keyword after loop index variable", "parseForStatement")
-				return nil
+				return ast.ZeroNode
 			}
 
 			p.advance("parseForStatement in") // consume in keyword
 		}
 
 		expr := p.expression(ctx, types.None)
-		if expr == nil {
+		if expr == ast.ZeroExpr {
 			p.error(p.this(), "expected range expression or loop body", "parseForStatement")
-			return nil
+			return ast.ZeroNode
 		}
 
 		if !types.IsIterator(expr.Type()) {
 			p.error(p.this(), "cannot iterate over type "+expr.Type().String(), "parseForStatement")
-			return nil
+			return ast.ZeroNode
 		}
 
 		if valueVar != nil {
@@ -118,7 +119,7 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 	loop := p.parseBlockStatement(ctx)
 	if loop == nil {
 		p.error(p.this(), "unable to parse for block", "parseForStatement")
-		return nil
+		return ast.ZeroNode
 	}
 
 	if valueVar != nil || indexVar != nil {
@@ -140,12 +141,21 @@ func (p *Parser) parseForStatement(ctx context.Context) *ast.ForStatement {
 		for _, err := range p.Errs[prevErrorCount:] {
 			if strings.Contains(err.Error(), "unknown token") {
 				p.error(p.this(), "untyped container literal not allowed in loop range expression", "parseIfStatement")
-				return nil
+				return ast.ZeroNode
 			}
 		}
 	}
 
 	node.Loop = loop
 
-	return node
+	if labelIdent != nil {
+		// Set label if present.
+		labelIdent.ValueType = types.None
+		node.Label = &ast.Label{
+			Token: labelIdent.Token,
+			Label: labelIdent,
+		}
+	}
+
+	return ast.NewNode(ast.KindForStatement, node)
 }

@@ -17,6 +17,10 @@ type MatchCase struct {
 	Body      []NodeValue
 }
 
+func (m *MatchCase) Kind() NodeKind {
+	return KindMatchCase
+}
+
 func (m *MatchCase) Pos() (uint32, uint16) {
 	return m.Token.Ln, m.Token.Col
 }

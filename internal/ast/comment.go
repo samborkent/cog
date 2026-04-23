@@ -13,6 +13,10 @@ type Comment struct {
 	Text  string
 }
 
+func (c *Comment) Kind() NodeKind {
+	return KindComment
+}
+
 func (c *Comment) Hash() uint64 {
 	return hash(c)
 }

@@ -11,21 +11,21 @@ import (
 
 // parsePkgSelector parses an imported package selector expression: pkg.Symbol
 // The cursor is on the package name identifier.
-func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.Expression {
+func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.ExprValue {
 	pkgToken := p.this()
 
 	p.advance("parsePkgSelector pkg") // consume package name
 
 	if p.this().Type != tokens.Dot {
 		p.error(p.this(), "expected '.' after package name", "parsePkgSelector")
-		return nil
+		return ast.ZeroExpr
 	}
 
 	p.advance("parsePkgSelector .") // consume '.'
 
 	if p.this().Type != tokens.Identifier {
 		p.error(p.this(), "expected identifier after package selector", "parsePkgSelector")
-		return nil
+		return ast.ZeroExpr
 	}
 
 	symbolName := p.this().Literal
@@ -34,7 +34,7 @@ func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.Expre
 	sym, ok := imp.Exports[symbolName]
 	if !ok {
 		p.error(p.this(), fmt.Sprintf("package %q has no exported symbol %q", imp.Name, symbolName), "parsePkgSelector")
-		return nil
+		return ast.ZeroExpr
 	}
 
 	pkgIdent := &ast.Identifier{
@@ -57,21 +57,21 @@ func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.Expre
 		procType, isProc := sym.Identifier.ValueType.(*types.Procedure)
 		if !isProc {
 			p.error(p.this(), fmt.Sprintf("%s.%s is not callable", imp.Name, symbolName), "parsePkgSelector")
-			return nil
+			return ast.ZeroExpr
 		}
 
-		return &ast.Call{
-			Expression: fieldIdent,
+		return ast.NewExpr(ast.KindCall, procType.ReturnType.Kind(), &ast.Call{
+			Expr:       ast.NewExpr(ast.KindIdentifier, fieldIdent.ValueType.Kind(), fieldIdent),
 			Package:    imp.Name,
 			Arguments:  p.parseCallArguments(ctx, procType),
 			ReturnType: procType.ReturnType,
-		}
+		})
 	}
 
 	// Otherwise it's a value/type selector: pkg.Value
-	return &ast.Selector{
-		Token:      pkgToken,
-		Expression: pkgIdent,
-		Field:      fieldIdent,
-	}
+	return ast.NewExpr(ast.KindSelector, fieldIdent.ValueType.Kind(), &ast.Selector{
+		Token: pkgToken,
+		Expr:  ast.NewExpr(ast.KindIdentifier, pkgIdent.ValueType.Kind(), pkgIdent),
+		Field: fieldIdent,
+	})
 }

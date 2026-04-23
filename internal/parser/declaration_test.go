@@ -21,7 +21,7 @@ main : proc() = {}`)
 			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Name)
 		}
 
-		if d.Assignment.Expression == nil {
+		if d.Assignment.Expr == ast.ZeroExpr {
 			t.Error("expected expression in declaration")
 		}
 	})
@@ -47,15 +47,17 @@ main : proc() = {
 }`)
 		d := stmtAs[*ast.Declaration](t, f, 0)
 
-		proc, ok := d.Assignment.Expression.(*ast.ProcedureLiteral)
-		if !ok {
-			t.Fatalf("expected ProcedureLiteral, got %T", d.Assignment.Expression)
+		if d.Assignment.Expr.NodeKind != ast.KindProcedureLiteral {
+			t.Fatalf("expected ProcedureLiteral, got %T", d.Assignment.Expr)
 		}
 
-		varDecl, ok := proc.Body.Statements[0].(*ast.Declaration)
-		if !ok {
+		proc := d.Assignment.Expr.AsProcedureLiteral()
+
+		if proc.Body.Statements[0].NodeKind != ast.KindDeclaration {
 			t.Fatalf("expected Declaration, got %T", proc.Body.Statements[0])
 		}
+
+		varDecl := proc.Body.Statements[0].AsDeclaration()
 
 		if varDecl.Assignment.Identifier.Qualifier != ast.QualifierVariable {
 			t.Errorf("expected QualifierVariable, got %d", varDecl.Assignment.Identifier.Qualifier)

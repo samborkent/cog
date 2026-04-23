@@ -14,6 +14,10 @@ type Assignment struct {
 	Expr       ExprValue
 }
 
+func (a *Assignment) Kind() NodeKind {
+	return KindAssignment
+}
+
 func (a *Assignment) Pos() (uint32, uint16) {
 	return a.Token.Ln, a.Token.Col
 }

@@ -23,6 +23,10 @@ func NewUTF8Literal(t tokens.Token) *UTF8Literal {
 	}
 }
 
+func (l *UTF8Literal) Kind() NodeKind {
+	return KindUTF8Literal
+}
+
 func (l *UTF8Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

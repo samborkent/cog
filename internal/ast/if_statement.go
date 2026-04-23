@@ -16,6 +16,10 @@ type IfStatement struct {
 	Alternative *Block
 }
 
+func (s *IfStatement) Kind() NodeKind {
+	return KindIfStatement
+}
+
 func (s *IfStatement) Pos() (uint32, uint16) {
 	return s.Token.Ln, s.Token.Col
 }

@@ -168,6 +168,10 @@ func (e *Infix) EqualizeLiteralTypes() {
 	e.Right = upgradeLiteralType(e.Right, e.Left)
 }
 
+func (e *Infix) Kind() NodeKind {
+	return KindInfix
+}
+
 func (e *Infix) Pos() (uint32, uint16) {
 	return e.Operator.Ln, e.Operator.Col
 }

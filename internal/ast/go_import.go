@@ -13,6 +13,10 @@ type GoImport struct {
 	Imports []*Identifier
 }
 
+func (g *GoImport) Kind() NodeKind {
+	return KindGoImport
+}
+
 func (g *GoImport) Pos() (uint32, uint16) {
 	return g.Token.Ln, g.Token.Col
 }

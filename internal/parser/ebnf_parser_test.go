@@ -17,12 +17,13 @@ x := 1 + 2
 main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
-		if d.Assignment.Expression == nil {
+
+		if d.Assignment.Expr == ast.ZeroExpr {
 			t.Fatal("expected expression")
 		}
 
-		if _, ok := d.Assignment.Expression.(*ast.Infix); !ok {
-			t.Errorf("expected Infix expression, got %T", d.Assignment.Expression)
+		if d.Assignment.Expr.NodeKind != ast.KindInfix {
+			t.Errorf("expected Infix expression, got %T", d.Assignment.Expr)
 		}
 	})
 
@@ -33,8 +34,9 @@ x := -1
 main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
-		if _, ok := d.Assignment.Expression.(*ast.Prefix); !ok {
-			t.Errorf("expected Prefix expression, got %T", d.Assignment.Expression)
+
+		if d.Assignment.Expr.NodeKind != ast.KindPrefix {
+			t.Errorf("expected Prefix expression, got %T", d.Assignment.Expr)
 		}
 	})
 
@@ -93,10 +95,11 @@ broken := Struct{
 	declaration := stmtAs[*ast.Declaration](t, f, 1)
 
 	// Check that the value is a struct literal
-	structLiteral, ok := declaration.Assignment.Expression.(*ast.StructLiteral)
-	if !ok {
-		t.Fatalf("expected struct literal, got %T", declaration.Assignment.Expression)
+	if declaration.Assignment.Expr.NodeKind != ast.KindStructLiteral {
+		t.Fatalf("expected struct literal, got %T", declaration.Assignment.Expr)
 	}
+
+	structLiteral := declaration.Assignment.Expr.AsStructLiteral()
 
 	if !strings.Contains(structLiteral.StructType.String(), "Struct") {
 		t.Errorf("expected struct type with Struct, got %s", structLiteral.StructType.String())

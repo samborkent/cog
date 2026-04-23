@@ -15,6 +15,10 @@ type Complex64Literal struct {
 	Value complex64
 }
 
+func (l *Complex64Literal) Kind() NodeKind {
+	return KindComplex64Literal
+}
+
 func (l *Complex64Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

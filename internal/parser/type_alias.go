@@ -9,13 +9,13 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast.Type {
+func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.NodeValue {
 	if p.symbols.Outer == nil {
 		// Ensure type already exists (created during find globals sweep)
 		_, ok := p.symbols.Resolve(ident.Name)
 		if !ok {
 			p.error(p.this(), fmt.Sprintf("missing global type symbol %q", ident.Name), "parseTypeAlias")
-			return nil
+			return ast.ZeroNode
 		}
 	}
 
@@ -32,7 +32,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 	if p.this().Type == tokens.LT {
 		typeParams = p.parseTypeParams(ctx)
 		if typeParams == nil {
-			return nil
+			return ast.ZeroNode
 		}
 
 		typeDecl.TypeParameters = typeParams
@@ -59,7 +59,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 
 	typ := p.parseCombinedType(ctx, ident.Exported, ident.Global)
 	if typ == nil {
-		return nil
+		return ast.ZeroNode
 	}
 
 	// Carry over methods registered during the global scan:
@@ -112,5 +112,5 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 		}
 	}
 
-	return typeDecl
+	return ast.NewNode(ast.KindType, typeDecl)
 }

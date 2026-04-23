@@ -1,4 +1,4 @@
-2026-04-22 12:16
+2026-04-22 12:16 Before optimizations
 BenchmarkLexing-10                           844            128737 ns/op          430043 B/op       1009 allocs/op
 BenchmarkParsing-10                          447            256105 ns/op          664629 B/op       4633 allocs/op
 BenchmarkTranspiling-10                      399            281826 ns/op          546915 B/op       9397 allocs/op

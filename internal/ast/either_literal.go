@@ -19,6 +19,10 @@ type EitherLiteral struct {
 	IsRight    bool
 }
 
+func (e *EitherLiteral) Kind() NodeKind {
+	return KindEitherLiteral
+}
+
 func (e *EitherLiteral) Pos() (uint32, uint16) {
 	return e.Token.Ln, e.Token.Col
 }

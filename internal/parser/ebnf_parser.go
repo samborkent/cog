@@ -12,76 +12,68 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.Expression {
+func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.ExprValue {
 	expr := p.boolean(ctx, typeToken)
 
 	for p.match(tokens.LBracket) {
-		if ctx.Err() != nil || expr == nil {
-			return nil
+		if ctx.Err() != nil || expr == ast.ZeroExpr {
+			return ast.ZeroExpr
 		}
 
 		operator := p.this()
 		p.advance("expression index operator") // consume operator
 		index := p.boolean(ctx, types.None)
 
-		expr = &ast.Index{
+		expr = ast.NewExpr(ast.KindIndex, types.Invalid, &ast.Index{
 			Token:      operator,
 			Identifier: expr,
 			Index:      index,
-		}
+		})
 
 		if p.this().Type != tokens.RBracket {
 			p.error(p.this(), "expected ] after index expression", "expression")
-			return nil
+			return ast.ZeroExpr
 		}
 
 		p.advance("expression ]") // consume ]
 	}
 
-	if expr != nil {
-		return expr
-	}
-
-	return nil
+	return expr
 }
 
-func (p *Parser) boolean(ctx context.Context, typeToken types.Type) ast.Expression {
+func (p *Parser) boolean(ctx context.Context, typeToken types.Type) ast.ExprValue {
 	expr := p.equality(ctx, typeToken)
 
 	for p.match(tokens.And, tokens.Or) {
-		if ctx.Err() != nil || expr == nil {
-			return nil
+		if ctx.Err() != nil || expr == ast.ZeroExpr {
+			return ast.ZeroExpr
 		}
 
 		if !types.IsBool(expr.Type()) {
 			p.error(p.this(), "operator requires bool type", "boolean")
-			return nil
+			return ast.ZeroExpr
 		}
 
 		operator := p.this()
 		p.advance("boolean operator") // consume operator
 		right := p.equality(ctx, types.Basics[types.Bool])
 
-		expr = &ast.Infix{
+		expr = ast.NewExpr(ast.KindInfix, types.Bool, &ast.Infix{
 			Operator: operator,
 			Left:     expr,
 			Right:    right,
-		}
+		})
 	}
 
-	if expr != nil {
-		return expr
-	}
-
-	return nil
+	return expr
 }
 
-func (p *Parser) equality(ctx context.Context, typeToken types.Type) ast.Expression {
+func (p *Parser) equality(ctx context.Context, typeToken types.Type) ast.ExprValue {
 	expr := p.comparison(ctx, typeToken)
 
 	for p.match(tokens.Equal, tokens.NotEqual) {
-		if ctx.Err() != nil || expr == nil {
-			return nil
+		if ctx.Err() != nil || expr == ast.ZeroExpr {
+			return ast.ZeroExpr
 		}
 
 		operator := p.this()
@@ -94,31 +86,27 @@ func (p *Parser) equality(ctx context.Context, typeToken types.Type) ast.Express
 			Right:    right,
 		}
 
-		if infix.Left.Type().Kind() != infix.Right.Type().Kind() {
+		if infix.Left.TypeKind != infix.Right.TypeKind {
 			infix.EqualizeLiteralTypes()
 		}
 
-		expr = infix
+		expr = ast.NewExpr(ast.KindInfix, types.Bool, infix)
 	}
 
-	if expr != nil {
-		return expr
-	}
-
-	return nil
+	return expr
 }
 
-func (p *Parser) comparison(ctx context.Context, typeToken types.Type) ast.Expression {
+func (p *Parser) comparison(ctx context.Context, typeToken types.Type) ast.ExprValue {
 	expr := p.term(ctx, typeToken)
 
 	for p.match(tokens.GT, tokens.GTEqual, tokens.LT, tokens.LTEqual) {
-		if ctx.Err() != nil || expr == nil {
-			return nil
+		if ctx.Err() != nil || expr == ast.ZeroExpr {
+			return ast.ZeroExpr
 		}
 
 		if !types.IsNumber(expr.Type()) {
 			p.error(p.this(), "operator requires numeric type", "comparison")
-			return nil
+			return ast.ZeroExpr
 		}
 
 		operator := p.this()
@@ -135,90 +123,82 @@ func (p *Parser) comparison(ctx context.Context, typeToken types.Type) ast.Expre
 			infix.EqualizeLiteralTypes()
 		}
 
-		expr = infix
+		expr = ast.NewExpr(ast.KindInfix, types.Bool, infix)
 	}
 
-	if expr != nil {
-		return expr
-	}
-
-	return nil
+	return expr
 }
 
-func (p *Parser) term(ctx context.Context, typeToken types.Type) ast.Expression {
+func (p *Parser) term(ctx context.Context, typeToken types.Type) ast.ExprValue {
 	expr := p.factor(ctx, typeToken)
 
 	for p.match(tokens.Minus, tokens.Plus) {
-		if ctx.Err() != nil || expr == nil {
-			return nil
+		if ctx.Err() != nil || expr == ast.ZeroExpr {
+			return ast.ZeroExpr
 		}
 
+		t := expr.Type()
+
 		// TODO: this is a hack due to lack of known Go typing at compile time, figure out a better solution.
-		if expr.Type() != types.None {
+		if t != types.None {
 			if p.this().Type == tokens.Plus {
-				if !types.IsSummable(expr.Type()) {
-					p.error(p.this(), fmt.Sprintf("operator requires numeric or string type, got %q", expr.Type()), "term")
-					return nil
+				if !types.IsSummable(t) {
+					p.error(p.this(), fmt.Sprintf("operator requires numeric or string type, got %q", t), "term")
+					return ast.ZeroExpr
 				}
 			} else {
 				// Minus
-				if !types.IsNumber(expr.Type()) {
-					p.error(p.this(), fmt.Sprintf("operator requires numeric type, got %q", expr.Type()), "term")
-					return nil
+				if !types.IsNumber(t) {
+					p.error(p.this(), fmt.Sprintf("operator requires numeric type, got %q", t), "term")
+					return ast.ZeroExpr
 				}
 			}
 		}
 
 		operator := p.this()
 		p.advance("term operator") // consume operator
-		right := p.factor(ctx, expr.Type())
+		right := p.factor(ctx, t)
 
-		expr = &ast.Infix{
+		expr = ast.NewExpr(ast.KindInfix, t.Kind(), &ast.Infix{
 			Operator: operator,
 			Left:     expr,
 			Right:    right,
-		}
+		})
 	}
 
-	if expr != nil {
-		return expr
-	}
-
-	return nil
+	return expr
 }
 
-func (p *Parser) factor(ctx context.Context, typeToken types.Type) ast.Expression {
+func (p *Parser) factor(ctx context.Context, typeToken types.Type) ast.ExprValue {
 	expr := p.unary(ctx, typeToken)
 
 	for p.match(tokens.Asterisk, tokens.Divide) {
-		if ctx.Err() != nil || expr == nil {
-			return nil
+		if ctx.Err() != nil || expr == ast.ZeroExpr {
+			return ast.ZeroExpr
 		}
 
-		if !types.IsNumber(expr.Type()) {
+		t := expr.Type()
+
+		if !types.IsNumber(t) {
 			p.error(p.this(), "operator requires numeric type", "factor")
-			return nil
+			return ast.ZeroExpr
 		}
 
 		operator := p.this()
 		p.advance("factor operator") // consume operator
-		right := p.unary(ctx, expr.Type())
+		right := p.unary(ctx, t)
 
-		expr = &ast.Infix{
+		expr = ast.NewExpr(ast.KindInfix, t.Kind(), &ast.Infix{
 			Operator: operator,
 			Left:     expr,
 			Right:    right,
-		}
+		})
 	}
 
-	if expr != nil {
-		return expr
-	}
-
-	return nil
+	return expr
 }
 
-func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression {
+func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprValue {
 	if p.match(tokens.Not, tokens.Minus, tokens.BitAnd) {
 		// Previous operator is stored, to disallow double references.
 		prevOperator := p.prev()
@@ -235,7 +215,7 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 			// Special reference handling.
 			if prevOperator.Type == tokens.BitAnd {
 				p.error(p.this(), "double reference is not allowed", "unary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			if typeToken != types.None && typeToken.Kind() == types.ReferenceKind {
@@ -243,7 +223,7 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 				refType, ok := typeToken.(*types.Reference)
 				if !ok {
 					p.error(p.this(), "unable to assert reference type", "unary")
-					return nil
+					return ast.ZeroExpr
 				}
 
 				exprType = refType.Value
@@ -251,22 +231,24 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		}
 
 		right := p.unary(ctx, exprType)
-		if right == nil {
-			return nil
+		if right == ast.ZeroExpr {
+			return ast.ZeroExpr
 		}
 
-		if operator.Type == tokens.Not && !types.IsBool(right.Type()) {
+		rt := right.Type()
+
+		if operator.Type == tokens.Not && !types.IsBool(rt) {
 			p.error(p.this(), "operator requires bool type", "unary")
-			return nil
-		} else if operator.Type == tokens.Minus && !types.IsSigned(right.Type()) {
+			return ast.ZeroExpr
+		} else if operator.Type == tokens.Minus && !types.IsSigned(rt) {
 			p.error(p.this(), "operator requires signed numeric type", "unary")
-			return nil
+			return ast.ZeroExpr
 		}
 
-		return &ast.Prefix{
+		return ast.NewExpr(ast.KindPrefix, rt.Kind(), &ast.Prefix{
 			Operator: operator,
 			Right:    right,
-		}
+		})
 	}
 
 	if (typeToken == nil || typeToken == types.None) && p.this().Type == tokens.Identifier {
@@ -277,7 +259,7 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 			// primary() will handle it via parsePkgSelector.
 			if _, isImport := p.symbols.ResolveCogImport(p.this().Literal); !isImport {
 				p.error(p.this(), "undefined identifier", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 		} else {
 			typeToken = symbol.Type()
@@ -285,8 +267,8 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 	}
 
 	node := p.primary(ctx, typeToken)
-	if node == nil {
-		return nil
+	if node == ast.ZeroExpr {
+		return ast.ZeroExpr
 	}
 
 	if p.this().Type == tokens.Question {
@@ -296,13 +278,13 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 		// ? works on both option and result types.
 		if typeToken.Kind() != types.OptionKind && typeToken.Kind() != types.ResultKind {
 			p.error(token, "? operator requires option or result type", "unary")
-			return nil
+			return ast.ZeroExpr
 		}
 
-		return &ast.Suffix{
+		return ast.NewExpr(ast.KindSuffix, node.Type().Kind(), &ast.Suffix{
 			Operator: token,
 			Left:     node,
-		}
+		})
 	}
 
 	if p.this().Type == tokens.Not {
@@ -311,37 +293,38 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.Expression
 
 		if typeToken.Kind() != types.ResultKind {
 			p.error(token, "! operator requires result type", "unary")
-			return nil
+			return ast.ZeroExpr
 		}
 
 		// Must-check: cannot extract error without checking ? first.
-		if ident, ok := node.(*ast.Identifier); ok {
+		if node.NodeKind == ast.KindIdentifier {
+			ident := node.AsIdentifier()
 			if !p.symbols.IsErrorChecked(ident.Name) {
 				p.error(ident.Token, "must check "+ident.Name+" before accessing error", "unary")
-				return nil
+				return ast.ZeroExpr
 			}
 		}
 
-		return &ast.Suffix{
+		return ast.NewExpr(ast.KindSuffix, node.Type().Kind(), &ast.Suffix{
 			Operator: token,
 			Left:     node,
-		}
+		})
 	}
 
 	// Must-check analysis: bare access to option/result requires prior ? check.
-	if ident, ok := node.(*ast.Identifier); ok {
-		kind := typeToken.Kind()
+	if node.NodeKind == ast.KindIdentifier {
+		ident := node.AsIdentifier()
 
-		if (kind == types.OptionKind || kind == types.ResultKind) && !p.symbols.IsValueChecked(ident.Name) {
+		if (node.TypeKind == types.OptionKind || node.TypeKind == types.ResultKind) && !p.symbols.IsValueChecked(ident.Name) {
 			p.error(ident.Token, "must check "+ident.Name+" before accessing value", "unary")
-			return nil
+			return ast.ZeroExpr
 		}
 	}
 
 	return node
 }
 
-func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expression {
+func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprValue {
 	if typeToken != nil {
 		aliasType, ok := typeToken.(*types.Alias)
 		if ok && !aliasType.IsTypeParam() {
@@ -354,7 +337,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			optionType, ok := typeToken.(*types.Option)
 			if !ok {
 				p.error(p.this(), "unable to assert option type", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			// TODO: handle none type
@@ -365,15 +348,15 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			eitherType, ok := typeToken.(*types.Either)
 			if !ok {
 				p.error(p.this(), "unable to assert either type", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			token := p.this()
 
 			// Infer type.
 			expr := p.primary(ctx, types.None)
-			if expr == nil {
-				return nil
+			if expr == ast.ZeroExpr {
+				return ast.ZeroExpr
 			}
 
 			var isRight bool
@@ -384,15 +367,15 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				isRight = true
 			} else {
 				p.error(p.this(), fmt.Sprintf("expression of type %q not in either type %q", expr.Type().String(), eitherType.String()), "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
-			return &ast.EitherLiteral{
+			return ast.NewExpr(ast.KindEitherLiteral, types.EitherKind, &ast.EitherLiteral{
 				Token:      token,
 				EitherType: eitherType,
 				Value:      expr,
 				IsRight:    isRight,
-			}
+			})
 		}
 	}
 
@@ -402,7 +385,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 		if typeToken != types.None && literalType.String() != typeToken.String() {
 			p.error(p.this(), fmt.Sprintf("literal type %q does not match expected type %q", literalType.String(), typeToken.String()), "primary")
-			return nil
+			return ast.ZeroExpr
 		}
 
 		typeToken = literalType
@@ -421,36 +404,29 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 		builtinParser, ok := p.builtins[t.Literal]
 		if !ok {
 			p.error(t, "unknown builtin function", "primary")
-			return nil
+			return ast.ZeroExpr
 		}
 
 		node := builtinParser(ctx, t, typeToken)
 		if node == nil {
-			return nil
+			return ast.ZeroExpr
 		}
 
-		return node
+		// TODO: optimize, return type kind should be known based on builtin type.
+		return ast.NewExpr(ast.KindBuiltin, node.Type().Kind(), node)
 	case tokens.FloatLiteral,
 		tokens.IntLiteral,
 		tokens.StringLiteral:
 		return p.parseLiteral(typeToken)
-	case tokens.False:
+	case tokens.False, tokens.True:
 		node := &ast.BoolLiteral{
 			Token: p.this(),
+			Value: p.this().Type == tokens.True,
 		}
 
 		p.advance("primary literal") // consume literal
 
-		return node
-	case tokens.True:
-		node := &ast.BoolLiteral{
-			Token: p.this(),
-			Value: true,
-		}
-
-		p.advance("primary literal") // consume literal
-
-		return node
+		return ast.NewExpr(ast.KindBoolLiteral, types.Bool, node)
 	case tokens.LParen: // Grouped expression
 		p.advance("primary (") // consume '('
 
@@ -458,16 +434,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 		if p.this().Type != tokens.RParen {
 			p.error(p.this(), "expected ')' after grouped expression", "primary")
-			return nil
+			return ast.ZeroExpr
 		}
 
 		p.advance("primary )") // consume ')'
 
-		if expr != nil {
-			return expr
-		}
-
-		return nil
+		return expr
 	case tokens.Identifier:
 		symbol, ok := p.symbols.Resolve(p.this().Literal)
 		if !ok {
@@ -479,7 +451,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			p.error(p.this(), "undefined identifier", "primary")
 
-			return nil
+			return ast.ZeroExpr
 		}
 
 		p.advance("primary identifier") // consume identifier
@@ -487,11 +459,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 		if symbol.Identifier.Qualifier == ast.QualifierType && p.this().Type == tokens.LBrace {
 			// Named struct literal
 			literal := p.primary(ctx, symbol.Type())
-			if literal == nil {
-				return nil
+			if literal == ast.ZeroExpr {
+				return ast.ZeroExpr
 			}
 
-			literal.(*ast.StructLiteral).StructType = &types.Alias{
+			literal.AsStructLiteral().StructType = &types.Alias{
 				Name:     symbol.Identifier.Name,
 				Derived:  literal.Type(),
 				Exported: symbol.Identifier.Exported,
@@ -507,7 +479,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			procType, ok := symbol.Identifier.ValueType.(*types.Procedure)
 			if !ok {
 				p.error(p.this(), "identifier is not callable", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			if len(procType.TypeParams) > 0 {
@@ -516,38 +488,38 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 				typeArgs, returnType := p.inferTypeArgs(procType, args)
 				if typeArgs == nil {
-					return nil
+					return ast.ZeroExpr
 				}
 
-				return &ast.Call{
-					Expression: symbol.Identifier,
+				return ast.NewExpr(ast.KindCall, returnType.Kind(), &ast.Call{
+					Expr:       ast.NewExpr(ast.KindIdentifier, symbol.Identifier.ValueType.Kind(), symbol.Identifier),
 					Arguments:  args,
 					ReturnType: returnType,
 					TypeArgs:   typeArgs,
-				}
+				})
 			}
 
-			return &ast.Call{
-				Expression: symbol.Identifier,
+			return ast.NewExpr(ast.KindCall, procType.ReturnType.Kind(), &ast.Call{
+				Expr:       ast.NewExpr(ast.KindIdentifier, symbol.Identifier.ValueType.Kind(), symbol.Identifier),
 				Arguments:  p.parseCallArguments(ctx, procType),
 				ReturnType: procType.ReturnType,
-			}
+			})
 		case tokens.LT:
 			// Explicit type arguments on generic call: genFunc<utf8>("hello")
 			procType, ok := symbol.Identifier.ValueType.(*types.Procedure)
 			if !ok || len(procType.TypeParams) == 0 {
 				// Not a generic callable — let comparison() handle '<'.
-				return symbol.Identifier
+				return ast.NewExpr(ast.KindIdentifier, symbol.Identifier.ValueType.Kind(), symbol.Identifier)
 			}
 
 			typeArgs := p.parseTypeArguments(ctx)
 			if typeArgs == nil {
-				return nil
+				return ast.ZeroExpr
 			}
 
 			if p.this().Type != tokens.LParen {
 				p.error(p.this(), "expected '(' after type arguments in generic call", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			args := p.parseCallArguments(ctx, procType)
@@ -555,15 +527,15 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			// Validation failed (nil) but proc has a return type — error already reported.
 			if returnType == nil && procType.ReturnType != nil {
-				return nil
+				return ast.ZeroExpr
 			}
 
-			return &ast.Call{
-				Expression: symbol.Identifier,
+			return ast.NewExpr(ast.KindCall, returnType.Kind(), &ast.Call{
+				Expr:       ast.NewExpr(ast.KindIdentifier, symbol.Identifier.ValueType.Kind(), symbol.Identifier),
 				Arguments:  args,
 				ReturnType: returnType,
 				TypeArgs:   typeArgs,
-			}
+			})
 		case tokens.Dot:
 			symbolType := symbol.Type()
 			kind := symbolType.Kind()
@@ -571,14 +543,14 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			if symbol.Identifier.Qualifier == ast.QualifierType &&
 				kind != types.EnumKind && kind != types.ErrorKind {
 				p.error(p.this(), fmt.Sprintf("%q is a type, not a value: cannot invoke methods on types", symbol.Identifier.Name), "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			// Selector expression
 			selector := p.this()
 
 			var (
-				expr     ast.Expression = symbol.Identifier
+				expr     ast.Expr = symbol.Identifier
 				selected *ast.Identifier
 			)
 
@@ -587,7 +559,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 				if p.this().Type != tokens.Identifier {
 					p.error(p.this(), "expected field identifier after . selector", "primary")
-					return nil
+					return ast.ZeroExpr
 				}
 
 				var typName string
@@ -602,7 +574,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				field, ok := p.symbols.ResolveField(typName, p.this().Literal)
 				if !ok {
 					p.error(p.this(), fmt.Sprintf("undefined field %q for selector %q", p.this().Literal, typName), "primary")
-					return nil
+					return ast.ZeroExpr
 				}
 
 				field.Identifier.Token = p.this()
@@ -624,9 +596,9 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				if selected != nil {
 					// If there is already a selected field, add it to selector expression.
 					expr = &ast.Selector{
-						Token:      selector,
-						Expression: expr,
-						Field:      selected,
+						Token: selector,
+						Expr:  ast.NewExpr(ast.KindSelector, expr.Type().Kind(), expr),
+						Field: selected,
 					}
 				}
 
@@ -638,16 +610,16 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			expr = &ast.Selector{
-				Token:      selector,
-				Expression: expr,
-				Field:      selected,
+				Token: selector,
+				Expr:  ast.NewExpr(ast.KindSelector, expr.Type().Kind(), expr),
+				Field: selected,
 			}
 
 			if p.match(tokens.LParen, tokens.LT) {
 				// Method call expression
 				if expr.Type().Kind() != types.ProcedureKind {
 					p.error(p.prev(), fmt.Sprintf("cannot call expression: expression of type %q is not a function", expr.Type()))
-					return nil
+					return ast.ZeroExpr
 				}
 
 				procType, ok := expr.Type().(*types.Procedure)
@@ -660,33 +632,33 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				if p.this().Type == tokens.LT {
 					typeArgs = p.parseTypeArguments(ctx)
 					if typeArgs == nil {
-						return nil
+						return ast.ZeroExpr
 					}
 				}
 
 				args := p.parseCallArguments(ctx, procType)
 				if args == nil {
-					return nil
+					return ast.ZeroExpr
 				}
 
-				return &ast.Call{
-					Expression: expr,
+				return ast.NewExpr(ast.KindCall, procType.ReturnType.Kind(), &ast.Call{
+					Expr:       ast.NewExpr(ast.KindSelector, expr.Type().Kind(), expr),
 					Arguments:  args,
 					ReturnType: procType.ReturnType,
 					TypeArgs:   typeArgs,
-				}
+				})
 			}
 
-			return &ast.Selector{
-				Token:      selector,
-				Expression: expr,
-				Field:      selected,
-			}
+			return ast.NewExpr(ast.KindSelector, selected.ValueType.Kind(), &ast.Selector{
+				Token: selector,
+				Expr:  ast.NewExpr(ast.KindSelector, expr.Type().Kind(), expr),
+				Field: selected,
+			})
 		default:
 			// Variable reference
 			if symbol.Identifier == nil {
 				p.error(p.this(), "nil identifier in variable reference", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			if symbol.Identifier.ValueType != nil &&
@@ -696,40 +668,35 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				optType, isOption := symbol.Identifier.ValueType.(*types.Option)
 				if !isOption || optType.Value.Kind() != typeToken.Kind() {
 					p.error(p.this(), fmt.Sprintf("type of identifier %q (%s) does not match expected type (%s)", symbol.Identifier.Name, symbol.Identifier.ValueType, typeToken), "primary")
-					return nil
+					return ast.ZeroExpr
 				}
 			}
 
-			return symbol.Identifier
+			return ast.NewExpr(ast.KindIdentifier, symbol.Identifier.ValueType.Kind(), symbol.Identifier)
 		}
 	case tokens.LBrace:
 		switch t := typeToken.(type) {
 		case *types.Alias:
 			expr := p.primary(ctx, t.Derived)
-			if expr == nil {
-				return nil
+			if expr == ast.ZeroExpr {
+				return ast.ZeroExpr
 			}
 
 			// Place back type alias
-			switch literal := expr.(type) {
-			case *ast.ArrayLiteral:
-				literal.ArrayType = t.Derived.Underlying().(*types.Array)
-				return literal
-			case *ast.MapLiteral:
-				literal.MapType = t
-				return literal
-			case *ast.SetLiteral:
-				literal.SetType = t
-				return literal
-			case *ast.StructLiteral:
-				literal.StructType = t
-				return literal
-			case *ast.TupleLiteral:
-				literal.TupleType = t
-				return literal
-			case *ast.EitherLiteral:
-				literal.EitherType = t
-				return literal
+			switch expr.NodeKind {
+			case ast.KindArrayLiteral:
+				// TODO: figure out why only array need this special handling.
+				expr.AsArrayLiteral().ArrayType = t.Derived.Underlying().(*types.Array)
+			case ast.KindEitherLiteral:
+				expr.AsEitherLiteral().EitherType = t
+			case ast.KindMapLiteral:
+				expr.AsMapLiteral().MapType = t
+			case ast.KindSetLiteral:
+				expr.AsSetLiteral().SetType = t
+			case ast.KindStructLiteral:
+				expr.AsStructLiteral().StructType = t
+			case ast.KindTupleLiteral:
+				expr.AsTupleLiteral().TupleType = t
 			}
 
 			return expr
@@ -738,18 +705,18 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			arrayLiteral := &ast.ArrayLiteral{
 				Token:     p.this(),
 				ArrayType: t,
-				Values:    []ast.Expression{},
+				Values:    []ast.ExprValue{},
 			}
 
 			p.advance("primary array {") // consume {
 
 			for !p.match(tokens.RBrace, tokens.EOF) {
 				if ctx.Err() != nil {
-					return nil
+					return ast.ZeroExpr
 				}
 
 				value := p.expression(ctx, t.Element)
-				if value != nil {
+				if value != ast.ZeroExpr {
 					arrayLiteral.Values = append(arrayLiteral.Values, value)
 				}
 
@@ -760,12 +727,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			if p.this().Type != tokens.RBrace {
 				p.error(arrayLiteral.Token, "array literal is missing closing }", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			p.advance("primary array }") // consume }
 
-			return arrayLiteral
+			return ast.NewExpr(ast.KindArrayLiteral, types.ArrayKind, arrayLiteral)
 		case *types.Map:
 			mapLiteral := &ast.MapLiteral{
 				Token:   p.this(),
@@ -777,30 +744,30 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			for !p.match(tokens.RBrace, tokens.EOF) {
 				if ctx.Err() != nil {
-					return nil
+					return ast.ZeroExpr
 				}
 
 				key := p.expression(ctx, t.Key)
-				if key != nil {
+				if key != ast.ZeroExpr {
 					// TODO: optimize
 					for i := range mapLiteral.Pairs {
 						if mapLiteral.Pairs[i].Key.String() == key.String() {
 							p.error(p.prev(), "duplicate key in map literal", "primary")
-							return nil
+							return ast.ZeroExpr
 						}
 					}
 				}
 
 				if p.this().Type != tokens.Colon {
 					p.error(p.this(), "expected colon after key in map literal", "primary")
-					return nil
+					return ast.ZeroExpr
 				}
 
 				p.advance("primary map :") // consume :
 
 				val := p.expression(ctx, t.Value)
-				if val == nil {
-					return nil
+				if val == ast.ZeroExpr {
+					return ast.ZeroExpr
 				}
 
 				mapLiteral.Pairs = append(mapLiteral.Pairs, &ast.KeyValue{
@@ -815,12 +782,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			if p.this().Type != tokens.RBrace {
 				p.error(mapLiteral.Token, "map literal is missing closing }", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			p.advance("primary map }") // consume }
 
-			return mapLiteral
+			return ast.NewExpr(ast.KindMapLiteral, types.MapKind, mapLiteral)
 		case *types.Procedure:
 			procLiteral := &ast.ProcedureLiteral{
 				ProcedureType: t,
@@ -883,32 +850,32 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 			}
 
 			if body == nil {
-				return nil
+				return ast.ZeroExpr
 			}
 
 			procLiteral.Body = body
 
-			return procLiteral
+			return ast.NewExpr(ast.KindProcedureLiteral, types.ProcedureKind, procLiteral)
 		case *types.Set:
 			setLiteral := &ast.SetLiteral{
 				Token:   p.this(),
 				SetType: t,
-				Values:  []ast.Expression{},
+				Values:  []ast.ExprValue{},
 			}
 
 			p.advance("primary set {") // consume {
 
 			for !p.match(tokens.RBrace, tokens.EOF) {
 				if ctx.Err() != nil {
-					return nil
+					return ast.ZeroExpr
 				}
 
 				value := p.expression(ctx, t.Element)
-				if value != nil {
+				if value != ast.ZeroExpr {
 					for i := range setLiteral.Values {
 						if setLiteral.Values[i].String() == value.String() {
 							p.error(p.prev(), "duplicate key in set literal", "primary")
-							return nil
+							return ast.ZeroExpr
 						}
 					}
 
@@ -922,28 +889,28 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			if p.this().Type != tokens.RBrace {
 				p.error(setLiteral.Token, "set literal is missing closing }", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			p.advance("primary set }") // consume }
 
-			return setLiteral
+			return ast.NewExpr(ast.KindSetLiteral, types.SetKind, setLiteral)
 		case *types.Slice:
 			sliceLiteral := &ast.SliceLiteral{
 				Token:       p.this(),
 				ElementType: t.Element,
-				Values:      []ast.Expression{},
+				Values:      []ast.ExprValue{},
 			}
 
 			p.advance("primary slice {") // consume {
 
 			for !p.match(tokens.RBrace, tokens.EOF) {
 				if ctx.Err() != nil {
-					return nil
+					return ast.ZeroExpr
 				}
 
 				value := p.expression(ctx, t.Element)
-				if value != nil {
+				if value != ast.ZeroExpr {
 					sliceLiteral.Values = append(sliceLiteral.Values, value)
 				}
 
@@ -954,29 +921,29 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			if p.this().Type != tokens.RBrace {
 				p.error(sliceLiteral.Token, "slice literal is missing closing }", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			p.advance("primary slice }") // consume }
 
-			return sliceLiteral
+			return ast.NewExpr(ast.KindSliceLiteral, types.SliceKind, sliceLiteral)
 		case *types.Struct:
 			structLiteral := &ast.StructLiteral{
 				Token:      p.this(),
 				StructType: t,
-				Values:     make([]*ast.FieldValue, 0, len(t.Fields)),
+				Values:     make([]ast.FieldValue, 0, len(t.Fields)),
 			}
 
 			p.advance("primary struct {") // consume {
 
 			for !p.match(tokens.RBrace, tokens.EOF) {
 				if ctx.Err() != nil {
-					return nil
+					return ast.ZeroExpr
 				}
 
 				if p.this().Type != tokens.Identifier {
 					p.error(p.this(), "expected identifier at in struct literal", "primary")
-					return nil
+					return ast.ZeroExpr
 				}
 
 				index := slices.IndexFunc(t.Fields, func(f *types.Field) bool {
@@ -985,10 +952,10 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 				if index == -1 {
 					p.error(p.this(), "unknown field found in struct literal", "primary")
-					return nil
+					return ast.ZeroExpr
 				}
 
-				fieldValue := &ast.FieldValue{
+				fieldValue := ast.FieldValue{
 					Name: p.this().Literal,
 				}
 
@@ -996,7 +963,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 				if p.this().Type != tokens.Assign {
 					p.error(p.this(), "expected = after identifier in struct literal", "primary")
-					return nil
+					return ast.ZeroExpr
 				}
 
 				p.advance("primary struct =") // consume =
@@ -1004,9 +971,9 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				startToken := p.this()
 
 				value := p.expression(ctx, t.Fields[index].Type)
-				if value == nil {
+				if value == ast.ZeroExpr {
 					p.error(startToken, "failed to parse field expression in struct literal", "primary")
-					return nil
+					return ast.ZeroExpr
 				}
 
 				fieldValue.Value = value
@@ -1020,17 +987,17 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			if p.this().Type != tokens.RBrace {
 				p.error(structLiteral.Token, "struct literal is missing closing }", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			p.advance("primary struct }") // consume }
 
-			return structLiteral
+			return ast.NewExpr(ast.KindStructLiteral, types.StructKind, structLiteral)
 		case *types.Tuple:
 			tupleLiteral := &ast.TupleLiteral{
 				Token:     p.this(),
 				TupleType: t,
-				Values:    make([]ast.Expression, 0, len(t.Types)),
+				Values:    make([]ast.ExprValue, 0, len(t.Types)),
 			}
 
 			p.advance("primary tuple {") // consume {
@@ -1039,9 +1006,9 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				startToken := p.this()
 
 				value := p.expression(ctx, t.Index(i))
-				if value == nil {
+				if value == ast.ZeroExpr {
 					p.error(startToken, "failed to parse expression in tuple literal", "primary")
-					return nil
+					return ast.ZeroExpr
 				}
 
 				tupleLiteral.Values = append(tupleLiteral.Values, value)
@@ -1049,7 +1016,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 				if i < len(t.Types)-1 {
 					if p.this().Type != tokens.Comma {
 						p.error(p.this(), "expected , after expression in tuple literal", "primary")
-						return nil
+						return ast.ZeroExpr
 					}
 
 					p.advance("primary tuple ,") // consume ','
@@ -1058,57 +1025,54 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 
 			if p.this().Type != tokens.RBrace {
 				p.error(tupleLiteral.Token, "tuple literal is missing closing }", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			p.advance("primary tuple }") // consume }
 
-			return tupleLiteral
+			return ast.NewExpr(ast.KindTupleLiteral, types.TupleKind, tupleLiteral)
 		case *types.Basic:
 			if t.Kind() != types.Complex32 {
 				p.error(p.this(), fmt.Sprintf("unexpected basic type %q for expression starting with {", t.String()), "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			token := p.this()
 			p.advance("primary complex32 {") // consume {
 
 			realPart := p.expression(ctx, types.Basics[types.Float16])
-			if realPart == nil {
-				return nil
+			if realPart == ast.ZeroExpr {
+				return ast.ZeroExpr
 			}
 
 			if p.this().Type != tokens.Comma {
 				p.error(p.this(), "expected , after real part in complex32 literal", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			p.advance("primary complex32 ,") // consume ,
 
 			imagPart := p.expression(ctx, types.Basics[types.Float16])
-			if imagPart == nil {
-				return nil
+			if imagPart == ast.ZeroExpr {
+				return ast.ZeroExpr
 			}
 
 			if p.this().Type != tokens.RBrace {
 				p.error(p.this(), "expected } after imaginary part in complex32 literal", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
 			p.advance("primary complex32 }") // consume }
 
-			realLit, realOk := realPart.(*ast.Float16Literal)
-
-			imagLit, imagOk := imagPart.(*ast.Float16Literal)
-			if !realOk || !imagOk {
+			if realPart.TypeKind != types.Float16 || imagPart.TypeKind != types.Float16 {
 				p.error(token, "complex32 literal requires float16 literal values", "primary")
-				return nil
+				return ast.ZeroExpr
 			}
 
-			return &ast.Complex32Literal{
+			return ast.NewExpr(ast.KindComplex32Literal, types.Complex32, &ast.Complex32Literal{
 				Token: token,
-				Value: [2]f16.Float16{realLit.Value, imagLit.Value},
-			}
+				Value: [2]f16.Float16{realPart.AsFloat16Literal().Value, imagPart.AsFloat16Literal().Value},
+			})
 		default:
 			if typeToken == nil || typeToken == types.None {
 				p.error(p.prev(), "cannot infer type for untyped literal", "primary")
@@ -1122,16 +1086,16 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.Expressi
 					p.advance("primary }") // consume }
 				}
 
-				return nil
+				return ast.ZeroExpr
 			}
 
 			p.error(p.this(), fmt.Sprintf("unexpected type %q for expression starting with {", typeToken.String()), "primary")
 
-			return nil
+			return ast.ZeroExpr
 		}
 	default:
 		p.error(p.this(), "unexpected token encountered while parsing expression", "primary")
-		return nil
+		return ast.ZeroExpr
 	}
 }
 

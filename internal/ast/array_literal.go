@@ -15,12 +15,16 @@ type ArrayLiteral struct {
 	Values    []ExprValue
 }
 
-func (l *ArrayLiteral) Pos() (uint32, uint16) {
-	return l.Token.Ln, l.Token.Col
+func (l *ArrayLiteral) Kind() NodeKind {
+	return KindArrayLiteral
 }
 
 func (l *ArrayLiteral) Hash() uint64 {
 	return hash(l)
+}
+
+func (l *ArrayLiteral) Pos() (uint32, uint16) {
+	return l.Token.Ln, l.Token.Col
 }
 
 func (l *ArrayLiteral) stringTo(out *strings.Builder) {

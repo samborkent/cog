@@ -15,6 +15,10 @@ type SetLiteral struct {
 	Values  []ExprValue
 }
 
+func (l *SetLiteral) Kind() NodeKind {
+	return KindSetLiteral
+}
+
 func (l *SetLiteral) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

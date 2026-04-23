@@ -21,6 +21,10 @@ type Complex32Literal struct {
 	Value complex32
 }
 
+func (l *Complex32Literal) Kind() NodeKind {
+	return KindComplex32Literal
+}
+
 func (l *Complex32Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

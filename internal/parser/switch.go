@@ -8,21 +8,21 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseSwitch(ctx context.Context) *ast.Switch {
+func (p *Parser) parseSwitch(ctx context.Context, labelIdent *ast.Identifier) ast.NodeValue {
 	p.advance("parseSwitch switch") // consume switch
 
 	switch p.this().Type {
 	case tokens.Identifier:
-		return p.parseIdentSwitch(ctx)
+		return p.parseIdentSwitch(ctx, labelIdent)
 	case tokens.LBrace:
-		return p.parseBoolSwitch(ctx)
+		return p.parseBoolSwitch(ctx, labelIdent)
 	default:
 		p.error(p.this(), "unexpected token after switch", "parseSwitch")
-		return nil
+		return ast.ZeroNode
 	}
 }
 
-func (p *Parser) parseBoolSwitch(ctx context.Context) *ast.Switch {
+func (p *Parser) parseBoolSwitch(ctx context.Context, labelIdent *ast.Identifier) ast.NodeValue {
 	node := &ast.Switch{
 		Token: p.prev(),
 	}
@@ -37,29 +37,29 @@ func (p *Parser) parseBoolSwitch(ctx context.Context) *ast.Switch {
 		p.advance("parseBoolSwitch case") // consume case
 
 		expr := p.expression(ctx, types.None)
-		if expr == nil {
+		if expr == ast.ZeroExpr {
 			p.error(p.this(), "unable to parse case expression", "parseBoolSwitch")
-			return nil
+			return ast.ZeroNode
 		}
 
 		caseNode.Condition = expr
 
 		if p.this().Type != tokens.Colon {
 			p.error(p.this(), "expected ':' after case condition", "parseBoolSwitch")
-			return nil
+			return ast.ZeroNode
 		}
 
 		p.advance("parseBoolSwitch case :") // consume :
 
 		for !p.match(tokens.Case, tokens.Default, tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
-				return nil
+				return ast.ZeroNode
 			}
 
 			prev := p.i
 
 			stmt := p.parseStatement(ctx)
-			if stmt != nil {
+			if stmt != ast.ZeroNode {
 				caseNode.Body = append(caseNode.Body, stmt)
 			} else {
 				p.synchronize()
@@ -82,20 +82,20 @@ func (p *Parser) parseBoolSwitch(ctx context.Context) *ast.Switch {
 
 		if p.this().Type != tokens.Colon {
 			p.error(p.this(), "expected ':' after default", "parseBoolSwitch")
-			return nil
+			return ast.ZeroNode
 		}
 
 		p.advance("parseBoolSwitch default :") // consume :
 
 		for !p.match(tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
-				return nil
+				return ast.ZeroNode
 			}
 
 			prev := p.i
 
 			stmt := p.parseStatement(ctx)
-			if stmt != nil {
+			if stmt != ast.ZeroNode {
 				defaultNode.Body = append(defaultNode.Body, stmt)
 			} else {
 				p.synchronize()
@@ -111,10 +111,19 @@ func (p *Parser) parseBoolSwitch(ctx context.Context) *ast.Switch {
 
 	p.advance("parseBoolSwitch }") // consume }
 
-	return node
+	if labelIdent != nil {
+		// Set label if present.
+		labelIdent.ValueType = types.None
+		node.Label = &ast.Label{
+			Token: labelIdent.Token,
+			Label: labelIdent,
+		}
+	}
+
+	return ast.NewNode(ast.KindSwitch, node)
 }
 
-func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
+func (p *Parser) parseIdentSwitch(ctx context.Context, labelIdent *ast.Identifier) ast.NodeValue {
 	node := &ast.Switch{
 		Token: p.prev(),
 	}
@@ -122,7 +131,7 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 	symbol, ok := p.symbols.Resolve(p.this().Literal)
 	if !ok {
 		p.error(p.this(), "unknown identifier in switch expression", "parseIdentSwitch")
-		return nil
+		return ast.ZeroNode
 	}
 
 	node.Identifier = symbol.Identifier
@@ -131,7 +140,7 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 
 	if p.this().Type != tokens.LBrace {
 		p.error(p.this(), "expected '{' after switch expression", "parseIdentSwitch")
-		return nil
+		return ast.ZeroNode
 	}
 
 	p.advance("parseIdentSwitch {") // consume {
@@ -144,34 +153,34 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 		p.advance("parseIdentSwitch case") // consume case
 
 		cond := p.expression(ctx, symbol.Type())
-		if cond == nil {
+		if cond == ast.ZeroExpr {
 			p.error(p.this(), "unable to parse case expression", "parseIdentSwitch")
-			return nil
+			return ast.ZeroNode
 		}
 
 		if cond.Type() != symbol.Type() {
 			p.error(p.this(), "case condition type does not match switch expression type", "parseIdentSwitch")
-			return nil
+			return ast.ZeroNode
 		}
 
 		caseNode.Condition = cond
 
 		if p.this().Type != tokens.Colon {
 			p.error(p.this(), "expected ':' after case condition", "parseIdentSwitch")
-			return nil
+			return ast.ZeroNode
 		}
 
 		p.advance("parseIdentSwitch case :") // consume :
 
 		for !p.match(tokens.Case, tokens.Default, tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
-				return nil
+				return ast.ZeroNode
 			}
 
 			prev := p.i
 
 			stmt := p.parseStatement(ctx)
-			if stmt != nil {
+			if stmt != ast.ZeroNode {
 				caseNode.Body = append(caseNode.Body, stmt)
 			} else {
 				p.synchronize()
@@ -194,20 +203,20 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 
 		if p.this().Type != tokens.Colon {
 			p.error(p.this(), "expected ':' after default", "parseIdentSwitch")
-			return nil
+			return ast.ZeroNode
 		}
 
 		p.advance("parseIdentSwitch default :") // consume :
 
 		for !p.match(tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
-				return nil
+				return ast.ZeroNode
 			}
 
 			prev := p.i
 
 			stmt := p.parseStatement(ctx)
-			if stmt != nil {
+			if stmt != ast.ZeroNode {
 				defaultNode.Body = append(defaultNode.Body, stmt)
 			} else {
 				p.synchronize()
@@ -223,5 +232,14 @@ func (p *Parser) parseIdentSwitch(ctx context.Context) *ast.Switch {
 
 	p.advance("parseIdentSwitch }") // consume }
 
-	return node
+	if labelIdent != nil {
+		// Set label if present.
+		labelIdent.ValueType = types.None
+		node.Label = &ast.Label{
+			Token: labelIdent.Token,
+			Label: labelIdent,
+		}
+	}
+
+	return ast.NewNode(ast.KindSwitch, node)
 }

@@ -16,6 +16,10 @@ type Type struct {
 	Alias          types.Type
 }
 
+func (s *Type) Kind() NodeKind {
+	return KindType
+}
+
 func (s *Type) Pos() (uint32, uint16) {
 	return s.Token.Ln, s.Token.Col
 }

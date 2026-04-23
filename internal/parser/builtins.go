@@ -48,7 +48,7 @@ func (p *Parser) parseBuiltinIf(ctx context.Context, t tokens.Token, tokenType t
 
 	// condition := p.expression(ctx, types.Basics[types.Bool])
 	condition := p.expression(ctx, types.None)
-	if condition == nil {
+	if condition == ast.ZeroExpr {
 		return nil
 	}
 
@@ -60,17 +60,17 @@ func (p *Parser) parseBuiltinIf(ctx context.Context, t tokens.Token, tokenType t
 	p.advance("parseIf , condition") // consume ,
 
 	thenExpr := p.expression(ctx, tokenType)
-	if thenExpr == nil {
+	if thenExpr == ast.ZeroExpr {
 		return nil
 	}
 
-	args := []ast.Expression{condition, thenExpr}
+	args := []ast.ExprValue{condition, thenExpr}
 
 	if p.this().Type == tokens.Comma {
 		p.advance("parseIf , then") // consume ,
 
 		elseExpr := p.expression(ctx, tokenType)
-		if elseExpr == nil {
+		if elseExpr == ast.ZeroExpr {
 			return nil
 		}
 
@@ -140,7 +140,7 @@ func (p *Parser) parseBuiltinMap(ctx context.Context, t tokens.Token, tokenType 
 
 	p.advance("parseBuiltinMap (") // consume (
 
-	var args []ast.Expression
+	var args []ast.ExprValue
 
 	if p.this().Type != tokens.RParen {
 		var capType types.Type = types.None
@@ -150,7 +150,7 @@ func (p *Parser) parseBuiltinMap(ctx context.Context, t tokens.Token, tokenType 
 		}
 
 		capArg := p.expression(ctx, capType)
-		if capArg == nil {
+		if capArg == ast.ZeroExpr {
 			return nil
 		}
 
@@ -187,7 +187,7 @@ func (p *Parser) parseBuiltinPrint(ctx context.Context, t tokens.Token, tokenTyp
 	}
 
 	arg := p.expression(ctx, tokenType)
-	if arg == nil {
+	if arg == ast.ZeroExpr {
 		return nil
 	}
 
@@ -204,7 +204,7 @@ func (p *Parser) parseBuiltinPrint(ctx context.Context, t tokens.Token, tokenTyp
 		Token:      t,
 		Name:       "print",
 		ReturnType: types.None,
-		Arguments:  []ast.Expression{arg},
+		Arguments:  []ast.ExprValue{arg},
 	}
 }
 
@@ -298,7 +298,7 @@ func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType 
 
 	p.advance("parseBuiltinSet (") // consume (
 
-	var args []ast.Expression
+	var args []ast.ExprValue
 
 	if p.this().Type != tokens.RParen {
 		var capType types.Type = types.None
@@ -308,7 +308,7 @@ func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType 
 		}
 
 		capArg := p.expression(ctx, capType)
-		if capArg == nil {
+		if capArg == ast.ZeroExpr {
 			return nil
 		}
 
@@ -375,17 +375,17 @@ func (p *Parser) parseBuiltinSlice(ctx context.Context, t tokens.Token, tokenTyp
 	}
 
 	lenArg := p.expression(ctx, lenType)
-	if lenArg == nil {
+	if lenArg == ast.ZeroExpr {
 		return nil
 	}
 
-	args := []ast.Expression{lenArg}
+	args := []ast.ExprValue{lenArg}
 
 	if p.this().Type == tokens.Comma {
 		p.advance("parseBuiltinSlice ,") // consume ','
 
 		capArg := p.expression(ctx, lenType)
-		if capArg == nil {
+		if capArg == ast.ZeroExpr {
 			return nil
 		}
 
@@ -443,7 +443,7 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 	}
 
 	arg := p.expression(ctx, argType)
-	if arg == nil {
+	if arg == ast.ZeroExpr {
 		return nil
 	}
 
@@ -463,7 +463,7 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 			Token:         t,
 			Name:          "cast",
 			TypeArguments: typArgs,
-			Arguments:     []ast.Expression{arg},
+			Arguments:     []ast.ExprValue{arg},
 			ReturnType:    targetType,
 		}
 	}
@@ -507,7 +507,7 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 		Token:         t,
 		Name:          "cast",
 		TypeArguments: typArgs,
-		Arguments:     []ast.Expression{arg},
+		Arguments:     []ast.ExprValue{arg},
 		ReturnType:    targetType,
 	}
 }

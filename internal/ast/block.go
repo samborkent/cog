@@ -13,6 +13,10 @@ type Block struct {
 	Statements []NodeValue
 }
 
+func (b *Block) Kind() NodeKind {
+	return KindBlock
+}
+
 func (b *Block) Pos() (uint32, uint16) {
 	return b.Start.Ln, b.Start.Col
 }

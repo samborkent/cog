@@ -8,34 +8,29 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier) *ast.Declaration {
+func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier) ast.NodeValue {
 	identType := p.parseCombinedType(ctx, ident.Exported, ident.Global)
 	if identType == nil {
-		return nil
+		return ast.ZeroNode
 	}
 
 	ident.ValueType = identType
 
-	node := p.parseDeclaration(ctx, ident)
-	if node == nil {
-		return nil
-	}
-
-	return node
+	return p.parseDeclaration(ctx, ident)
 }
 
-func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *ast.Declaration {
+func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) ast.NodeValue {
 	symbol, ok := p.symbols.Resolve(ident.Name)
 	if ok && symbol.Scope != ScanScope && ident.Qualifier != ast.QualifierMethod {
 		p.error(ident.Token, "cannot redeclare variable", "parseDeclaration")
-		return nil
+		return ast.ZeroNode
 	}
 
 	if ident.Name == "main" {
 		procType, isProc := ident.ValueType.(*types.Procedure)
 		if !isProc || procType.Function || len(procType.Parameters) != 0 || procType.ReturnType != nil {
 			p.error(ident.Token, `"main" can only be declared as proc()`, "parseDeclaration")
-			return nil
+			return ast.ZeroNode
 		}
 	}
 
@@ -53,23 +48,23 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 	if !p.match(tokens.Assign, tokens.Declaration) {
 		if ident.Qualifier == ast.QualifierImmutable {
 			p.error(p.this(), "immutable declarations must be initialized", "parseDeclaration")
-			return nil
+			return ast.ZeroNode
 		}
 
 		// Uninitialized variable
 		p.symbols.Define(ident)
 
-		return node
+		return ast.NewNode(ast.KindDeclaration, node)
 	}
 
 	p.advance("parseDeclaration") // consume := or =
 
 	expr := p.expression(ctx, ident.ValueType)
-	if expr == nil {
-		return nil
+	if expr == ast.ZeroExpr {
+		return ast.ZeroNode
 	}
 
-	node.Assignment.Expression = expr
+	node.Assignment.Expr = expr
 
 	if ident.ValueType == types.None {
 		exprType := expr.Type()
@@ -87,26 +82,24 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 	// Wrap in ResultLiteral so the transpiler emits the correct Go struct.
 	if resultType, ok := ident.ValueType.Underlying().(*types.Result); ok {
 		if state, isVariant := resultExprState(resultType, expr); isVariant {
-			node.Assignment.Expression = wrapResultLiteral(node.Assignment.Token, ident.ValueType, expr)
+			node.Assignment.Expr = wrapResultLiteral(node.Assignment.Token, ident.ValueType, expr)
 			p.symbols.MarkChecked(ident.Name, state)
 		}
 	}
 
-	return node
+	return ast.NewNode(ast.KindDeclaration, node)
 }
 
 // resultExprState checks whether an expression assigned to a result type
 // is a valid value or error variant and returns the corresponding check state.
 // Returns (state, true) if the expression matches a variant, or (0, false)
 // if it matches the full result type (e.g. a function call returning T ! E).
-func resultExprState(resolved *types.Result, expr ast.Expression) (checkState, bool) {
-	exprType := expr.Type()
-
-	if exprType.Kind() == types.ErrorKind {
+func resultExprState(resolved *types.Result, expr ast.ExprValue) (checkState, bool) {
+	if expr.TypeKind == types.ErrorKind {
 		return checkError, true
 	}
 
-	if types.Equal(exprType, resolved.Value) || types.AssignableTo(exprType, resolved.Value) {
+	if types.Equal(expr.Type(), resolved.Value) || types.AssignableTo(expr.Type(), resolved.Value) {
 		return checkValue, true
 	}
 
@@ -117,13 +110,13 @@ func resultExprState(resolved *types.Result, expr ast.Expression) (checkState, b
 // to a result-typed variable. It determines whether the expression is the
 // error or value variant based on the expression type's kind.
 // Returns nil if the expression type doesn't match either variant.
-func wrapResultLiteral(tok tokens.Token, resultType types.Type, expr ast.Expression) *ast.ResultLiteral {
+func wrapResultLiteral(tok tokens.Token, resultType types.Type, expr ast.ExprValue) ast.ExprValue {
 	isError := expr.Type().Kind() == types.ErrorKind
 
-	return &ast.ResultLiteral{
+	return ast.NewExpr(ast.KindResultLiteral, types.ResultKind, &ast.ResultLiteral{
 		Token:      tok,
 		ResultType: resultType,
 		Value:      expr,
 		IsError:    isError,
-	}
+	})
 }

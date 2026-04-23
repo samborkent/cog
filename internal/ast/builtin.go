@@ -17,6 +17,10 @@ type Builtin struct {
 	ReturnType    types.Type
 }
 
+func (b *Builtin) Kind() NodeKind {
+	return KindBuiltin
+}
+
 func (b *Builtin) Pos() (uint32, uint16) {
 	return b.Token.Ln, b.Token.Col
 }

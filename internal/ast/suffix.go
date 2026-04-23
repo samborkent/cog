@@ -14,6 +14,10 @@ type Suffix struct {
 	Left     ExprValue
 }
 
+func (p *Suffix) Kind() NodeKind {
+	return KindSuffix
+}
+
 func (p *Suffix) Pos() (uint32, uint16) {
 	return p.Operator.Ln, p.Operator.Col
 }

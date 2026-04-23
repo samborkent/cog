@@ -17,6 +17,10 @@ type Method struct {
 	Declaration *Declaration
 }
 
+func (s *Method) Kind() NodeKind {
+	return KindMethod
+}
+
 func (s *Method) Pos() (uint32, uint16) {
 	return s.Token.Ln, s.Token.Col
 }

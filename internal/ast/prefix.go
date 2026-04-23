@@ -14,6 +14,10 @@ type Prefix struct {
 	Right    ExprValue
 }
 
+func (p *Prefix) Kind() NodeKind {
+	return KindPrefix
+}
+
 func (p *Prefix) Pos() (uint32, uint16) {
 	return p.Operator.Ln, p.Operator.Col
 }

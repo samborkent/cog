@@ -9,7 +9,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
+func (p *Parser) parseMatch(ctx context.Context) ast.NodeValue {
 	node := &ast.Match{
 		Token: p.this(),
 	}
@@ -29,9 +29,9 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 	}
 
 	node.Subject = p.expression(ctx, types.None)
-	if node.Subject == nil {
+	if node.Subject == ast.ZeroExpr {
 		p.error(p.this(), "unable to parse match subject", "parseMatch")
-		return nil
+		return ast.ZeroNode
 	}
 
 	subjectType := node.Subject.Type()
@@ -50,12 +50,12 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 
 	if !isEither && !isGeneric {
 		p.error(p.this(), fmt.Sprintf("match subject must be an either type or a generic type parameter bounded by a union or any, got %s", subjectType.String()), "parseMatch")
-		return nil
+		return ast.ZeroNode
 	}
 
 	if p.this().Type != tokens.LBrace {
 		p.error(p.this(), "expected '{' after match subject", "parseMatch")
-		return nil
+		return ast.ZeroNode
 	}
 
 	p.advance("parseMatch {") // consume {
@@ -76,14 +76,14 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 		caseType := p.parseType(ctx)
 		if caseType == nil {
 			p.error(p.this(), "unable to parse case type", "parseMatch")
-			return nil
+			return ast.ZeroNode
 		}
 
 		caseNode.MatchType = caseType
 
 		if p.this().Type != tokens.Colon {
 			p.error(p.this(), "expected ':' after case type", "parseMatch")
-			return nil
+			return ast.ZeroNode
 		}
 
 		p.advance("parseMatch case :") // consume :
@@ -97,13 +97,13 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 
 		for !p.match(tokens.Case, tokens.Default, tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
-				return nil
+				return ast.ZeroNode
 			}
 
 			prev := p.i
 
 			stmt := p.parseStatement(ctx)
-			if stmt != nil {
+			if stmt != ast.ZeroNode {
 				caseNode.Body = append(caseNode.Body, stmt)
 			} else {
 				p.synchronize()
@@ -128,7 +128,7 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 
 		if p.this().Type != tokens.Colon {
 			p.error(p.this(), "expected ':' after default", "parseMatch")
-			return nil
+			return ast.ZeroNode
 		}
 
 		p.advance("parseMatch default :") // consume :
@@ -143,13 +143,13 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 
 		for !p.match(tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
-				return nil
+				return ast.ZeroNode
 			}
 
 			prev := p.i
 
 			stmt := p.parseStatement(ctx)
-			if stmt != nil {
+			if stmt != ast.ZeroNode {
 				defaultNode.Body = append(defaultNode.Body, stmt)
 			} else {
 				p.synchronize()
@@ -167,10 +167,10 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 
 	if p.this().Type != tokens.RBrace {
 		p.error(p.this(), "expected '}' to close match statement", "parseMatch")
-		return nil
+		return ast.ZeroNode
 	}
 
 	p.advance("parseMatch }") // consume }
 
-	return node
+	return ast.NewNode(ast.KindMatch, node)
 }

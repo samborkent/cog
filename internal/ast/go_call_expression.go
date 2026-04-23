@@ -16,6 +16,10 @@ type GoCallExpression struct {
 	Arguments      []ExprValue
 }
 
+func (e *GoCallExpression) Kind() NodeKind {
+	return KindGoCallExpression
+}
+
 func (e *GoCallExpression) Pos() (uint32, uint16) {
 	return e.Token.Ln, e.Token.Col
 }

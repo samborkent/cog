@@ -13,6 +13,10 @@ type ExpressionStatement struct {
 	Expr  ExprValue
 }
 
+func (s *ExpressionStatement) Kind() NodeKind {
+	return KindExpressionStatement
+}
+
 func (s *ExpressionStatement) Hash() uint64 {
 	return hash(s)
 }

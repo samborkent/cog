@@ -57,6 +57,10 @@ func (l *ASCIILiteral) String() string {
 	return out.String()
 }
 
+func (l *ASCIILiteral) Kind() NodeKind {
+	return KindASCIILiteral
+}
+
 func (l *ASCIILiteral) Type() types.Type {
 	return types.Basics[types.ASCII]
 }

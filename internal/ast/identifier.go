@@ -29,6 +29,10 @@ type Identifier struct {
 	Global    bool
 }
 
+func (e *Identifier) Kind() NodeKind {
+	return KindIdentifier
+}
+
 func (e *Identifier) Pos() (uint32, uint16) {
 	return e.Token.Ln, e.Token.Col
 }

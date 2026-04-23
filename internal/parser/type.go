@@ -179,7 +179,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		}
 
 		lenExpr := p.expression(ctx, types.None)
-		if lenExpr == nil {
+		if lenExpr == ast.ZeroExpr {
 			return nil
 		}
 
@@ -720,7 +720,7 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 			p.advance("parseParameters loop =") // consume '='
 
 			expr := p.expression(ctx, paramType)
-			if expr != nil {
+			if expr != ast.ZeroExpr {
 				param.Default = expr
 			}
 		}
@@ -850,7 +850,7 @@ func (p *Parser) parseEnumType(ctx context.Context, ident *ast.Identifier) types
 		p.advance("parseEnumType :=") // consume :=
 
 		enumExpr := p.expression(ctx, valType)
-		if enumExpr != nil {
+		if enumExpr != ast.ZeroExpr {
 			typ.Values = append(typ.Values, &types.EnumValue{
 				Name:  valIdent.Name,
 				Value: enumExpr,
@@ -944,7 +944,7 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 			p.advance("parseErrorType :=") // consume :=
 
 			enumExpr := p.expression(ctx, typ.ValueType)
-			if enumExpr != nil {
+			if enumExpr != ast.ZeroExpr {
 				typ.Values = append(typ.Values, &types.EnumValue{
 					Name:  valName,
 					Value: enumExpr,

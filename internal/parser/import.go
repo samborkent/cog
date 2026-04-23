@@ -9,7 +9,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseImport() *ast.Import {
+func (p *Parser) parseImport() ast.NodeValue {
 	node := &ast.Import{
 		Token:   p.this(),
 		Imports: make([]*ast.Identifier, 0),
@@ -19,7 +19,7 @@ func (p *Parser) parseImport() *ast.Import {
 
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), "expected '(' after import", "parseImport")
-		return nil
+		return ast.ZeroNode
 	}
 
 	p.advance("parseImport (") // consume '('
@@ -27,7 +27,7 @@ func (p *Parser) parseImport() *ast.Import {
 	for ; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; p.advance("parseImport loop") {
 		if p.this().Type != tokens.StringLiteral {
 			p.error(p.this(), "found non-string token in import list: "+p.this().Literal, "parseImport")
-			return nil
+			return ast.ZeroNode
 		}
 
 		importPath := p.this().Literal
@@ -35,7 +35,7 @@ func (p *Parser) parseImport() *ast.Import {
 		// Safety: disallow parent traversal and absolute paths.
 		if strings.Contains(importPath, "..") || strings.HasPrefix(importPath, "/") {
 			p.error(p.this(), "import path must be a relative subdirectory path (no '..' or leading '/')", "parseImport")
-			return nil
+			return ast.ZeroNode
 		}
 
 		// Package name is the last segment of the path.
@@ -74,5 +74,5 @@ func (p *Parser) parseImport() *ast.Import {
 
 	p.advance("parseImport )") // consume ')'
 
-	return node
+	return ast.NewNode(ast.KindImport, node)
 }

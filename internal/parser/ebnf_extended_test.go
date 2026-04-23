@@ -173,7 +173,8 @@ main : proc() = {
 }`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
-		if d.Assignment.Expression == nil {
+
+		if d.Assignment.Expr == ast.ZeroExpr {
 			t.Fatal("expected expression in main body")
 		}
 	})

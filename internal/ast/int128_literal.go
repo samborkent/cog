@@ -33,6 +33,10 @@ func NewInt128Literal(t tokens.Token) (*Int128Literal, error) {
 	}, nil
 }
 
+func (l *Int128Literal) Kind() NodeKind {
+	return KindInt128Literal
+}
+
 func (l *Int128Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

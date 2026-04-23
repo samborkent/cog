@@ -7,10 +7,13 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
+// TODO: optimize based on statistics.
+const blockSizeEstimate = 8
+
 func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
 	node := &ast.Block{
 		Start:      p.this(),
-		Statements: make([]ast.Statement, 0),
+		Statements: make([]ast.NodeValue, 0, blockSizeEstimate),
 	}
 
 	p.advance("parseBlock") // consume '{'
@@ -31,7 +34,7 @@ func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
 		prev := p.i
 
 		stmt := p.parseStatement(ctx)
-		if stmt != nil {
+		if stmt != ast.ZeroNode {
 			node.Statements = append(node.Statements, stmt)
 		} else {
 			// Synchronize to recover from errors within a block.

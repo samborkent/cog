@@ -191,22 +191,24 @@ main : proc() = {
 }`)
 		// Get the main proc body and find the call.
 		mainDecl := stmtAs[*ast.Declaration](t, f, 1)
-		procLit := mainDecl.Assignment.Expression.(*ast.ProcedureLiteral)
+		procLit := mainDecl.Assignment.Expr.AsProcedureLiteral()
 
 		block := procLit.Body
 		if len(block.Statements) == 0 {
 			t.Fatal("expected statements in main block")
 		}
 
-		exprStmt, ok := block.Statements[0].(*ast.ExpressionStatement)
-		if !ok {
+		if block.Statements[0].NodeKind != ast.KindExpressionStatement {
 			t.Fatalf("expected ExpressionStatement, got %T", block.Statements[0])
 		}
 
-		call, ok := exprStmt.Expression.(*ast.Call)
-		if !ok {
-			t.Fatalf("expected Call, got %T", exprStmt.Expression)
+		exprStmt := block.Statements[0].AsExpressionStatement()
+
+		if exprStmt.Expr.NodeKind != ast.KindCall {
+			t.Fatalf("expected Call, got %T", exprStmt.Expr)
 		}
+
+		call := exprStmt.Expr.AsCall()
 
 		if len(call.TypeArgs) != 1 {
 			t.Fatalf("expected 1 type arg, got %d", len(call.TypeArgs))
@@ -292,7 +294,7 @@ main : proc() = {
 
 		// Verify the first func's type parameter has concrete type constraints.
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
+		procLit := decl.Assignment.Expr.AsProcedureLiteral()
 
 		procType := procLit.ProcedureType.(*types.Procedure)
 		if len(procType.TypeParams) != 1 {

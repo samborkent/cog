@@ -17,6 +17,10 @@ type Selector struct {
 	Field *Identifier
 }
 
+func (e *Selector) Kind() NodeKind {
+	return KindSelector
+}
+
 func (e *Selector) Pos() (uint32, uint16) {
 	return e.Token.Ln, e.Token.Col
 }

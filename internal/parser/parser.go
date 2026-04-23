@@ -116,7 +116,7 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.File, err
 	f := &ast.File{
 		Name:       fileName,
 		Package:    pkg,
-		Statements: []ast.Statement{},
+		Statements: []ast.NodeValue{},
 	}
 
 	// Iterate tokens.
@@ -130,10 +130,10 @@ tokenLoop:
 
 		switch p.this().Type {
 		case tokens.Comment:
-			f.Statements = append(f.Statements, &ast.Comment{
+			f.Statements = append(f.Statements, ast.NewNode(ast.KindComment, &ast.Comment{
 				Token: p.this(),
 				Text:  p.this().Literal,
-			})
+			}))
 			p.advance("Parse comment")
 		case tokens.Dynamic,
 			tokens.Export,
@@ -151,7 +151,7 @@ tokenLoop:
 			ident := p.this().Literal
 
 			node := p.parseStatement(ctx)
-			if node != nil {
+			if node != ast.ZeroNode {
 				if ident == "main" {
 					f.ContainsMain = true
 				}
@@ -162,14 +162,14 @@ tokenLoop:
 			}
 		case tokens.GoImport:
 			node := p.parseGoImport()
-			if node != nil {
+			if node != ast.ZeroNode {
 				f.Statements = append(f.Statements, node)
 			} else {
 				p.synchronize()
 			}
 		case tokens.Import:
 			node := p.parseImport()
-			if node != nil {
+			if node != ast.ZeroNode {
 				f.Statements = append(f.Statements, node)
 			} else {
 				p.synchronize()

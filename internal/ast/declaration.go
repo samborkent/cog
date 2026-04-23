@@ -12,6 +12,10 @@ type Declaration struct {
 	Assignment *Assignment
 }
 
+func (d *Declaration) Kind() NodeKind {
+	return KindDeclaration
+}
+
 func (d *Declaration) Pos() (uint32, uint16) {
 	return d.Assignment.Token.Ln, d.Assignment.Token.Col
 }
@@ -32,7 +36,7 @@ func (d *Declaration) stringTo(out *strings.Builder) {
 		_, _ = out.WriteString("dyn ")
 	}
 
-	if d.Assignment.Expr.NodeKind == KindNone {
+	if d.Assignment.Expr == ZeroExpr {
 		d.Assignment.Identifier.stringTo(out)
 		_, _ = out.WriteString(" : ")
 		_, _ = out.WriteString(d.Assignment.Identifier.ValueType.String())

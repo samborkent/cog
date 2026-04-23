@@ -13,6 +13,10 @@ type Import struct {
 	Imports []*Identifier
 }
 
+func (i *Import) Kind() NodeKind {
+	return KindImport
+}
+
 func (i *Import) Pos() (uint32, uint16) {
 	return i.Token.Ln, i.Token.Col
 }

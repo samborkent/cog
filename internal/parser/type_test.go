@@ -20,8 +20,8 @@ main : proc() = {}`)
 			t.Errorf("expected name 'main', got %q", d.Assignment.Identifier.Name)
 		}
 
-		if d.Assignment.Expression.Type().Kind() != types.ProcedureKind {
-			t.Errorf("expected ProcedureKind, got %s", d.Assignment.Expression.Type().Kind())
+		if d.Assignment.Expr.Type().Kind() != types.ProcedureKind {
+			t.Errorf("expected ProcedureKind, got %s", d.Assignment.Expr.Type().Kind())
 		}
 	})
 
@@ -34,7 +34,7 @@ greet : proc(name : utf8) = {
 main : proc() = {}`)
 		d := stmtAs[*ast.Declaration](t, f, 0)
 
-		procType, ok := d.Assignment.Expression.Type().(*types.Procedure)
+		procType, ok := d.Assignment.Expr.Type().(*types.Procedure)
 		if !ok {
 			t.Fatal("expected procedure type")
 		}
@@ -57,7 +57,7 @@ add : func(a : int64, b : int64) int64 = {
 main : proc() = {}`)
 		d := stmtAs[*ast.Declaration](t, f, 0)
 
-		procType, ok := d.Assignment.Expression.Type().(*types.Procedure)
+		procType, ok := d.Assignment.Expr.Type().(*types.Procedure)
 		if !ok {
 			t.Fatal("expected procedure type")
 		}
@@ -88,7 +88,7 @@ greet : func(name : utf8, greeting? : utf8 = "hello") utf8 = {
 main : proc() = {}`)
 		d := stmtAs[*ast.Declaration](t, f, 0)
 
-		procType, ok := d.Assignment.Expression.Type().(*types.Procedure)
+		procType, ok := d.Assignment.Expr.Type().(*types.Procedure)
 		if !ok {
 			t.Fatal("expected procedure type")
 		}
@@ -124,7 +124,7 @@ divide : func(a : int64, b : int64) int64 ! MyError = {
 main : proc() = {}`)
 		d := stmtAs[*ast.Declaration](t, f, 1)
 
-		procType, ok := d.Assignment.Expression.Type().(*types.Procedure)
+		procType, ok := d.Assignment.Expr.Type().(*types.Procedure)
 		if !ok {
 			t.Fatal("expected procedure type")
 		}
@@ -157,24 +157,27 @@ divide : func(a : int64, b : int64) int64 ! MyError = {
 main : proc() = {}`)
 		d := stmtAs[*ast.Declaration](t, f, 1)
 
-		procLit, ok := d.Assignment.Expression.(*ast.ProcedureLiteral)
-		if !ok {
+		if d.Assignment.Expr.NodeKind != ast.KindProcedureLiteral {
 			t.Fatal("expected ProcedureLiteral")
 		}
 
-		ret, ok := procLit.Body.Statements[0].(*ast.Return)
-		if !ok {
+		procLit := d.Assignment.Expr.AsProcedureLiteral()
+
+		if procLit.Body.Statements[0].NodeKind != ast.KindReturn {
 			t.Fatal("expected Return statement")
 		}
+
+		ret := procLit.Body.Statements[0].AsReturn()
 
 		if len(ret.Values) != 1 {
 			t.Fatalf("expected 1 return value, got %d", len(ret.Values))
 		}
 
-		rl, ok := ret.Values[0].(*ast.ResultLiteral)
-		if !ok {
+		if ret.Values[0].NodeKind != ast.KindResultLiteral {
 			t.Fatalf("expected ResultLiteral, got %T", ret.Values[0])
 		}
+
+		rl := ret.Values[0].AsResultLiteral()
 
 		if rl.IsError {
 			t.Error("expected success return (IsError=false)")
@@ -191,24 +194,27 @@ divide : func(a : int64, b : int64) int64 ! MyError = {
 main : proc() = {}`)
 		d := stmtAs[*ast.Declaration](t, f, 1)
 
-		procLit, ok := d.Assignment.Expression.(*ast.ProcedureLiteral)
-		if !ok {
+		if d.Assignment.Expr.NodeKind != ast.KindProcedureLiteral {
 			t.Fatal("expected ProcedureLiteral")
 		}
 
-		ret, ok := procLit.Body.Statements[0].(*ast.Return)
-		if !ok {
+		procLit := d.Assignment.Expr.AsProcedureLiteral()
+
+		if procLit.Body.Statements[0].NodeKind != ast.KindReturn {
 			t.Fatal("expected Return statement")
 		}
+
+		ret := procLit.Body.Statements[0].AsReturn()
 
 		if len(ret.Values) != 1 {
 			t.Fatalf("expected 1 return value, got %d", len(ret.Values))
 		}
 
-		rl, ok := ret.Values[0].(*ast.ResultLiteral)
-		if !ok {
+		if ret.Values[0].NodeKind != ast.KindResultLiteral {
 			t.Fatalf("expected ResultLiteral, got %T", ret.Values[0])
 		}
+
+		rl := ret.Values[0].AsResultLiteral()
 
 		if !rl.IsError {
 			t.Error("expected error return (IsError=true)")
@@ -228,21 +234,23 @@ outer : func(a : int64) int64 ! MyError = {
 main : proc() = {}`)
 		d := stmtAs[*ast.Declaration](t, f, 2)
 
-		procLit, ok := d.Assignment.Expression.(*ast.ProcedureLiteral)
-		if !ok {
+		if d.Assignment.Expr.NodeKind != ast.KindProcedureLiteral {
 			t.Fatal("expected ProcedureLiteral")
 		}
 
-		ret, ok := procLit.Body.Statements[0].(*ast.Return)
-		if !ok {
+		procLit := d.Assignment.Expr.AsProcedureLiteral()
+
+		if procLit.Body.Statements[0].NodeKind != ast.KindReturn {
 			t.Fatal("expected Return statement")
 		}
+
+		ret := procLit.Body.Statements[0].AsReturn()
 
 		if len(ret.Values) != 1 {
 			t.Fatalf("expected 1 return value, got %d", len(ret.Values))
 		}
 
-		if _, wrapped := ret.Values[0].(*ast.ResultLiteral); wrapped {
+		if ret.Values[0].NodeKind == ast.KindResultLiteral {
 			t.Fatalf("expected pass-through result return, got %T", ret.Values[0])
 		}
 	})

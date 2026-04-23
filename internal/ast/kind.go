@@ -15,9 +15,9 @@ const (
 	KindCall
 	KindCase
 	KindComment
-	KindComplex128Literal
 	KindComplex32Literal
 	KindComplex64Literal
+	KindComplex128Literal
 	KindDeclaration
 	KindDefault
 	KindEitherLiteral

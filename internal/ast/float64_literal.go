@@ -28,6 +28,10 @@ func NewFloat64Literal(t tokens.Token) (*Float64Literal, error) {
 	}, nil
 }
 
+func (l *Float64Literal) Kind() NodeKind {
+	return KindFloat64Literal
+}
+
 func (l *Float64Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

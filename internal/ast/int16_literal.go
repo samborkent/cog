@@ -28,6 +28,10 @@ func NewInt16Literal(t tokens.Token) (*Int16Literal, error) {
 	}, nil
 }
 
+func (l *Int16Literal) Kind() NodeKind {
+	return KindInt16Literal
+}
+
 func (l *Int16Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

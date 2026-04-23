@@ -8,7 +8,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
+func (p *Parser) parseIfStatement(ctx context.Context, labelIdent *ast.Identifier) ast.NodeValue {
 	node := &ast.IfStatement{
 		Token: p.this(),
 	}
@@ -16,14 +16,14 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 	p.advance("parseIfStatement if") // consume if
 
 	expr := p.expression(ctx, types.None)
-	if expr == nil {
+	if expr == ast.ZeroExpr {
 		p.error(p.this(), "unable to parse bool expression in if condition", "parseIfStatement")
-		return nil
+		return ast.ZeroNode
 	}
 
 	if expr.Type().Kind() != types.Bool {
 		p.error(p.this(), "expected bool expression in if condition", "parseIfStatement")
-		return nil
+		return ast.ZeroNode
 	}
 
 	node.Condition = expr
@@ -64,7 +64,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 
 	if consequence == nil {
 		p.error(p.this(), "unable to parse if block", "parseIfStatement")
-		return nil
+		return ast.ZeroNode
 	}
 
 	node.Consequence = consequence
@@ -83,7 +83,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 
 	if p.this().Type == tokens.Else {
 		if ctx.Err() != nil {
-			return nil
+			return ast.ZeroNode
 		}
 
 		p.advance("parseIfStatement else") // consume 'else'
@@ -105,7 +105,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 
 		if alternative == nil {
 			p.error(p.this(), "unable to parse else block", "parseIfStatement")
-			return nil
+			return ast.ZeroNode
 		}
 
 		node.Alternative = alternative
@@ -116,7 +116,16 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 		p.symbols.MarkChecked(checkedVar, checkValue)
 	}
 
-	return node
+	if labelIdent != nil {
+		// Set label if present.
+		labelIdent.ValueType = types.None
+		node.Label = &ast.Label{
+			Token: labelIdent.Token,
+			Label: labelIdent,
+		}
+	}
+
+	return ast.NewNode(ast.KindIfStatement, node)
 }
 
 // blockExitsScope reports whether a block's last statement unconditionally
@@ -127,30 +136,26 @@ func blockExitsScope(block *ast.Block) bool {
 	}
 
 	last := block.Statements[len(block.Statements)-1]
-
-	switch last.(type) {
-	case *ast.Return, *ast.Branch:
-		return true
-	}
-
-	return false
+	return last.NodeKind == ast.KindReturn || last.NodeKind == ast.KindBranch
 }
 
 // extractCheckVar extracts the variable name from a ? check expression.
 // Only ? is a check operator. Returns the variable name and whether negated.
 // Patterns: val? → (name, false), !val? → (name, true)
-func extractCheckVar(expr ast.Expression) (string, bool) {
-	switch e := expr.(type) {
-	case *ast.Suffix:
-		if e.Operator.Type == tokens.Question {
-			if ident, ok := e.Left.(*ast.Identifier); ok {
-				return ident.Name, false
-			}
-		}
-	case *ast.Prefix:
+func extractCheckVar(expr ast.ExprValue) (string, bool) {
+	switch expr.NodeKind {
+	case ast.KindPrefix:
+		e := expr.AsPrefix()
+
 		if e.Operator.Type == tokens.Not {
 			name, neg := extractCheckVar(e.Right)
 			return name, !neg
+		}
+	case ast.KindSuffix:
+		e := expr.AsSuffix()
+
+		if e.Operator.Type == tokens.Question && e.Left.NodeKind == ast.KindIdentifier {
+			return e.Left.AsIdentifier().Name, false
 		}
 	}
 

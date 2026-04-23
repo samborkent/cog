@@ -11,6 +11,10 @@ type File struct {
 	ContainsMain bool
 }
 
+func (f *File) Kind() NodeKind {
+	return KindFile
+}
+
 func (f *File) Pos() (uint32, uint16) {
 	return 0, 0
 }

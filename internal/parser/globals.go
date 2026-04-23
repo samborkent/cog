@@ -417,7 +417,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 			p.advance("findGlobalType enum literal :=") // consume :=
 
 			enumVal := p.expression(ctx, enumValType)
-			if enumVal != nil {
+			if enumVal != ast.ZeroExpr {
 				enumType.Values = append(enumType.Values, &types.EnumValue{
 					Name:  valIdent.Name,
 					Value: enumVal,

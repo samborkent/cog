@@ -17,6 +17,10 @@ type ForStatement struct {
 	Loop  *Block
 }
 
+func (s *ForStatement) Kind() NodeKind {
+	return KindForStatement
+}
+
 func (s *ForStatement) Pos() (uint32, uint16) {
 	return s.Token.Ln, s.Token.Col
 }
@@ -45,7 +49,7 @@ func (s *ForStatement) stringTo(out *strings.Builder) {
 		_, _ = out.WriteString(" in ")
 	}
 
-	if s.Range.NodeKind != KindNone {
+	if s.Range != ZeroExpr {
 		s.Range.expr.stringTo(out)
 		_ = out.WriteByte(' ')
 	}

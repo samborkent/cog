@@ -32,6 +32,10 @@ func NewFloat16Literal(t tokens.Token) (*Float16Literal, error) {
 	}, nil
 }
 
+func (l *Float16Literal) Kind() NodeKind {
+	return KindFloat16Literal
+}
+
 func (l *Float16Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

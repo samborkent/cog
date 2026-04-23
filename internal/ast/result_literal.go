@@ -16,6 +16,10 @@ type ResultLiteral struct {
 	IsError    bool // False: Value (success), True: Error
 }
 
+func (e *ResultLiteral) Kind() NodeKind {
+	return KindResultLiteral
+}
+
 func (e *ResultLiteral) Pos() (uint32, uint16) {
 	return e.Token.Ln, e.Token.Col
 }

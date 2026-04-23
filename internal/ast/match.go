@@ -22,6 +22,10 @@ type Match struct {
 	Default *Default
 }
 
+func (m *Match) Kind() NodeKind {
+	return KindMatch
+}
+
 func (m *Match) Pos() (uint32, uint16) {
 	return m.Token.Ln, m.Token.Col
 }

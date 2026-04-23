@@ -15,6 +15,10 @@ type Index struct {
 	Index      ExprValue
 }
 
+func (e *Index) Kind() NodeKind {
+	return KindIndex
+}
+
 func (e *Index) Pos() (ln uint32, col uint16) {
 	return e.Token.Ln, e.Token.Col
 }

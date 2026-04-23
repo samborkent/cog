@@ -15,6 +15,10 @@ type Complex128Literal struct {
 	Value complex128
 }
 
+func (l *Complex128Literal) Kind() NodeKind {
+	return KindComplex128Literal
+}
+
 func (l *Complex128Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

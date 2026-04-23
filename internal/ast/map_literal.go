@@ -20,6 +20,10 @@ type KeyValue struct {
 	Value ExprValue
 }
 
+func (l *MapLiteral) Kind() NodeKind {
+	return KindMapLiteral
+}
+
 func (l *MapLiteral) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

@@ -14,6 +14,10 @@ type ProcedureLiteral struct {
 	ProcedureType types.Type
 }
 
+func (l *ProcedureLiteral) Kind() NodeKind {
+	return KindProcedureLiteral
+}
+
 func (l *ProcedureLiteral) Pos() (uint32, uint16) {
 	return l.Body.Start.Ln, l.Body.Start.Col
 }

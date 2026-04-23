@@ -25,17 +25,18 @@ show : func<T ~ int32 | utf8>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
+		procLit := decl.Assignment.Expr.AsProcedureLiteral()
 		block := procLit.Body
 
 		if len(block.Statements) == 0 {
 			t.Fatal("expected statements in function body")
 		}
 
-		matchStmt, ok := block.Statements[0].(*ast.Match)
-		if !ok {
+		if block.Statements[0].NodeKind != ast.KindMatch {
 			t.Fatalf("expected *ast.Match, got %T", block.Statements[0])
 		}
+
+		matchStmt := block.Statements[0].AsMatch()
 
 		if matchStmt.Binding != nil {
 			t.Error("expected no binding")
@@ -69,8 +70,8 @@ show : func<T ~ int32 | utf8>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+		procLit := decl.Assignment.Expr.AsProcedureLiteral()
+		matchStmt := procLit.Body.Statements[0].AsMatch()
 
 		if matchStmt.Binding == nil {
 			t.Fatal("expected binding")
@@ -100,8 +101,8 @@ show : func<T ~ any>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+		procLit := decl.Assignment.Expr.AsProcedureLiteral()
+		matchStmt := procLit.Body.Statements[0].AsMatch()
 
 		if len(matchStmt.Cases) != 1 {
 			t.Fatalf("expected 1 case, got %d", len(matchStmt.Cases))
@@ -127,8 +128,8 @@ show : func<T ~ any>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+		procLit := decl.Assignment.Expr.AsProcedureLiteral()
+		matchStmt := procLit.Body.Statements[0].AsMatch()
 
 		if !matchStmt.Cases[0].Tilde {
 			t.Error("expected tilde flag to be true")
@@ -170,8 +171,8 @@ show : func<T ~ int32 | utf8>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+		procLit := decl.Assignment.Expr.AsProcedureLiteral()
+		matchStmt := procLit.Body.Statements[0].AsMatch()
 
 		if len(matchStmt.Cases[0].Body) != 2 {
 			t.Errorf("expected 2 statements in first case, got %d", len(matchStmt.Cases[0].Body))
@@ -197,8 +198,8 @@ show : func<T ~ any>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+		procLit := decl.Assignment.Expr.AsProcedureLiteral()
+		matchStmt := procLit.Body.Statements[0].AsMatch()
 
 		if len(matchStmt.Cases) != 2 {
 			t.Fatalf("expected 2 cases, got %d", len(matchStmt.Cases))
@@ -220,8 +221,8 @@ show : func<T ~ int32 | utf8>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+		procLit := decl.Assignment.Expr.AsProcedureLiteral()
+		matchStmt := procLit.Body.Statements[0].AsMatch()
 
 		s := matchStmt.String()
 		if s == "" {
@@ -247,8 +248,8 @@ show : func<T ~ any>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+		procLit := decl.Assignment.Expr.AsProcedureLiteral()
+		matchStmt := procLit.Body.Statements[0].AsMatch()
 
 		caseStr := matchStmt.Cases[0].String()
 

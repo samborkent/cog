@@ -9,7 +9,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedure) []ast.Expression {
+func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedure) []ast.ExprValue {
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), "expected '(' after call identifier", "parseCallArguments")
 		return nil
@@ -19,21 +19,21 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 
 	if p.this().Type == tokens.RParen {
 		p.advance("parseCallArguments )") // consume ')'
-		return []ast.Expression{}
+		return []ast.ExprValue{}
 	}
 
-	args := []ast.Expression{}
+	args := []ast.ExprValue{}
 
 	for i := 0; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; i++ {
 		if ctx.Err() != nil {
 			return nil
 		}
 
-		var arg ast.Expression
+		var arg ast.ExprValue
 
 		if procType == nil {
 			arg = p.expression(ctx, types.None)
-			if arg == nil {
+			if arg == ast.ZeroExpr {
 				return nil
 			}
 		} else {
@@ -51,7 +51,7 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 			}
 
 			arg = p.expression(ctx, paramType)
-			if arg == nil {
+			if arg == ast.ZeroExpr {
 				return nil
 			}
 		}
@@ -78,7 +78,7 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 // and the substituted return type. Reports parser errors on failure.
 func (p *Parser) inferTypeArgs(
 	procType *types.Procedure,
-	args []ast.Expression,
+	args []ast.ExprValue,
 ) ([]types.Type, types.Type) {
 	argMap := make(map[string]types.Type, len(procType.TypeParams))
 
@@ -148,7 +148,7 @@ func (p *Parser) inferTypeArgs(
 func (p *Parser) validateExplicitTypeArgs(
 	procType *types.Procedure,
 	typeArgs []types.Type,
-	args []ast.Expression,
+	args []ast.ExprValue,
 ) types.Type {
 	if len(typeArgs) != len(procType.TypeParams) {
 		p.error(p.this(), fmt.Sprintf(

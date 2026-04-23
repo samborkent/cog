@@ -13,6 +13,10 @@ type Label struct {
 	Label *Identifier
 }
 
+func (s *Label) Kind() NodeKind {
+	return KindLabel
+}
+
 func (s *Label) Pos() (uint32, uint16) {
 	return s.Token.Ln, s.Token.Col
 }

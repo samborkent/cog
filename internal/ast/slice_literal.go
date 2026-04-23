@@ -15,6 +15,10 @@ type SliceLiteral struct {
 	Values      []ExprValue
 }
 
+func (l *SliceLiteral) Kind() NodeKind {
+	return KindSliceLiteral
+}
+
 func (l *SliceLiteral) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

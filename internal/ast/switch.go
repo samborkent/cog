@@ -17,6 +17,10 @@ type Switch struct {
 	Default *Default // may be nil
 }
 
+func (s *Switch) Kind() NodeKind {
+	return KindSwitch
+}
+
 func (s *Switch) Pos() (ln uint32, col uint16) {
 	return s.Token.Ln, s.Token.Col
 }
@@ -66,6 +70,10 @@ type Case struct {
 	Body      []NodeValue
 }
 
+func (c *Case) Kind() NodeKind {
+	return KindCase
+}
+
 func (c *Case) Pos() (ln uint32, col uint16) {
 	return c.Token.Ln, c.Token.Col
 }
@@ -99,6 +107,10 @@ var _ Node = &Default{}
 type Default struct {
 	Token tokens.Token
 	Body  []NodeValue
+}
+
+func (d *Default) Kind() NodeKind {
+	return KindDefault
 }
 
 func (d *Default) Pos() (ln uint32, col uint16) {

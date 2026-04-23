@@ -13,6 +13,10 @@ type Package struct {
 	Identifier *Identifier
 }
 
+func (p *Package) Kind() NodeKind {
+	return KindPackage
+}
+
 func (p *Package) Pos() (uint32, uint16) {
 	return p.Token.Ln, p.Token.Col
 }

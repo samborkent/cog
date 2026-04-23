@@ -13,6 +13,10 @@ type Return struct {
 	Values []ExprValue
 }
 
+func (r *Return) Kind() NodeKind {
+	return KindReturn
+}
+
 func (r *Return) Pos() (uint32, uint16) {
 	return r.Token.Ln, r.Token.Col
 }

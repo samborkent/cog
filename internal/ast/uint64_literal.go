@@ -28,6 +28,10 @@ func NewUint64Literal(t tokens.Token) (*Uint64Literal, error) {
 	}, nil
 }
 
+func (l *Uint64Literal) Kind() NodeKind {
+	return KindUint64Literal
+}
+
 func (l *Uint64Literal) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

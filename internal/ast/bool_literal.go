@@ -32,6 +32,10 @@ func NewBoolLiteral(t tokens.Token) (*BoolLiteral, error) {
 	}, nil
 }
 
+func (b *BoolLiteral) Kind() NodeKind {
+	return KindBoolLiteral
+}
+
 func (l *BoolLiteral) Pos() (uint32, uint16) {
 	return l.Token.Ln, l.Token.Col
 }

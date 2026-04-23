@@ -16,7 +16,14 @@ type Call struct {
 	TypeArgs   []types.Type // explicit or inferred type arguments for generic calls
 }
 
+func (c *Call) Kind() NodeKind {
+	return KindCall
+}
+
 func (c *Call) Pos() (uint32, uint16) {
+	if c.Expr.expr == nil {
+		return 0, 0
+	}
 	return c.Expr.expr.Pos()
 }
 

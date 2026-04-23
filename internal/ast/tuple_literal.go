@@ -15,6 +15,10 @@ type TupleLiteral struct {
 	Values    []ExprValue
 }
 
+func (e *TupleLiteral) Kind() NodeKind {
+	return KindTupleLiteral
+}
+
 func (e *TupleLiteral) Pos() (uint32, uint16) {
 	return e.Token.Ln, e.Token.Col
 }

@@ -20,6 +20,10 @@ type FieldValue struct {
 	Value ExprValue
 }
 
+func (e *StructLiteral) Kind() NodeKind {
+	return KindStructLiteral
+}
+
 func (e *StructLiteral) Pos() (uint32, uint16) {
 	return e.Token.Ln, e.Token.Col
 }

@@ -13,6 +13,10 @@ type Branch struct {
 	Label *Identifier
 }
 
+func (b *Branch) Kind() NodeKind {
+	return KindBranch
+}
+
 func (b *Branch) Pos() (uint32, uint16) {
 	return b.Token.Ln, b.Token.Col
 }

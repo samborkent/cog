@@ -15,6 +15,10 @@ type Parameter struct {
 	Default    ExprValue // optional
 }
 
+func (p *Parameter) Kind() NodeKind {
+	return KindParameter
+}
+
 func (p *Parameter) Pos() (uint32, uint16) {
 	return p.Identifier.Token.Ln, p.Identifier.Token.Col
 }
@@ -36,7 +40,7 @@ func (p *Parameter) stringTo(out *strings.Builder) {
 
 	_, _ = out.WriteString(p.ValueType.String())
 
-	if p.Default.NodeKind != KindNone {
+	if p.Default != ZeroExpr {
 		_, _ = out.WriteString(" = ")
 		p.Default.expr.stringTo(out)
 	}
