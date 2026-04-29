@@ -6,30 +6,34 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &ExpressionStatement{}
+var _ Node = &ExpressionStatement{}
 
 type ExpressionStatement struct {
-	statement
-
-	Token      tokens.Token
-	Expression Expression
+	Token tokens.Token
+	Expr  ExprIndex
 }
 
-func (s *ExpressionStatement) Hash() uint64 {
-	return hash(s)
+func (a *AST) NewExpressionStatement(token tokens.Token, expr ExprIndex) NodeIndex {
+	node := New[ExpressionStatement](a)
+	node.Token = token
+	node.Expr = expr
+	return a.AddNode(node)
 }
 
-func (s *ExpressionStatement) Pos() (uint32, uint16) {
-	return s.Token.Ln, s.Token.Col
+func (n *ExpressionStatement) Hash() uint64 {
+	return hash(n)
 }
 
-func (s *ExpressionStatement) stringTo(out *strings.Builder) {
-	s.Expression.stringTo(out)
+func (n *ExpressionStatement) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (s *ExpressionStatement) String() string {
+func (n *ExpressionStatement) StringTo(out *strings.Builder, a *AST) {
+	a.exprs[n.Expr].StringTo(out, a)
+}
+
+func (n *ExpressionStatement) String() string {
 	var out strings.Builder
-	s.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

@@ -8,11 +8,11 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *ast.Assignment {
+func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) ast.NodeIndex {
 	symbol, ok := p.symbols.Resolve(ident.Name)
 	if !ok {
 		p.error(p.prev(), "unknown identifier", "parseAssignment")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	switch symbol.Identifier.Qualifier {
@@ -23,45 +23,47 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 		p.advance("parseAssignment error =") // consume =
 		_ = p.expression(ctx, symbol.Type())
 
-		return nil
+		return ast.ZeroNodeIndex
 	case ast.QualifierType:
 		p.error(p.prev(), "cannot assign to a type identifier", "parseAssignment")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
-	node := &ast.Assignment{
-		Token:      p.this(),
-		Identifier: symbol.Identifier,
-	}
+	assignmentToken := p.this()
 
 	p.advance("parseAssignment") // consume '='
 
 	expr := p.expression(ctx, symbol.Type())
-	if expr == nil {
-		return nil
+	if expr == ast.ZeroExprIndex {
+		return ast.ZeroNodeIndex
 	}
 
-	node.Expression = expr
+	exprType := p.ast.Expr(expr).Type()
 
-	if symbol.Identifier.Name != "_" && !types.Equal(symbol.Type(), expr.Type()) && !types.AssignableTo(expr.Type(), symbol.Type()) {
-		p.error(node.Token, fmt.Sprintf("type mismatch: cannot assign %q to variable of type %q", expr.Type(), symbol.Type()), "parseAssignment")
-		return nil
+	if symbol.Identifier.Name != "_" &&
+		// TODO: check if this is required, as [Parser.expression] should already enforce this, expect if symbol type is [types.None].
+		!types.Equal(symbol.Type(), exprType) &&
+		!types.AssignableTo(exprType, symbol.Type()) {
+		p.error(assignmentToken, fmt.Sprintf("type mismatch: cannot assign %q to variable of type %q", exprType, symbol.Type()), "parseAssignment")
+		return ast.ZeroNodeIndex
 	}
 
-	if symbol.Identifier.Name != "_" && (node.Identifier.ValueType == nil || node.Identifier.ValueType == types.None) {
-		node.Identifier.ValueType = expr.Type()
+	if symbol.Identifier.Name != "_" &&
+		(symbol.Identifier.ValueType == nil || symbol.Identifier.ValueType == types.None) {
+		symbol.Identifier.ValueType = exprType
 	}
 
 	if symbol.Identifier.Name != "_" && symbol.Type() == types.None {
-		p.symbols.Update(ident.Name, expr.Type())
+		// TODO: this seems unnecessary, as we do the same just above.
+		p.symbols.Update(ident.Name, exprType)
 	}
 
 	// Static result analysis: if the assigned expression's type matches the
 	// result's value or error type, we know statically which variant it is.
 	// Wrap in ResultLiteral so the transpiler emits the correct Go struct.
-	if resultType, ok := symbol.Type().Underlying().(*types.Result); ok {
-		if state, isVariant := resultExprState(resultType, expr); isVariant {
-			node.Expression = wrapResultLiteral(node.Token, symbol.Type(), expr)
+	if resultType, ok := exprType.Underlying().(*types.Result); ok {
+		if state, isVariant := resultExprState(resultType, exprType); isVariant {
+			expr = p.ast.NewResultLiteral(assignmentToken, exprType, expr, exprType.Kind() == types.ErrorKind)
 
 			p.symbols.MarkChecked(ident.Name, state)
 		} else {
@@ -70,5 +72,5 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) *as
 		}
 	}
 
-	return node
+	return p.ast.NewAssignment(assignmentToken, symbol.Identifier, expr)
 }

@@ -7,49 +7,58 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Statement = &Declaration{}
+var _ Node = &Method{}
 
 type Method struct {
-	statement
-
 	Token       tokens.Token
 	Export      bool
 	Receiver    *Identifier
 	Type        types.Type
-	Declaration *Declaration
+	Declaration NodeIndex
 }
 
-func (s *Method) Pos() (uint32, uint16) {
-	return s.Token.Ln, s.Token.Col
+func (a *AST) NewMethod(t tokens.Token, export bool, receiver *Identifier, typ types.Type, declaration NodeIndex) NodeIndex {
+	node := New[Method](a)
+
+	node.Token = t
+	node.Export = export
+	node.Receiver = receiver
+	node.Type = typ
+	node.Declaration = declaration
+
+	return a.AddNode(node)
 }
 
-func (s *Method) Hash() uint64 {
-	return hash(s)
+func (n *Method) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (s *Method) stringTo(out *strings.Builder) {
-	if s.Declaration.Assignment.Identifier.Exported {
+func (n *Method) Hash() uint64 {
+	return hash(n)
+}
+
+func (n *Method) StringTo(out *strings.Builder, a *AST) {
+	if n.Export {
 		_, _ = out.WriteString("export ")
 	}
 
-	if s.Receiver != nil {
+	if n.Receiver != nil {
 		_ = out.WriteByte('(')
-		_, _ = out.WriteString(s.Receiver.Name)
+		_, _ = out.WriteString(n.Receiver.Name)
 		_, _ = out.WriteString(" : ")
-		_, _ = out.WriteString(s.Type.String())
+		_, _ = out.WriteString(n.Type.String())
 		_ = out.WriteByte(')')
 	} else {
-		_, _ = out.WriteString(s.Type.String())
+		_, _ = out.WriteString(n.Type.String())
 	}
 
 	_ = out.WriteByte('.')
 
-	s.Declaration.Assignment.stringTo(out)
+	a.nodes[n.Declaration].StringTo(out, a)
 }
 
 func (d *Method) String() string {
 	var out strings.Builder
-	d.stringTo(&out)
-
+	d.StringTo(&out, nil)
 	return out.String()
 }

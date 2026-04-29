@@ -3,41 +3,45 @@ package ast
 import (
 	"strings"
 
+	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Call{}
+var _ Expr = &Call{}
 
 type Call struct {
-	expression
-
-	Expression Expression // *Identfier or *Selector
-	Package    string     // non-empty when calling an imported package's function
-	Arguments  []Expression
+	Token      tokens.Token
+	Expr       ExprIndex // *Identfier or *Selector
+	Arguments  []ExprIndex
 	ReturnType types.Type
 	TypeArgs   []types.Type // explicit or inferred type arguments for generic calls
 }
 
-func (c *Call) Pos() (uint32, uint16) {
-	return c.Expression.Pos()
+func (a *AST) NewCall(t tokens.Token, expr ExprIndex, args []ExprIndex, returnType types.Type, typeArgs ...types.Type) ExprIndex {
+	call := New[Call](a)
+	call.Token = t
+	call.Expr = expr
+	call.Arguments = args
+	call.ReturnType = returnType
+	call.TypeArgs = typeArgs
+	return a.AddExpr(call)
 }
 
-func (c *Call) Hash() uint64 {
-	return hash(c)
+func (e *Call) Pos() (uint32, uint16) {
+	return e.Token.Ln, e.Token.Col
 }
 
-func (c *Call) stringTo(out *strings.Builder) {
-	if c.Package != "" {
-		_, _ = out.WriteString(c.Package)
-		_ = out.WriteByte('.')
-	}
+func (e *Call) Hash() uint64 {
+	return hash(e)
+}
 
-	c.Expression.stringTo(out)
+func (e *Call) StringTo(out *strings.Builder, a *AST) {
+	a.exprs[e.Expr].StringTo(out, a)
 
-	if len(c.TypeArgs) > 0 {
+	if len(e.TypeArgs) > 0 {
 		_ = out.WriteByte('<')
 
-		for i, ta := range c.TypeArgs {
+		for i, ta := range e.TypeArgs {
 			if i > 0 {
 				_, _ = out.WriteString(", ")
 			}
@@ -50,10 +54,10 @@ func (c *Call) stringTo(out *strings.Builder) {
 
 	_ = out.WriteByte('(')
 
-	for i, arg := range c.Arguments {
-		arg.stringTo(out)
+	for i, arg := range e.Arguments {
+		a.exprs[arg].StringTo(out, a)
 
-		if i < len(c.Arguments)-1 {
+		if i < len(e.Arguments)-1 {
 			_, _ = out.WriteString(", ")
 		}
 	}
@@ -61,18 +65,12 @@ func (c *Call) stringTo(out *strings.Builder) {
 	_ = out.WriteByte(')')
 }
 
-func (c *Call) String() string {
+func (e *Call) String() string {
 	var out strings.Builder
-	c.stringTo(&out)
-
+	e.StringTo(&out, nil)
 	return out.String()
 }
 
-// TODO: return a proper return type here
-func (c *Call) Type() types.Type {
-	if c.ReturnType == nil {
-		panic("call with nil return type detected")
-	}
-
-	return c.ReturnType
+func (e *Call) Type() types.Type {
+	return e.ReturnType
 }

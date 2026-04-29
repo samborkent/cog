@@ -16,26 +16,25 @@ const (
 
 type ascii = []byte
 
-var _ Expression = &ASCIILiteral{}
+var _ Expr = &ASCIILiteral{}
 
 type ASCIILiteral struct {
-	expression
-
 	Token tokens.Token
 	Value ascii
 }
 
-func NewASCIILiteral(t tokens.Token) (*ASCIILiteral, error) {
+func (a *AST) NewASCIILiteral(t tokens.Token) (ExprIndex, error) {
 	for _, r := range t.Literal {
 		if r < minPrintableASCII || r > maxPrintableASCII {
-			return nil, fmt.Errorf("string literal contains non-printable ASCII character %q", r)
+			return ZeroExprIndex, fmt.Errorf("string literal contains non-printable ASCII character %q", r)
 		}
 	}
 
-	return &ASCIILiteral{
-		Token: t,
-		Value: ascii(t.Literal),
-	}, nil
+	expr := New[ASCIILiteral](a)
+	expr.Token = t
+	expr.Value = ascii(t.Literal)
+
+	return a.AddExpr(expr), nil
 }
 
 func (l *ASCIILiteral) Pos() (uint32, uint16) {
@@ -46,7 +45,7 @@ func (l *ASCIILiteral) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *ASCIILiteral) stringTo(out *strings.Builder) {
+func (l *ASCIILiteral) StringTo(out *strings.Builder, _ *AST) {
 	_, _ = out.WriteString("(\"")
 	out.Write(l.Value)
 	_, _ = out.WriteString("\" : ascii)")
@@ -54,8 +53,7 @@ func (l *ASCIILiteral) stringTo(out *strings.Builder) {
 
 func (l *ASCIILiteral) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

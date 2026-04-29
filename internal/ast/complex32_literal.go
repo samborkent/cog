@@ -8,19 +8,24 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-type complex32 = [2]float16
+type Complex32 = [2]float16
 
-func Complex32To64(c complex32) complex64 {
+func Complex32To64(c Complex32) complex64 {
 	return complex(c[0].Float32(), c[1].Float32())
 }
 
-var _ Expression = &Complex32Literal{}
+var _ Expr = &Complex32Literal{}
 
 type Complex32Literal struct {
-	expression
-
 	Token tokens.Token
-	Value complex32
+	Value Complex32
+}
+
+func (a *AST) NewComplex32Literal(token tokens.Token, value Complex32) ExprIndex {
+	complex32Literal := New[Complex32Literal](a)
+	complex32Literal.Token = token
+	complex32Literal.Value = value
+	return a.AddExpr(complex32Literal)
 }
 
 func (l *Complex32Literal) Pos() (uint32, uint16) {
@@ -31,14 +36,13 @@ func (l *Complex32Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *Complex32Literal) stringTo(out *strings.Builder) {
+func (l *Complex32Literal) StringTo(out *strings.Builder, _ *AST) {
 	fmt.Fprintf(out, "(%g, %g : complex32)", float32(l.Value[0]), float32(l.Value[1]))
 }
 
 func (l *Complex32Literal) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

@@ -9,23 +9,27 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
+// TODO: remove this and treat like regular selector?
+
 // parsePkgSelector parses an imported package selector expression: pkg.Symbol
 // The cursor is on the package name identifier.
-func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.Expression {
+func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.ExprIndex {
 	pkgToken := p.this()
 
 	p.advance("parsePkgSelector pkg") // consume package name
 
 	if p.this().Type != tokens.Dot {
 		p.error(p.this(), "expected '.' after package name", "parsePkgSelector")
-		return nil
+		return ast.ZeroExprIndex
 	}
+
+	selToken := p.this()
 
 	p.advance("parsePkgSelector .") // consume '.'
 
 	if p.this().Type != tokens.Identifier {
 		p.error(p.this(), "expected identifier after package selector", "parsePkgSelector")
-		return nil
+		return ast.ZeroExprIndex
 	}
 
 	symbolName := p.this().Literal
@@ -34,7 +38,7 @@ func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.Expre
 	sym, ok := imp.Exports[symbolName]
 	if !ok {
 		p.error(p.this(), fmt.Sprintf("package %q has no exported symbol %q", imp.Name, symbolName), "parsePkgSelector")
-		return nil
+		return ast.ZeroExprIndex
 	}
 
 	pkgIdent := &ast.Identifier{
@@ -52,26 +56,19 @@ func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.Expre
 
 	p.advance("parsePkgSelector symbol") // consume symbol identifier
 
+	sel := p.ast.NewSelector(selToken, pkgIdent, fieldIdent)
+
 	// If followed by '(', this is a function call: pkg.Func(args)
 	if p.this().Type == tokens.LParen {
 		procType, isProc := sym.Identifier.ValueType.(*types.Procedure)
 		if !isProc {
 			p.error(p.this(), fmt.Sprintf("%s.%s is not callable", imp.Name, symbolName), "parsePkgSelector")
-			return nil
+			return ast.ZeroExprIndex
 		}
 
-		return &ast.Call{
-			Expression: fieldIdent,
-			Package:    imp.Name,
-			Arguments:  p.parseCallArguments(ctx, procType),
-			ReturnType: procType.ReturnType,
-		}
+		return p.ast.NewCall(p.this(), sel, p.parseCallArguments(ctx, procType), procType.ReturnType)
 	}
 
 	// Otherwise it's a value/type selector: pkg.Value
-	return &ast.Selector{
-		Token:      pkgToken,
-		Expression: pkgIdent,
-		Field:      fieldIdent,
-	}
+	return sel
 }

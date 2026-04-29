@@ -9,31 +9,29 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, typeName string, exported, reference bool) *ast.Method {
-	method := &ast.Method{
-		Token:    p.this(),
-		Export:   exported,
-		Receiver: receiver,
-	}
+func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, typeName string, exported, reference bool) ast.NodeIndex {
+	methodToken := p.this()
 
 	storedReceiver, ok := p.symbols.Resolve(typeName)
 	if !ok {
 		p.error(p.this(), fmt.Sprintf("undefined receiver type %q", typeName), "parseMethod")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	if storedReceiver.Identifier.Qualifier != ast.QualifierType {
 		p.error(p.this(), "encountered non-type method receiver "+storedReceiver.Identifier.Name, "parseMethod")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	if exported && !storedReceiver.Identifier.Exported {
 		p.error(p.this(), "exported method not allowed on unexported type", "parseMethod")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
+	var methodType types.Type
+
 	if reference {
-		method.Type = &types.Reference{
+		methodType = &types.Reference{
 			Value: &types.Alias{
 				Name:     storedReceiver.Identifier.Name,
 				Derived:  storedReceiver.Identifier.ValueType,
@@ -42,7 +40,7 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 			},
 		}
 	} else {
-		method.Type = &types.Alias{
+		methodType = &types.Alias{
 			Name:     storedReceiver.Identifier.Name,
 			Derived:  storedReceiver.Identifier.ValueType,
 			Exported: storedReceiver.Identifier.Exported,
@@ -52,28 +50,28 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 
 	if p.this().Type != tokens.Dot {
 		p.error(p.this(), "expected . after reciver in method declaration", "parseMethod")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	p.advance("parseMethod .") // consume .
 
 	if p.this().Type != tokens.Identifier {
 		p.error(p.this(), "expected method in name in type method declaration", "parseMethod")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	methodName := p.this().Literal
 	methodSymbol, ok := p.symbols.ResolveField(typeName, methodName)
 	if !ok {
 		p.error(p.this(), "method is undefined", "parseMethod")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	// Check for duplicate method definition.
 	methodKey := typeName + "." + methodName
 	if _, exists := p.definedMethods[methodKey]; exists {
 		p.error(p.this(), fmt.Sprintf("duplicate method definition: %s", methodKey), "parseMethod")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	p.definedMethods[methodKey] = struct{}{}
@@ -81,7 +79,7 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 	p.advance("parseMethod identifier") // consume identifier
 	p.advance("parseMethod :")          // consume :
 
-	if method.Receiver != nil {
+	if receiver != nil {
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 		p.symbols.Define(receiver)
 
@@ -89,20 +87,19 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 	}
 
 	decl := p.parseTypedDeclaration(ctx, methodSymbol.Identifier)
-
-	if decl == nil {
-		return nil
+	if decl == ast.ZeroNodeIndex {
+		return ast.ZeroNodeIndex
 	}
 
 	// Reject variable receiver on func (pure functions cannot mutate).
 	if receiver != nil && receiver.Qualifier == ast.QualifierVariable {
-		if procType, ok := decl.Assignment.Identifier.ValueType.(*types.Procedure); ok && procType.Function {
+		declExpr := p.ast.Node(decl)
+
+		if procType, ok := declExpr.(*ast.Declaration).Assignment.Identifier.ValueType.(*types.Procedure); ok && procType.Function {
 			p.error(receiver.Token, "func cannot have a variable receiver; use proc for methods that mutate state", "parseMethod")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 	}
 
-	method.Declaration = decl
-
-	return method
+	return p.ast.NewMethod(methodToken, exported, receiver, methodType, decl)
 }

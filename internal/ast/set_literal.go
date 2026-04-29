@@ -7,14 +7,20 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &SetLiteral{}
+var _ Expr = &SetLiteral{}
 
 type SetLiteral struct {
-	expression
-
 	Token   tokens.Token
 	SetType types.Type
-	Values  []Expression
+	Values  []ExprIndex
+}
+
+func (a *AST) NewSetLiteral(token tokens.Token, t *types.Set, values []ExprIndex) ExprIndex {
+	setLiteral := New[SetLiteral](a)
+	setLiteral.Token = token
+	setLiteral.SetType = t
+	setLiteral.Values = values
+	return a.AddExpr(setLiteral)
 }
 
 func (l *SetLiteral) Pos() (uint32, uint16) {
@@ -25,11 +31,11 @@ func (l *SetLiteral) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *SetLiteral) stringTo(out *strings.Builder) {
+func (l *SetLiteral) StringTo(out *strings.Builder, a *AST) {
 	_, _ = out.WriteString("({")
 
 	for i, v := range l.Values {
-		v.stringTo(out)
+		a.exprs[v].StringTo(out, a)
 
 		if i < len(l.Values)-1 {
 			_, _ = out.WriteString(", ")
@@ -43,19 +49,10 @@ func (l *SetLiteral) stringTo(out *strings.Builder) {
 
 func (l *SetLiteral) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 
 func (l *SetLiteral) Type() types.Type {
-	if l.SetType == nil {
-		panic("set with nil set type detected")
-	}
-
-	if l.SetType.Kind() != types.SetKind {
-		panic("set with non-set type detected")
-	}
-
 	return l.SetType
 }

@@ -7,14 +7,20 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &SliceLiteral{}
+var _ Expr = &SliceLiteral{}
 
 type SliceLiteral struct {
-	expression
+	Token     tokens.Token
+	SliceType types.Type
+	Values    []ExprIndex
+}
 
-	Token       tokens.Token
-	ElementType types.Type
-	Values      []Expression
+func (a *AST) NewSliceLiteral(token tokens.Token, t *types.Slice, values []ExprIndex) ExprIndex {
+	sliceLiteral := New[SliceLiteral](a)
+	sliceLiteral.Token = token
+	sliceLiteral.SliceType = t
+	sliceLiteral.Values = values
+	return a.AddExpr(sliceLiteral)
 }
 
 func (l *SliceLiteral) Pos() (uint32, uint16) {
@@ -25,11 +31,11 @@ func (l *SliceLiteral) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *SliceLiteral) stringTo(out *strings.Builder) {
+func (l *SliceLiteral) StringTo(out *strings.Builder, a *AST) {
 	_, _ = out.WriteString("({")
 
 	for i, v := range l.Values {
-		v.stringTo(out)
+		a.exprs[v].StringTo(out, a)
 
 		if i < len(l.Values)-1 {
 			_, _ = out.WriteString(", ")
@@ -43,17 +49,10 @@ func (l *SliceLiteral) stringTo(out *strings.Builder) {
 
 func (l *SliceLiteral) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 
 func (l *SliceLiteral) Type() types.Type {
-	if l.ElementType == nil {
-		panic("slice with nil element type detected")
-	}
-
-	return &types.Slice{
-		Element: l.ElementType,
-	}
+	return l.SliceType
 }

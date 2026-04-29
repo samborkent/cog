@@ -9,25 +9,24 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Uint64Literal{}
+var _ Expr = &Uint64Literal{}
 
 type Uint64Literal struct {
-	expression
-
 	Token tokens.Token
 	Value uint64
 }
 
-func NewUint64Literal(t tokens.Token) (*Uint64Literal, error) {
+func (a *AST) NewUint64Literal(t tokens.Token) (ExprIndex, error) {
 	value, err := strconv.ParseUint(t.Literal, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse int literal to int64: %w", err)
+		return ZeroExprIndex, fmt.Errorf("unable to parse int literal to uint64: %w", err)
 	}
 
-	return &Uint64Literal{
-		Token: t,
-		Value: value,
-	}, nil
+	expr := New[Uint64Literal](a)
+	expr.Token = t
+	expr.Value = value
+
+	return a.AddExpr(expr), nil
 }
 
 func (l *Uint64Literal) Pos() (uint32, uint16) {
@@ -38,7 +37,7 @@ func (l *Uint64Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *Uint64Literal) stringTo(out *strings.Builder) {
+func (l *Uint64Literal) StringTo(out *strings.Builder, _ *AST) {
 	_ = out.WriteByte('(')
 	_, _ = out.WriteString(strconv.FormatUint(l.Value, 10))
 	_, _ = out.WriteString(" : uint64)")
@@ -46,8 +45,7 @@ func (l *Uint64Literal) stringTo(out *strings.Builder) {
 
 func (l *Uint64Literal) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

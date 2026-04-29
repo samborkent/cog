@@ -6,129 +6,63 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Switch{}
+var _ Node = &Switch{}
 
 type Switch struct {
-	statement
-
 	Token      tokens.Token
-	Label      *Label
+	Label      *Identifier
 	Identifier *Identifier // may be nil
-	// Condition Expression // may be nil
-	Cases   []*Case
-	Default *Default // may be nil
+	Cases      []*Case
+	Default    *Default // may be nil
 }
 
-func (s *Switch) Pos() (ln uint32, col uint16) {
-	return s.Token.Ln, s.Token.Col
+func (a *AST) NewSwitch(token tokens.Token, label *Identifier, ident *Identifier, cases []*Case, def *Default) NodeIndex {
+	node := New[Switch](a)
+	node.Token = token
+	node.Label = label
+	node.Identifier = ident
+	node.Cases = cases
+	node.Default = def
+
+	return a.AddNode(node)
 }
 
-func (s *Switch) Hash() uint64 {
-	return hash(s)
+func (n *Switch) Pos() (ln uint32, col uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (s *Switch) stringTo(out *strings.Builder) {
-	if s.Label != nil {
-		s.Label.stringTo(out)
-		_ = out.WriteByte(' ')
+func (n *Switch) Hash() uint64 {
+	return hash(n)
+}
+
+func (n *Switch) StringTo(out *strings.Builder, a *AST) {
+	if n.Label != nil {
+		_, _ = out.WriteString(n.Label.Name)
+		_, _ = out.WriteString(":\n")
 	}
 
-	_, _ = out.WriteString(s.Token.Type.String())
+	_, _ = out.WriteString(n.Token.Type.String())
 	_ = out.WriteByte(' ')
 
-	if s.Identifier != nil {
-		s.Identifier.stringTo(out)
+	if n.Identifier != nil {
+		_, _ = out.WriteString(n.Identifier.Name)
 	}
 
 	_, _ = out.WriteString(" {\n")
 
-	for _, c := range s.Cases {
-		c.stringTo(out)
+	for _, c := range n.Cases {
+		c.StringTo(out, a)
 	}
 
-	if s.Default != nil {
-		s.Default.stringTo(out)
+	if n.Default != nil {
+		n.Default.StringTo(out, a)
 	}
 
 	_ = out.WriteByte('}')
 }
 
-func (s *Switch) String() string {
+func (n *Switch) String() string {
 	var out strings.Builder
-	s.stringTo(&out)
-
-	return out.String()
-}
-
-var _ Statement = &Case{}
-
-type Case struct {
-	statement
-
-	Token     tokens.Token
-	Condition Expression
-	Body      []Statement
-}
-
-func (c *Case) Pos() (ln uint32, col uint16) {
-	return c.Token.Ln, c.Token.Col
-}
-
-func (c *Case) Hash() uint64 {
-	return hash(c)
-}
-
-func (c *Case) stringTo(out *strings.Builder) {
-	_, _ = out.WriteString(c.Token.Type.String())
-	_ = out.WriteByte(' ')
-	c.Condition.stringTo(out)
-	_, _ = out.WriteString(":\n")
-
-	for _, stmt := range c.Body {
-		_ = out.WriteByte('\t')
-		stmt.stringTo(out)
-		_ = out.WriteByte('\n')
-	}
-}
-
-func (c *Case) String() string {
-	var out strings.Builder
-	c.stringTo(&out)
-
-	return out.String()
-}
-
-var _ Statement = &Default{}
-
-type Default struct {
-	statement
-
-	Token tokens.Token
-	Body  []Statement
-}
-
-func (d *Default) Pos() (ln uint32, col uint16) {
-	return d.Token.Ln, d.Token.Col
-}
-
-func (d *Default) Hash() uint64 {
-	return hash(d)
-}
-
-func (d *Default) stringTo(out *strings.Builder) {
-	_, _ = out.WriteString(d.Token.Type.String())
-	_, _ = out.WriteString(":\n")
-
-	for _, stmt := range d.Body {
-		_ = out.WriteByte('\t')
-		stmt.stringTo(out)
-		_ = out.WriteByte('\n')
-	}
-}
-
-func (d *Default) String() string {
-	var out strings.Builder
-	d.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

@@ -6,51 +6,60 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &ForStatement{}
+var _ Node = &ForStatement{}
 
 type ForStatement struct {
-	statement
-
 	Token tokens.Token
-	Label *Label
+	Label *Identifier
 	Value *Identifier
 	Index *Identifier
-	Range Expression
+	Range ExprIndex
 	Loop  *Block
 }
 
-func (s *ForStatement) Pos() (uint32, uint16) {
-	return s.Token.Ln, s.Token.Col
+func (a *AST) NewForStatement(t tokens.Token, label *Identifier, value *Identifier, index *Identifier, rangeExpr ExprIndex, loop *Block) NodeIndex {
+	expr := New[ForStatement](a)
+	expr.Token = t
+	expr.Label = label
+	expr.Value = value
+	expr.Index = index
+	expr.Range = rangeExpr
+	expr.Loop = loop
+
+	return a.AddNode(expr)
 }
 
-func (s *ForStatement) Hash() uint64 {
-	return hash(s)
+func (n *ForStatement) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (s *ForStatement) String() string {
-	var out strings.Builder
-	s.stringTo(&out)
-
-	return out.String()
+func (n *ForStatement) Hash() uint64 {
+	return hash(n)
 }
 
-func (s *ForStatement) stringTo(out *strings.Builder) {
-	if s.Label != nil {
-		s.Label.stringTo(out)
-		_ = out.WriteByte(' ')
+func (n *ForStatement) StringTo(out *strings.Builder, a *AST) {
+	if n.Label != nil {
+		_, _ = out.WriteString(n.Label.Name)
+		_, _ = out.WriteString(":\n")
 	}
 
 	_, _ = out.WriteString("for ")
 
-	if s.Value != nil {
-		_, _ = out.WriteString(s.Value.Name)
+	if n.Value != nil {
+		_, _ = out.WriteString(n.Value.Name)
 		_, _ = out.WriteString(" in ")
 	}
 
-	if s.Range != nil {
-		s.Range.stringTo(out)
+	if n.Range != ZeroExprIndex {
+		a.exprs[n.Range].StringTo(out, a)
 		_ = out.WriteByte(' ')
 	}
 
-	s.Loop.stringTo(out)
+	n.Loop.StringTo(out, a)
+}
+
+func (n *ForStatement) String() string {
+	var out strings.Builder
+	n.StringTo(&out, nil)
+	return out.String()
 }

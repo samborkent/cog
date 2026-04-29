@@ -11,7 +11,7 @@ import (
 )
 
 // parseWithSharedSymbols uses the FindGlobals + ParseOnly flow with a shared symbol table.
-func parseWithSharedSymbols(t *testing.T, sources map[string]string) map[string]*ast.File {
+func parseWithSharedSymbols(t *testing.T, sources map[string]string) map[string]*ast.AST {
 	t.Helper()
 
 	symbols := parser.NewSymbolTable()
@@ -23,6 +23,8 @@ func parseWithSharedSymbols(t *testing.T, sources map[string]string) map[string]
 
 	var entries []entry
 
+	fileID := uint16(0)
+
 	for name, src := range sources {
 		l := lexer.NewLexer(strings.NewReader(src))
 
@@ -31,16 +33,19 @@ func parseWithSharedSymbols(t *testing.T, sources map[string]string) map[string]
 			t.Fatalf("lex error (%s): %v", name, err)
 		}
 
-		p, err := parser.NewParserWithSymbols(toks, symbols, false, src)
+		p, err := parser.NewParserWithSymbols(toks, symbols, false, src, fileID)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", name, err)
 		}
 
 		p.FindGlobals(t.Context())
 		entries = append(entries, entry{name: name, parser: p})
+
+		fileID++
 	}
 
-	result := make(map[string]*ast.File, len(entries))
+	result := make(map[string]*ast.AST, len(entries))
+
 	for _, e := range entries {
 		f, err := e.parser.ParseOnly(t.Context(), e.name)
 		if err != nil {
@@ -66,7 +71,7 @@ func findGlobalsShouldError(t *testing.T, src string) {
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false, "test.cog")
+	p, err := parser.NewParserWithSymbols(toks, symbols, false, "test.cog", 0)
 	if err != nil {
 		return
 	}
@@ -102,7 +107,7 @@ main : proc() = {}
 
 		symbols := parser.NewSymbolTable()
 
-		p, err := parser.NewParserWithSymbols(toks, symbols, false, "")
+		p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0)
 		if err != nil {
 			t.Fatalf("parser init: %v", err)
 		}
@@ -144,7 +149,7 @@ main : proc() = {}
 
 		symbols := parser.NewSymbolTable()
 
-		p, err := parser.NewParserWithSymbols(toks, symbols, false, "")
+		p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0)
 		if err != nil {
 			t.Fatalf("parser init: %v", err)
 		}
@@ -186,7 +191,7 @@ main : proc() = {}
 
 		symbols := parser.NewSymbolTable()
 
-		p, err := parser.NewParserWithSymbols(toks, symbols, false, "")
+		p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0)
 		if err != nil {
 			t.Fatalf("parser init: %v", err)
 		}
@@ -261,7 +266,7 @@ val := 42
 `
 		l1 := lexer.NewLexer(strings.NewReader(src1))
 		toks1, _ := l1.Parse(t.Context())
-		p1, _ := parser.NewParserWithSymbols(toks1, syms, false, "")
+		p1, _ := parser.NewParserWithSymbols(toks1, syms, false, "", 0)
 		p1.FindGlobals(t.Context())
 
 		src2 := `package main
@@ -272,7 +277,7 @@ main : proc() = {
 `
 		l2 := lexer.NewLexer(strings.NewReader(src2))
 		toks2, _ := l2.Parse(t.Context())
-		p2, _ := parser.NewParserWithSymbols(toks2, syms, false, "")
+		p2, _ := parser.NewParserWithSymbols(toks2, syms, false, "", 0)
 		p2.FindGlobals(t.Context())
 
 		// val should be resolvable by the shared symbol table.
@@ -312,7 +317,7 @@ main : proc() = {}
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false, "")
+	p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0)
 	if err != nil {
 		t.Fatalf("parser init: %v", err)
 	}

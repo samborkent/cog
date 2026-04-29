@@ -1,6 +1,10 @@
 package parser_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/samborkent/cog/internal/ast"
+)
 
 func TestParsePackage(t *testing.T) {
 	t.Parallel()
@@ -10,12 +14,15 @@ func TestParsePackage(t *testing.T) {
 
 		f := parse(t, `package mypackage
 main : proc() = {}`)
-		if f.Package == nil {
+
+		file := f.Node(1).(*ast.File)
+
+		if file.Package == nil {
 			t.Fatal("expected package node")
 		}
 
-		if f.Package.Identifier.Name != "mypackage" {
-			t.Errorf("expected package name 'mypackage', got %q", f.Package.Identifier.Name)
+		if file.Package.Identifier.Name != "mypackage" {
+			t.Errorf("expected package name 'mypackage', got %q", file.Package.Identifier.Name)
 		}
 	})
 

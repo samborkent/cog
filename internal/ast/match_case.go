@@ -14,35 +14,34 @@ type MatchCase struct {
 	Token     tokens.Token
 	MatchType types.Type
 	Tilde     bool
-	Body      []Statement
+	Body      []NodeIndex
 }
 
-func (m *MatchCase) Pos() (uint32, uint16) {
-	return m.Token.Ln, m.Token.Col
+func (n *MatchCase) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (m *MatchCase) Hash() uint64 {
-	return hash(m)
+func (n *MatchCase) Hash() uint64 {
+	return hash(n)
 }
 
-func (m *MatchCase) stringTo(out *strings.Builder) {
+func (n *MatchCase) StringTo(out *strings.Builder, a *AST) {
 	_, _ = out.WriteString("case ")
 
-	if m.Tilde {
+	if n.Tilde {
 		_ = out.WriteByte('~')
 	}
 
-	_, _ = out.WriteString(m.MatchType.String())
+	_, _ = out.WriteString(n.MatchType.String())
 	_, _ = out.WriteString(":\n")
 
-	for _, stmt := range m.Body {
-		stmt.stringTo(out)
+	for _, stmt := range n.Body {
+		a.nodes[stmt].StringTo(out, a)
 	}
 }
 
-func (m *MatchCase) String() string {
+func (n *MatchCase) String() string {
 	var out strings.Builder
-	m.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

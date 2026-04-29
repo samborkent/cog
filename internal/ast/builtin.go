@@ -7,38 +7,46 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Builtin{}
+var _ Expr = &Builtin{}
 
 type Builtin struct {
-	expression
-
 	Token         tokens.Token
 	Name          string
 	TypeArguments []types.Type
-	Arguments     []Expression
+	Arguments     []ExprIndex
 	ReturnType    types.Type
 }
 
-func (b *Builtin) Pos() (uint32, uint16) {
-	return b.Token.Ln, b.Token.Col
+func (a *AST) NewBuiltin(token tokens.Token, name string, typeArgs []types.Type, args []ExprIndex, returnType types.Type) ExprIndex {
+	expr := New[Builtin](a)
+	expr.Token = token
+	expr.Name = name
+	expr.TypeArguments = typeArgs
+	expr.Arguments = args
+	expr.ReturnType = returnType
+	return a.AddExpr(expr)
 }
 
-func (b *Builtin) Hash() uint64 {
-	return hash(b)
+func (e *Builtin) Pos() (uint32, uint16) {
+	return e.Token.Ln, e.Token.Col
 }
 
-func (b *Builtin) stringTo(out *strings.Builder) {
+func (e *Builtin) Hash() uint64 {
+	return hash(e)
+}
+
+func (e *Builtin) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte('@')
-	_, _ = out.WriteString(b.Name)
+	_, _ = out.WriteString(e.Name)
 
-	for i, arg := range b.TypeArguments {
+	for i, arg := range e.TypeArguments {
 		if i == 0 {
 			_ = out.WriteByte('<')
 		}
 
 		_, _ = out.WriteString(arg.String())
 
-		if i < len(b.TypeArguments)-1 {
+		if i < len(e.TypeArguments)-1 {
 			_, _ = out.WriteString(", ")
 		} else {
 			_ = out.WriteByte('>')
@@ -47,10 +55,10 @@ func (b *Builtin) stringTo(out *strings.Builder) {
 
 	_ = out.WriteByte('(')
 
-	for i, arg := range b.Arguments {
-		arg.stringTo(out)
+	for i, arg := range e.Arguments {
+		a.exprs[arg].StringTo(out, a)
 
-		if i < len(b.Arguments)-1 {
+		if i < len(e.Arguments)-1 {
 			_, _ = out.WriteString(", ")
 		}
 	}
@@ -58,17 +66,12 @@ func (b *Builtin) stringTo(out *strings.Builder) {
 	_ = out.WriteByte(')')
 }
 
-func (b *Builtin) String() string {
+func (e *Builtin) String() string {
 	var out strings.Builder
-	b.stringTo(&out)
-
+	e.StringTo(&out, nil)
 	return out.String()
 }
 
-func (b *Builtin) Type() types.Type {
-	if b.ReturnType == nil {
-		panic("builtin with nil-type detected")
-	}
-
-	return b.ReturnType
+func (e *Builtin) Type() types.Type {
+	return e.ReturnType
 }

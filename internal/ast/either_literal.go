@@ -7,40 +7,42 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &EitherLiteral{}
+var _ Expr = &EitherLiteral{}
 
 type EitherLiteral struct {
-	expression
-
 	Token      tokens.Token
 	EitherType types.Type
-	Value      Expression
+	Value      ExprIndex
 	IsRight    bool
 }
 
-func (e *EitherLiteral) Pos() (uint32, uint16) {
-	return e.Token.Ln, e.Token.Col
+func (a *AST) NewEitherLiteral(token tokens.Token, eitherType types.Type, value ExprIndex, isRight bool) ExprIndex {
+	expr := New[EitherLiteral](a)
+	expr.Token = token
+	expr.EitherType = eitherType
+	expr.Value = value
+	expr.IsRight = isRight
+	return a.AddExpr(expr)
 }
 
-func (e *EitherLiteral) Hash() uint64 {
-	return hash(e)
+func (l *EitherLiteral) Pos() (uint32, uint16) {
+	return l.Token.Ln, l.Token.Col
 }
 
-func (e *EitherLiteral) stringTo(out *strings.Builder) {
-	e.Value.stringTo(out)
+func (l *EitherLiteral) Hash() uint64 {
+	return hash(l)
 }
 
-func (e *EitherLiteral) String() string {
+func (l *EitherLiteral) StringTo(out *strings.Builder, a *AST) {
+	a.exprs[l.Value].StringTo(out, a)
+}
+
+func (l *EitherLiteral) String() string {
 	var out strings.Builder
-	e.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 
-func (e *EitherLiteral) Type() types.Type {
-	if e.EitherType == nil {
-		panic("either with nil type detected")
-	}
-
-	return e.EitherType
+func (l *EitherLiteral) Type() types.Type {
+	return l.EitherType
 }

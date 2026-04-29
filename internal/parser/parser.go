@@ -5,10 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
+)
+
+const (
+	// TODO: base this on heuristics of the average number of tokens per node in typical source files.
+	averageNumberOfTokensPerNode = 4
+	errorPreallocationSize       = 16
+	statementPreallocationSize   = 16
 )
 
 type Parser struct {
@@ -17,6 +25,7 @@ type Parser struct {
 	builtins map[string]BuiltinParser
 	filePath string
 
+	ast               *ast.AST
 	Errs              []error
 	i                 int
 	debug             bool
@@ -28,7 +37,7 @@ type Parser struct {
 // NewParserWithSymbols creates a parser that uses the provided symbol table.
 // This allows multiple parsers (one per file) to share a single symbol table
 // so that global declarations from one file are visible in all others.
-func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool, fileName string) (*Parser, error) {
+func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool, fileName string, fileID uint16) (*Parser, error) {
 	if len(tokens) == 0 {
 		return nil, errors.New("no tokens provided to parser")
 	}
@@ -36,7 +45,8 @@ func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug boo
 	p := &Parser{
 		tokens:         tokens,
 		symbols:        symbols,
-		Errs:           make([]error, 0),
+		ast:            ast.NewAST(fileID, uint32(averageNumberOfTokensPerNode*len(tokens))),
+		Errs:           make([]error, 0, errorPreallocationSize),
 		debug:          debug,
 		definedMethods: make(map[string]struct{}),
 	}
@@ -57,9 +67,11 @@ func NewScriptParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, deb
 	}
 
 	p := &Parser{
-		tokens:         tokens,
-		symbols:        symbols,
-		Errs:           make([]error, 0),
+		tokens:  tokens,
+		symbols: symbols,
+		// TODO: allow multi-file scripts?
+		ast:            ast.NewAST(0, uint32(averageNumberOfTokensPerNode*len(tokens))),
+		Errs:           make([]error, 0, errorPreallocationSize),
 		debug:          debug,
 		scriptMode:     true,
 		definedMethods: make(map[string]struct{}),
@@ -68,7 +80,7 @@ func NewScriptParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, deb
 	return p, nil
 }
 
-func (p *Parser) Parse(ctx context.Context, fileName string) (*ast.File, error) {
+func (p *Parser) Parse(ctx context.Context, fileName string) (*ast.AST, error) {
 	p.FindGlobals(ctx)
 
 	return p.ParseOnly(ctx, fileName)
@@ -77,10 +89,10 @@ func (p *Parser) Parse(ctx context.Context, fileName string) (*ast.File, error) 
 // ParseOnly runs the full parse without calling FindGlobals first.
 // Use this when FindGlobals has already been called on a shared symbol table
 // across multiple files.
-func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.File, error) {
+func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.AST, error) {
 	// Reset position and errors for a clean parse.
 	p.i = 0
-	p.Errs = make([]error, 0, len(p.Errs))
+	p.Errs = p.Errs[:0]
 
 	p.builtins = map[string]BuiltinParser{
 		"cast":  p.parseBuiltinCast,
@@ -101,10 +113,9 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.File, err
 		}
 
 		// Synthesize package main.
-		pkg = &ast.Package{
-			Token:      tokens.Token{Type: tokens.Package, Literal: "package"},
-			Identifier: &ast.Identifier{Name: "main"},
-		}
+		pkg = ast.New[ast.Package](p.ast)
+		pkg.Token = tokens.Token{Type: tokens.Package, Literal: "package"}
+		pkg.Identifier = &ast.Identifier{Name: "main"}
 	} else {
 		if p.tokens[0].Type != tokens.Package {
 			p.error(p.tokens[0], "missing package declaration", "Parse")
@@ -113,27 +124,21 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.File, err
 		pkg = p.parsePackage()
 	}
 
-	f := &ast.File{
-		Name:       fileName,
-		Package:    pkg,
-		Statements: []ast.Statement{},
-	}
+	stmts := make([]ast.NodeIndex, 0, statementPreallocationSize)
+	file := p.ast.NewFile(fileName, pkg, stmts, false)
 
 	// Iterate tokens.
 tokenLoop:
 	for p.this().Type != tokens.EOF {
 		if ctx.Err() != nil {
-			return f, fmt.Errorf("parser error:\n%w", errors.Join(p.Errs...))
+			return p.ast, fmt.Errorf("parser error:\n%w", errors.Join(p.Errs...))
 		}
 
 		prev := p.i
 
 		switch p.this().Type {
 		case tokens.Comment:
-			f.Statements = append(f.Statements, &ast.Comment{
-				Token: p.this(),
-				Text:  p.this().Literal,
-			})
+			stmts = append(stmts, p.ast.NewComment(p.this()))
 			p.advance("Parse comment")
 		case tokens.Dynamic,
 			tokens.Export,
@@ -151,26 +156,26 @@ tokenLoop:
 			ident := p.this().Literal
 
 			node := p.parseStatement(ctx)
-			if node != nil {
+			if node != ast.ZeroNodeIndex {
 				if ident == "main" {
-					f.ContainsMain = true
+					p.ast.Node(file).(*ast.File).ContainsMain = true
 				}
 
-				f.Statements = append(f.Statements, node)
+				stmts = append(stmts, node)
 			} else {
 				p.synchronize()
 			}
 		case tokens.GoImport:
 			node := p.parseGoImport()
-			if node != nil {
-				f.Statements = append(f.Statements, node)
+			if node != ast.ZeroNodeIndex {
+				stmts = append(stmts, node)
 			} else {
 				p.synchronize()
 			}
 		case tokens.Import:
 			node := p.parseImport()
-			if node != nil {
-				f.Statements = append(f.Statements, node)
+			if node != ast.ZeroNodeIndex {
+				stmts = append(stmts, node)
 			} else {
 				p.synchronize()
 			}
@@ -193,10 +198,10 @@ tokenLoop:
 	}
 
 	if err := errors.Join(p.Errs...); err != nil {
-		return f, fmt.Errorf("parser error:\n%w", err)
+		return p.ast, fmt.Errorf("parser error:\n%w", err)
 	}
 
-	return f, nil
+	return p.ast, nil
 }
 
 func (p *Parser) prev() tokens.Token {
@@ -297,4 +302,16 @@ func (p *Parser) stringToken(t tokens.Token) string {
 	return fmt.Sprintf("%s:\tln %d, col %d: %s: %s",
 		p.filePath, t.Ln, t.Col, t.Type, t.Literal,
 	)
+}
+
+func (p *Parser) NodeString(i ast.NodeIndex) string {
+	var out strings.Builder
+	p.ast.Node(i).StringTo(&out, p.ast)
+	return out.String()
+}
+
+func (p *Parser) ExprString(i ast.ExprIndex) string {
+	var out strings.Builder
+	p.ast.Expr(i).StringTo(&out, p.ast)
+	return out.String()
 }

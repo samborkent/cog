@@ -6,7 +6,7 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Match{}
+var _ Node = &Match{}
 
 // Match represents a match statement:
 //
@@ -15,48 +15,64 @@ var _ Statement = &Match{}
 //	    ...
 //	}
 type Match struct {
-	statement
-
 	Token   tokens.Token
-	Subject Expression
+	Label   *Identifier // Optional label for the match statement.
 	Binding *Identifier // Optional binding variable.
+	Subject ExprIndex
 	Cases   []*MatchCase
 	Default *Default
 }
 
-func (m *Match) Pos() (uint32, uint16) {
-	return m.Token.Ln, m.Token.Col
+func (a *AST) NewMatch(t tokens.Token, label *Identifier, binding *Identifier, subject ExprIndex, cases []*MatchCase, defaultCase *Default) NodeIndex {
+	node := New[Match](a)
+
+	node.Token = t
+	node.Label = label
+	node.Binding = binding
+	node.Subject = subject
+	node.Cases = cases
+	node.Default = defaultCase
+
+	return a.AddNode(node)
 }
 
-func (m *Match) Hash() uint64 {
-	return hash(m)
+func (n *Match) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (m *Match) stringTo(out *strings.Builder) {
+func (n *Match) Hash() uint64 {
+	return hash(n)
+}
+
+func (n *Match) StringTo(out *strings.Builder, a *AST) {
+	if n.Label != nil {
+		_, _ = out.WriteString(n.Label.Name)
+		_, _ = out.WriteString(":\n")
+	}
+
 	out.WriteString("match ")
 
-	if m.Binding != nil {
-		m.Binding.stringTo(out)
-		out.WriteString(" := ")
+	if n.Binding != nil {
+		_, _ = out.WriteString(n.Binding.Name)
+		_, _ = out.WriteString(" := ")
 	}
 
-	m.Subject.stringTo(out)
-	out.WriteString(" {\n")
+	a.exprs[n.Subject].StringTo(out, a)
+	_, _ = out.WriteString(" {\n")
 
-	for _, c := range m.Cases {
-		c.stringTo(out)
+	for _, c := range n.Cases {
+		c.StringTo(out, a)
 	}
 
-	if m.Default != nil {
-		m.Default.stringTo(out)
+	if n.Default != nil {
+		n.Default.StringTo(out, a)
 	}
 
-	out.WriteString("}\n")
+	_, _ = out.WriteString("}\n")
 }
 
-func (m *Match) String() string {
+func (n *Match) String() string {
 	var out strings.Builder
-	m.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

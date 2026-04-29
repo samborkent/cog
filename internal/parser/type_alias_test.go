@@ -329,7 +329,7 @@ main : proc() = {
 	xs : List<int32> = @slice<int32>(3)
 	@print(xs)
 }`)
-		if len(f.Statements) < 2 {
+		if f.LenNodes() < 2 {
 			t.Fatal("expected at least 2 statements")
 		}
 	})
@@ -361,8 +361,8 @@ List<T ~ any> ~ []T
 main : proc() = {
 	@print(names)
 }`)
-		if len(f.Statements) < 3 {
-			t.Fatalf("expected at least 3 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 3 {
+			t.Fatalf("expected at least 3 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -376,7 +376,7 @@ main : proc() = {
 		@print(index)
 	}
 }`)
-		if len(f.Statements) < 1 {
+		if f.LenNodes() < 1 {
 			t.Fatal("expected at least 1 statement")
 		}
 	})
@@ -394,7 +394,7 @@ main : proc() = {
 	xs : List<int32> = @slice<int32>(3)
 	@print(xs)
 }`)
-		if len(f.Statements) < 2 {
+		if f.LenNodes() < 2 {
 			t.Fatal("expected at least 2 statements")
 		}
 	})
@@ -408,7 +408,7 @@ main : proc() = {
 	m : Dict<utf8, int64> = @map<utf8, int64>()
 	@print(m)
 }`)
-		if len(f.Statements) < 2 {
+		if f.LenNodes() < 2 {
 			t.Fatal("expected at least 2 statements")
 		}
 	})
@@ -422,7 +422,7 @@ main : proc() = {
 	words : SortableSlice<utf8> = @slice<utf8>(10)
 	@print(words)
 }`)
-		if len(f.Statements) < 2 {
+		if f.LenNodes() < 2 {
 			t.Fatal("expected at least 2 statements")
 		}
 	})
@@ -436,7 +436,7 @@ main : proc() = {
 	lookup : Dict<utf8, int64> = @map<utf8, int64>()
 	@print(lookup)
 }`)
-		if len(f.Statements) < 2 {
+		if f.LenNodes() < 2 {
 			t.Fatal("expected at least 2 statements")
 		}
 	})
@@ -450,7 +450,7 @@ main : proc() = {
 	labels : TagSlice<utf8> = @slice<utf8>(3)
 	@print(labels)
 }`)
-		if len(f.Statements) < 2 {
+		if f.LenNodes() < 2 {
 			t.Fatal("expected at least 2 statements")
 		}
 	})
@@ -562,8 +562,8 @@ main : proc() = {
 	})
 }`)
 
-		if len(f.Statements) < 5 {
-			t.Fatalf("expected at least 5 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 5 {
+			t.Fatalf("expected at least 5 statements, got %d", f.LenNodes())
 		}
 	})
 

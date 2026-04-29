@@ -7,36 +7,43 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Statement = &Type{}
+var _ Node = &Type{}
 
 type Type struct {
-	statement
-
 	Token          tokens.Token
 	Identifier     *Identifier
 	TypeParameters []*types.Alias
 	Alias          types.Type
 }
 
-func (s *Type) Pos() (uint32, uint16) {
-	return s.Token.Ln, s.Token.Col
+func (a *AST) NewType(token tokens.Token, ident *Identifier, params []*types.Alias, alias types.Type) NodeIndex {
+	node := New[Type](a)
+	node.Token = token
+	node.Identifier = ident
+	node.TypeParameters = params
+	node.Alias = alias
+	return a.AddNode(node)
 }
 
-func (s *Type) Hash() uint64 {
-	return hash(s)
+func (n *Type) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (s *Type) stringTo(out *strings.Builder) {
-	if s.Identifier.Exported {
+func (n *Type) Hash() uint64 {
+	return hash(n)
+}
+
+func (n *Type) StringTo(out *strings.Builder, _ *AST) {
+	if n.Identifier.Exported {
 		_, _ = out.WriteString("export ")
 	}
 
-	_, _ = out.WriteString(s.Identifier.Name)
+	_, _ = out.WriteString(n.Identifier.Name)
 
-	if len(s.TypeParameters) > 0 {
+	if len(n.TypeParameters) > 0 {
 		_, _ = out.WriteString("<")
 
-		for i, tp := range s.TypeParameters {
+		for i, tp := range n.TypeParameters {
 			if i > 0 {
 				_, _ = out.WriteString(", ")
 			}
@@ -50,12 +57,11 @@ func (s *Type) stringTo(out *strings.Builder) {
 	}
 
 	_, _ = out.WriteString(" ~ ")
-	_, _ = out.WriteString(s.Alias.String())
+	_, _ = out.WriteString(n.Alias.String())
 }
 
-func (s *Type) String() string {
+func (n *Type) String() string {
 	var out strings.Builder
-	s.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

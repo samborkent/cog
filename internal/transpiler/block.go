@@ -26,7 +26,7 @@ func (t *Transpiler) convertIfBlock(node *ast.Block) (*goast.BlockStmt, *goast.L
 	}
 
 	for i, stmt := range node.Statements {
-		breakExpr, ok := stmt.(*ast.Branch)
+		breakExpr, ok := t.Node(stmt).(*ast.Branch)
 		if ok && breakExpr.Token.Type == tokens.Break {
 			if breakExpr.Label != nil {
 				block.List = append(block.List, &goast.BranchStmt{
@@ -52,7 +52,7 @@ func (t *Transpiler) convertIfBlock(node *ast.Block) (*goast.BlockStmt, *goast.L
 			continue
 		}
 
-		goStmts, err := t.convertStmt(stmt)
+		goStmts, err := t.convertStmt(t.Node(stmt))
 		if err != nil {
 			return nil, nil, fmt.Errorf("converting statement %d in block: %w", i, err)
 		}
@@ -79,7 +79,7 @@ func (t *Transpiler) convertForBlock(node *ast.Block) (*goast.BlockStmt, error) 
 	}
 
 	for i, stmt := range node.Statements {
-		goStmts, err := t.convertStmt(stmt)
+		goStmts, err := t.convertStmt(t.Node(stmt))
 		if err != nil {
 			return nil, fmt.Errorf("converting statement %d in block: %w", i, err)
 		}

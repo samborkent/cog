@@ -6,30 +6,36 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Comment{}
+var _ Node = &Comment{}
 
 type Comment struct {
-	statement
-
 	Token tokens.Token
 	Text  string
 }
 
-func (c *Comment) Hash() uint64 {
-	return hash(c)
+func (a *AST) NewComment(token tokens.Token) NodeIndex {
+	node := New[Comment](a)
+	node.Token = token
+	node.Text = token.Literal
+	return a.AddNode(node)
 }
 
-func (c *Comment) Pos() (uint32, uint16) {
-	return c.Token.Ln, c.Token.Col
+func (n *Comment) Hash() uint64 {
+	return hash(n)
 }
 
-func (c *Comment) stringTo(out *strings.Builder) {
-	out.WriteString(c.Text)
+func (n *Comment) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (c *Comment) String() string {
+func (n *Comment) StringTo(out *strings.Builder, _ *AST) {
+	_, _ = out.WriteString(n.Text)
+}
+
+func (n *Comment) String() string {
 	var out strings.Builder
-	c.stringTo(&out)
+
+	n.StringTo(&out, nil)
 
 	return out.String()
 }

@@ -7,15 +7,22 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &ResultLiteral{}
+var _ Expr = &ResultLiteral{}
 
 type ResultLiteral struct {
-	expression
-
 	Token      tokens.Token
 	ResultType types.Type
-	Value      Expression
+	Value      ExprIndex
 	IsError    bool // False: Value (success), True: Error
+}
+
+func (a *AST) NewResultLiteral(tok tokens.Token, resultType types.Type, value ExprIndex, isError bool) ExprIndex {
+	expr := New[ResultLiteral](a)
+	expr.Token = tok
+	expr.ResultType = resultType
+	expr.Value = value
+	expr.IsError = isError
+	return a.AddExpr(expr)
 }
 
 func (e *ResultLiteral) Pos() (uint32, uint16) {
@@ -26,21 +33,16 @@ func (e *ResultLiteral) Hash() uint64 {
 	return hash(e)
 }
 
-func (e *ResultLiteral) stringTo(out *strings.Builder) {
-	e.Value.stringTo(out)
+func (e *ResultLiteral) StringTo(out *strings.Builder, a *AST) {
+	a.exprs[e.Value].StringTo(out, a)
 }
 
 func (e *ResultLiteral) String() string {
 	var out strings.Builder
-	e.stringTo(&out)
-
+	e.StringTo(&out, nil)
 	return out.String()
 }
 
 func (e *ResultLiteral) Type() types.Type {
-	if e.ResultType == nil {
-		panic("result with nil type detected")
-	}
-
 	return e.ResultType
 }

@@ -2,40 +2,46 @@ package ast
 
 import "strings"
 
-var _ Statement = &File{}
+var _ Node = &File{}
 
 type File struct {
-	statement
-
 	Name         string
 	Package      *Package
-	Statements   []Statement
+	Statements   []NodeIndex
 	ContainsMain bool
 }
 
-func (f *File) Pos() (uint32, uint16) {
+func (a *AST) NewFile(name string, pkg *Package, statements []NodeIndex, containsMain bool) NodeIndex {
+	node := New[File](a)
+	node.Name = name
+	node.Package = pkg
+	node.Statements = statements
+	node.ContainsMain = containsMain
+	return a.AddNode(node)
+}
+
+func (n *File) Pos() (uint32, uint16) {
 	return 0, 0
 }
 
-func (f *File) Hash() uint64 {
-	return hash(f)
+func (n *File) Hash() uint64 {
+	return hash(n)
 }
 
-func (f *File) stringTo(out *strings.Builder) {
-	_, _ = out.WriteString(f.Name)
+func (n *File) StringTo(out *strings.Builder, a *AST) {
+	_, _ = out.WriteString(n.Name)
 	_ = out.WriteByte('\n')
 
-	f.Package.stringTo(out)
+	n.Package.StringTo(out, a)
 
-	for _, stmt := range f.Statements {
-		stmt.stringTo(out)
+	for _, stmt := range n.Statements {
+		a.nodes[stmt].StringTo(out, a)
 		_ = out.WriteByte('\n')
 	}
 }
 
-func (f *File) String() string {
+func (n *File) String() string {
 	var out strings.Builder
-	f.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

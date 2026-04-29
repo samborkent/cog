@@ -12,142 +12,21 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Infix{}
+var _ Expr = &Infix{}
 
 type Infix struct {
-	expression
-
 	Operator    tokens.Token
-	Left, Right Expression
+	InfixType   types.Type
+	Left, Right ExprIndex
 }
 
-func (e *Infix) EqualizeLiteralTypes() {
-	if types.Equal(e.Left.Type(), e.Right.Type()) {
-		return
-	}
-
-	// Handle default inferred literal types.
-	switch e.Left.Type().Kind() {
-	case types.ASCII:
-		if right, ok := e.Right.(*UTF8Literal); ok {
-			e.Right = &ASCIILiteral{
-				Token: right.Token,
-				Value: ascii(right.Value),
-			}
-
-			return
-		}
-	case types.Float16:
-		if right, ok := e.Right.(*Float64Literal); ok {
-			e.Right = &Float16Literal{
-				Token: right.Token,
-				Value: f16.Fromfloat32(float32(right.Value)),
-			}
-
-			return
-		}
-	case types.Float32:
-		if right, ok := e.Right.(*Float64Literal); ok {
-			e.Right = &Float32Literal{
-				Token: right.Token,
-				Value: float32(right.Value),
-			}
-
-			return
-		}
-	case types.Int8:
-		right, ok := e.Right.(*Int64Literal)
-		if ok && (right.Value >= math.MinInt8 && right.Value <= math.MaxInt8) {
-			e.Right = &Int8Literal{
-				Token: right.Token,
-				Value: int8(right.Value),
-			}
-
-			return
-		}
-	case types.Int16:
-		right, ok := e.Right.(*Int64Literal)
-		if ok && (right.Value >= math.MinInt16 && right.Value <= math.MaxInt16) {
-			e.Right = &Int16Literal{
-				Token: right.Token,
-				Value: int16(right.Value),
-			}
-
-			return
-		}
-	case types.Int32:
-		right, ok := e.Right.(*Int64Literal)
-		if ok && (right.Value >= math.MinInt32 && right.Value <= math.MaxInt32) {
-			e.Right = &Int32Literal{
-				Token: right.Token,
-				Value: int32(right.Value),
-			}
-
-			return
-		}
-	case types.Int128:
-		if right, ok := e.Right.(*Int64Literal); ok {
-			e.Right = &Int128Literal{
-				Token: right.Token,
-				Value: wide.Int128FromInt64(right.Value),
-			}
-
-			return
-		}
-	case types.Uint8:
-		right, ok := e.Right.(*Int64Literal)
-		if ok && (right.Value >= 0 && right.Value <= math.MaxUint8) {
-			e.Right = &Uint8Literal{
-				Token: right.Token,
-				Value: uint8(right.Value),
-			}
-
-			return
-		}
-	case types.Uint16:
-		right, ok := e.Right.(*Int64Literal)
-		if ok && (right.Value >= 0 && right.Value <= math.MaxUint16) {
-			e.Right = &Uint16Literal{
-				Token: right.Token,
-				Value: uint16(right.Value),
-			}
-
-			return
-		}
-	case types.Uint32:
-		right, ok := e.Right.(*Int64Literal)
-		if ok && (right.Value >= 0 && right.Value <= math.MaxUint32) {
-			e.Right = &Uint32Literal{
-				Token: right.Token,
-				Value: uint32(right.Value),
-			}
-
-			return
-		}
-	case types.Uint64:
-		right, ok := e.Right.(*Int64Literal)
-		if ok && right.Value >= 0 {
-			e.Right = &Uint64Literal{
-				Token: right.Token,
-				Value: uint64(right.Value),
-			}
-
-			return
-		}
-	case types.Uint128:
-		right, ok := e.Right.(*Int64Literal)
-		if ok && right.Value >= 0 {
-			e.Right = &Uint128Literal{
-				Token: right.Token,
-				Value: u128.From64(uint64(right.Value)),
-			}
-
-			return
-		}
-	}
-
-	e.Left = upgradeLiteralType(e.Left, e.Right)
-	e.Right = upgradeLiteralType(e.Right, e.Left)
+func (a *AST) NewInfix(operator tokens.Token, infixType types.Type, left, right ExprIndex) ExprIndex {
+	infixExpr := New[Infix](a)
+	infixExpr.Operator = operator
+	infixExpr.InfixType = types.Basics[types.Bool]
+	infixExpr.Left = left
+	infixExpr.Right = right
+	return a.AddExpr(infixExpr)
 }
 
 func (e *Infix) Pos() (uint32, uint16) {
@@ -158,28 +37,23 @@ func (e *Infix) Hash() uint64 {
 	return hash(e)
 }
 
-func (e *Infix) stringTo(out *strings.Builder) {
+func (e *Infix) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte('(')
-	e.Left.stringTo(out)
+	a.exprs[e.Left].StringTo(out, a)
 	_ = out.WriteByte(' ')
 	_, _ = out.WriteString(e.Operator.Type.String())
 	_ = out.WriteByte(' ')
-	e.Right.stringTo(out)
+	a.exprs[e.Right].StringTo(out, a)
 	_ = out.WriteByte(')')
 }
 
 func (e *Infix) String() string {
 	var out strings.Builder
-	e.stringTo(&out)
-
+	e.StringTo(&out, nil)
 	return out.String()
 }
 
 func (e *Infix) Type() types.Type {
-	if e.Left.Type() == nil {
-		panic("infix with nil type detected")
-	}
-
 	// Return bool type for comparison operators
 	switch e.Operator.Type {
 	case tokens.And, tokens.Or,
@@ -188,10 +62,131 @@ func (e *Infix) Type() types.Type {
 		return types.Basics[types.Bool]
 	}
 
-	return e.Left.Type()
+	return e.InfixType
 }
 
-func upgradeLiteralType(expr Expression, ref Expression) Expression {
+func EqualizeInfixTypes(left, right Expr) {
+	if types.Equal(left.Type(), right.Type()) {
+		return
+	}
+
+	// Handle default inferred literal types.
+	switch left.Type().Kind() {
+	case types.ASCII:
+		if r, ok := right.(*UTF8Literal); ok {
+			right = &ASCIILiteral{
+				Token: r.Token,
+				Value: ascii(r.Value),
+			}
+
+			return
+		}
+	case types.Float16:
+		if r, ok := right.(*Float64Literal); ok {
+			right = &Float16Literal{
+				Token: r.Token,
+				Value: f16.Fromfloat32(float32(r.Value)),
+			}
+
+			return
+		}
+	case types.Float32:
+		if r, ok := right.(*Float64Literal); ok {
+			right = &Float32Literal{
+				Token: r.Token,
+				Value: float32(r.Value),
+			}
+
+			return
+		}
+	case types.Int8:
+		if r, ok := right.(*Int64Literal); ok && (r.Value >= math.MinInt8 && r.Value <= math.MaxInt8) {
+			right = &Int8Literal{
+				Token: r.Token,
+				Value: int8(r.Value),
+			}
+
+			return
+		}
+	case types.Int16:
+		if r, ok := right.(*Int64Literal); ok && (r.Value >= math.MinInt16 && r.Value <= math.MaxInt16) {
+			right = &Int16Literal{
+				Token: r.Token,
+				Value: int16(r.Value),
+			}
+
+			return
+		}
+	case types.Int32:
+		if r, ok := right.(*Int64Literal); ok && (r.Value >= math.MinInt32 && r.Value <= math.MaxInt32) {
+			right = &Int32Literal{
+				Token: r.Token,
+				Value: int32(r.Value),
+			}
+
+			return
+		}
+	case types.Int128:
+		if r, ok := right.(*Int64Literal); ok {
+			right = &Int128Literal{
+				Token: r.Token,
+				Value: wide.Int128FromInt64(r.Value),
+			}
+
+			return
+		}
+	case types.Uint8:
+		if r, ok := right.(*Int64Literal); ok && (r.Value >= 0 && r.Value <= math.MaxUint8) {
+			right = &Uint8Literal{
+				Token: r.Token,
+				Value: uint8(r.Value),
+			}
+
+			return
+		}
+	case types.Uint16:
+		if r, ok := right.(*Int64Literal); ok && (r.Value >= 0 && r.Value <= math.MaxUint16) {
+			right = &Uint16Literal{
+				Token: r.Token,
+				Value: uint16(r.Value),
+			}
+
+			return
+		}
+	case types.Uint32:
+		if r, ok := right.(*Int64Literal); ok && (r.Value >= 0 && r.Value <= math.MaxUint32) {
+			right = &Uint32Literal{
+				Token: r.Token,
+				Value: uint32(r.Value),
+			}
+
+			return
+		}
+	case types.Uint64:
+		if r, ok := right.(*Int64Literal); ok && r.Value >= 0 {
+			right = &Uint64Literal{
+				Token: r.Token,
+				Value: uint64(r.Value),
+			}
+
+			return
+		}
+	case types.Uint128:
+		if r, ok := right.(*Int64Literal); ok && r.Value >= 0 {
+			right = &Uint128Literal{
+				Token: r.Token,
+				Value: u128.From64(uint64(r.Value)),
+			}
+
+			return
+		}
+	}
+
+	left = upgradeLiteralType(left, right)
+	right = upgradeLiteralType(right, left)
+}
+
+func upgradeLiteralType(expr Expr, ref Expr) Expr {
 	refType := ref.Type().Kind()
 
 	if expr.Type().Kind() == refType {

@@ -3,59 +3,65 @@ package ast
 import (
 	"strings"
 
+	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Statement = &Declaration{}
+var _ Node = &Declaration{}
 
 type Declaration struct {
-	statement
-
+	Token      tokens.Token
 	Assignment *Assignment
 }
 
-func (d *Declaration) Pos() (uint32, uint16) {
-	return d.Assignment.Token.Ln, d.Assignment.Token.Col
+func (a *AST) NewDeclaration(token tokens.Token, assignment *Assignment) NodeIndex {
+	node := New[Declaration](a)
+	node.Token = token
+	node.Assignment = assignment
+	return a.AddNode(node)
 }
 
-func (d *Declaration) Hash() uint64 {
-	return hash(d)
+func (n *Declaration) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (d *Declaration) stringTo(out *strings.Builder) {
-	if d.Assignment.Identifier.Exported {
+func (n *Declaration) Hash() uint64 {
+	return hash(n)
+}
+
+func (n *Declaration) StringTo(out *strings.Builder, a *AST) {
+	if n.Assignment.Identifier.Exported {
 		_, _ = out.WriteString("export ")
 	}
 
-	switch d.Assignment.Identifier.Qualifier {
+	switch n.Assignment.Identifier.Qualifier {
 	case QualifierVariable:
 		_, _ = out.WriteString("var ")
 	case QualifierDynamic:
 		_, _ = out.WriteString("dyn ")
 	}
 
-	if d.Assignment.Expression == nil {
-		d.Assignment.Identifier.stringTo(out)
+	if n.Assignment.Expr == 0 {
+		_, _ = out.WriteString(n.Assignment.Identifier.Name)
 		_, _ = out.WriteString(" : ")
-		_, _ = out.WriteString(d.Assignment.Identifier.ValueType.String())
+		_, _ = out.WriteString(n.Assignment.Identifier.ValueType.String())
 
 		return
 	}
 
-	if d.Assignment.Identifier.ValueType == nil || d.Assignment.Identifier.ValueType == types.None {
-		d.Assignment.Identifier.stringTo(out)
+	if n.Assignment.Identifier.ValueType == nil || n.Assignment.Identifier.ValueType == types.None {
+		_, _ = out.WriteString(n.Assignment.Identifier.Name)
 		_, _ = out.WriteString(" := ")
-		d.Assignment.Expression.stringTo(out)
+		a.exprs[n.Assignment.Expr].StringTo(out, a)
 
 		return
 	}
 
-	d.Assignment.stringTo(out)
+	n.Assignment.StringTo(out, a)
 }
 
-func (d *Declaration) String() string {
+func (n *Declaration) String() string {
 	var out strings.Builder
-	d.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

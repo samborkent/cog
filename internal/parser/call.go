@@ -9,7 +9,10 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedure) []ast.Expression {
+// TODO: pre-allocate based on heuristics
+const argumentPreallocationSize = 2
+
+func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedure) []ast.ExprIndex {
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), "expected '(' after call identifier", "parseCallArguments")
 		return nil
@@ -19,21 +22,21 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 
 	if p.this().Type == tokens.RParen {
 		p.advance("parseCallArguments )") // consume ')'
-		return []ast.Expression{}
+		return []ast.ExprIndex{}
 	}
 
-	args := []ast.Expression{}
+	args := make([]ast.ExprIndex, 0, argumentPreallocationSize)
 
 	for i := 0; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; i++ {
 		if ctx.Err() != nil {
 			return nil
 		}
 
-		var arg ast.Expression
+		var arg ast.ExprIndex
 
 		if procType == nil {
 			arg = p.expression(ctx, types.None)
-			if arg == nil {
+			if arg == ast.ZeroExprIndex {
 				return nil
 			}
 		} else {
@@ -51,7 +54,7 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 			}
 
 			arg = p.expression(ctx, paramType)
-			if arg == nil {
+			if arg == ast.ZeroExprIndex {
 				return nil
 			}
 		}
@@ -78,7 +81,7 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 // and the substituted return type. Reports parser errors on failure.
 func (p *Parser) inferTypeArgs(
 	procType *types.Procedure,
-	args []ast.Expression,
+	args []ast.ExprIndex,
 ) ([]types.Type, types.Type) {
 	argMap := make(map[string]types.Type, len(procType.TypeParams))
 
@@ -93,7 +96,7 @@ func (p *Parser) inferTypeArgs(
 			continue
 		}
 
-		argType := args[i].Type()
+		argType := p.ast.Expr(args[i]).Type()
 
 		if existing, ok := argMap[tp.Name]; ok {
 			// Already inferred — check consistency.
@@ -148,7 +151,7 @@ func (p *Parser) inferTypeArgs(
 func (p *Parser) validateExplicitTypeArgs(
 	procType *types.Procedure,
 	typeArgs []types.Type,
-	args []ast.Expression,
+	args []ast.ExprIndex,
 ) types.Type {
 	if len(typeArgs) != len(procType.TypeParams) {
 		p.error(p.this(), fmt.Sprintf(
@@ -179,7 +182,7 @@ func (p *Parser) validateExplicitTypeArgs(
 		}
 
 		expectedType := types.SubstituteType(param.Type, argMap)
-		argType := args[i].Type()
+		argType := p.ast.Expr(args[i]).Type()
 
 		if !types.Equal(expectedType, argType) && !types.AssignableTo(argType, expectedType) {
 			p.error(p.this(), fmt.Sprintf(

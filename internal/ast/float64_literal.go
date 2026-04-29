@@ -9,25 +9,24 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Float64Literal{}
+var _ Expr = &Float64Literal{}
 
 type Float64Literal struct {
-	expression
-
 	Token tokens.Token
 	Value float64
 }
 
-func NewFloat64Literal(t tokens.Token) (*Float64Literal, error) {
+func (a *AST) NewFloat64Literal(t tokens.Token) (ExprIndex, error) {
 	value, err := strconv.ParseFloat(t.Literal, 64)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse float literal to float64: %w", err)
+		return ZeroExprIndex, fmt.Errorf("unable to parse float literal to float64: %w", err)
 	}
 
-	return &Float64Literal{
-		Token: t,
-		Value: value,
-	}, nil
+	expr := New[Float64Literal](a)
+	expr.Token = t
+	expr.Value = value
+
+	return a.AddExpr(expr), nil
 }
 
 func (l *Float64Literal) Pos() (uint32, uint16) {
@@ -38,7 +37,7 @@ func (l *Float64Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *Float64Literal) stringTo(out *strings.Builder) {
+func (l *Float64Literal) StringTo(out *strings.Builder, _ *AST) {
 	_ = out.WriteByte('(')
 	_, _ = out.WriteString(strconv.FormatFloat(l.Value, 'g', -1, 64))
 	_, _ = out.WriteString(" : float64)")
@@ -46,8 +45,7 @@ func (l *Float64Literal) stringTo(out *strings.Builder) {
 
 func (l *Float64Literal) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

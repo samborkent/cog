@@ -11,7 +11,7 @@ import (
 func NewTestParser(t *testing.T, tokens []tokens.Token, debug bool) (*parser.Parser, error) {
 	t.Helper()
 
-	return parser.NewParserWithSymbols(tokens, parser.NewSymbolTable(), debug, "")
+	return parser.NewParserWithSymbols(tokens, parser.NewSymbolTable(), debug, "", 0)
 }
 
 func TestParse(t *testing.T) {
@@ -22,8 +22,11 @@ func TestParse(t *testing.T) {
 
 		f := parse(t, `package p
 main : proc() = {}`)
-		if f.Name != "test.cog" {
-			t.Errorf("expected file name 'test.cog', got %q", f.Name)
+
+		file := f.Node(1).(*ast.File)
+
+		if file.Name != "test.cog" {
+			t.Errorf("expected file name 'test.cog', got %q", file.Name)
 		}
 	})
 

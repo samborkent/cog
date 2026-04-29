@@ -8,28 +8,37 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
-	node := &ast.IfStatement{
-		Token: p.this(),
+func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
+	var label *ast.Identifier
+
+	if p.prev().Type == tokens.Identifier && p.this().Type == tokens.Colon {
+		label = &ast.Identifier{
+			Token: p.prev(),
+			Name:  p.prev().Literal,
+		}
+
+		p.advance("parseIfStatement :") // consume colon
 	}
+
+	ifToken := p.this()
 
 	p.advance("parseIfStatement if") // consume if
 
-	expr := p.expression(ctx, types.None)
-	if expr == nil {
+	condition := p.expression(ctx, types.None)
+	if condition == ast.ZeroExprIndex {
 		p.error(p.this(), "unable to parse bool expression in if condition", "parseIfStatement")
-		return nil
+		return ast.ZeroNodeIndex
 	}
+
+	expr := p.ast.Expr(condition)
 
 	if expr.Type().Kind() != types.Bool {
 		p.error(p.this(), "expected bool expression in if condition", "parseIfStatement")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
-	node.Condition = expr
-
 	// Detect option/result ? check patterns for must-check analysis.
-	checkedVar, negated := extractCheckVar(expr)
+	checkedVar, negated := p.extractCheckVar(expr)
 
 	// ? means "is OK?" for both option and result:
 	//   if val?   → consequence: value safe, persists after
@@ -64,14 +73,12 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 
 	if consequence == nil {
 		p.error(p.this(), "unable to parse if block", "parseIfStatement")
-		return nil
+		return ast.ZeroNodeIndex
 	}
-
-	node.Consequence = consequence
 
 	// Early-exit promotion: if the consequence block exits scope,
 	// the opposite check persists after the if-statement.
-	if checkedVar != "" && !persistsAfterIf && blockExitsScope(consequence) {
+	if checkedVar != "" && !persistsAfterIf && p.blockExitsScope(consequence) {
 		if negated {
 			// if !val? { return } → value safe after.
 			persistsAfterIf = true
@@ -81,9 +88,11 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 		}
 	}
 
+	var alternative *ast.Block
+
 	if p.this().Type == tokens.Else {
 		if ctx.Err() != nil {
-			return nil
+			return ast.ZeroNodeIndex
 		}
 
 		p.advance("parseIfStatement else") // consume 'else'
@@ -93,7 +102,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 			p.symbols.MarkChecked(checkedVar, checkValue)
 		}
 
-		alternative := p.parseBlockStatement(ctx)
+		alternative = p.parseBlockStatement(ctx)
 
 		if checkedVar != "" && negated {
 			if hadPrevState {
@@ -105,10 +114,8 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 
 		if alternative == nil {
 			p.error(p.this(), "unable to parse else block", "parseIfStatement")
-			return nil
+			return ast.ZeroNodeIndex
 		}
-
-		node.Alternative = alternative
 	}
 
 	// Direct checks persist: value access safe for rest of scope.
@@ -116,19 +123,19 @@ func (p *Parser) parseIfStatement(ctx context.Context) *ast.IfStatement {
 		p.symbols.MarkChecked(checkedVar, checkValue)
 	}
 
-	return node
+	return p.ast.NewIfStatement(ifToken, label, condition, consequence, alternative)
 }
 
 // blockExitsScope reports whether a block's last statement unconditionally
 // exits the enclosing scope (return, break, or continue).
-func blockExitsScope(block *ast.Block) bool {
+func (p *Parser) blockExitsScope(block *ast.Block) bool {
 	if len(block.Statements) == 0 {
 		return false
 	}
 
 	last := block.Statements[len(block.Statements)-1]
 
-	switch last.(type) {
+	switch p.ast.Node(last).(type) {
 	case *ast.Return, *ast.Branch:
 		return true
 	}
@@ -139,17 +146,17 @@ func blockExitsScope(block *ast.Block) bool {
 // extractCheckVar extracts the variable name from a ? check expression.
 // Only ? is a check operator. Returns the variable name and whether negated.
 // Patterns: val? → (name, false), !val? → (name, true)
-func extractCheckVar(expr ast.Expression) (string, bool) {
+func (p *Parser) extractCheckVar(expr ast.Expr) (string, bool) {
 	switch e := expr.(type) {
 	case *ast.Suffix:
 		if e.Operator.Type == tokens.Question {
-			if ident, ok := e.Left.(*ast.Identifier); ok {
+			if ident, ok := p.ast.Expr(e.Left).(*ast.Identifier); ok {
 				return ident.Name, false
 			}
 		}
 	case *ast.Prefix:
 		if e.Operator.Type == tokens.Not {
-			name, neg := extractCheckVar(e.Right)
+			name, neg := p.extractCheckVar(p.ast.Expr(e.Right))
 			return name, !neg
 		}
 	}

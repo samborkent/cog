@@ -7,48 +7,50 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Prefix{}
+var _ Expr = &Prefix{}
 
 type Prefix struct {
-	expression
-
-	Operator tokens.Token
-	Right    Expression
+	Operator   tokens.Token
+	PrefixType types.Type
+	Right      ExprIndex
 }
 
-func (p *Prefix) Pos() (uint32, uint16) {
-	return p.Operator.Ln, p.Operator.Col
+func (a *AST) NewPrefix(operator tokens.Token, prefixType types.Type, right ExprIndex) ExprIndex {
+	prefixExpr := New[Prefix](a)
+	prefixExpr.Operator = operator
+	prefixExpr.PrefixType = prefixType
+	prefixExpr.Right = right
+	return a.AddExpr(prefixExpr)
 }
 
-func (p *Prefix) Hash() uint64 {
-	return hash(p)
+func (e *Prefix) Pos() (uint32, uint16) {
+	return e.Operator.Ln, e.Operator.Col
 }
 
-func (p *Prefix) stringTo(out *strings.Builder) {
+func (e *Prefix) Hash() uint64 {
+	return hash(e)
+}
+
+func (e *Prefix) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte('(')
-	_, _ = out.WriteString(p.Operator.Type.String())
-	p.Right.stringTo(out)
+	_, _ = out.WriteString(e.Operator.Type.String())
+	a.exprs[e.Right].StringTo(out, a)
 	_ = out.WriteByte(')')
 }
 
-func (p *Prefix) String() string {
+func (e *Prefix) String() string {
 	var out strings.Builder
-	p.stringTo(&out)
-
+	e.StringTo(&out, nil)
 	return out.String()
 }
 
-func (p *Prefix) Type() types.Type {
-	if p.Right.Type() == nil {
-		panic("prefix with nil type detected")
-	}
-
+func (e *Prefix) Type() types.Type {
 	// Return
-	if p.Operator.Type == tokens.BitAnd {
+	if e.Operator.Type == tokens.BitAnd {
 		return &types.Reference{
-			Value: p.Right.Type(),
+			Value: e.PrefixType,
 		}
 	}
 
-	return p.Right.Type()
+	return e.PrefixType
 }

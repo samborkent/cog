@@ -139,7 +139,7 @@ func findGlobals(ctx context.Context, t testing.TB, lexed []lexedFile, symbols *
 	parsers := make([]*parser.Parser, len(lexed))
 
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.path)
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.path, uint16(i))
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", lf.path, err)
 		}

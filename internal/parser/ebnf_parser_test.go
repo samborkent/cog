@@ -17,12 +17,13 @@ x := 1 + 2
 main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
-		if d.Assignment.Expression == nil {
+
+		if d.Assignment.Expr == ast.ZeroExprIndex {
 			t.Fatal("expected expression")
 		}
 
-		if _, ok := d.Assignment.Expression.(*ast.Infix); !ok {
-			t.Errorf("expected Infix expression, got %T", d.Assignment.Expression)
+		if _, ok := f.Expr(d.Assignment.Expr).(*ast.Infix); !ok {
+			t.Errorf("expected Infix expression, got %T", d.Assignment.Expr)
 		}
 	})
 
@@ -33,8 +34,9 @@ x := -1
 main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
-		if _, ok := d.Assignment.Expression.(*ast.Prefix); !ok {
-			t.Errorf("expected Prefix expression, got %T", d.Assignment.Expression)
+
+		if _, ok := f.Expr(d.Assignment.Expr).(*ast.Prefix); !ok {
+			t.Errorf("expected Prefix expression, got %T", d.Assignment.Expr)
 		}
 	})
 
@@ -48,7 +50,7 @@ main : proc() = {
 		@print("yes")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -62,7 +64,7 @@ main : proc() = {
 		@print("both")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -85,17 +87,17 @@ broken := Struct{
 	f := parse(t, src)
 
 	// Check that we have the expected statements (type alias + variable declaration)
-	if len(f.Statements) != 2 {
-		t.Fatalf("expected 2 statements, got %d", len(f.Statements))
+	if f.LenNodes() != 2 {
+		t.Fatalf("expected 2 statements, got %d", f.LenNodes())
 	}
 
 	// The second statement should be the variable declaration with struct literal
 	declaration := stmtAs[*ast.Declaration](t, f, 1)
 
 	// Check that the value is a struct literal
-	structLiteral, ok := declaration.Assignment.Expression.(*ast.StructLiteral)
+	structLiteral, ok := f.Expr(declaration.Assignment.Expr).(*ast.StructLiteral)
 	if !ok {
-		t.Fatalf("expected struct literal, got %T", declaration.Assignment.Expression)
+		t.Fatalf("expected struct literal, got %T", f.Expr(declaration.Assignment.Expr))
 	}
 
 	if !strings.Contains(structLiteral.StructType.String(), "Struct") {
@@ -116,7 +118,7 @@ broken := Struct{
 	}
 
 	// Check that the field value is correct (it includes type annotation)
-	if !strings.Contains(structLiteral.Values[0].Value.String(), "42") {
-		t.Errorf("expected field value containing '42', got %s", structLiteral.Values[0].Value.String())
+	if !strings.Contains(f.Expr(structLiteral.Values[0].Value).String(), "42") {
+		t.Errorf("expected field value containing '42', got %s", f.Expr(structLiteral.Values[0].Value).String())
 	}
 }

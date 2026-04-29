@@ -17,7 +17,7 @@ main : proc() = {
 		@print("no")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -39,7 +39,7 @@ main : proc() = {
 		@print("other")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})

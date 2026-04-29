@@ -7,31 +7,37 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &TupleLiteral{}
+var _ Expr = &TupleLiteral{}
 
 type TupleLiteral struct {
-	expression
-
 	Token     tokens.Token
 	TupleType types.Type
-	Values    []Expression
+	Values    []ExprIndex
 }
 
-func (e *TupleLiteral) Pos() (uint32, uint16) {
-	return e.Token.Ln, e.Token.Col
+func (a *AST) NewTupleLiteral(token tokens.Token, t *types.Tuple, values []ExprIndex) ExprIndex {
+	tupleLiteral := New[TupleLiteral](a)
+	tupleLiteral.Token = token
+	tupleLiteral.TupleType = t
+	tupleLiteral.Values = values
+	return a.AddExpr(tupleLiteral)
 }
 
-func (e *TupleLiteral) Hash() uint64 {
-	return hash(e)
+func (l *TupleLiteral) Pos() (uint32, uint16) {
+	return l.Token.Ln, l.Token.Col
 }
 
-func (e *TupleLiteral) stringTo(out *strings.Builder) {
+func (l *TupleLiteral) Hash() uint64 {
+	return hash(l)
+}
+
+func (l *TupleLiteral) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte('{')
 
-	for i, val := range e.Values {
-		val.stringTo(out)
+	for i, val := range l.Values {
+		a.exprs[val].StringTo(out, a)
 
-		if i < len(e.Values)-1 {
+		if i < len(l.Values)-1 {
 			_, _ = out.WriteString(", ")
 		}
 	}
@@ -39,17 +45,12 @@ func (e *TupleLiteral) stringTo(out *strings.Builder) {
 	_ = out.WriteByte('}')
 }
 
-func (e *TupleLiteral) String() string {
+func (l *TupleLiteral) String() string {
 	var out strings.Builder
-	e.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 
-func (e *TupleLiteral) Type() types.Type {
-	if e.TupleType == nil {
-		panic("tuple with nil type detected")
-	}
-
-	return e.TupleType
+func (l *TupleLiteral) Type() types.Type {
+	return l.TupleType
 }

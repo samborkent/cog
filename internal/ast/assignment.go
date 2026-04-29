@@ -6,35 +6,40 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Assignment{}
+var _ Node = &Assignment{}
 
 type Assignment struct {
-	statement
-
 	Token      tokens.Token
 	Identifier *Identifier
-	Expression Expression
+	Expr       ExprIndex
 }
 
-func (a *Assignment) Pos() (uint32, uint16) {
-	return a.Token.Ln, a.Token.Col
+func (a *AST) NewAssignment(token tokens.Token, ident *Identifier, expr ExprIndex) NodeIndex {
+	node := New[Assignment](a)
+	node.Token = token
+	node.Identifier = ident
+	node.Expr = expr
+	return a.AddNode(node)
 }
 
-func (a *Assignment) Hash() uint64 {
-	return hash(a)
+func (n *Assignment) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (a *Assignment) stringTo(out *strings.Builder) {
-	a.Identifier.stringTo(out)
+func (n *Assignment) Hash() uint64 {
+	return hash(n)
+}
+
+func (n *Assignment) StringTo(out *strings.Builder, a *AST) {
+	_, _ = out.WriteString(n.Identifier.Name)
 	_ = out.WriteByte(' ')
-	_, _ = out.WriteString(a.Token.Type.String())
+	_, _ = out.WriteString(n.Token.Type.String())
 	_ = out.WriteByte(' ')
-	a.Expression.stringTo(out)
+	a.exprs[n.Expr].StringTo(out, a)
 }
 
-func (a *Assignment) String() string {
+func (n *Assignment) String() string {
 	var out strings.Builder
-	a.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

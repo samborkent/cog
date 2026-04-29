@@ -6,46 +6,53 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &IfStatement{}
+var _ Node = &IfStatement{}
 
 type IfStatement struct {
-	statement
-
 	Token       tokens.Token
-	Label       *Label
-	Condition   Expression
+	Label       *Identifier
+	Condition   ExprIndex
 	Consequence *Block
-	Alternative *Block
+	Alternative *Block // may be nil
 }
 
-func (s *IfStatement) Pos() (uint32, uint16) {
-	return s.Token.Ln, s.Token.Col
+func (a *AST) NewIfStatement(token tokens.Token, label *Identifier, condition ExprIndex, consequence, alternative *Block) NodeIndex {
+	node := New[IfStatement](a)
+	node.Token = token
+	node.Label = label
+	node.Condition = condition
+	node.Consequence = consequence
+	node.Alternative = alternative
+	return a.AddNode(node)
 }
 
-func (s *IfStatement) Hash() uint64 {
-	return hash(s)
+func (n *IfStatement) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (s *IfStatement) stringTo(out *strings.Builder) {
-	if s.Label != nil {
-		s.Label.stringTo(out)
-		_ = out.WriteByte(' ')
+func (n *IfStatement) Hash() uint64 {
+	return hash(n)
+}
+
+func (n *IfStatement) StringTo(out *strings.Builder, a *AST) {
+	if n.Label != nil {
+		_, _ = out.WriteString(n.Label.Name)
+		_, _ = out.WriteString(":\n")
 	}
 
 	_, _ = out.WriteString("if (")
-	s.Condition.stringTo(out)
+	a.exprs[n.Condition].StringTo(out, a)
 	_, _ = out.WriteString(") ")
-	s.Consequence.stringTo(out)
+	n.Consequence.StringTo(out, a)
 
-	if s.Alternative != nil {
+	if n.Alternative != nil {
 		_, _ = out.WriteString(" else ")
-		s.Alternative.stringTo(out)
+		n.Alternative.StringTo(out, a)
 	}
 }
 
-func (s *IfStatement) String() string {
+func (n *IfStatement) String() string {
 	var out strings.Builder
-	s.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

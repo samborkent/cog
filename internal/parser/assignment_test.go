@@ -13,7 +13,7 @@ main : proc() = {
 	var x := 1
 	x = 2
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})

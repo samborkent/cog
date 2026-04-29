@@ -7,59 +7,60 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &StructLiteral{}
+var _ Expr = &StructLiteral{}
 
 type StructLiteral struct {
-	expression
-
 	Token      tokens.Token
 	StructType types.Type
-	Values     []*FieldValue
+	Values     []FieldValue
 }
 
 type FieldValue struct {
 	Name  string
-	Value Expression
+	Value ExprIndex
 }
 
-func (e *StructLiteral) Pos() (uint32, uint16) {
-	return e.Token.Ln, e.Token.Col
+func (a *AST) NewStructLiteral(token tokens.Token, t *types.Struct, values []FieldValue) ExprIndex {
+	structLiteral := New[StructLiteral](a)
+	structLiteral.Token = token
+	structLiteral.StructType = t
+	structLiteral.Values = values
+	return a.AddExpr(structLiteral)
 }
 
-func (e *StructLiteral) Hash() uint64 {
-	return hash(e)
+func (l *StructLiteral) Pos() (uint32, uint16) {
+	return l.Token.Ln, l.Token.Col
 }
 
-func (e *StructLiteral) stringTo(out *strings.Builder) {
+func (l *StructLiteral) Hash() uint64 {
+	return hash(l)
+}
+
+func (l *StructLiteral) StringTo(out *strings.Builder, a *AST) {
 	_, _ = out.WriteString("({")
 
-	for i, val := range e.Values {
+	for i, val := range l.Values {
 		if i == 0 {
 			_ = out.WriteByte('\n')
 		}
 
 		_, _ = out.WriteString(val.Name)
 		_, _ = out.WriteString(" = ")
-		val.Value.stringTo(out)
+		a.exprs[val.Value].StringTo(out, a)
 		_, _ = out.WriteString(",\n")
 	}
 
 	_, _ = out.WriteString("} : ")
-	_, _ = out.WriteString(e.Type().String())
+	_, _ = out.WriteString(l.Type().String())
 	_ = out.WriteByte(')')
 }
 
-func (e *StructLiteral) String() string {
+func (l *StructLiteral) String() string {
 	var out strings.Builder
-	e.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 
-func (e *StructLiteral) Type() types.Type {
-	if e.StructType == nil {
-		panic("struct with nil type detected")
-	}
-
-	return e.StructType
+func (l *StructLiteral) Type() types.Type {
+	return l.StructType
 }

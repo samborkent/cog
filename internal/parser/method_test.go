@@ -33,12 +33,14 @@ main : proc() = {}`)
 			t.Errorf("expected receiver name f, got %q", m.Receiver.Name)
 		}
 
-		if m.Declaration == nil {
+		if m.Declaration == ast.ZeroNodeIndex {
 			t.Fatal("method declaration is nil")
 		}
 
-		if m.Declaration.Assignment.Identifier.Name != "GetValue" {
-			t.Errorf("expected method name GetValue, got %q", m.Declaration.Assignment.Identifier.Name)
+		decl := f.Node(m.Declaration).(*ast.Declaration)
+
+		if decl.Assignment.Identifier.Name != "GetValue" {
+			t.Errorf("expected method name GetValue, got %q", decl.Assignment.Identifier.Name)
 		}
 	})
 
@@ -56,11 +58,13 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		if m.Declaration == nil {
+		if m.Declaration == ast.ZeroNodeIndex {
 			t.Fatal("method declaration is nil")
 		}
 
-		procType, ok := m.Declaration.Assignment.Identifier.ValueType.(*types.Procedure)
+		decl := f.Node(m.Declaration).(*ast.Declaration)
+
+		procType, ok := decl.Assignment.Identifier.ValueType.(*types.Procedure)
 		if !ok {
 			t.Fatal("method type is not a procedure")
 		}
@@ -110,8 +114,10 @@ main : proc() = {}`)
 			t.Errorf("expected receiver f, got %q", m.Receiver.Name)
 		}
 
-		if m.Declaration.Assignment.Identifier.Name != "String" {
-			t.Errorf("expected method name String, got %q", m.Declaration.Assignment.Identifier.Name)
+		decl := f.Node(m.Declaration).(*ast.Declaration)
+
+		if decl.Assignment.Identifier.Name != "String" {
+			t.Errorf("expected method name String, got %q", decl.Assignment.Identifier.Name)
 		}
 	})
 
@@ -129,7 +135,9 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		if !m.Declaration.Assignment.Identifier.Exported {
+		decl := f.Node(m.Declaration).(*ast.Declaration)
+
+		if !decl.Assignment.Identifier.Exported {
 			t.Error("expected exported method")
 		}
 	})
@@ -195,8 +203,10 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		if m.Declaration.Assignment.Identifier.Name != "Greet" {
-			t.Errorf("expected method name 'Greet', got %q", m.Declaration.Assignment.Identifier.Name)
+		decl := f.Node(m.Declaration).(*ast.Declaration)
+
+		if decl.Assignment.Identifier.Name != "Greet" {
+			t.Errorf("expected method name 'Greet', got %q", decl.Assignment.Identifier.Name)
 		}
 	})
 
@@ -219,12 +229,15 @@ main : proc() = {}`)
 		m1 := stmtAs[*ast.Method](t, f, 1)
 		m2 := stmtAs[*ast.Method](t, f, 2)
 
-		if m1.Declaration.Assignment.Identifier.Name != "GetX" {
-			t.Errorf("expected first method 'GetX', got %q", m1.Declaration.Assignment.Identifier.Name)
+		decl1 := f.Node(m1.Declaration).(*ast.Declaration)
+		decl2 := f.Node(m2.Declaration).(*ast.Declaration)
+
+		if decl1.Assignment.Identifier.Name != "GetX" {
+			t.Errorf("expected first method 'GetX', got %q", decl1.Assignment.Identifier.Name)
 		}
 
-		if m2.Declaration.Assignment.Identifier.Name != "GetY" {
-			t.Errorf("expected second method 'GetY', got %q", m2.Declaration.Assignment.Identifier.Name)
+		if decl2.Assignment.Identifier.Name != "GetY" {
+			t.Errorf("expected second method 'GetY', got %q", decl2.Assignment.Identifier.Name)
 		}
 	})
 
@@ -261,7 +274,9 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		procType, ok := m.Declaration.Assignment.Identifier.ValueType.(*types.Procedure)
+		decl := f.Node(m.Declaration).(*ast.Declaration)
+
+		procType, ok := decl.Assignment.Identifier.ValueType.(*types.Procedure)
 		if !ok {
 			t.Fatal("expected procedure type")
 		}
@@ -284,8 +299,8 @@ Foo.Method : proc() = {}
 Foo ~ struct {}
 main : proc() = {}`)
 
-		if len(f.Statements) < 3 {
-			t.Fatalf("expected at least 3 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 3 {
+			t.Fatalf("expected at least 3 statements, got %d", f.LenNodes())
 		}
 	})
 

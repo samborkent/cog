@@ -27,6 +27,11 @@ func IsNumber(t Type) bool {
 	return IsComplex(t) || IsReal(t)
 }
 
+func IsIndexable(t Type) bool {
+	kind := t.Kind()
+	return kind == ArrayKind || kind == SliceKind || kind == MapKind || kind == SetKind || IsString(t)
+}
+
 func IsIterator(t Type) bool {
 	kind := t.Kind()
 	return IsString(t) || kind == ArrayKind || kind == SliceKind || kind == MapKind || kind == SetKind || kind == EnumKind

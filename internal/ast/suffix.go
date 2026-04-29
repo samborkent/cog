@@ -7,60 +7,49 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Suffix{}
+var _ Expr = &Suffix{}
 
 type Suffix struct {
-	expression
-
-	Operator tokens.Token
-	Left     Expression
+	Operator   tokens.Token
+	SuffixType types.Type
+	Left       ExprIndex
 }
 
-func (p *Suffix) Pos() (uint32, uint16) {
-	return p.Operator.Ln, p.Operator.Col
+func (a *AST) NewSuffix(operator tokens.Token, suffixType types.Type, left ExprIndex) ExprIndex {
+	suffixExpr := New[Suffix](a)
+	suffixExpr.Operator = operator
+	suffixExpr.SuffixType = suffixType
+	suffixExpr.Left = left
+	return a.AddExpr(suffixExpr)
 }
 
-func (p *Suffix) Hash() uint64 {
-	return hash(p)
+func (e *Suffix) Pos() (uint32, uint16) {
+	return e.Operator.Ln, e.Operator.Col
 }
 
-func (p *Suffix) stringTo(out *strings.Builder) {
+func (e *Suffix) Hash() uint64 {
+	return hash(e)
+}
+
+func (e *Suffix) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte('(')
-	p.Left.stringTo(out)
-	_, _ = out.WriteString(p.Operator.Type.String())
+	a.exprs[e.Left].StringTo(out, a)
+	_, _ = out.WriteString(e.Operator.Type.String())
 	_ = out.WriteByte(')')
 }
 
-func (p *Suffix) String() string {
+func (e *Suffix) String() string {
 	var out strings.Builder
-	p.stringTo(&out)
-
+	e.StringTo(&out, nil)
 	return out.String()
 }
 
-func (p *Suffix) Type() types.Type {
-	if p.Left.Type() == nil {
-		panic("suffix with nil type detected")
-	}
-
-	// ? suffix is always a boolean check (option: is set?, result: is OK?).
-	if p.Operator.Type == tokens.Question {
-		return types.Basics[types.Bool]
-	}
-
+func (e *Suffix) Type() types.Type {
+	// TODO: check if still necessary
 	// ! suffix extracts the error value from a result type.
-	if p.Operator.Type == tokens.Not {
-		underlying := p.Left.Type()
-		if alias, ok := underlying.(*types.Alias); ok {
-			underlying = alias.Underlying()
-		}
-
-		if result, ok := underlying.(*types.Result); ok {
-			return result.Error
-		}
-
-		panic("! suffix on non-result type")
+	if e.Operator.Type == tokens.Not {
+		return e.SuffixType.Underlying().(*types.Result).Error
 	}
 
-	return p.Left.Type()
+	return e.SuffixType
 }

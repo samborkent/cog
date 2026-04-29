@@ -6,38 +6,39 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Return{}
+var _ Node = &Return{}
 
 type Return struct {
-	statement
-	Token  tokens.Token
-	Values []Expression
+	Token tokens.Token
+	Value ExprIndex
 }
 
-func (r *Return) Pos() (uint32, uint16) {
-	return r.Token.Ln, r.Token.Col
+func (a *AST) NewReturn(tok tokens.Token, value ExprIndex) NodeIndex {
+	node := New[Return](a)
+	node.Token = tok
+	node.Value = value
+	return a.AddNode(node)
 }
 
-func (r *Return) Hash() uint64 {
-	return hash(r)
+func (n *Return) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (r *Return) stringTo(out *strings.Builder) {
-	_, _ = out.WriteString(r.Token.Type.String())
+func (n *Return) Hash() uint64 {
+	return hash(n)
+}
+
+func (n *Return) StringTo(out *strings.Builder, a *AST) {
+	_, _ = out.WriteString(n.Token.Type.String())
 	_ = out.WriteByte(' ')
 
-	for i, v := range r.Values {
-		v.stringTo(out)
-
-		if i < len(r.Values)-1 {
-			_, _ = out.WriteString(", ")
-		}
+	if n.Value != ZeroExprIndex {
+		a.exprs[n.Value].StringTo(out, a)
 	}
 }
 
-func (r *Return) String() string {
+func (n *Return) String() string {
 	var out strings.Builder
-	r.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

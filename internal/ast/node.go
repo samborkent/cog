@@ -1,8 +1,6 @@
 package ast
 
 import (
-	"encoding/binary"
-	"hash/maphash"
 	"strings"
 
 	"github.com/samborkent/cog/internal/types"
@@ -10,40 +8,22 @@ import (
 
 type Node interface {
 	Pos() (ln uint32, col uint16)
-	Hash() uint64
 	String() string
-	stringTo(out *strings.Builder)
+	Hash() uint64
+	StringTo(out *strings.Builder, a *AST)
 }
 
-type Statement interface {
-	Node
-	statementNode()
-}
-
-type statement struct{}
-
-func (statement) statementNode() {}
-
-type Expression interface {
+type Expr interface {
 	Node
 	Type() types.Type
-	expressionNode()
 }
 
-type expression struct{}
+type (
+	NodeIndex uint32
+	ExprIndex uint32
+)
 
-func (expression) expressionNode() {}
-
-var seed = maphash.MakeSeed()
-
-func hash(n Node) uint64 {
-	ln, col := n.Pos()
-	str := n.String()
-
-	b := make([]byte, 6, 6+len(str))
-	binary.BigEndian.PutUint32(b[:4], ln)
-	binary.BigEndian.PutUint16(b[4:6], col)
-	b = append(b, str...)
-
-	return maphash.Bytes(seed, b)
-}
+var (
+	ZeroNodeIndex = NodeIndex(0)
+	ZeroExprIndex = ExprIndex(0)
+)

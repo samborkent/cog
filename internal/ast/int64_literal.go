@@ -9,25 +9,24 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Int64Literal{}
+var _ Expr = &Int64Literal{}
 
 type Int64Literal struct {
-	expression
-
 	Token tokens.Token
 	Value int64
 }
 
-func NewInt64Literal(t tokens.Token) (*Int64Literal, error) {
+func (a *AST) NewInt64Literal(t tokens.Token) (ExprIndex, error) {
 	value, err := strconv.ParseInt(t.Literal, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse int literal: %w", err)
+		return ZeroExprIndex, fmt.Errorf("unable to parse int literal: %w", err)
 	}
 
-	return &Int64Literal{
-		Token: t,
-		Value: value,
-	}, nil
+	expr := New[Int64Literal](a)
+	expr.Token = t
+	expr.Value = value
+
+	return a.AddExpr(expr), nil
 }
 
 func (l *Int64Literal) Pos() (uint32, uint16) {
@@ -38,7 +37,7 @@ func (l *Int64Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *Int64Literal) stringTo(out *strings.Builder) {
+func (l *Int64Literal) StringTo(out *strings.Builder, _ *AST) {
 	_ = out.WriteByte('(')
 	_, _ = out.WriteString(strconv.FormatInt(l.Value, 10))
 	_, _ = out.WriteString(" : int64)")
@@ -46,8 +45,7 @@ func (l *Int64Literal) stringTo(out *strings.Builder) {
 
 func (l *Int64Literal) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

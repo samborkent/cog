@@ -7,14 +7,20 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &ArrayLiteral{}
+var _ Expr = &ArrayLiteral{}
 
 type ArrayLiteral struct {
-	expression
-
 	Token     tokens.Token
 	ArrayType *types.Array
-	Values    []Expression
+	Values    []ExprIndex
+}
+
+func (a *AST) NewArrayLiteral(token tokens.Token, t *types.Array, values []ExprIndex) ExprIndex {
+	arrayLiteral := New[ArrayLiteral](a)
+	arrayLiteral.Token = token
+	arrayLiteral.ArrayType = t
+	arrayLiteral.Values = values
+	return a.AddExpr(arrayLiteral)
 }
 
 func (l *ArrayLiteral) Pos() (uint32, uint16) {
@@ -25,11 +31,11 @@ func (l *ArrayLiteral) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *ArrayLiteral) stringTo(out *strings.Builder) {
+func (l *ArrayLiteral) StringTo(out *strings.Builder, a *AST) {
 	_, _ = out.WriteString("({")
 
 	for i, v := range l.Values {
-		v.stringTo(out)
+		a.exprs[v].StringTo(out, a)
 
 		if i < len(l.Values)-1 {
 			_, _ = out.WriteString(", ")
@@ -43,15 +49,10 @@ func (l *ArrayLiteral) stringTo(out *strings.Builder) {
 
 func (l *ArrayLiteral) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 
 func (l *ArrayLiteral) Type() types.Type {
-	if l.ArrayType == nil {
-		panic("array with nil type detected")
-	}
-
 	return l.ArrayType
 }

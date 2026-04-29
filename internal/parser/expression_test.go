@@ -25,7 +25,7 @@ main : proc() = {
 	}
 	@print(p)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -61,7 +61,7 @@ main : proc() = {}`)
 M ~ map<utf8, int64>
 m : M = {"a": 1, "b": 2}
 main : proc() = {}`)
-		if len(f.Statements) < 2 {
+		if f.LenNodes() < 2 {
 			t.Fatal("expected at least 2 statements")
 		}
 	})
@@ -99,7 +99,7 @@ func TestParseTypedLiterals(t *testing.T) {
 			t.Parallel()
 
 			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
-			if len(f.Statements) == 0 {
+			if f.LenNodes() == 0 {
 				t.Fatal("expected statements")
 			}
 		})
@@ -123,7 +123,7 @@ func TestParseInferredLiterals(t *testing.T) {
 			t.Parallel()
 
 			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
-			if len(f.Statements) == 0 {
+			if f.LenNodes() == 0 {
 				t.Fatal("expected statements")
 			}
 		})
@@ -160,7 +160,7 @@ func TestParseArithmeticExpressions(t *testing.T) {
 			t.Parallel()
 
 			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
-			if len(f.Statements) == 0 {
+			if f.LenNodes() == 0 {
 				t.Fatal("expected statements")
 			}
 		})

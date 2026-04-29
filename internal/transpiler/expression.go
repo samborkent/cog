@@ -12,13 +12,13 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
-	switch n := node.(type) {
+func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
+	switch n := expr.(type) {
 	case *ast.ArrayLiteral:
 		exprs := make([]goast.Expr, 0, len(n.Values))
 
 		for _, val := range n.Values {
-			expr, err := t.convertExpr(val)
+			expr, err := t.convertExpr(t.Expr(val))
 			if err != nil {
 				return nil, fmt.Errorf("converting expression in slice literal: %w", err)
 			}
@@ -42,9 +42,9 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 	case *ast.Builtin:
 		return t.convertBuiltin(n)
 	case *ast.Call:
-		procType, ok := n.Expression.Type().(*types.Procedure)
+		procType, ok := t.Expr(n.Expr).Type().(*types.Procedure)
 		if !ok {
-			return nil, fmt.Errorf("failed to assert procedure type for %q", n.Expression)
+			return nil, fmt.Errorf("failed to assert procedure type for %q", n.Expr)
 		}
 
 		args := make([]goast.Expr, 0, len(procType.Parameters))
@@ -59,7 +59,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		for _, arg := range n.Arguments {
-			expr, err := t.convertExpr(arg)
+			expr, err := t.convertExpr(t.Expr(arg))
 			if err != nil {
 				return nil, fmt.Errorf("transpiling argument in call expression: %w", err)
 			}
@@ -82,7 +82,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 					continue
 				}
 
-				defaultExpr, err := t.convertExpr(procType.Parameters[i].Default.(ast.Expression))
+				defaultExpr, err := t.convertExpr(procType.Parameters[i].Default.(ast.Expr))
 				if err != nil {
 					return nil, fmt.Errorf("parsing default value of input parameter in call expression: %w", err)
 				}
@@ -91,78 +91,76 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			}
 		}
 
-		if n.Package == "" {
-			var usedName string
+		// TODO: check if still required.
+		// if n.Package == "" {
+		var usedName string
 
-			switch expr := n.Expression.(type) {
-			case *ast.Identifier:
-				usedName = component.ConvertExport(expr.Name, expr.Exported, expr.Global)
-			case *ast.Selector:
-				leftMost, err := expr.LeftMost()
-				if err != nil {
-					return nil, err
-				}
-
-				usedName = component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
-			}
-
-			if err := t.symbols.MarkUsed(usedName); err != nil {
-				return nil, fmt.Errorf("marking call identifier used: %w", err)
-			}
+		switch expr := t.Expr(n.Expr).(type) {
+		case *ast.Identifier:
+			usedName = component.ConvertExport(expr.Name, expr.Exported, expr.Global)
+		case *ast.Selector:
+			leftMost := expr.Fields[0]
+			usedName = component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
 		}
+
+		if err := t.symbols.MarkUsed(usedName); err != nil {
+			return nil, fmt.Errorf("marking call identifier used: %w", err)
+		}
+		// }
 
 		var fun goast.Expr
 
-		if n.Package != "" {
-			switch sel := n.Expression.(type) {
-			case *ast.Identifier:
-				fun = &goast.SelectorExpr{
-					X:   &goast.Ident{Name: n.Package},
-					Sel: component.Ident(sel),
-				}
-			case *ast.Selector:
-				var fields []*goast.Ident
+		// TODO: check if still required.
+		// if n.Package != "" {
+		// 	switch sel := n.Expr.(type) {
+		// 	case *ast.Identifier:
+		// 		fun = &goast.SelectorExpr{
+		// 			X:   &goast.Ident{Name: n.Package},
+		// 			Sel: component.Ident(sel),
+		// 		}
+		// 	case *ast.Selector:
+		// 		var fields []*goast.Ident
 
-				selExpr := sel.Expression
+		// 		selExpr := sel.Expr
 
-			selCallLoop:
-				for {
-					switch subsel := selExpr.(type) {
-					case *ast.Selector:
-						fields = append(fields, component.Ident(subsel.Field))
-						selExpr = subsel.Expression
-					case *ast.Identifier:
-						fields = append(fields, component.Ident(subsel))
-						break selCallLoop
-					default:
-						return nil, fmt.Errorf("unexpected type %T encounterd in selector call expression", selExpr)
-					}
-				}
+		// 	selCallLoop:
+		// 		for {
+		// 			switch subsel := selExpr.(type) {
+		// 			case *ast.Selector:
+		// 				fields = append(fields, component.Ident(subsel.Field))
+		// 				selExpr = subsel.Expr
+		// 			case *ast.Identifier:
+		// 				fields = append(fields, component.Ident(subsel))
+		// 				break selCallLoop
+		// 			default:
+		// 				return nil, fmt.Errorf("unexpected type %T encounterd in selector call expression", selExpr)
+		// 			}
+		// 		}
 
-				var x goast.Expr = &goast.Ident{Name: n.Package}
+		// 		var x goast.Expr = &goast.Ident{Name: n.Package}
 
-				for _, field := range slices.Backward(fields) {
-					x = &goast.SelectorExpr{
-						X:   x,
-						Sel: field,
-					}
-				}
+		// 		for _, field := range slices.Backward(fields) {
+		// 			x = &goast.SelectorExpr{
+		// 				X:   x,
+		// 				Sel: field,
+		// 			}
+		// 		}
 
-				fun = &goast.SelectorExpr{
-					X:   x,
-					Sel: component.Ident(sel.Field),
-				}
-			default:
-				return nil, fmt.Errorf("unexpected type in call expression: %T", sel)
-			}
-		} else {
-			expr, err := t.convertExpr(n.Expression)
-			if err != nil {
-				return nil, err
-			}
-
-			fun = expr
+		// 		fun = &goast.SelectorExpr{
+		// 			X:   x,
+		// 			Sel: component.Ident(sel.Field),
+		// 		}
+		// 	default:
+		// 		return nil, fmt.Errorf("unexpected type in call expression: %T", sel)
+		// 	}
+		// } else {
+		expr, err := t.convertExpr(t.Expr(n.Expr))
+		if err != nil {
+			return nil, err
 		}
+
+		fun = expr
+		// }
 
 		// Wrap in IndexExpr/IndexListExpr for generic calls with type arguments.
 		if len(n.TypeArgs) > 0 {
@@ -240,7 +238,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		for _, arg := range n.Arguments {
-			goarg, err := t.convertExpr(arg)
+			goarg, err := t.convertExpr(t.Expr(arg))
 			if err != nil {
 				return nil, fmt.Errorf("converting call argument: %w", err)
 			}
@@ -285,33 +283,33 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 
 		return ident, nil
 	case *ast.Index:
-		ident, err := t.convertExpr(n.Identifier)
+		ex, err := t.convertExpr(t.Expr(n.Expr))
 		if err != nil {
 			return nil, fmt.Errorf("converting identifier: %w", err)
 		}
 
-		index, err := t.convertExpr(n.Index)
+		index, err := t.convertExpr(t.Expr(n.Index))
 		if err != nil {
 			return nil, fmt.Errorf("converting index: %w", err)
 		}
 
 		return &goast.IndexExpr{
-			X:     ident,
+			X:     ex,
 			Index: index,
 		}, nil
 	case *ast.Infix:
-		lhs, err := t.convertExpr(n.Left)
+		lhs, err := t.convertExpr(t.Expr(n.Left))
 		if err != nil {
 			return nil, fmt.Errorf("converting lhs: %w", err)
 		}
 
-		rhs, err := t.convertExpr(n.Right)
+		rhs, err := t.convertExpr(t.Expr(n.Right))
 		if err != nil {
 			return nil, fmt.Errorf("converting rhs: %w", err)
 		}
 
 		// Use bytes.Equal for ascii type.
-		switch n.Left.Type().Kind() {
+		switch t.Expr(n.Left).Type().Kind() {
 		case types.ASCII:
 			return &goast.CallExpr{
 				Fun: &goast.SelectorExpr{
@@ -568,7 +566,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		hasASCIIKey := mType.Key.Kind() == types.ASCII
 
 		for i, pair := range n.Pairs {
-			keyExpr, err := t.convertExpr(pair.Key)
+			keyExpr, err := t.convertExpr(t.Expr(pair.Key))
 			if err != nil {
 				return nil, fmt.Errorf("converting map literal key %d: %w", i, err)
 			}
@@ -577,7 +575,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				// Convert ascii literal keys to utf8 literals, since Go map keys must be comparable and byte slices are not.
 				var indexExpr goast.Expr
 
-				keyAlias, ok := pair.Key.Type().(*types.Alias)
+				keyAlias, ok := t.Expr(pair.Key).Type().(*types.Alias)
 				if ok {
 					indexExpr = &goast.Ident{Name: component.ConvertExport(keyAlias.Name, keyAlias.Exported, keyAlias.Global) + "Hash"}
 				} else {
@@ -598,7 +596,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 					Args: []goast.Expr{keyExpr},
 				}
 			} else {
-				kExpr, err := t.convertExpr(pair.Key)
+				kExpr, err := t.convertExpr(t.Expr(pair.Key))
 				if err != nil {
 					return nil, fmt.Errorf("converting map literal key %d: %w", i, err)
 				}
@@ -606,7 +604,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 				keyExpr = kExpr
 			}
 
-			valExpr, err := t.convertExpr(pair.Value)
+			valExpr, err := t.convertExpr(t.Expr(pair.Value))
 			if err != nil {
 				return nil, fmt.Errorf("converting map literal value %d: %w", i, err)
 			}
@@ -627,7 +625,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Elts: exprs,
 		}, nil
 	case *ast.Prefix:
-		right, err := t.convertExpr(n.Right)
+		right, err := t.convertExpr(t.Expr(n.Right))
 		if err != nil {
 			return nil, err
 		}
@@ -638,7 +636,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		// Float16 has no native operators; promote to float32, apply, demote.
-		if n.Right.Type().Kind() == types.Float16 {
+		if t.Expr(n.Right).Type().Kind() == types.Float16 {
 			t.addCogImport()
 
 			return &goast.CallExpr{
@@ -658,7 +656,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		// Complex32 has no native operators; promote to complex64, apply, demote.
-		if n.Right.Type().Kind() == types.Complex32 {
+		if t.Expr(n.Right).Type().Kind() == types.Complex32 {
 			t.addCogImport()
 
 			return &goast.CallExpr{
@@ -678,7 +676,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		// Int128 uses .Neg() method for unary minus.
-		if n.Right.Type().Kind() == types.Int128 {
+		if t.Expr(n.Right).Type().Kind() == types.Int128 {
 			return &goast.CallExpr{
 				Fun: &goast.SelectorExpr{X: right, Sel: &goast.Ident{Name: "Neg"}},
 			}, nil
@@ -730,7 +728,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		for _, s := range n.Body.Statements {
-			stmt, err := t.convertStmt(s)
+			stmt, err := t.convertStmt(t.Node(s))
 			if err != nil {
 				return nil, err
 			}
@@ -760,18 +758,17 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			},
 		}, nil
 	case *ast.Selector:
+		// TODO: update to handle new selector structure with slice of fields.
+
 		// Check if this is a package import selector (pkg.Symbol).
-		if types.IsNone(n.Expression.Type()) {
+		if types.IsNone(n.Fields[0].ValueType) {
 			return &goast.SelectorExpr{
-				X:   component.IdentName(n.Expression.String()),
-				Sel: component.Ident(n.Field),
+				X:   component.Ident(n.Fields[0]),
+				Sel: component.Ident(n.Fields[1]),
 			}, nil
 		}
 
-		leftMost, err := n.LeftMost()
-		if err != nil {
-			return nil, err
-		}
+		leftMost := n.Fields[0]
 
 		name := component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
 
@@ -789,30 +786,30 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		switch leftMost.ValueType.Kind() {
 		case types.EnumKind, types.ErrorKind:
 			enumName := ident
-			enumName.Name = enumName.Name + titleCaser.String(n.Field.Name)
+			enumName.Name = enumName.Name + t.titleCaser.String(n.Fields[len(n.Fields)-1].Name)
 
 			return enumName, nil
 		case types.GenericKind:
-			selExpr, err := t.convertExpr(n.Expression)
+			selExpr, err := t.convertExpr(n.Fields[0])
 			if err != nil {
 				return nil, err
 			}
 
-			return component.Selector(selExpr, n.Field.Name), nil
+			return component.Selector(selExpr, n.Fields[len(n.Fields)-1].Name), nil
 		case types.StructKind:
 			structType, ok := leftMost.ValueType.Underlying().(*types.Struct)
 			if !ok {
 				return nil, fmt.Errorf("unable to assert struct type for %q", leftMost.Name)
 			}
 
-			field := structType.Field(n.Field.Name)
+			field := structType.Field(n.Fields[len(n.Fields)-1].Name)
 			if field != nil {
 				exported = field.Exported
 			}
 
 			return &goast.SelectorExpr{
 				X:   component.Ident(leftMost),
-				Sel: component.IdentName(component.ConvertExport(n.Field.Name, exported, false)),
+				Sel: component.IdentName(component.ConvertExport(n.Fields[len(n.Fields)-1].Name, exported, false)),
 			}, nil
 		default:
 			return nil, fmt.Errorf("%q: unknown type found for selector expression %q", n, leftMost.ValueType)
@@ -825,7 +822,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		isASCII := setType.Element.Kind() == types.ASCII
 
 		for i, v := range n.Values {
-			goExpr, err := t.convertExpr(v)
+			goExpr, err := t.convertExpr(t.Expr(v))
 			if err != nil {
 				return nil, fmt.Errorf("converting set literal value %d: %w", i, err)
 			}
@@ -899,7 +896,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		exprs := make([]goast.Expr, 0, len(n.Values))
 
 		for _, val := range n.Values {
-			expr, err := t.convertExpr(val)
+			expr, err := t.convertExpr(t.Expr(val))
 			if err != nil {
 				return nil, fmt.Errorf("converting expression in slice literal: %w", err)
 			}
@@ -907,15 +904,13 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			exprs = append(exprs, expr)
 		}
 
-		elemType, err := t.convertType(n.ElementType)
+		sliceType, err := t.convertType(n.SliceType)
 		if err != nil {
 			return nil, fmt.Errorf("converting array type: %w", err)
 		}
 
 		return &goast.CompositeLit{
-			Type: &goast.ArrayType{
-				Elt: elemType,
-			},
+			Type: sliceType,
 			Elts: exprs,
 		}, nil
 	case *ast.StructLiteral:
@@ -932,7 +927,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		}
 
 		for _, val := range n.Values {
-			expr, err := t.convertExpr(val.Value)
+			expr, err := t.convertExpr(t.Expr(val.Value))
 			if err != nil {
 				return nil, fmt.Errorf("converting expression in struct literal: %w", err)
 			}
@@ -959,7 +954,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("unknown suffix operator '%s'", n.Operator.Type.String())
 		}
 
-		ident, ok := n.Left.(*ast.Identifier)
+		ident, ok := t.Expr(n.Left).(*ast.Identifier)
 		if !ok {
 			return nil, fmt.Errorf("suffix operator applied to non-identifier")
 		}
@@ -1016,7 +1011,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 		values := make([]goast.Expr, 0, len(n.Values))
 
 		for _, v := range n.Values {
-			val, err := t.convertExpr(v)
+			val, err := t.convertExpr(t.Expr(v))
 			if err != nil {
 				return nil, fmt.Errorf("converting expression in tuple literal: %w", err)
 			}
@@ -1046,7 +1041,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			Args: []goast.Expr{component.UTF8Lit(n.Value.String())},
 		}, nil
 	case *ast.EitherLiteral:
-		expr, err := t.convertExpr(n.Value)
+		expr, err := t.convertExpr(t.Expr(n.Value))
 		if err != nil {
 			return nil, fmt.Errorf("converting either literal value: %w", err)
 		}
@@ -1078,7 +1073,7 @@ func (t *Transpiler) convertExpr(node ast.Expression) (goast.Expr, error) {
 			return nil, fmt.Errorf("unable to assert result type")
 		}
 
-		expr, err := t.convertExpr(n.Value)
+		expr, err := t.convertExpr(t.Expr(n.Value))
 		if err != nil {
 			return nil, fmt.Errorf("converting result literal value: %w", err)
 		}

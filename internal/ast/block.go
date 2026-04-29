@@ -6,42 +6,39 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Block{}
+var _ Node = &Block{}
 
 type Block struct {
-	statement
-
 	Start, End tokens.Token
-	Statements []Statement
+	Statements []NodeIndex
 }
 
-func (b *Block) Pos() (uint32, uint16) {
-	return b.Start.Ln, b.Start.Col
+func (n *Block) Pos() (uint32, uint16) {
+	return n.Start.Ln, n.Start.Col
 }
 
-func (b *Block) Hash() uint64 {
-	return hash(b)
+func (n *Block) Hash() uint64 {
+	return hash(n)
 }
 
-func (b *Block) String() string {
-	var out strings.Builder
-	b.stringTo(&out)
-
-	return out.String()
-}
-
-func (b *Block) stringTo(out *strings.Builder) {
+func (n *Block) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte('{')
 
-	for i, stmt := range b.Statements {
+	for i, stmt := range n.Statements {
 		if i == 0 {
 			_ = out.WriteByte('\n')
 		}
 
 		_ = out.WriteByte('\t')
-		stmt.stringTo(out)
+		a.nodes[stmt].StringTo(out, a)
 		_ = out.WriteByte('\n')
 	}
 
 	_ = out.WriteByte('}')
+}
+
+func (n *Block) String() string {
+	var out strings.Builder
+	n.StringTo(&out, nil)
+	return out.String()
 }

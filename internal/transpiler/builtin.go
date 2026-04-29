@@ -32,14 +32,16 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 
 		args := make([]goast.Expr, 0, len(node.Arguments))
 
-		condition, err := t.convertExpr(node.Arguments[0])
+		condition, err := t.convertExpr(t.Expr(node.Arguments[0]))
 		if err != nil {
 			return nil, fmt.Errorf("converting @if builtin condition expression: %w", err)
 		}
 
 		args = append(args, condition)
 
-		consequence, err := t.convertExpr(node.Arguments[1])
+		consequenceExpr := t.Expr(node.Arguments[1])
+
+		consequence, err := t.convertExpr(consequenceExpr)
 		if err != nil {
 			return nil, fmt.Errorf("converting @if builtin consequence: %w", err)
 		}
@@ -47,7 +49,7 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 		args = append(args, consequence)
 
 		if len(node.Arguments) == 3 {
-			alternative, err := t.convertExpr(node.Arguments[2])
+			alternative, err := t.convertExpr(t.Expr(node.Arguments[2]))
 			if err != nil {
 				return nil, fmt.Errorf("converting @if builtin alternative: %w", err)
 			}
@@ -55,7 +57,7 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 			args = append(args, alternative)
 		}
 
-		expectedIfType := node.Arguments[1].Type()
+		expectedIfType := consequenceExpr.Type()
 
 		if len(node.TypeArguments) >= 1 {
 			expectedIfType = node.TypeArguments[0]
@@ -100,12 +102,14 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 		var capacity goast.Expr
 
 		if len(node.Arguments) == 1 {
-			capacity, err = t.convertExpr(node.Arguments[0])
+			capacityExpr := t.Expr(node.Arguments[0])
+
+			capacity, err = t.convertExpr(capacityExpr)
 			if err != nil {
 				return nil, fmt.Errorf("converting @map builtin capacity argument: %w", err)
 			}
 
-			switch node.Arguments[0].(type) {
+			switch capacityExpr.(type) {
 			case *ast.Prefix:
 				return nil, errors.New("@map capacity must be positive")
 			}
@@ -117,14 +121,17 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 			return nil, fmt.Errorf("print expects 1 argument, got %d", len(node.Arguments))
 		}
 
-		arg, err := t.convertExpr(node.Arguments[0])
+		argExpr := t.Expr(node.Arguments[0])
+
+		arg, err := t.convertExpr(argExpr)
 		if err != nil {
 			return nil, fmt.Errorf("converting print argument: %w", err)
 		}
 
 		// Print underlying value of enum/error instead of enum itself.
-		if node.Arguments[0].Type().Kind() == types.EnumKind || node.Arguments[0].Type().Kind() == types.ErrorKind {
-			enumType, ok := node.Arguments[0].Type().(*types.Alias)
+		if argExpr.Type().Kind() == types.EnumKind ||
+			argExpr.Type().Kind() == types.ErrorKind {
+			enumType, ok := argExpr.Type().(*types.Alias)
 			if !ok {
 				return nil, fmt.Errorf("unable to cast enum to alias for @print argument")
 			}
@@ -172,12 +179,14 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 		var capacity goast.Expr
 
 		if len(node.Arguments) == 1 {
-			capacity, err = t.convertExpr(node.Arguments[0])
+			capacityExpr := t.Expr(node.Arguments[0])
+
+			capacity, err = t.convertExpr(capacityExpr)
 			if err != nil {
 				return nil, fmt.Errorf("converting @set builtin capacity argument: %w", err)
 			}
 
-			switch node.Arguments[0].(type) {
+			switch capacityExpr.(type) {
 			case *ast.Prefix:
 				return nil, errors.New("@set capacity must be positive")
 			}
@@ -198,12 +207,14 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 			return nil, fmt.Errorf("converting @slice element type: %w", err)
 		}
 
-		length, err := t.convertExpr(node.Arguments[0])
+		lenExpr := t.Expr(node.Arguments[0])
+
+		length, err := t.convertExpr(lenExpr)
 		if err != nil {
 			return nil, fmt.Errorf("converting @slice length argument: %w", err)
 		}
 
-		switch node.Arguments[0].(type) {
+		switch lenExpr.(type) {
 		case *ast.Prefix:
 			return nil, errors.New("@slice length must be positive")
 		}
@@ -211,12 +222,14 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 		var capacity goast.Expr
 
 		if len(node.Arguments) == 2 {
-			capacity, err = t.convertExpr(node.Arguments[1])
+			capacityExpr := t.Expr(node.Arguments[1])
+
+			capacity, err = t.convertExpr(capacityExpr)
 			if err != nil {
 				return nil, fmt.Errorf("converting @slice capacity argument: %w", err)
 			}
 
-			switch node.Arguments[1].(type) {
+			switch capacityExpr.(type) {
 			case *ast.Prefix:
 				return nil, errors.New("@slice capacity must be positive")
 			}
@@ -232,12 +245,14 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 			return nil, fmt.Errorf("@cast expects 1 argument, got %d", len(node.Arguments))
 		}
 
-		arg, err := t.convertExpr(node.Arguments[0])
+		argExpr := t.Expr(node.Arguments[0])
+
+		arg, err := t.convertExpr(argExpr)
 		if err != nil {
 			return nil, fmt.Errorf("converting @cast argument: %w", err)
 		}
 
-		srcKind := node.Arguments[0].Type().Kind()
+		srcKind := argExpr.Type().Kind()
 		dstKind := node.TypeArguments[0].Kind()
 
 		return t.convertCast(arg, srcKind, dstKind)

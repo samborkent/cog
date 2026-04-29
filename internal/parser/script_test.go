@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
 	"github.com/samborkent/cog/internal/parser"
 )
@@ -29,7 +30,9 @@ func parseScript(t *testing.T, src string) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	if f.Package == nil || f.Package.Identifier.Name != "main" {
+	file := f.Node(1).(*ast.File)
+
+	if file.Package == nil || file.Package.Identifier.Name != "main" {
 		t.Fatal("expected synthesized package main")
 	}
 }
