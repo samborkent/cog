@@ -70,7 +70,7 @@ func (a *AST) Free() {
 	a.arena.Free()
 }
 
-// NewNode creates a new node or expression in the AST and returns a pointer to it.
+// New creates a new node or expression in the AST and returns a pointer to it.
 func New[T any](a *AST) *T {
 	return arena.New[T](a.arena)
 }

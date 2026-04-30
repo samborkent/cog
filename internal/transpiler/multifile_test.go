@@ -49,7 +49,7 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, f := range lexed {
-		p, err := parser.NewParserWithSymbols(f.toks, symbols, false, f.name)
+		p, err := parser.NewParserWithSymbols(f.toks, symbols, false, f.name, uint16(i))
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", f.name, err)
 		}
@@ -58,7 +58,7 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 		parsers[i] = p
 	}
 
-	astFiles := make([]*ast.File, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
 	for i, f := range lexed {
 		af, err := parsers[i].ParseOnly(t.Context(), f.name)
 		if err != nil {
@@ -68,7 +68,7 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 		astFiles[i] = af
 	}
 
-	tr := transpiler.NewTranspilerWithModule("testmod", astFiles)
+	tr := transpiler.NewTranspilerWithModule("testmod", ast.MergeASTs(astFiles...))
 
 	gofiles, err := tr.TranspileFiles()
 	if err != nil {
@@ -101,7 +101,7 @@ func transpileWithModule(t *testing.T, moduleName, src string) string {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -111,7 +111,7 @@ func transpileWithModule(t *testing.T, moduleName, src string) string {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspilerWithModule(moduleName, []*ast.File{f})
+	tr := transpiler.NewTranspilerWithModule(moduleName, ast.MergeASTs(f))
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -251,7 +251,7 @@ main : proc() = {}
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0)
 	if err != nil {
 		t.Fatalf("parser init: %v", err)
 	}
@@ -261,7 +261,7 @@ main : proc() = {}
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspilerWithModule("mymod", []*ast.File{f})
+	tr := transpiler.NewTranspilerWithModule("mymod", ast.MergeASTs(f))
 
 	gofile, err := tr.Transpile()
 	if err != nil {

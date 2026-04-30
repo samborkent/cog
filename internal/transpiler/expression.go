@@ -44,7 +44,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 	case *ast.Call:
 		procType, ok := t.Expr(n.Expr).Type().(*types.Procedure)
 		if !ok {
-			return nil, fmt.Errorf("failed to assert procedure type for %q", n.Expr)
+			return nil, fmt.Errorf("failed to assert procedure type for %q", t.Expr(n.Expr))
 		}
 
 		args := make([]goast.Expr, 0, len(procType.Parameters))

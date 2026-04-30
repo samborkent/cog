@@ -153,14 +153,14 @@ func findGlobals(ctx context.Context, t testing.TB, lexed []lexedFile, symbols *
 }
 
 // compilePackage compiles a single package: FindGlobals + ParseOnly.
-func compilePackage(ctx context.Context, t testing.TB, pkg packageFiles) ([]*ast.File, *parser.SymbolTable) {
+func compilePackage(ctx context.Context, t testing.TB, pkg packageFiles) ([]*ast.AST, *parser.SymbolTable) {
 	t.Helper()
 
 	lexed := lexPackage(ctx, t, pkg)
 	symbols := parser.NewSymbolTable()
 	parsers := findGlobals(ctx, t, lexed, symbols)
 
-	astFiles := make([]*ast.File, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
 
 	for i, lf := range lexed {
 		f, err := parsers[i].ParseOnly(ctx, lf.path)
@@ -187,7 +187,7 @@ func populateImportExports(imp *parser.CogImport, symbols *parser.SymbolTable) {
 // compileProject compiles the full example project: entry package + imports.
 // It mirrors the flow in cmd/main.go: lex all → FindGlobals → compile
 // imports → populate exports → ParseOnly entry files.
-func compileProject(ctx context.Context, t testing.TB) ([]*ast.File, *parser.SymbolTable) {
+func compileProject(ctx context.Context, t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
 	t.Helper()
 
 	entry, imported := loadExamplePackages(t)
@@ -210,7 +210,7 @@ func compileProject(ctx context.Context, t testing.TB) ([]*ast.File, *parser.Sym
 	}
 
 	// Phase 3: Full parse the entry package.
-	astFiles := make([]*ast.File, len(entryLexed))
+	astFiles := make([]*ast.AST, len(entryLexed))
 
 	for i, lf := range entryLexed {
 		f, err := entryParsers[i].ParseOnly(ctx, lf.path)
@@ -307,7 +307,7 @@ func BenchmarkTranspiling(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		tr := transpiler.NewTranspiler(astFiles)
+		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 		gofiles, err := tr.TranspileFiles()
 		if err != nil {
@@ -323,7 +323,7 @@ func BenchmarkPrinting(b *testing.B) {
 	ctx := context.Background()
 	astFiles, _ := compileProject(ctx, b)
 
-	tr := transpiler.NewTranspiler(astFiles)
+	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 	gofiles, err := tr.TranspileFiles()
 	if err != nil {
@@ -354,7 +354,7 @@ func BenchmarkTranspileAndPrint(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		tr := transpiler.NewTranspiler(astFiles)
+		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 		gofiles, err := tr.TranspileFiles()
 		if err != nil {
@@ -398,7 +398,7 @@ func BenchmarkFullPipeline(b *testing.B) {
 		}
 
 		// ParseOnly entry files.
-		astFiles := make([]*ast.File, len(entryLexed))
+		astFiles := make([]*ast.AST, len(entryLexed))
 
 		for i, lf := range entryLexed {
 			f, err := entryParsers[i].ParseOnly(ctx, lf.path)
@@ -410,7 +410,7 @@ func BenchmarkFullPipeline(b *testing.B) {
 		}
 
 		// Transpile + print.
-		tr := transpiler.NewTranspiler(astFiles)
+		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 		gofiles, err := tr.TranspileFiles()
 		if err != nil {
@@ -438,7 +438,7 @@ func BenchmarkGoBuild(b *testing.B) {
 	// Compile and write imported packages.
 	for _, pkg := range imported {
 		pkgASTs, _ := compilePackage(ctx, b, pkg)
-		pkgTr := transpiler.NewTranspilerWithModule("main", pkgASTs)
+		pkgTr := transpiler.NewTranspilerWithModule("main", ast.MergeASTs(pkgASTs...))
 
 		pkgGoFiles, err := pkgTr.TranspileFiles()
 		if err != nil {
@@ -464,7 +464,7 @@ func BenchmarkGoBuild(b *testing.B) {
 
 	// Compile the full project (entry package with imports resolved).
 	astFiles, _ := compileProject(ctx, b)
-	tr := transpiler.NewTranspilerWithModule("main", astFiles)
+	tr := transpiler.NewTranspilerWithModule("main", ast.MergeASTs(astFiles...))
 
 	gofiles, err := tr.TranspileFiles()
 	if err != nil {
@@ -597,7 +597,7 @@ func BenchmarkLargeFile(b *testing.B) {
 			}
 		}
 
-		astFiles := make([]*ast.File, len(entryLexed))
+		astFiles := make([]*ast.AST, len(entryLexed))
 
 		for i, lf := range entryLexed {
 			f, err := entryParsers[i].ParseOnly(ctx, lf.path)
@@ -608,7 +608,7 @@ func BenchmarkLargeFile(b *testing.B) {
 			astFiles[i] = f
 		}
 
-		tr := transpiler.NewTranspiler(astFiles)
+		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 		gofiles, err := tr.TranspileFiles()
 		if err != nil {
@@ -636,7 +636,7 @@ func BenchmarkMultiFileTranspile(b *testing.B) {
 	b.ReportAllocs()
 
 	for b.Loop() {
-		tr := transpiler.NewTranspiler(astFiles)
+		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 		gofiles, err := tr.TranspileFiles()
 		if err != nil {

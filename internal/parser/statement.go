@@ -273,6 +273,8 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 				return p.parseSwitch(ctx)
 			}
 
+			p.advance("parseStatement :") // advance :
+
 			return p.parseTypedDeclaration(ctx, ident)
 		case tokens.Declaration:
 			// Untyped declaration

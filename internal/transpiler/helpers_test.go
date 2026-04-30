@@ -25,7 +25,7 @@ func transpile(t *testing.T, src string) string {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -35,7 +35,7 @@ func transpile(t *testing.T, src string) string {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspiler([]*ast.File{f})
+	tr := transpiler.NewTranspiler(ast.MergeASTs(f))
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -64,7 +64,7 @@ func transpileWithPrint(t *testing.T, src string) string {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -74,7 +74,7 @@ func transpileWithPrint(t *testing.T, src string) string {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspiler([]*ast.File{f})
+	tr := transpiler.NewTranspiler(ast.MergeASTs(f))
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -118,7 +118,7 @@ func mustFailTranspile(t *testing.T, src, want string) {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -128,7 +128,7 @@ func mustFailTranspile(t *testing.T, src, want string) {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspiler([]*ast.File{f})
+	tr := transpiler.NewTranspiler(ast.MergeASTs(f))
 
 	_, err = tr.Transpile()
 	if err == nil {

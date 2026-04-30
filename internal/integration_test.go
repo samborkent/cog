@@ -30,7 +30,7 @@ func transpileSource(t *testing.T, src string) string {
 		t.Fatalf("lexer error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -40,7 +40,7 @@ func transpileSource(t *testing.T, src string) string {
 		t.Fatalf("parser parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspiler([]*ast.File{f})
+	tr := transpiler.NewTranspiler(ast.MergeASTs(f))
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -158,7 +158,7 @@ func tryTranspile(ctx context.Context, src string) (string, error) {
 		return "", fmt.Errorf("lexer: %w", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0)
 	if err != nil {
 		return "", fmt.Errorf("parser init: %w", err)
 	}
@@ -168,7 +168,7 @@ func tryTranspile(ctx context.Context, src string) (string, error) {
 		return "", fmt.Errorf("parser parse: %w", err)
 	}
 
-	tr := transpiler.NewTranspiler([]*ast.File{f})
+	tr := transpiler.NewTranspiler(ast.MergeASTs(f))
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -266,7 +266,7 @@ func TestMissingPackageProducesError(t *testing.T) {
 		t.Fatalf("lexer error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -344,7 +344,7 @@ main : proc() = {}`
 		t.Fatalf("lexer error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), true, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), true, "", 0)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -895,7 +895,7 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name)
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name, uint16(i))
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", lf.name, err)
 		}
@@ -904,7 +904,8 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 		parsers[i] = p
 	}
 
-	astFiles := make([]*ast.File, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
+
 	for i, lf := range lexed {
 		f, err := parsers[i].ParseOnly(t.Context(), lf.name)
 		if err != nil {
@@ -914,7 +915,7 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 		astFiles[i] = f
 	}
 
-	tr := transpiler.NewTranspiler(astFiles)
+	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -962,7 +963,7 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name)
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name, uint16(i))
 		if err != nil {
 			return "", fmt.Errorf("parser init (%s): %w", lf.name, err)
 		}
@@ -971,7 +972,7 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 		parsers[i] = p
 	}
 
-	astFiles := make([]*ast.File, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
 	for i, lf := range lexed {
 		f, err := parsers[i].ParseOnly(t.Context(), lf.name)
 		if err != nil {
@@ -981,7 +982,7 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 		astFiles[i] = f
 	}
 
-	tr := transpiler.NewTranspiler(astFiles)
+	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -1112,7 +1113,7 @@ main : proc() = {
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false, "test.cog")
+	p, err := parser.NewParserWithSymbols(toks, symbols, false, "test.cog", 0)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -1290,7 +1291,7 @@ main : proc() = {
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false, "")
+	p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}

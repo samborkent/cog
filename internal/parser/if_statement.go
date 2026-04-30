@@ -32,8 +32,10 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 
 	expr := p.ast.Expr(condition)
 
-	if expr.Type().Kind() != types.Bool {
-		p.error(p.this(), "expected bool expression in if condition", "parseIfStatement")
+	if expr.Type().Kind() != types.Bool &&
+		expr.Type().Kind() != types.ErrorKind &&
+		expr.Type().Kind() != types.OptionKind {
+		p.error(p.this(), "expected bool, result, or option expression in if condition", "parseIfStatement")
 		return ast.ZeroNodeIndex
 	}
 
