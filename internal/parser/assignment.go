@@ -48,20 +48,10 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) ast
 		return ast.ZeroNodeIndex
 	}
 
-	if symbol.Identifier.Name != "_" &&
-		(symbol.Identifier.ValueType == nil || symbol.Identifier.ValueType == types.None) {
-		symbol.Identifier.ValueType = exprType
-	}
-
-	if symbol.Identifier.Name != "_" && symbol.Type() == types.None {
-		// TODO: this seems unnecessary, as we do the same just above.
-		p.symbols.Update(ident.Name, exprType)
-	}
-
 	// Static result analysis: if the assigned expression's type matches the
 	// result's value or error type, we know statically which variant it is.
 	// Wrap in ResultLiteral so the transpiler emits the correct Go struct.
-	if resultType, ok := exprType.Underlying().(*types.Result); ok {
+	if resultType, ok := symbol.Identifier.Type().Underlying().(*types.Result); ok {
 		if state, isVariant := resultExprState(resultType, exprType); isVariant {
 			expr = p.ast.NewResultLiteral(assignmentToken, exprType, expr, exprType.Kind() == types.ErrorKind)
 
@@ -70,6 +60,16 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) ast
 			// Reassignment from an unknown result variant invalidates previous checks.
 			p.symbols.ClearChecked(ident.Name)
 		}
+	}
+
+	if symbol.Identifier.Name != "_" &&
+		(symbol.Identifier.ValueType == nil || symbol.Identifier.ValueType == types.None) {
+		symbol.Identifier.ValueType = exprType
+	}
+
+	if symbol.Identifier.Name != "_" && symbol.Type() == types.None {
+		// TODO: this seems unnecessary, as we do the same just above.
+		p.symbols.Update(ident.Name, exprType)
 	}
 
 	return p.ast.NewAssignment(assignmentToken, symbol.Identifier, expr)

@@ -19,7 +19,7 @@ func parse(t *testing.T, src string) *ast.AST {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := NewTestParser(t, toks, true)
+	p, err := NewTestParser(t, toks, false)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}

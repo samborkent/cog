@@ -322,7 +322,7 @@ main : proc() = {
 MyErr ~ error { Fail }
 main : proc() = {
 	var r : int64 ! MyErr
-	r = 10
+	r = 10 // value literal assigned, marked as checked value
 	@print(r)
 }`)
 	})

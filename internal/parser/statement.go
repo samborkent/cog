@@ -330,7 +330,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 		case tokens.Dot:
 			if p.symbols.Outer == nil {
 				// Method declaration (only possible in global scope)
-				p.parseMethod(ctx, nil, ident.Name, false, reference)
+				return p.parseMethod(ctx, nil, ident.Name, false, reference)
 			}
 
 			fallthrough
