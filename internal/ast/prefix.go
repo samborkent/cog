@@ -38,12 +38,6 @@ func (e *Prefix) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(')')
 }
 
-func (e *Prefix) String() string {
-	var out strings.Builder
-	e.StringTo(&out, nil)
-	return out.String()
-}
-
 func (e *Prefix) Type() types.Type {
 	// Return
 	if e.Operator.Type == tokens.BitAnd {

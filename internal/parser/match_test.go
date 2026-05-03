@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -230,13 +231,13 @@ main : proc() = {}`)
 		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
 		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
 
-		s := matchStmt.String()
-		if s == "" {
-			t.Error("expected non-empty string representation")
+		if matchStmt.Token.Type != tokens.Match {
+			t.Errorf("expected token type Match, got %s", matchStmt.Token.Type)
 		}
 
-		mustContainStr(t, s, "match")
-		mustContainStr(t, s, "case")
+		if matchStmt.Cases[0].Token.Type != tokens.Case {
+			t.Errorf("expected first case token type Case, got %s", matchStmt.Cases[0].Token.Type)
+		}
 	})
 
 	t.Run("match_case_string", func(t *testing.T) {
@@ -258,27 +259,14 @@ main : proc() = {}`)
 		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
 		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
 
-		caseStr := matchStmt.Cases[0].String()
+		matchCase := matchStmt.Cases[0]
 
-		mustContainStr(t, caseStr, "case")
-		mustContainStr(t, caseStr, "~")
-	})
-}
-
-func mustContainStr(t *testing.T, got, want string) {
-	t.Helper()
-
-	if len(got) == 0 {
-		t.Errorf("output is empty, expected it to contain %q", want)
-
-		return
-	}
-
-	for i := 0; i <= len(got)-len(want); i++ {
-		if got[i:i+len(want)] == want {
-			return
+		if matchCase.Token.Type != tokens.Case {
+			t.Errorf("expected token type Case, got %s", matchCase.Token.Type)
 		}
-	}
 
-	t.Errorf("output missing %q\ngot:\n%s", want, got)
+		if !matchCase.Tilde {
+			t.Error("expected tilde flag to be true")
+		}
+	})
 }

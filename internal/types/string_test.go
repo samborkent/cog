@@ -87,7 +87,7 @@ func TestSliceString(t *testing.T) {
 func TestArrayString(t *testing.T) {
 	t.Parallel()
 
-	a := &Array{Element: Basics[UTF8], Length: mockExpr{str: "5"}}
+	a := &Array{Element: Basics[UTF8], Length: Expression{String: "5"}}
 	if got := a.String(); got != "[5]utf8" {
 		t.Errorf("Array.String() = %q, want [5]utf8", got)
 	}
@@ -269,7 +269,7 @@ func TestEnumString(t *testing.T) {
 		e := &Enum{
 			ValueType: Basics[UTF8],
 			Values: []*EnumValue{
-				{Name: "Open", Value: mockExpr{str: `"open"`}},
+				{Name: "Open", Value: Expression{String: `"open"`}},
 			},
 		}
 		got := e.String()
@@ -332,7 +332,7 @@ func TestProcedureString(t *testing.T) {
 		p := &Procedure{
 			Function: true,
 			Parameters: []*Parameter{
-				{Name: "x", Type: Basics[UTF8], Optional: true, Default: mockExpr{str: `"hi"`}},
+				{Name: "x", Type: Basics[UTF8], Optional: true, Default: &Expression{String: `"hi"`}},
 			},
 		}
 

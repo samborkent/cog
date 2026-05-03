@@ -34,8 +34,6 @@ func (n *Comment) StringTo(out *strings.Builder, _ *AST) {
 
 func (n *Comment) String() string {
 	var out strings.Builder
-
 	n.StringTo(&out, nil)
-
 	return out.String()
 }

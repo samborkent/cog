@@ -57,7 +57,11 @@ func (n *Match) StringTo(out *strings.Builder, a *AST) {
 		_, _ = out.WriteString(" := ")
 	}
 
-	a.exprs[n.Subject].StringTo(out, a)
+	if a != nil {
+		a.exprs[n.Subject].StringTo(out, a)
+	} else {
+		_, _ = out.WriteString("<expr>")
+	}
 	_, _ = out.WriteString(" {\n")
 
 	for _, c := range n.Cases {
@@ -69,10 +73,4 @@ func (n *Match) StringTo(out *strings.Builder, a *AST) {
 	}
 
 	_, _ = out.WriteString("}\n")
-}
-
-func (n *Match) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
 }

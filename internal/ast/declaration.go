@@ -59,9 +59,3 @@ func (n *Declaration) StringTo(out *strings.Builder, a *AST) {
 
 	n.Assignment.StringTo(out, a)
 }
-
-func (n *Declaration) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
-}

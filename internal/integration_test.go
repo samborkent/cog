@@ -278,6 +278,8 @@ func TestMissingPackageProducesError(t *testing.T) {
 }
 
 func TestEnumPrintsUnderlyingValue(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 Status ~ enum<utf8> {
@@ -291,8 +293,6 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
-	t.Parallel()
-
 	out, err := runGenerated(t, code)
 	if err != nil {
 		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
@@ -304,6 +304,8 @@ main : proc() = {
 }
 
 func TestDynamicVarDefaultAndOverwrite(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 dyn val : utf8 = "default"
@@ -315,8 +317,6 @@ main : proc() = {
 }`
 
 	code := transpileSource(t, src)
-
-	t.Parallel()
 
 	out, err := runGenerated(t, code)
 	if err != nil {

@@ -39,9 +39,3 @@ func (n *File) StringTo(out *strings.Builder, a *AST) {
 		_ = out.WriteByte('\n')
 	}
 }
-
-func (n *File) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
-}

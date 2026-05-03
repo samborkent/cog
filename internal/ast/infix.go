@@ -23,7 +23,7 @@ type Infix struct {
 func (a *AST) NewInfix(operator tokens.Token, infixType types.Type, left, right ExprIndex) ExprIndex {
 	infixExpr := New[Infix](a)
 	infixExpr.Operator = operator
-	infixExpr.InfixType = types.Basics[types.Bool]
+	infixExpr.InfixType = infixType
 	infixExpr.Left = left
 	infixExpr.Right = right
 	return a.AddExpr(infixExpr)
@@ -45,12 +45,6 @@ func (e *Infix) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(' ')
 	a.exprs[e.Right].StringTo(out, a)
 	_ = out.WriteByte(')')
-}
-
-func (e *Infix) String() string {
-	var out strings.Builder
-	e.StringTo(&out, nil)
-	return out.String()
 }
 
 func (e *Infix) Type() types.Type {

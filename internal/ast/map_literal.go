@@ -54,12 +54,6 @@ func (l *MapLiteral) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(')')
 }
 
-func (l *MapLiteral) String() string {
-	var out strings.Builder
-	l.StringTo(&out, nil)
-	return out.String()
-}
-
 func (l *MapLiteral) Type() types.Type {
 	return l.MapType
 }

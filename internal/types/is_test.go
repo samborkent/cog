@@ -37,9 +37,9 @@ func TestEqual(t *testing.T) {
 		{"nested slice differ", &Slice{Element: &Slice{Element: int8Type}}, &Slice{Element: &Slice{Element: int64Type}}, false},
 
 		// Arrays
-		{"same array", &Array{Element: int64Type, Length: mockExpr{str: "3"}}, &Array{Element: int64Type, Length: mockExpr{str: "3"}}, true},
-		{"different array element", &Array{Element: int8Type, Length: mockExpr{str: "3"}}, &Array{Element: int64Type, Length: mockExpr{str: "3"}}, false},
-		{"different array length", &Array{Element: int64Type, Length: mockExpr{str: "3"}}, &Array{Element: int64Type, Length: mockExpr{str: "5"}}, false},
+		{"same array", &Array{Element: int64Type, Length: Expression{String: "3"}}, &Array{Element: int64Type, Length: Expression{String: "3"}}, true},
+		{"different array element", &Array{Element: int8Type, Length: Expression{String: "3"}}, &Array{Element: int64Type, Length: Expression{String: "3"}}, false},
+		{"different array length", &Array{Element: int64Type, Length: Expression{String: "3"}}, &Array{Element: int64Type, Length: Expression{String: "5"}}, false},
 
 		// Maps
 		{"same map", &Map{Key: utf8Type, Value: int64Type}, &Map{Key: utf8Type, Value: int64Type}, true},
@@ -339,7 +339,7 @@ func TestIsIterator(t *testing.T) {
 		t.Error("IsIterator([]int64) = false")
 	}
 
-	if !IsIterator(&Array{Element: Basics[Int64], Length: mockExpr{str: "3"}}) {
+	if !IsIterator(&Array{Element: Basics[Int64], Length: Expression{String: "3"}}) {
 		t.Error("IsIterator([3]int64) = false")
 	}
 

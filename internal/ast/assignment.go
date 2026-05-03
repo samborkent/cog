@@ -37,9 +37,3 @@ func (n *Assignment) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(' ')
 	a.exprs[n.Expr].StringTo(out, a)
 }
-
-func (n *Assignment) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
-}

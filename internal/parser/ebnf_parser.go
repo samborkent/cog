@@ -167,22 +167,22 @@ func (p *Parser) term(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 		right := p.factor(ctx, exprType)
 
 		// TODO: this is a hack due to lack of known Go typing at compile time, figure out a better solution.
-		if exprType != types.None {
-			if p.this().Type == tokens.Plus {
-				if !types.IsSummable(exprType) {
-					p.error(p.this(), fmt.Sprintf("operator requires numeric or string type, got %q", exprType), "term")
-					return ast.ZeroExprIndex
-				}
-			} else {
-				// Minus
-				if !types.IsNumber(exprType) {
-					p.error(p.this(), fmt.Sprintf("operator requires numeric type, got %q", exprType), "term")
-					return ast.ZeroExprIndex
-				}
+	if exprType != types.None {
+		if operator.Type == tokens.Plus {
+			if !types.IsSummable(exprType) {
+				p.error(p.this(), fmt.Sprintf("operator requires numeric or string type, got %q", exprType), "term")
+				return ast.ZeroExprIndex
+			}
+		} else {
+			// Minus
+			if !types.IsNumber(exprType) {
+				p.error(p.this(), fmt.Sprintf("operator requires numeric type, got %q", exprType), "term")
+				return ast.ZeroExprIndex
 			}
 		}
+	}
 
-		expr = p.ast.NewInfix(operator, types.Basics[types.Bool], expr, right)
+	expr = p.ast.NewInfix(operator, exprType, expr, right)
 	}
 
 	return expr
@@ -207,7 +207,7 @@ func (p *Parser) factor(ctx context.Context, typeToken types.Type) ast.ExprIndex
 			return ast.ZeroExprIndex
 		}
 
-		expr = p.ast.NewInfix(operator, types.Basics[types.Bool], expr, right)
+		expr = p.ast.NewInfix(operator, exprType, expr, right)
 	}
 
 	return expr

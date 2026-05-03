@@ -53,12 +53,6 @@ func (e *ProcedureLiteral) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte('}')
 }
 
-func (e *ProcedureLiteral) String() string {
-	var out strings.Builder
-	e.StringTo(&out, nil)
-	return out.String()
-}
-
 func (e *ProcedureLiteral) Type() types.Type {
 	return e.ProcedureType
 }

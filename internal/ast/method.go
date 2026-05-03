@@ -56,9 +56,3 @@ func (n *Method) StringTo(out *strings.Builder, a *AST) {
 
 	a.nodes[n.Declaration].StringTo(out, a)
 }
-
-func (d *Method) String() string {
-	var out strings.Builder
-	d.StringTo(&out, nil)
-	return out.String()
-}

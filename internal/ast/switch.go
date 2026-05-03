@@ -60,9 +60,3 @@ func (n *Switch) StringTo(out *strings.Builder, a *AST) {
 
 	_ = out.WriteByte('}')
 }
-
-func (n *Switch) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
-}

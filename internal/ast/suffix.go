@@ -38,17 +38,13 @@ func (e *Suffix) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(')')
 }
 
-func (e *Suffix) String() string {
-	var out strings.Builder
-	e.StringTo(&out, nil)
-	return out.String()
-}
-
 func (e *Suffix) Type() types.Type {
-	// TODO: check if still necessary
-	// ! suffix extracts the error value from a result type.
 	if e.Operator.Type == tokens.Not {
 		return e.SuffixType.Underlying().(*types.Result).Error
+	}
+
+	if e.Operator.Type == tokens.Question {
+		return types.Basics[types.Bool]
 	}
 
 	return e.SuffixType

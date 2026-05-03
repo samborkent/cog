@@ -45,12 +45,6 @@ func (l *TupleLiteral) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte('}')
 }
 
-func (l *TupleLiteral) String() string {
-	var out strings.Builder
-	l.StringTo(&out, nil)
-	return out.String()
-}
-
 func (l *TupleLiteral) Type() types.Type {
 	return l.TupleType
 }

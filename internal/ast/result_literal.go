@@ -37,12 +37,6 @@ func (e *ResultLiteral) StringTo(out *strings.Builder, a *AST) {
 	a.exprs[e.Value].StringTo(out, a)
 }
 
-func (e *ResultLiteral) String() string {
-	var out strings.Builder
-	e.StringTo(&out, nil)
-	return out.String()
-}
-
 func (e *ResultLiteral) Type() types.Type {
 	return e.ResultType
 }

@@ -66,12 +66,6 @@ func (e *Builtin) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(')')
 }
 
-func (e *Builtin) String() string {
-	var out strings.Builder
-	e.StringTo(&out, nil)
-	return out.String()
-}
-
 func (e *Builtin) Type() types.Type {
 	return e.ReturnType
 }

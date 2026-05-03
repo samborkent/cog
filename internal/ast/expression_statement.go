@@ -31,9 +31,3 @@ func (n *ExpressionStatement) Pos() (uint32, uint16) {
 func (n *ExpressionStatement) StringTo(out *strings.Builder, a *AST) {
 	a.exprs[n.Expr].StringTo(out, a)
 }
-
-func (n *ExpressionStatement) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
-}

@@ -39,9 +39,3 @@ func (n *MatchCase) StringTo(out *strings.Builder, a *AST) {
 		a.nodes[stmt].StringTo(out, a)
 	}
 }
-
-func (n *MatchCase) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
-}

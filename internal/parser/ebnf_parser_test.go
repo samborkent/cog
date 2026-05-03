@@ -1,10 +1,10 @@
 package parser_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/types"
 )
 
 func TestExpression(t *testing.T) {
@@ -86,12 +86,12 @@ broken := Struct{
 
 	f := parse(t, src)
 
-	// Check that we have the expected statements (type alias + variable declaration)
-	if f.LenNodes() != 2 {
-		t.Fatalf("expected 2 statements, got %d", f.LenNodes())
+	file := f.Node(1).(*ast.File)
+
+	if len(file.Statements) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(file.Statements))
 	}
 
-	// The second statement should be the variable declaration with struct literal
 	declaration := stmtAs[*ast.Declaration](t, f, 1)
 
 	// Check that the value is a struct literal
@@ -100,15 +100,28 @@ broken := Struct{
 		t.Fatalf("expected struct literal, got %T", f.Expr(declaration.Assignment.Expr))
 	}
 
-	if !strings.Contains(structLiteral.StructType.String(), "Struct") {
-		t.Errorf("expected struct type with Struct, got %s", structLiteral.StructType.String())
+	aliasType, ok := structLiteral.StructType.(*types.Alias)
+	if !ok {
+		t.Fatalf("expected alias type for struct literal, got %T", structLiteral.StructType)
 	}
 
-	if !strings.Contains(structLiteral.StructType.Underlying().String(), "Field : int64") {
-		t.Errorf("expected struct type with Field : int64, got %s", structLiteral.StructType.Underlying().String())
+	if aliasType.Name != "Struct" {
+		t.Errorf("expected struct type with Struct, got %s", aliasType.Name)
 	}
 
-	// Check that the struct literal has the expected field
+	structType, ok := aliasType.Derived.(*types.Struct)
+	if !ok {
+		t.Fatalf("expected struct type for alias, got %T", aliasType.Derived)
+	}
+
+	if structType.Fields[0].Name != "Field" {
+		t.Errorf("expected field name 'Field', got %s", structType.Fields[0].Name)
+	}
+
+	if structType.Fields[0].Type.Kind() != types.Int64 {
+		t.Errorf("expected field type int64, got %s", structType.Fields[0].Type.String())
+	}
+
 	if len(structLiteral.Values) != 1 {
 		t.Fatalf("expected 1 field value, got %d", len(structLiteral.Values))
 	}
@@ -117,8 +130,9 @@ broken := Struct{
 		t.Errorf("expected field name 'Field', got %s", structLiteral.Values[0].Name)
 	}
 
-	// Check that the field value is correct (it includes type annotation)
-	if !strings.Contains(f.Expr(structLiteral.Values[0].Value).String(), "42") {
-		t.Errorf("expected field value containing '42', got %s", f.Expr(structLiteral.Values[0].Value).String())
+	intLiteral := f.Expr(structLiteral.Values[0].Value).(*ast.Int64Literal)
+
+	if intLiteral.Value != 42 {
+		t.Errorf("expected field value 42, got %d", intLiteral.Value)
 	}
 }

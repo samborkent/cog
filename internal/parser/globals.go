@@ -420,7 +420,7 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 			if enumVal != ast.ZeroExprIndex {
 				enumType.Values = append(enumType.Values, &types.EnumValue{
 					Name:  valIdent.Name,
-					Value: p.ast.Expr(enumVal),
+					Value: p.typeExpr(enumVal),
 				})
 			}
 

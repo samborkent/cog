@@ -1,46 +1,43 @@
 package ast
 
-import "arena"
+import (
+	"arena"
+	"iter"
+)
 
 // MergedAST is a structure that combines multiple ASTs into one.
 // The parser will create one AST per file, and then we will merge them together to pass it to the transpiler.
-type MergedAST struct {
-	arena  *arena.Arena
-	arenas []*arena.Arena
-
-	// The first index is the file index, the second index is node / expr index.
-	Nodes [][]Node
-	Exprs [][]Expr
-}
+type MergedAST []*AST
 
 // MergeASTs takes a slice of ASTs and merges them into a single merged AST.
-func MergeASTs(asts ...*AST) *MergedAST {
-	a := arena.NewArena()
-
-	merged := &MergedAST{
-		arena:  a,
-		arenas: arena.MakeSlice[*arena.Arena](a, len(asts), len(asts)),
-		Nodes:  arena.MakeSlice[[]Node](a, len(asts), len(asts)),
-		Exprs:  arena.MakeSlice[[]Expr](a, len(asts), len(asts)),
-	}
-
-	for i := range asts {
-		merged.arenas[i] = asts[i].arena
-		merged.Nodes[i] = asts[i].nodes
-		merged.Exprs[i] = asts[i].exprs
-	}
-
-	return merged
+func MergeASTs(asts ...*AST) MergedAST {
+	return asts
 }
 
 // Free releases the memory used by all arenas in the merged AST.
 // This should be called after the transpilation is done to free up memory.
-func (a *MergedAST) Free() {
-	for _, arena := range a.arenas {
-		arena.Free()
+func (a MergedAST) Free() {
+	for _, ast := range a {
+		ast.Free()
 	}
+}
 
-	a.arena.Free()
+func (a MergedAST) Node(fileIndex uint16, nodeIndex NodeIndex) Node {
+	return a[fileIndex].Node(nodeIndex)
+}
+
+func (a MergedAST) AllNodes() iter.Seq2[uint16, []Node] {
+	return func(yield func(uint16, []Node) bool) {
+		for i, ast := range a {
+			if !yield(uint16(i), ast.nodes) {
+				return
+			}
+		}
+	}
+}
+
+func (a MergedAST) Expr(fileIndex uint16, exprIndex ExprIndex) Expr {
+	return a[fileIndex].Expr(exprIndex)
 }
 
 // AST is a single file AST. That uses arena based memory mangement.

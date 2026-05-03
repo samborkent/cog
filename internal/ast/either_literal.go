@@ -37,12 +37,6 @@ func (l *EitherLiteral) StringTo(out *strings.Builder, a *AST) {
 	a.exprs[l.Value].StringTo(out, a)
 }
 
-func (l *EitherLiteral) String() string {
-	var out strings.Builder
-	l.StringTo(&out, nil)
-	return out.String()
-}
-
 func (l *EitherLiteral) Type() types.Type {
 	return l.EitherType
 }

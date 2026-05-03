@@ -198,8 +198,10 @@ tokenLoop:
 	}
 
 	if err := errors.Join(p.Errs...); err != nil {
-		return p.ast, fmt.Errorf("parser error:\n%w", err)
+		return p.ast, fmt.Errorf("parser error:\n%w", errors.Join(p.Errs...))
 	}
+
+	p.ast.Node(file).(*ast.File).Statements = stmts
 
 	return p.ast, nil
 }
@@ -314,4 +316,16 @@ func (p *Parser) ExprString(i ast.ExprIndex) string {
 	var out strings.Builder
 	p.ast.Expr(i).StringTo(&out, p.ast)
 	return out.String()
+}
+
+func (p *Parser) typeExpr(i ast.ExprIndex) types.Expression {
+	expr := p.ast.Expr(i)
+
+	var out strings.Builder
+	expr.StringTo(&out, p.ast)
+
+	return types.Expression{
+		Expr:   expr,
+		String: out.String(),
+	}
 }

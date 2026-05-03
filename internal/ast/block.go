@@ -36,9 +36,3 @@ func (n *Block) StringTo(out *strings.Builder, a *AST) {
 
 	_ = out.WriteByte('}')
 }
-
-func (n *Block) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
-}

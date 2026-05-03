@@ -31,12 +31,6 @@ func (e *Index) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(']')
 }
 
-func (e *Index) String() string {
-	var out strings.Builder
-	e.StringTo(&out, nil)
-	return out.String()
-}
-
 func (e *Index) Type() types.Type {
 	return e.ElemType
 }

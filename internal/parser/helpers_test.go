@@ -19,7 +19,7 @@ func parse(t *testing.T, src string) *ast.AST {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := NewTestParser(t, toks, false)
+	p, err := NewTestParser(t, toks, true)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -59,13 +59,15 @@ func parseShouldError(t *testing.T, src string) {
 func stmtAs[T ast.Node](t *testing.T, f *ast.AST, i int) T {
 	t.Helper()
 
-	if i >= f.LenNodes() {
-		t.Fatalf("expected at least %d statements, got %d", i+1, f.LenNodes())
+	file := f.Node(1).(*ast.File)
+
+	if i >= len(file.Statements) {
+		t.Fatalf("expected at least %d statements, got %d", i+1, len(file.Statements))
 	}
 
-	s, ok := f.Node(ast.NodeIndex(i)).(T)
+	s, ok := f.Node(file.Statements[i]).(T)
 	if !ok {
-		t.Fatalf("statement %d: expected %T, got %T", i, *new(T), f.Node(ast.NodeIndex(i)))
+		t.Fatalf("statement %d: expected %T, got %T", i, *new(T), f.Node(file.Statements[i]))
 	}
 
 	return s

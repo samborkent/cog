@@ -18,7 +18,7 @@ import (
 )
 
 type Transpiler struct {
-	files  *ast.MergedAST
+	files  ast.MergedAST
 	file   *ast.File // current file being processed (for line directives)
 	fileID uint16    // current file ID for context tracking
 	fset   *gotoken.FileSet
@@ -44,15 +44,15 @@ type Transpiler struct {
 
 type TranspilerOption func(*Transpiler)
 
-func NewTranspiler(files *ast.MergedAST, opts ...TranspilerOption) *Transpiler {
+func NewTranspiler(files ast.MergedAST, opts ...TranspilerOption) *Transpiler {
 	return newTranspilerWithOptions("", files, opts...)
 }
 
-func NewTranspilerWithModule(goModulePath string, files *ast.MergedAST, opts ...TranspilerOption) *Transpiler {
+func NewTranspilerWithModule(goModulePath string, files ast.MergedAST, opts ...TranspilerOption) *Transpiler {
 	return newTranspilerWithOptions(goModulePath, files, opts...)
 }
 
-func newTranspilerWithOptions(goModulePath string, files *ast.MergedAST, opts ...TranspilerOption) *Transpiler {
+func newTranspilerWithOptions(goModulePath string, files ast.MergedAST, opts ...TranspilerOption) *Transpiler {
 	t := &Transpiler{
 		files:        files,
 		fset:         gotoken.NewFileSet(),
@@ -81,7 +81,7 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	}
 
 	// Set current file.
-	t.file = t.files.Nodes[0][1].(*ast.File)
+	t.file = t.files.Node(0, 1).(*ast.File)
 
 	// Count total statements across all files.
 	totalStmts := len(t.file.Statements)
@@ -100,13 +100,13 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 
 	for _, stmt := range t.file.Statements {
 		// Skip comments already consumed by dyn field annotations.
-		if comment, ok := t.files.Nodes[0][stmt].(*ast.Comment); ok {
+		if comment, ok := t.files.Node(0, stmt).(*ast.Comment); ok {
 			if _, skip := t.skipComments[comment.Hash()]; skip {
 				continue
 			}
 		}
 
-		switch s := t.files.Nodes[0][stmt].(type) {
+		switch s := t.files.Node(0, stmt).(type) {
 		case *ast.GoImport:
 			for _, imprt := range s.Imports {
 				t.addStdLibImport(imprt.Name)
@@ -116,7 +116,7 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 		default:
 			gonodes, err := t.convertDecl(s)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("\t%s: %w", s.String(), err))
+				errs = append(errs, fmt.Errorf("\t%s: %w", t.NodeString(stmt), err))
 				continue
 			}
 
@@ -152,7 +152,7 @@ func (t *Transpiler) currentFileNeedsContext() bool {
 	// Find the file ID for the current file
 	var fileID uint16
 
-	for id, f := range t.files.Nodes {
+	for id, f := range t.files.AllNodes() {
 		if f[1] == t.file {
 			fileID = uint16(id)
 			break
@@ -170,10 +170,10 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 	}
 
 	errs := make([]error, 0)
-	gofiles := make([]*goast.File, len(t.files.Nodes))
+	gofiles := make([]*goast.File, len(t.files))
 
-	for i := range t.files.Nodes {
-		t.file = t.files.Nodes[i][1].(*ast.File)
+	for i := range t.files.AllNodes() {
+		t.file = t.files.Node(uint16(i), 1).(*ast.File)
 		t.fileID = uint16(i)
 		t.imports = make(map[string]*goast.ImportSpec)
 		t.lastSourceLine = 0
@@ -193,13 +193,13 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 		}
 
 		for _, stmt := range t.file.Statements {
-			if comment, ok := t.files.Nodes[i][stmt].(*ast.Comment); ok {
+			if comment, ok := t.files.Node(uint16(i), stmt).(*ast.Comment); ok {
 				if _, skip := t.skipComments[comment.Hash()]; skip {
 					continue
 				}
 			}
 
-			switch s := t.files.Nodes[i][stmt].(type) {
+			switch s := t.files.Node(uint16(i), stmt).(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
 					t.addStdLibImport(imprt.Name)
@@ -209,7 +209,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 			default:
 				gonodes, err := t.convertDecl(s)
 				if err != nil {
-					errs = append(errs, fmt.Errorf("\t%s: %w", s.String(), err))
+					errs = append(errs, fmt.Errorf("\t%s: %w", t.NodeString(stmt), err))
 					continue
 				}
 
@@ -245,7 +245,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 	t.lastSourceLine = 0
 
 	// Set current file.
-	t.file = t.files.Nodes[0][1].(*ast.File)
+	t.file = t.files.Node(0, 1).(*ast.File)
 
 	gofile := &goast.File{
 		Name:  goast.NewIdent("main"),
@@ -258,7 +258,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 	mainBody := make([]goast.Stmt, 0)
 
 	for _, stmt := range t.file.Statements {
-		switch s := t.files.Nodes[0][stmt].(type) {
+		switch s := t.files.Node(0, stmt).(type) {
 		case *ast.GoImport:
 			for _, imprt := range s.Imports {
 				t.addStdLibImport(imprt.Name)
@@ -268,7 +268,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 		case *ast.Method, *ast.Type:
 			gonodes, err := t.convertDecl(s)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("\t%s: %w", s.String(), err))
+				errs = append(errs, fmt.Errorf("\t%s: %w", t.NodeString(stmt), err))
 				continue
 			}
 
@@ -276,7 +276,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 		default:
 			goStmts, err := t.convertStmt(t.Node(stmt))
 			if err != nil {
-				errs = append(errs, fmt.Errorf("\t%s: %w", s.String(), err))
+				errs = append(errs, fmt.Errorf("\t%s: %w", t.NodeString(stmt), err))
 				continue
 			}
 
@@ -325,11 +325,11 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 func (t *Transpiler) predeclareGlobals() error {
 	errs := make([]error, 0)
 
-	for id := range t.files.Nodes {
-		f := t.files.Nodes[id][1].(*ast.File)
+	for id := range t.files.AllNodes() {
+		f := t.files.Node(uint16(id), 1).(*ast.File)
 
 		for i, stmt := range f.Statements {
-			switch s := t.files.Nodes[id][stmt].(type) {
+			switch s := t.files.Node(uint16(id), stmt).(type) {
 			case *ast.Declaration:
 				name := component.ConvertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported, s.Assignment.Identifier.Global)
 
@@ -340,11 +340,11 @@ func (t *Transpiler) predeclareGlobals() error {
 					}
 
 					if s.Assignment.Expr != ast.ZeroExprIndex {
-						t.dynDefaults[name] = t.files.Exprs[id][s.Assignment.Expr]
+						t.dynDefaults[name] = t.files.Expr(uint16(id), s.Assignment.Expr)
 					}
 
 					if i+1 < len(f.Statements) {
-						if comment, ok := t.files.Nodes[id][f.Statements[i+1]].(*ast.Comment); ok {
+						if comment, ok := t.files.Node(uint16(id), f.Statements[i+1]).(*ast.Comment); ok {
 							declLn, _ := s.Pos()
 
 							commentLn, _ := comment.Pos()
@@ -365,9 +365,9 @@ func (t *Transpiler) predeclareGlobals() error {
 				}
 
 				if s.Assignment.Identifier.Name != "main" && s.Assignment.Expr != ast.ZeroExprIndex {
-					if procType, ok := t.files.Exprs[id][s.Assignment.Expr].Type().(*types.Procedure); ok && !procType.Function {
+					if procType, ok := t.files.Expr(uint16(id), s.Assignment.Expr).Type().(*types.Procedure); ok && !procType.Function {
 						// Find the file ID for this file
-						for id, file := range t.files.Nodes {
+						for id, file := range t.files.AllNodes() {
 							if file[1] == f {
 								t.needsContext[uint16(id)] = true
 								break
@@ -376,13 +376,13 @@ func (t *Transpiler) predeclareGlobals() error {
 					}
 				}
 			case *ast.Method:
-				decl := t.files.Nodes[id][s.Declaration].(*ast.Declaration)
-				assignType := t.files.Exprs[id][decl.Assignment.Expr].Type()
+				decl := t.files.Node(uint16(id), s.Declaration).(*ast.Declaration)
+				assignType := t.files.Expr(uint16(id), decl.Assignment.Expr).Type()
 
 				procType, ok := assignType.(*types.Procedure)
 				if ok && !procType.Function {
 					// Find the file ID for this file
-					for id, file := range t.files.Nodes {
+					for id, file := range t.files.AllNodes() {
 						if file[1] == f {
 							t.needsContext[uint16(id)] = true
 							break
@@ -604,9 +604,21 @@ func (t *Transpiler) setMemoryLimit() *goast.FuncDecl {
 }
 
 func (t *Transpiler) Node(i ast.NodeIndex) ast.Node {
-	return t.files.Nodes[t.fileID][i]
+	return t.files.Node(t.fileID, i)
 }
 
 func (t *Transpiler) Expr(i ast.ExprIndex) ast.Expr {
-	return t.files.Exprs[t.fileID][i]
+	return t.files.Expr(t.fileID, i)
+}
+
+func (t *Transpiler) NodeString(i ast.NodeIndex) string {
+	var out strings.Builder
+	t.Node(i).StringTo(&out, t.files[t.fileID])
+	return out.String()
+}
+
+func (t *Transpiler) ExprString(i ast.ExprIndex) string {
+	var out strings.Builder
+	t.Expr(i).StringTo(&out, t.files[t.fileID])
+	return out.String()
 }

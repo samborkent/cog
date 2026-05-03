@@ -43,7 +43,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			return nil, errors.New("unable to assert array type")
 		}
 
-		lenExpr, err := t.convertExpr(sliceType.Length.(ast.Expr))
+		lenExpr, err := t.convertExpr(sliceType.Length.Expr.(ast.Expr))
 		if err != nil {
 			return nil, fmt.Errorf("converting array length expression: %w", err)
 		}

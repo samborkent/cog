@@ -197,7 +197,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 		return &types.Array{
 			Element: elemType,
-			Length:  p.ast.Expr(lenExpr),
+			Length:  p.typeExpr(lenExpr),
 		}
 	case tokens.Map:
 		p.advance("parseType map") // consume map
@@ -721,7 +721,7 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 
 			expr := p.expression(ctx, paramType)
 			if expr != ast.ZeroExprIndex {
-				param.Default = p.ast.Expr(expr)
+				param.Default = new(p.typeExpr(expr))
 			}
 		}
 
@@ -853,7 +853,7 @@ func (p *Parser) parseEnumType(ctx context.Context, ident *ast.Identifier) types
 		if enumExpr != ast.ZeroExprIndex {
 			typ.Values = append(typ.Values, &types.EnumValue{
 				Name:  valIdent.Name,
-				Value: p.ast.Expr(enumExpr),
+				Value: p.typeExpr(enumExpr),
 			})
 		}
 
@@ -947,16 +947,21 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 			if enumExpr != ast.ZeroExprIndex {
 				typ.Values = append(typ.Values, &types.EnumValue{
 					Name:  valName,
-					Value: p.ast.Expr(enumExpr),
+					Value: p.typeExpr(enumExpr),
 				})
 			}
 		} else {
+			literal := &ast.UTF8Literal{
+				Token: tokens.Token{Type: tokens.StringLiteral, Literal: valName},
+				Value: valName,
+			}
+
 			// Typeless error: value is the variant name as a string literal.
 			typ.Values = append(typ.Values, &types.EnumValue{
 				Name: valName,
-				Value: &ast.UTF8Literal{
-					Token: tokens.Token{Type: tokens.StringLiteral, Literal: valName},
-					Value: valName,
+				Value: types.Expression{
+					Expr:   literal,
+					String: literal.String(),
 				},
 			})
 		}

@@ -6,7 +6,11 @@ type Type interface {
 	Underlying() Type
 }
 
+type Expression struct {
+	Expr   expression
+	String string
+}
+
 type expression interface {
-	String() string
 	Type() Type
 }

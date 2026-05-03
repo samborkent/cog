@@ -41,9 +41,3 @@ func (n *Parameter) StringTo(out *strings.Builder, a *AST) {
 		a.exprs[n.Default].StringTo(out, a)
 	}
 }
-
-func (n *Parameter) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
-}

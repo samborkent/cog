@@ -50,9 +50,3 @@ func (n *IfStatement) StringTo(out *strings.Builder, a *AST) {
 		n.Alternative.StringTo(out, a)
 	}
 }
-
-func (n *IfStatement) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
-}

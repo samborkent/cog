@@ -57,9 +57,3 @@ func (n *ForStatement) StringTo(out *strings.Builder, a *AST) {
 
 	n.Loop.StringTo(out, a)
 }
-
-func (n *ForStatement) String() string {
-	var out strings.Builder
-	n.StringTo(&out, nil)
-	return out.String()
-}

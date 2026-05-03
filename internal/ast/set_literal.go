@@ -47,12 +47,6 @@ func (l *SetLiteral) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(')')
 }
 
-func (l *SetLiteral) String() string {
-	var out strings.Builder
-	l.StringTo(&out, nil)
-	return out.String()
-}
-
 func (l *SetLiteral) Type() types.Type {
 	return l.SetType
 }

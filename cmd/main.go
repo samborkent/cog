@@ -241,10 +241,10 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 // compiledPackage holds the output of compiling a single cog package.
 type compiledPackage struct {
-	importPath string         // relative import path (empty for the entry package)
-	pkgName    string         // Go package name
-	files      []lexedFile    // original file paths
-	astFiles   *ast.MergedAST // parsed ASTs
+	importPath string        // relative import path (empty for the entry package)
+	pkgName    string        // Go package name
+	files      []lexedFile   // original file paths
+	astFiles   ast.MergedAST // parsed ASTs
 	symbols    *parser.SymbolTable
 }
 

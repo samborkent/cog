@@ -8,7 +8,7 @@ import (
 
 type Node interface {
 	Pos() (ln uint32, col uint16)
-	String() string
+	// String() string
 	Hash() uint64
 	StringTo(out *strings.Builder, a *AST)
 }

@@ -47,12 +47,6 @@ func (l *ArrayLiteral) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(')')
 }
 
-func (l *ArrayLiteral) String() string {
-	var out strings.Builder
-	l.StringTo(&out, nil)
-	return out.String()
-}
-
 func (l *ArrayLiteral) Type() types.Type {
 	return l.ArrayType
 }

@@ -359,7 +359,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 	exprs := make([]goast.Expr, 0, len(values))
 
 	for i, enumVal := range values {
-		val := enumVal.Value.(ast.Expr)
+		val := enumVal.Value.Expr.(ast.Expr)
 
 		expr, err := t.convertExpr(val)
 		if err != nil {

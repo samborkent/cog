@@ -42,12 +42,6 @@ func (e *GoCallExpression) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(')')
 }
 
-func (e *GoCallExpression) String() string {
-	var out strings.Builder
-	e.StringTo(&out, nil)
-	return out.String()
-}
-
 // TODO: figure out how to infer Go types and how to convert between Cog and Go types
 func (e *GoCallExpression) Type() types.Type {
 	// Currently, we cannot infer Go types.
