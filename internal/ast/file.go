@@ -17,7 +17,8 @@ func (a *AST) NewFile(name string, pkg *Package, statements []NodeIndex, contain
 	node.Package = pkg
 	node.Statements = statements
 	node.ContainsMain = containsMain
-	return a.AddNode(node)
+	a.FileIndex = a.AddNode(node)
+	return a.FileIndex
 }
 
 func (n *File) Pos() (uint32, uint16) {

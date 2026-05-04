@@ -80,15 +80,13 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 		return nil, err
 	}
 
-	// Set current file.
-	t.file = t.files.Node(0, 1).(*ast.File)
-
-	// Count total statements across all files.
-	totalStmts := len(t.file.Statements)
+	// Set current file to first file only.
+	t.file = t.files.Node(0, t.files[0].FileIndex).(*ast.File)
+	t.fileID = 0
 
 	gofile := &goast.File{
 		Name:  goast.NewIdent(t.file.Package.Identifier.Name),
-		Decls: make([]goast.Decl, 0, totalStmts),
+		Decls: make([]goast.Decl, 0, len(t.file.Statements)),
 	}
 	errs := make([]error, 0)
 
@@ -153,7 +151,7 @@ func (t *Transpiler) currentFileNeedsContext() bool {
 	var fileID uint16
 
 	for id, f := range t.files.AllNodes() {
-		if f[1] == t.file {
+		if f[t.files[id].FileIndex] == t.file {
 			fileID = uint16(id)
 			break
 		}
@@ -173,7 +171,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 	gofiles := make([]*goast.File, len(t.files))
 
 	for i := range t.files.AllNodes() {
-		t.file = t.files.Node(uint16(i), 1).(*ast.File)
+		t.file = t.files.Node(uint16(i), t.files[i].FileIndex).(*ast.File)
 		t.fileID = uint16(i)
 		t.imports = make(map[string]*goast.ImportSpec)
 		t.lastSourceLine = 0
@@ -245,7 +243,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 	t.lastSourceLine = 0
 
 	// Set current file.
-	t.file = t.files.Node(0, 1).(*ast.File)
+	t.file = t.files.Node(0, t.files[0].FileIndex).(*ast.File)
 
 	gofile := &goast.File{
 		Name:  goast.NewIdent("main"),
@@ -326,7 +324,7 @@ func (t *Transpiler) predeclareGlobals() error {
 	errs := make([]error, 0)
 
 	for id := range t.files.AllNodes() {
-		f := t.files.Node(uint16(id), 1).(*ast.File)
+		f := t.files.Node(uint16(id), t.files[id].FileIndex).(*ast.File)
 
 		for i, stmt := range f.Statements {
 			switch s := t.files.Node(uint16(id), stmt).(type) {
@@ -366,13 +364,13 @@ func (t *Transpiler) predeclareGlobals() error {
 
 				if s.Assignment.Identifier.Name != "main" && s.Assignment.Expr != ast.ZeroExprIndex {
 					if procType, ok := t.files.Expr(uint16(id), s.Assignment.Expr).Type().(*types.Procedure); ok && !procType.Function {
-						// Find the file ID for this file
-						for id, file := range t.files.AllNodes() {
-							if file[1] == f {
-								t.needsContext[uint16(id)] = true
-								break
+		// Find the file ID for this file
+							for id, file := range t.files.AllNodes() {
+								if file[t.files[id].FileIndex] == f {
+									t.needsContext[uint16(id)] = true
+									break
+								}
 							}
-						}
 					}
 				}
 			case *ast.Method:
@@ -381,13 +379,13 @@ func (t *Transpiler) predeclareGlobals() error {
 
 				procType, ok := assignType.(*types.Procedure)
 				if ok && !procType.Function {
-					// Find the file ID for this file
-					for id, file := range t.files.AllNodes() {
-						if file[1] == f {
-							t.needsContext[uint16(id)] = true
-							break
-						}
-					}
+				// Find the file ID for this file
+							for id, file := range t.files.AllNodes() {
+								if file[t.files[id].FileIndex] == f {
+									t.needsContext[uint16(id)] = true
+									break
+								}
+							}
 				}
 			case *ast.Type:
 				t.symbols.Define(component.ConvertExport(s.Identifier.Name, s.Identifier.Exported, s.Identifier.Global))

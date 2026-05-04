@@ -32,7 +32,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			return nil, nil
 		}
 
-		ident := t.symbols.Define(component.ConvertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global))
+		name := component.ConvertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global)
+		ident := t.symbols.Define(name)
+
+		// If the identifier was predeclared with a placeholder "_" name,
+		// update it to the proper name now.
+		ident.Name = name
 
 		tok := gotoken.CONST
 
@@ -241,7 +246,9 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 		if n.Receiver != nil {
 			t.symbols = NewEnclosedSymbolTable(t.symbols)
-			recIdent = t.symbols.Define(n.Receiver.Name)
+			// Create receiver ident with proper name directly
+			recIdent = &goast.Ident{Name: component.ConvertExport(n.Receiver.Name, n.Receiver.Exported, n.Receiver.Global)}
+			t.symbols.table[n.Receiver.Name] = recIdent
 		}
 
 		decls, err := t.convertDecl(t.Node(n.Declaration))

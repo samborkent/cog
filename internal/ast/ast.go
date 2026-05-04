@@ -47,6 +47,7 @@ type AST struct {
 	fileIndex uint16
 	nodes     []Node
 	exprs     []Expr
+	FileIndex NodeIndex // Index of the File node in nodes slice
 }
 
 func NewAST(fileIndex uint16, preallocationSize uint32) *AST {

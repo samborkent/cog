@@ -770,7 +770,44 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 
 		leftMost := n.Fields[0]
 
+		// Handle struct field access directly - no symbol lookup needed for local variables
+		// Check both Kind() and the underlying type for aliases
+		isStruct := false
+		var structType *types.Struct
+
+		if leftMost.ValueType.Kind() == types.StructKind {
+			isStruct = true
+			structType, _ = leftMost.ValueType.Underlying().(*types.Struct)
+		} else if alias, ok := leftMost.ValueType.(*types.Alias); ok {
+			// For aliases, check the underlying type
+			if alias.Underlying().Kind() == types.StructKind {
+				isStruct = true
+				structType, _ = alias.Underlying().(*types.Struct)
+			}
+		}
+
+		if isStruct && structType != nil {
+			field := structType.Field(n.Fields[len(n.Fields)-1].Name)
+			var exported bool
+			if field != nil {
+				exported = field.Exported
+			}
+
+			return &goast.SelectorExpr{
+				X:   component.Ident(leftMost),
+				Sel: component.IdentName(component.ConvertExport(n.Fields[len(n.Fields)-1].Name, exported, false)),
+			}, nil
+		}
+
 		name := component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
+
+		// For enum selectors, use the type name from the ValueType alias
+		if leftMost.ValueType.Kind() == types.EnumKind || leftMost.ValueType.Kind() == types.ErrorKind {
+			alias, ok := leftMost.ValueType.(*types.Alias)
+			if ok {
+				name = component.ConvertExport(alias.Name, alias.Exported, alias.Global)
+			}
+		}
 
 		ident, ok := t.symbols.Resolve(name)
 		if !ok {
@@ -780,8 +817,6 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 		if err := t.symbols.MarkUsed(name); err != nil {
 			return nil, fmt.Errorf("marking selector identifier used: %w", err)
 		}
-
-		var exported bool
 
 		switch leftMost.ValueType.Kind() {
 		case types.EnumKind, types.ErrorKind:
@@ -796,21 +831,6 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			}
 
 			return component.Selector(selExpr, n.Fields[len(n.Fields)-1].Name), nil
-		case types.StructKind:
-			structType, ok := leftMost.ValueType.Underlying().(*types.Struct)
-			if !ok {
-				return nil, fmt.Errorf("unable to assert struct type for %q", leftMost.Name)
-			}
-
-			field := structType.Field(n.Fields[len(n.Fields)-1].Name)
-			if field != nil {
-				exported = field.Exported
-			}
-
-			return &goast.SelectorExpr{
-				X:   component.Ident(leftMost),
-				Sel: component.IdentName(component.ConvertExport(n.Fields[len(n.Fields)-1].Name, exported, false)),
-			}, nil
 		default:
 			return nil, fmt.Errorf("%q: unknown type found for selector expression %q", n, leftMost.ValueType)
 		}

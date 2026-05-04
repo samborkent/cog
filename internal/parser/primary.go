@@ -245,6 +245,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				if selExpr == nil {
 					selExpr = ast.New[ast.Selector](p.ast)
 					selExpr.Token = selector
+					// Add the base identifier (e.g., 'p' in 'p.x') to Fields
+					selExpr.Fields = append(selExpr.Fields, symbol.Identifier)
 				}
 
 				var typName string

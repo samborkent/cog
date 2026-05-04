@@ -258,18 +258,19 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 			return p.parseAssignment(ctx, ident)
 		case tokens.Colon:
 			// Typed declaration or label
-			switch p.this().Type {
+			// Check if next token is a control flow keyword for labeled statements
+			switch p.next().Type {
 			case tokens.For:
-				// Labeled for statement
+				// Labeled for statement: label: for
 				return p.parseForStatement(ctx)
 			case tokens.If:
-				// Labeled if statement
+				// Labeled if statement: label: if
 				return p.parseIfStatement(ctx)
 			case tokens.Match:
-				// Labeled match statement
+				// Labeled match statement: label: match
 				return p.parseMatch(ctx)
 			case tokens.Switch:
-				// Labeled switch statement
+				// Labeled switch statement: label: switch
 				return p.parseSwitch(ctx)
 			}
 
