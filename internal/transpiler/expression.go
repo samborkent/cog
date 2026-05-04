@@ -94,6 +94,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 		// TODO: check if still required.
 		// if n.Package == "" {
 		var usedName string
+		isImportSelector := false
 
 		switch expr := t.Expr(n.Expr).(type) {
 		case *ast.Identifier:
@@ -101,10 +102,15 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 		case *ast.Selector:
 			leftMost := expr.Fields[0]
 			usedName = component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
+			// Check if this is an import selector (pkg.Symbol) - imports aren't in symbol table
+			isImportSelector = types.IsNone(leftMost.ValueType)
 		}
 
-		if err := t.symbols.MarkUsed(usedName); err != nil {
-			return nil, fmt.Errorf("marking call identifier used: %w", err)
+		// Only mark as used if it's not an import selector
+		if !isImportSelector {
+			if err := t.symbols.MarkUsed(usedName); err != nil {
+				return nil, fmt.Errorf("marking call identifier used: %w", err)
+			}
 		}
 		// }
 

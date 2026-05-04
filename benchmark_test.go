@@ -111,7 +111,7 @@ func sortedKeys(m map[string]string) []string {
 }
 
 // lexPackage lexes all files in a package and returns tokens in sorted order.
-func lexPackage(ctx context.Context, t testing.TB, pkg packageFiles) []lexedFile {
+func lexPackage(t testing.TB, pkg packageFiles) []lexedFile {
 	t.Helper()
 
 	names := sortedKeys(pkg.files)
@@ -120,7 +120,7 @@ func lexPackage(ctx context.Context, t testing.TB, pkg packageFiles) []lexedFile
 	for i, name := range names {
 		l := lexer.NewLexerWithFileID(strings.NewReader(pkg.files[name]), uint16(i))
 
-		toks, err := l.Parse(ctx)
+		toks, err := l.Parse(t.Context())
 		if err != nil {
 			t.Fatalf("lexer error (%s): %v", name, err)
 		}
@@ -133,7 +133,7 @@ func lexPackage(ctx context.Context, t testing.TB, pkg packageFiles) []lexedFile
 
 // findGlobals runs FindGlobals on all files with a shared symbol table,
 // returning the parsers for subsequent ParseOnly calls.
-func findGlobals(ctx context.Context, t testing.TB, lexed []lexedFile, symbols *parser.SymbolTable) []*parser.Parser {
+func findGlobals(t testing.TB, lexed []lexedFile, symbols *parser.SymbolTable) []*parser.Parser {
 	t.Helper()
 
 	parsers := make([]*parser.Parser, len(lexed))
@@ -144,7 +144,7 @@ func findGlobals(ctx context.Context, t testing.TB, lexed []lexedFile, symbols *
 			t.Fatalf("parser init (%s): %v", lf.path, err)
 		}
 
-		p.FindGlobals(ctx)
+		p.FindGlobals(t.Context())
 
 		parsers[i] = p
 	}
@@ -153,17 +153,17 @@ func findGlobals(ctx context.Context, t testing.TB, lexed []lexedFile, symbols *
 }
 
 // compilePackage compiles a single package: FindGlobals + ParseOnly.
-func compilePackage(ctx context.Context, t testing.TB, pkg packageFiles) ([]*ast.AST, *parser.SymbolTable) {
+func compilePackage(t testing.TB, pkg packageFiles) ([]*ast.AST, *parser.SymbolTable) {
 	t.Helper()
 
-	lexed := lexPackage(ctx, t, pkg)
+	lexed := lexPackage(t, pkg)
 	symbols := parser.NewSymbolTable()
-	parsers := findGlobals(ctx, t, lexed, symbols)
+	parsers := findGlobals(t, lexed, symbols)
 
 	astFiles := make([]*ast.AST, len(lexed))
 
 	for i, lf := range lexed {
-		f, err := parsers[i].ParseOnly(ctx, lf.path)
+		f, err := parsers[i].ParseOnly(t.Context(), lf.path)
 		if err != nil {
 			t.Fatalf("parser error (%s): %v", lf.path, err)
 		}
@@ -187,19 +187,19 @@ func populateImportExports(imp *parser.CogImport, symbols *parser.SymbolTable) {
 // compileProject compiles the full example project: entry package + imports.
 // It mirrors the flow in cmd/main.go: lex all → FindGlobals → compile
 // imports → populate exports → ParseOnly entry files.
-func compileProject(ctx context.Context, t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
+func compileProject(t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
 	t.Helper()
 
 	entry, imported := loadExamplePackages(t)
 
 	// Phase 1: Lex and FindGlobals for the entry package.
-	entryLexed := lexPackage(ctx, t, entry)
+	entryLexed := lexPackage(t, entry)
 	entrySymbols := parser.NewSymbolTable()
-	entryParsers := findGlobals(ctx, t, entryLexed, entrySymbols)
+	entryParsers := findGlobals(t, entryLexed, entrySymbols)
 
 	// Phase 2: Compile imported packages and populate exports.
 	for _, pkg := range imported {
-		_, pkgSymbols := compilePackage(ctx, t, pkg)
+		_, pkgSymbols := compilePackage(t, pkg)
 
 		// Find the CogImport in the entry symbol table that matches this package.
 		for _, imp := range entrySymbols.CogImports() {
@@ -213,7 +213,7 @@ func compileProject(ctx context.Context, t testing.TB) ([]*ast.AST, *parser.Symb
 	astFiles := make([]*ast.AST, len(entryLexed))
 
 	for i, lf := range entryLexed {
-		f, err := entryParsers[i].ParseOnly(ctx, lf.path)
+		f, err := entryParsers[i].ParseOnly(t.Context(), lf.path)
 		if err != nil {
 			t.Fatalf("parser error (%s): %v", lf.path, err)
 		}
@@ -226,7 +226,6 @@ func compileProject(ctx context.Context, t testing.TB) ([]*ast.AST, *parser.Symb
 
 // BenchmarkLexing benchmarks just the lexer phase across all example files.
 func BenchmarkLexing(b *testing.B) {
-	ctx := context.Background()
 	entry, imported := loadExamplePackages(b)
 
 	// Collect all files across all packages for lexing.
@@ -250,7 +249,7 @@ func BenchmarkLexing(b *testing.B) {
 		for i, name := range names {
 			l := lexer.NewLexerWithFileID(strings.NewReader(allFiles[name]), uint16(i))
 
-			toks, err := l.Parse(ctx)
+			toks, err := l.Parse(b.Context())
 			if err != nil {
 				b.Fatalf("lexer error (%s): %v", name, err)
 			}
@@ -263,7 +262,6 @@ func BenchmarkLexing(b *testing.B) {
 // BenchmarkParsing benchmarks the parser phase (lex + FindGlobals + ParseOnly)
 // with proper multi-file symbol sharing and import resolution.
 func BenchmarkParsing(b *testing.B) {
-	ctx := context.Background()
 	entry, imported := loadExamplePackages(b)
 
 	b.ResetTimer()
@@ -271,13 +269,13 @@ func BenchmarkParsing(b *testing.B) {
 
 	for b.Loop() {
 		// Lex + FindGlobals for the entry package.
-		entryLexed := lexPackage(ctx, b, entry)
+		entryLexed := lexPackage(b, entry)
 		entrySymbols := parser.NewSymbolTable()
-		entryParsers := findGlobals(ctx, b, entryLexed, entrySymbols)
+		entryParsers := findGlobals(b, entryLexed, entrySymbols)
 
 		// Compile imported packages and populate exports.
 		for _, pkg := range imported {
-			_, pkgSymbols := compilePackage(ctx, b, pkg)
+			_, pkgSymbols := compilePackage(b, pkg)
 
 			for _, imp := range entrySymbols.CogImports() {
 				if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
@@ -288,7 +286,7 @@ func BenchmarkParsing(b *testing.B) {
 
 		// ParseOnly entry files.
 		for i, lf := range entryLexed {
-			f, err := entryParsers[i].ParseOnly(ctx, lf.path)
+			f, err := entryParsers[i].ParseOnly(b.Context(), lf.path)
 			if err != nil {
 				b.Fatalf("parser error (%s): %v", lf.path, err)
 			}
@@ -300,8 +298,7 @@ func BenchmarkParsing(b *testing.B) {
 
 // BenchmarkTranspiling benchmarks the transpiler phase (AST -> Go AST).
 func BenchmarkTranspiling(b *testing.B) {
-	ctx := context.Background()
-	astFiles, _ := compileProject(ctx, b)
+	astFiles, _ := compileProject(b)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -320,8 +317,7 @@ func BenchmarkTranspiling(b *testing.B) {
 
 // BenchmarkPrinting benchmarks the print phase (Go AST -> Go source code).
 func BenchmarkPrinting(b *testing.B) {
-	ctx := context.Background()
-	astFiles, _ := compileProject(ctx, b)
+	astFiles, _ := compileProject(b)
 
 	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
@@ -347,8 +343,7 @@ func BenchmarkPrinting(b *testing.B) {
 
 // BenchmarkTranspileAndPrint benchmarks transpile + print combined.
 func BenchmarkTranspileAndPrint(b *testing.B) {
-	ctx := context.Background()
-	astFiles, _ := compileProject(ctx, b)
+	astFiles, _ := compileProject(b)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -374,7 +369,6 @@ func BenchmarkTranspileAndPrint(b *testing.B) {
 
 // BenchmarkFullPipeline benchmarks the entire pipeline: lex + parse + transpile + print.
 func BenchmarkFullPipeline(b *testing.B) {
-	ctx := context.Background()
 	entry, imported := loadExamplePackages(b)
 
 	b.ResetTimer()
@@ -382,13 +376,13 @@ func BenchmarkFullPipeline(b *testing.B) {
 
 	for b.Loop() {
 		// Lex + FindGlobals for the entry package.
-		entryLexed := lexPackage(ctx, b, entry)
+		entryLexed := lexPackage(b, entry)
 		entrySymbols := parser.NewSymbolTable()
-		entryParsers := findGlobals(ctx, b, entryLexed, entrySymbols)
+		entryParsers := findGlobals(b, entryLexed, entrySymbols)
 
 		// Compile imported packages and populate exports.
 		for _, pkg := range imported {
-			_, pkgSymbols := compilePackage(ctx, b, pkg)
+			_, pkgSymbols := compilePackage(b, pkg)
 
 			for _, imp := range entrySymbols.CogImports() {
 				if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
@@ -401,7 +395,7 @@ func BenchmarkFullPipeline(b *testing.B) {
 		astFiles := make([]*ast.AST, len(entryLexed))
 
 		for i, lf := range entryLexed {
-			f, err := entryParsers[i].ParseOnly(ctx, lf.path)
+			f, err := entryParsers[i].ParseOnly(b.Context(), lf.path)
 			if err != nil {
 				b.Fatalf("parser error (%s): %v", lf.path, err)
 			}
@@ -430,14 +424,13 @@ func BenchmarkFullPipeline(b *testing.B) {
 
 // BenchmarkGoBuild benchmarks the Go build step for transpiled code.
 func BenchmarkGoBuild(b *testing.B) {
-	ctx := context.Background()
 	tmpDir := b.TempDir()
 
 	_, imported := loadExamplePackages(b)
 
 	// Compile and write imported packages.
 	for _, pkg := range imported {
-		pkgASTs, _ := compilePackage(ctx, b, pkg)
+		pkgASTs, _ := compilePackage(b, pkg)
 		pkgTr := transpiler.NewTranspilerWithModule("main", ast.MergeASTs(pkgASTs...))
 
 		pkgGoFiles, err := pkgTr.TranspileFiles()
@@ -463,7 +456,7 @@ func BenchmarkGoBuild(b *testing.B) {
 	}
 
 	// Compile the full project (entry package with imports resolved).
-	astFiles, _ := compileProject(ctx, b)
+	astFiles, _ := compileProject(b)
 	tr := transpiler.NewTranspilerWithModule("main", ast.MergeASTs(astFiles...))
 
 	gofiles, err := tr.TranspileFiles()
@@ -520,7 +513,7 @@ replace (
 	for b.Loop() {
 		os.RemoveAll(filepath.Join(tmpDir, "bin"))
 
-		buildCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		buildCtx, cancel := context.WithTimeout(b.Context(), 30*time.Second)
 		cmd := exec.CommandContext(buildCtx, "go", "build", "-o", "bin", ".")
 		cmd.Dir = tmpDir
 
@@ -575,7 +568,6 @@ func goModCacheDir(t testing.TB, module string) string {
 
 // BenchmarkLargeFile benchmarks the full pipeline for the largest file (example.cog).
 func BenchmarkLargeFile(b *testing.B) {
-	ctx := context.Background()
 	entry, imported := loadExamplePackages(b)
 
 	b.ResetTimer()
@@ -583,12 +575,12 @@ func BenchmarkLargeFile(b *testing.B) {
 
 	for b.Loop() {
 		// Full project compile — the pipeline cost is dominated by example.cog.
-		entryLexed := lexPackage(ctx, b, entry)
+		entryLexed := lexPackage(b, entry)
 		entrySymbols := parser.NewSymbolTable()
-		entryParsers := findGlobals(ctx, b, entryLexed, entrySymbols)
+		entryParsers := findGlobals(b, entryLexed, entrySymbols)
 
 		for _, pkg := range imported {
-			_, pkgSymbols := compilePackage(ctx, b, pkg)
+			_, pkgSymbols := compilePackage(b, pkg)
 
 			for _, imp := range entrySymbols.CogImports() {
 				if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
@@ -600,7 +592,7 @@ func BenchmarkLargeFile(b *testing.B) {
 		astFiles := make([]*ast.AST, len(entryLexed))
 
 		for i, lf := range entryLexed {
-			f, err := entryParsers[i].ParseOnly(ctx, lf.path)
+			f, err := entryParsers[i].ParseOnly(b.Context(), lf.path)
 			if err != nil {
 				b.Fatalf("parser error (%s): %v", lf.path, err)
 			}
@@ -629,8 +621,7 @@ func BenchmarkLargeFile(b *testing.B) {
 // BenchmarkMultiFileTranspile benchmarks transpiling multiple files together
 // using TranspileFiles (one Go file per input file).
 func BenchmarkMultiFileTranspile(b *testing.B) {
-	ctx := context.Background()
-	astFiles, _ := compileProject(ctx, b)
+	astFiles, _ := compileProject(b)
 
 	b.ResetTimer()
 	b.ReportAllocs()

@@ -74,7 +74,7 @@ func newTranspilerWithOptions(goModulePath string, files ast.MergedAST, opts ...
 }
 
 func (t *Transpiler) Transpile() (*goast.File, error) {
-	defer t.files.Free()
+	// defer t.files.Free()
 
 	if err := t.predeclareGlobals(); err != nil {
 		return nil, err
@@ -147,21 +147,11 @@ func (t *Transpiler) currentFileNeedsContext() bool {
 		return false
 	}
 
-	// Find the file ID for the current file
-	var fileID uint16
-
-	for id, f := range t.files.AllNodes() {
-		if f[t.files[id].FileIndex] == t.file {
-			fileID = uint16(id)
-			break
-		}
-	}
-
-	return t.needsContext[fileID]
+	return t.needsContext[t.fileID]
 }
 
 func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
-	defer t.files.Free()
+	// defer t.files.Free()
 
 	if err := t.predeclareGlobals(); err != nil {
 		return nil, err
@@ -237,7 +227,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 // All statements are placed inside a func main() body. Type aliases and
 // enum declarations are emitted as top-level declarations.
 func (t *Transpiler) TranspileScript() (*goast.File, error) {
-	defer t.files.Free()
+	// defer t.files.Free()
 
 	t.imports = make(map[string]*goast.ImportSpec)
 	t.lastSourceLine = 0
@@ -364,13 +354,7 @@ func (t *Transpiler) predeclareGlobals() error {
 
 				if s.Assignment.Identifier.Name != "main" && s.Assignment.Expr != ast.ZeroExprIndex {
 					if procType, ok := t.files.Expr(uint16(id), s.Assignment.Expr).Type().(*types.Procedure); ok && !procType.Function {
-		// Find the file ID for this file
-							for id, file := range t.files.AllNodes() {
-								if file[t.files[id].FileIndex] == f {
-									t.needsContext[uint16(id)] = true
-									break
-								}
-							}
+						t.needsContext[uint16(id)] = true
 					}
 				}
 			case *ast.Method:
@@ -379,13 +363,7 @@ func (t *Transpiler) predeclareGlobals() error {
 
 				procType, ok := assignType.(*types.Procedure)
 				if ok && !procType.Function {
-				// Find the file ID for this file
-							for id, file := range t.files.AllNodes() {
-								if file[t.files[id].FileIndex] == f {
-									t.needsContext[uint16(id)] = true
-									break
-								}
-							}
+					t.needsContext[uint16(id)] = true
 				}
 			case *ast.Type:
 				t.symbols.Define(component.ConvertExport(s.Identifier.Name, s.Identifier.Exported, s.Identifier.Global))

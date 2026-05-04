@@ -176,6 +176,54 @@ main : proc() = {
 		mustContain(t, main, "package main")
 		mustContain(t, main, "greet")
 	})
+
+	t.Run("cross_file_variable_reference_same_package", func(t *testing.T) {
+		t.Parallel()
+		result := transpileMultiFile(t, map[string]string{
+			"other.cog": `package main
+
+Coordinate ~ struct {
+	lat : float64
+	lon : float64
+}
+
+formatCoord : func(c : Coordinate) utf8 = {
+	return "lat"
+}
+`,
+			"main.cog": `package main
+
+Planet ~ struct {
+	radius : float64
+	mass : float64
+}
+
+main : proc() = {
+	loc : Coordinate = {
+		lat = 52.37,
+		lon = 4.89,
+	}
+	@print(formatCoord(loc))
+
+	earth : Planet = {
+		radius = 10,
+		mass = 20,
+	}
+	_ = earth.radius
+}
+`,
+		})
+
+		if len(result) != 2 {
+			t.Fatalf("expected 2 output files, got %d", len(result))
+		}
+
+		main := result["main.cog"]
+
+		// main.cog should contain the declaration of earth and reference it
+		mustContain(t, main, "earth")
+		mustContain(t, main, "radius")
+	})
 }
 
 func TestTranspileFilesWithModule(t *testing.T) {

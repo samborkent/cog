@@ -18,6 +18,10 @@ func MergeASTs(asts ...*AST) MergedAST {
 // This should be called after the transpilation is done to free up memory.
 func (a MergedAST) Free() {
 	for _, ast := range a {
+		if ast == nil {
+			panic("HOW?")
+		}
+
 		ast.Free()
 	}
 }
