@@ -253,6 +253,13 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 		}
 
 		return expr, nil
+	case *ast.Grouped:
+		inner, err := t.convertExpr(t.Expr(n.Expr))
+		if err != nil {
+			return nil, fmt.Errorf("converting grouped expression: %w", err)
+		}
+
+		return &goast.ParenExpr{X: inner}, nil
 	case *ast.Identifier:
 		name := component.ConvertExport(n.Name, n.Exported, n.Global)
 
@@ -317,12 +324,20 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 		// Use bytes.Equal for ascii type.
 		switch t.Expr(n.Left).Type().Kind() {
 		case types.ASCII:
+			// Convert RHS string literal to ASCII if needed
+			rhsConverted := rhs
+
+			if _, ok := t.Expr(n.Right).(*ast.UTF8Literal); ok {
+				// TODO: get rid of allocation
+				rhsConverted = component.ASCIILit([]byte(t.Expr(n.Right).(*ast.UTF8Literal).Value))
+			}
+
 			return &goast.CallExpr{
 				Fun: &goast.SelectorExpr{
 					X:   lhs,
 					Sel: &goast.Ident{Name: "Equal"},
 				},
-				Args: []goast.Expr{rhs},
+				Args: []goast.Expr{rhsConverted},
 			}, nil
 		case types.Complex32:
 			t.addCogImport()
@@ -797,6 +812,12 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			var exported bool
 			if field != nil {
 				exported = field.Exported
+			}
+
+			// Mark the base identifier as used if it's in the symbol table
+			baseName := component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
+			if _, ok := t.symbols.Resolve(baseName); ok {
+				_ = t.symbols.MarkUsed(baseName)
 			}
 
 			return &goast.SelectorExpr{

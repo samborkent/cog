@@ -102,11 +102,12 @@ func (p *Parser) equality(ctx context.Context, typeToken types.Type) ast.ExprInd
 			return ast.ZeroExprIndex
 		}
 
+		left := p.ast.Expr(expr)
+
 		operator := p.this()
 		p.advance("equality operator") // consume operator
 		rightIndex := p.comparison(ctx, types.None)
 
-		left := p.ast.Expr(expr)
 		right := p.ast.Expr(rightIndex)
 
 		// TODO: do we need to equalize for equality?

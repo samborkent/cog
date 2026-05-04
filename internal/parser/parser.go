@@ -45,7 +45,7 @@ func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug boo
 	p := &Parser{
 		tokens:         tokens,
 		symbols:        symbols,
-		ast:            ast.NewAST(fileID, uint32(averageNumberOfTokensPerNode*len(tokens))),
+		ast:            ast.NewAST(fileID, uint32(len(tokens)/averageNumberOfTokensPerNode)),
 		Errs:           make([]error, 0, errorPreallocationSize),
 		debug:          debug,
 		definedMethods: make(map[string]struct{}),
@@ -70,7 +70,7 @@ func NewScriptParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, deb
 		tokens:  tokens,
 		symbols: symbols,
 		// TODO: allow multi-file scripts?
-		ast:            ast.NewAST(0, uint32(averageNumberOfTokensPerNode*len(tokens))),
+		ast:            ast.NewAST(0, uint32(len(tokens)/averageNumberOfTokensPerNode)),
 		Errs:           make([]error, 0, errorPreallocationSize),
 		debug:          debug,
 		scriptMode:     true,

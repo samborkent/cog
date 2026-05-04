@@ -112,6 +112,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 		p.advance("primary literal") // consume literal
 		return p.ast.NewBoolLiteral(p.prev())
 	case tokens.LParen: // Grouped expression
+		lparenToken := p.this()
 		p.advance("primary (") // consume '('
 
 		expr := p.expression(ctx, typeToken)
@@ -123,7 +124,15 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 		p.advance("primary )") // consume ')'
 
-		return expr
+		var exprType types.Type = types.None
+		if expr != ast.ZeroExprIndex {
+			innerExpr := p.ast.Expr(expr)
+			if innerExpr != nil {
+				exprType = innerExpr.Type()
+			}
+		}
+
+		return p.ast.NewGrouped(lparenToken, expr, exprType)
 	case tokens.Identifier:
 		symbol, ok := p.symbols.Resolve(p.this().Literal)
 		if !ok {
