@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	goast "go/ast"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -139,7 +141,7 @@ func findGlobals(t testing.TB, lexed []lexedFile, symbols *parser.SymbolTable) [
 	parsers := make([]*parser.Parser, len(lexed))
 
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.path, uint16(i))
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.path, uint16(i), nil)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", lf.path, err)
 		}
@@ -224,28 +226,27 @@ func compileProject(t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
 	return astFiles, entrySymbols
 }
 
+var lexingToks []tokens.Token
+
 // BenchmarkLexing benchmarks just the lexer phase across all example files.
 func BenchmarkLexing(b *testing.B) {
-	entry, imported := loadExamplePackages(b)
-
-	// Collect all files across all packages for lexing.
-	allFiles := make(map[string]string)
-	for name, src := range entry.files {
-		allFiles[name] = src
-	}
-
-	for _, pkg := range imported {
-		for name, src := range pkg.files {
-			allFiles[name] = src
-		}
-	}
-
-	names := sortedKeys(allFiles)
-
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
+		b.StopTimer()
+		entry, imported := loadExamplePackages(b)
+
+		// Collect all files across all packages for lexing.
+		allFiles := make(map[string]string)
+		maps.Copy(allFiles, entry.files)
+
+		for _, pkg := range imported {
+			maps.Copy(allFiles, pkg.files)
+		}
+
+		names := sortedKeys(allFiles)
+		b.StartTimer()
+
 		for i, name := range names {
 			l := lexer.NewLexerWithFileID(strings.NewReader(allFiles[name]), uint16(i))
 
@@ -254,20 +255,23 @@ func BenchmarkLexing(b *testing.B) {
 				b.Fatalf("lexer error (%s): %v", name, err)
 			}
 
-			_ = toks
+			lexingToks = toks
 		}
 	}
 }
 
+var parsingAST *ast.AST
+
 // BenchmarkParsing benchmarks the parser phase (lex + FindGlobals + ParseOnly)
 // with proper multi-file symbol sharing and import resolution.
 func BenchmarkParsing(b *testing.B) {
-	entry, imported := loadExamplePackages(b)
-
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
+		b.StopTimer()
+		entry, imported := loadExamplePackages(b)
+		b.StartTimer()
+
 		// Lex + FindGlobals for the entry package.
 		entryLexed := lexPackage(b, entry)
 		entrySymbols := parser.NewSymbolTable()
@@ -291,19 +295,22 @@ func BenchmarkParsing(b *testing.B) {
 				b.Fatalf("parser error (%s): %v", lf.path, err)
 			}
 
-			_ = f
+			parsingAST = f
 		}
 	}
 }
+
+var transpiledFiles []*goast.File
 
 // BenchmarkTranspiling benchmarks the transpiler phase (AST -> Go AST).
 func BenchmarkTranspiling(b *testing.B) {
-	astFiles, _ := compileProject(b)
-
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
+		b.StopTimer()
+		astFiles, _ := compileProject(b)
+		b.StartTimer()
+
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 		gofiles, err := tr.TranspileFiles()
@@ -311,44 +318,51 @@ func BenchmarkTranspiling(b *testing.B) {
 			b.Fatalf("transpile error: %v", err)
 		}
 
-		_ = gofiles
+		transpiledFiles = gofiles
 	}
 }
+
+var printingOutput string
 
 // BenchmarkPrinting benchmarks the print phase (Go AST -> Go source code).
 func BenchmarkPrinting(b *testing.B) {
-	astFiles, _ := compileProject(b)
-
-	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
-
-	gofiles, err := tr.TranspileFiles()
-	if err != nil {
-		b.Fatalf("transpile error: %v", err)
-	}
-
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
+		b.StopTimer()
+		astFiles, _ := compileProject(b)
+
+		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
+
+		gofiles, err := tr.TranspileFiles()
+		if err != nil {
+			b.Fatalf("transpile error: %v", err)
+		}
+		b.StartTimer()
+
 		for _, gofile := range gofiles {
 			var buf bytes.Buffer
+
 			if err := tr.Print(&buf, gofile); err != nil {
 				b.Fatalf("print error: %v", err)
 			}
 
-			_ = buf.String()
+			printingOutput = buf.String()
 		}
 	}
 }
 
+var transpiledOutput string
+
 // BenchmarkTranspileAndPrint benchmarks transpile + print combined.
 func BenchmarkTranspileAndPrint(b *testing.B) {
-	astFiles, _ := compileProject(b)
-
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
+		b.StopTimer()
+		astFiles, _ := compileProject(b)
+		b.StartTimer()
+
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 		gofiles, err := tr.TranspileFiles()
@@ -362,19 +376,22 @@ func BenchmarkTranspileAndPrint(b *testing.B) {
 				b.Fatalf("print error: %v", err)
 			}
 
-			_ = buf.String()
+			transpiledOutput = buf.String()
 		}
 	}
 }
 
+var pipelineOutput string
+
 // BenchmarkFullPipeline benchmarks the entire pipeline: lex + parse + transpile + print.
 func BenchmarkFullPipeline(b *testing.B) {
-	entry, imported := loadExamplePackages(b)
-
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
+		b.StopTimer()
+		entry, imported := loadExamplePackages(b)
+		b.StartTimer()
+
 		// Lex + FindGlobals for the entry package.
 		entryLexed := lexPackage(b, entry)
 		entrySymbols := parser.NewSymbolTable()
@@ -417,68 +434,74 @@ func BenchmarkFullPipeline(b *testing.B) {
 				b.Fatalf("print error: %v", err)
 			}
 
-			_ = buf.String()
+			pipelineOutput = buf.String()
 		}
 	}
 }
 
 // BenchmarkGoBuild benchmarks the Go build step for transpiled code.
 func BenchmarkGoBuild(b *testing.B) {
-	tmpDir := b.TempDir()
+	b.ReportAllocs()
 
-	_, imported := loadExamplePackages(b)
+	for b.Loop() {
+		b.StopTimer()
 
-	// Compile and write imported packages.
-	for _, pkg := range imported {
-		pkgASTs, _ := compilePackage(b, pkg)
-		pkgTr := transpiler.NewTranspilerWithModule("main", ast.MergeASTs(pkgASTs...))
+		// b.TempDir() returns a unique directory per call, so capture it once.
+		tmpDir := b.TempDir()
 
-		pkgGoFiles, err := pkgTr.TranspileFiles()
+		_, imported := loadExamplePackages(b)
+
+		// Compile and write imported packages.
+		for _, pkg := range imported {
+			pkgASTs, _ := compilePackage(b, pkg)
+			pkgTr := transpiler.NewTranspilerWithModule("main", ast.MergeASTs(pkgASTs...))
+
+			pkgGoFiles, err := pkgTr.TranspileFiles()
+			if err != nil {
+				b.Fatalf("transpile import %s: %v", pkg.dir, err)
+			}
+
+			outDir := filepath.Join(tmpDir, filepath.FromSlash(pkg.dir))
+			if err := os.MkdirAll(outDir, 0o700); err != nil {
+				b.Fatalf("mkdir %s: %v", outDir, err)
+			}
+
+			for i, gofile := range pkgGoFiles {
+				var buf bytes.Buffer
+				if err := pkgTr.Print(&buf, gofile); err != nil {
+					b.Fatalf("print import error: %v", err)
+				}
+
+				if err := os.WriteFile(filepath.Join(outDir, fmt.Sprintf("file%d.go", i)), buf.Bytes(), 0o600); err != nil {
+					b.Fatalf("writing import file: %v", err)
+				}
+			}
+		}
+
+		// Compile the full project (entry package with imports resolved).
+		astFiles, _ := compileProject(b)
+		tr := transpiler.NewTranspilerWithModule("main", ast.MergeASTs(astFiles...))
+
+		gofiles, err := tr.TranspileFiles()
 		if err != nil {
-			b.Fatalf("transpile import %s: %v", pkg.dir, err)
+			b.Fatalf("transpile error: %v", err)
 		}
 
-		outDir := filepath.Join(tmpDir, filepath.FromSlash(pkg.dir))
-		if err := os.MkdirAll(outDir, 0o700); err != nil {
-			b.Fatalf("mkdir %s: %v", outDir, err)
-		}
-
-		for i, gofile := range pkgGoFiles {
+		for i, gofile := range gofiles {
 			var buf bytes.Buffer
-			if err := pkgTr.Print(&buf, gofile); err != nil {
-				b.Fatalf("print import error: %v", err)
+			if err := tr.Print(&buf, gofile); err != nil {
+				b.Fatalf("print error: %v", err)
 			}
 
-			if err := os.WriteFile(filepath.Join(outDir, fmt.Sprintf("file%d.go", i)), buf.Bytes(), 0o600); err != nil {
-				b.Fatalf("writing import file: %v", err)
+			if err := os.WriteFile(filepath.Join(tmpDir, fmt.Sprintf("file%d.go", i)), buf.Bytes(), 0o600); err != nil {
+				b.Fatalf("writing file: %v", err)
 			}
 		}
-	}
 
-	// Compile the full project (entry package with imports resolved).
-	astFiles, _ := compileProject(b)
-	tr := transpiler.NewTranspilerWithModule("main", ast.MergeASTs(astFiles...))
+		// Write go.mod with proper dependencies.
+		root := projectRoot(b)
 
-	gofiles, err := tr.TranspileFiles()
-	if err != nil {
-		b.Fatalf("transpile error: %v", err)
-	}
-
-	for i, gofile := range gofiles {
-		var buf bytes.Buffer
-		if err := tr.Print(&buf, gofile); err != nil {
-			b.Fatalf("print error: %v", err)
-		}
-
-		if err := os.WriteFile(filepath.Join(tmpDir, fmt.Sprintf("file%d.go", i)), buf.Bytes(), 0o600); err != nil {
-			b.Fatalf("writing file: %v", err)
-		}
-	}
-
-	// Write go.mod with proper dependencies.
-	root := projectRoot(b)
-
-	goMod := fmt.Sprintf(`module main
+		goMod := fmt.Sprintf(`module main
 
 go 1.26.2
 
@@ -495,22 +518,19 @@ replace (
 )
 `, root, filepath.Join(root, "..", "adaptive-gc"), goModCacheDir(b, "github.com/pbnjay/memory"))
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0o600); err != nil {
-		b.Fatalf("writing go.mod: %v", err)
-	}
+		if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0o600); err != nil {
+			b.Fatalf("writing go.mod: %v", err)
+		}
 
-	// Run go mod tidy to resolve transitive dependencies.
-	tidy := exec.Command("go", "mod", "tidy")
-	tidy.Dir = tmpDir
+		// Run go mod tidy to resolve transitive dependencies.
+		tidy := exec.Command("go", "mod", "tidy")
+		tidy.Dir = tmpDir
 
-	if out, err := tidy.CombinedOutput(); err != nil {
-		b.Fatalf("go mod tidy failed: %v\n%s", err, out)
-	}
+		if out, err := tidy.CombinedOutput(); err != nil {
+			b.Fatalf("go mod tidy failed: %v\n%s", err, out)
+		}
+		b.StartTimer()
 
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	for b.Loop() {
 		os.RemoveAll(filepath.Join(tmpDir, "bin"))
 
 		buildCtx, cancel := context.WithTimeout(b.Context(), 30*time.Second)
@@ -566,14 +586,17 @@ func goModCacheDir(t testing.TB, module string) string {
 	return ""
 }
 
+var largeFileOutput string
+
 // BenchmarkLargeFile benchmarks the full pipeline for the largest file (example.cog).
 func BenchmarkLargeFile(b *testing.B) {
-	entry, imported := loadExamplePackages(b)
-
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
+		b.StopTimer()
+		entry, imported := loadExamplePackages(b)
+		b.StartTimer()
+
 		// Full project compile — the pipeline cost is dominated by example.cog.
 		entryLexed := lexPackage(b, entry)
 		entrySymbols := parser.NewSymbolTable()
@@ -609,24 +632,28 @@ func BenchmarkLargeFile(b *testing.B) {
 
 		for _, gofile := range gofiles {
 			var buf bytes.Buffer
+
 			if err := tr.Print(&buf, gofile); err != nil {
 				b.Fatalf("print error: %v", err)
 			}
 
-			_ = buf.String()
+			largeFileOutput = buf.String()
 		}
 	}
 }
 
+var multiFileOutput string
+
 // BenchmarkMultiFileTranspile benchmarks transpiling multiple files together
 // using TranspileFiles (one Go file per input file).
 func BenchmarkMultiFileTranspile(b *testing.B) {
-	astFiles, _ := compileProject(b)
-
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
+		b.StopTimer()
+		astFiles, _ := compileProject(b)
+		b.StartTimer()
+
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
 		gofiles, err := tr.TranspileFiles()
@@ -640,7 +667,7 @@ func BenchmarkMultiFileTranspile(b *testing.B) {
 				b.Fatalf("print error: %v", err)
 			}
 
-			_ = buf.String()
+			multiFileOutput = buf.String()
 		}
 	}
 }

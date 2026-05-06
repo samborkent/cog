@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"arena"
 	"context"
 	"errors"
 	"fmt"
@@ -13,10 +14,9 @@ import (
 )
 
 const (
-	// TODO: base this on heuristics of the average number of tokens per node in typical source files.
-	averageNumberOfTokensPerNode = 4
-	errorPreallocationSize       = 16
-	statementPreallocationSize   = 16
+	// TODO: base this on heuristics
+	errorPreallocationSize     = 16
+	statementPreallocationSize = 16
 )
 
 type Parser struct {
@@ -37,7 +37,8 @@ type Parser struct {
 // NewParserWithSymbols creates a parser that uses the provided symbol table.
 // This allows multiple parsers (one per file) to share a single symbol table
 // so that global declarations from one file are visible in all others.
-func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool, fileName string, fileID uint16) (*Parser, error) {
+// If a is non-nil, it is used for AST node allocations.
+func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool, fileName string, fileID uint16, a *arena.Arena) (*Parser, error) {
 	if len(tokens) == 0 {
 		return nil, errors.New("no tokens provided to parser")
 	}
@@ -45,7 +46,7 @@ func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug boo
 	p := &Parser{
 		tokens:         tokens,
 		symbols:        symbols,
-		ast:            ast.NewAST(fileID, uint32(len(tokens)/averageNumberOfTokensPerNode)),
+		ast:            ast.NewAST(a, fileID, len(tokens)),
 		Errs:           make([]error, 0, errorPreallocationSize),
 		debug:          debug,
 		definedMethods: make(map[string]struct{}),
@@ -57,11 +58,12 @@ func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug boo
 // NewScriptParser creates a parser in script mode for .cogs files.
 // Script mode forbids package declarations and export keywords.
 func NewScriptParser(tokens []tokens.Token, debug bool) (*Parser, error) {
-	return NewScriptParserWithSymbols(tokens, NewSymbolTable(), debug)
+	return NewScriptParserWithSymbols(tokens, NewSymbolTable(), debug, nil)
 }
 
 // NewScriptParserWithSymbols creates a script-mode parser with a shared symbol table.
-func NewScriptParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool) (*Parser, error) {
+// If a is non-nil, it is used for AST node allocations.
+func NewScriptParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool, a *arena.Arena) (*Parser, error) {
 	if len(tokens) == 0 {
 		return nil, errors.New("no tokens provided to parser")
 	}
@@ -70,7 +72,7 @@ func NewScriptParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, deb
 		tokens:  tokens,
 		symbols: symbols,
 		// TODO: allow multi-file scripts?
-		ast:            ast.NewAST(0, uint32(len(tokens)/averageNumberOfTokensPerNode)),
+		ast:            ast.NewAST(a, 0, len(tokens)),
 		Errs:           make([]error, 0, errorPreallocationSize),
 		debug:          debug,
 		scriptMode:     true,

@@ -8,8 +8,11 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
+
+	"github.com/KimMachineGun/automemlimit/memlimit"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
@@ -18,16 +21,19 @@ import (
 	"github.com/samborkent/cog/internal/transpiler"
 )
 
+func init() {
+}
+
 var (
 	fileName        string
-	debug           bool
+	debugMode       bool
 	write           bool
 	replaceLocalCog bool
 )
 
 func main() {
 	flag.StringVar(&fileName, "file", "", "Name of .cog/.cogs file or directory containing .cog files.")
-	flag.BoolVar(&debug, "debug", false, "Enable debug parser mode.")
+	flag.BoolVar(&debugMode, "debug", false, "Enable debug parser mode.")
 	flag.BoolVar(&write, "write", false, "Write to file.")
 	flag.BoolVar(&replaceLocalCog, "replace-local-cog", false, "Add replace directive for local cog module in generated go.mod.")
 	flag.Parse()
@@ -38,6 +44,18 @@ func main() {
 	if fileName == "" {
 		panic("missing file or directory name")
 	}
+
+	// Set GOMEMLIMIT based on 90% of available memory.
+	memlimit.SetGoMemLimitWithOpts(
+		memlimit.WithRatio(0.9),
+		memlimit.WithProvider(memlimit.ApplyFallback(
+			memlimit.FromCgroup,
+			memlimit.FromSystem,
+		)),
+	)
+
+	// Disable GC to improve performance of large projects.
+	debug.SetGCPercent(-1)
 
 	files := discoverFiles(fileName)
 
@@ -133,7 +151,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewScriptParserWithSymbols(toks, symbols, debug)
+	p, err := parser.NewScriptParserWithSymbols(toks, symbols, debugMode, nil)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -397,7 +415,7 @@ func findGlobals(ctx context.Context, lexed []lexedFile, symbols *parser.SymbolT
 	parsers := make([]*parser.Parser, len(lexed))
 
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, debug, lf.path, uint16(i))
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, debugMode, lf.path, uint16(i), nil)
 		if err != nil {
 			fmt.Println(err.Error())
 			return nil

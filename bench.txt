@@ -9,7 +9,7 @@ BenchmarkGoBuild-10                            1         124992375 ns/op        
 BenchmarkLargeFile-10                         81           1262587 ns/op         1672130 B/op      16741 allocs/op
 BenchmarkMultiFileTranspile-10               129            926002 ns/op         1008683 B/op      12104 allocs/op
 
-2026-05-04 21:34
+2026-05-04 22:10
 BenchmarkLexing-10                           757            139532 ns/op          430042 B/op       1009 allocs/op
 BenchmarkParsing-10                          111           1309619 ns/op        23841760 B/op       3800 allocs/op
 BenchmarkTranspiling-10                      616            185682 ns/op          330950 B/op       8590 allocs/op
@@ -19,3 +19,25 @@ BenchmarkFullPipeline-10                      98           3196875 ns/op        
 BenchmarkGoBuild-10                            1         133044667 ns/op           14152 B/op         66 allocs/op
 BenchmarkLargeFile-10                        103           1571602 ns/op         3781801 B/op      15087 allocs/op
 BenchmarkMultiFileTranspile-10               158            751084 ns/op          744373 B/op      11288 allocs/op
+
+2026-05-04 22:27
+BenchmarkLexing-10                           981            117227 ns/op          430064 B/op            1009 allocs/op
+BenchmarkParsing-10                          105           1273127 ns/op        22887389 B/op            3800 allocs/op
+BenchmarkTranspiling-10                      580            207211 ns/op          330969 B/op            8590 allocs/op
+BenchmarkPrinting-10                         207            576468 ns/op          415364 B/op            2698 allocs/op
+BenchmarkTranspileAndPrint-10                152            782676 ns/op          744402 B/op           11288 allocs/op
+BenchmarkFullPipeline-10                     110           1076237 ns/op         1376776 B/op           15086 allocs/op
+BenchmarkGoBuild-10                            1         134640416 ns/op           13672 B/op              65 allocs/op
+BenchmarkLargeFile-10                        100           1151017 ns/op         1375888 B/op           15086 allocs/op
+BenchmarkMultiFileTranspile-10               148            802397 ns/op          744422 B/op           11288 allocs/op
+
+2026-05-06 22:28
+BenchmarkLexing-10                          1009            114846 ns/op      430064 B/op       1009 allocs/op
+BenchmarkParsing-10                          396            294556 ns/op      691347 B/op       4677 allocs/op
+BenchmarkTranspiling-10                      490            233203 ns/op      331437 B/op       8592 allocs/op
+BenchmarkPrinting-10                         187            635198 ns/op      474097 B/op       2706 allocs/op
+BenchmarkTranspileAndPrint-10                138            868813 ns/op      802278 B/op      11299 allocs/op
+BenchmarkFullPipeline-10                     100           1225316 ns/op     1505447 B/op      15982 allocs/op
+BenchmarkGoBuild-10                            1         127322083 ns/op       13704 B/op         66 allocs/op
+BenchmarkLargeFile-10                         93           1265872 ns/op     1501629 B/op      15981 allocs/op
+BenchmarkMultiFileTranspile-10               100           1209253 ns/op          804722 B/op         11299 allocs/op

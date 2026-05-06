@@ -11,7 +11,7 @@ import (
 func NewTestParser(t *testing.T, tokens []tokens.Token, debug bool) (*parser.Parser, error) {
 	t.Helper()
 
-	return parser.NewParserWithSymbols(tokens, parser.NewSymbolTable(), debug, "", 0)
+	return parser.NewParserWithSymbols(tokens, parser.NewSymbolTable(), debug, "", 0, nil)
 }
 
 func TestParse(t *testing.T) {

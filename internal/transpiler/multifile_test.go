@@ -49,7 +49,7 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, f := range lexed {
-		p, err := parser.NewParserWithSymbols(f.toks, symbols, false, f.name, uint16(i))
+		p, err := parser.NewParserWithSymbols(f.toks, symbols, false, f.name, uint16(i), nil)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", f.name, err)
 		}
@@ -101,7 +101,7 @@ func transpileWithModule(t *testing.T, moduleName, src string) string {
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -299,7 +299,7 @@ main : proc() = {}
 		t.Fatalf("lex error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0)
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init: %v", err)
 	}

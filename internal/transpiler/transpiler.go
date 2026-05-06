@@ -74,8 +74,6 @@ func newTranspilerWithOptions(goModulePath string, files ast.MergedAST, opts ...
 }
 
 func (t *Transpiler) Transpile() (*goast.File, error) {
-	// defer t.files.Free()
-
 	if err := t.predeclareGlobals(); err != nil {
 		return nil, err
 	}
@@ -151,8 +149,6 @@ func (t *Transpiler) currentFileNeedsContext() bool {
 }
 
 func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
-	// defer t.files.Free()
-
 	if err := t.predeclareGlobals(); err != nil {
 		return nil, err
 	}
@@ -227,8 +223,6 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 // All statements are placed inside a func main() body. Type aliases and
 // enum declarations are emitted as top-level declarations.
 func (t *Transpiler) TranspileScript() (*goast.File, error) {
-	// defer t.files.Free()
-
 	t.imports = make(map[string]*goast.ImportSpec)
 	t.lastSourceLine = 0
 
