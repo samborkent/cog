@@ -18,7 +18,7 @@ main : proc() = {
 	x := xs[0]
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -32,7 +32,7 @@ main : proc() = {
 		@print("or")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -47,7 +47,7 @@ main : proc() = {
 		@print("not equal")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -62,7 +62,7 @@ main : proc() = {
 		@print("greater")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -77,7 +77,7 @@ main : proc() = {
 		@print("less")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -92,7 +92,7 @@ main : proc() = {
 		@print("gte")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -107,7 +107,7 @@ main : proc() = {
 		@print("lte")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -120,7 +120,7 @@ main : proc() = {
 	x := 1 + 2 + 3
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -133,7 +133,7 @@ main : proc() = {
 	x := 10 - 3
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -146,7 +146,7 @@ main : proc() = {
 	x := 3 * 4
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -159,7 +159,7 @@ main : proc() = {
 	x := 10 / 2
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -173,7 +173,8 @@ main : proc() = {
 }`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
-		if d.Assignment.Expression == nil {
+
+		if d.Assignment.Expr == ast.ZeroExprIndex {
 			t.Fatal("expected expression in main body")
 		}
 	})
@@ -186,7 +187,7 @@ main : proc() = {
 	x := !true
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -199,7 +200,7 @@ main : proc() = {
 	s := "hello" + " " + "world"
 	@print(s)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -212,7 +213,7 @@ main : proc() = {
 	x := (1 + 2) * 3 - 4 / 2
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -229,7 +230,7 @@ main : proc() = {
 	c := Color.Red
 	@print(c)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -245,7 +246,7 @@ main : proc() = {
 	x := add(1, 2)
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -261,7 +262,7 @@ main : proc() = {
 	x := double(double(5))
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -274,7 +275,7 @@ main : proc() = {
 	x := (1 + 2)
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -287,7 +288,7 @@ main : proc() = {
 	x := false
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -307,7 +308,7 @@ main : proc() = {
 		@print(v)
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -322,7 +323,7 @@ main : proc() = {
 		@print(v)
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -344,7 +345,7 @@ main : proc() = {
 		@print("two")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -361,7 +362,7 @@ main : proc() = {
 		@print("no")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -378,7 +379,7 @@ main : proc() = {
 	m := @map<utf8, int64>(10)
 	@print(m)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -391,7 +392,7 @@ main : proc() = {
 	s := @set<int64>(5)
 	@print(s)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -404,7 +405,7 @@ main : proc() = {
 	@print("x:")
 	@print(1)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -417,7 +418,7 @@ main : proc() = {
 	xs := @slice<utf8>(0, 10)
 	@print(xs)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -430,7 +431,7 @@ main : proc() = {
 	x := @if(true, "yes", "no")
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})

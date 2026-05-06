@@ -8,17 +8,17 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseGoImport() *ast.GoImport {
-	node := &ast.GoImport{
-		Token:   p.this(),
-		Imports: make([]*ast.Identifier, 0),
-	}
+const importPreallocationSize = 4
+
+func (p *Parser) parseGoImport() ast.NodeIndex {
+	importToken := p.this()
+	imports := make([]*ast.Identifier, 0, importPreallocationSize)
 
 	p.advance("parseGoImport goimport") // consume 'goimport'
 
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), "expected '(' after goimport", "parseGoImport")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	p.advance("parseGoImport (") // consume '('
@@ -26,13 +26,13 @@ func (p *Parser) parseGoImport() *ast.GoImport {
 	for ; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; p.advance("parseGoImport loop") {
 		if p.this().Type != tokens.StringLiteral {
 			p.error(p.this(), "found non-string token in goimport list: "+p.this().Literal, "parseGoImport")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 
 		_, ok := p.symbols.ResolveGoImport(p.this().Literal)
 		if ok {
 			p.error(p.this(), "cannot redeclare Go imports", "parseGoImport")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 
 		ident := &ast.Identifier{
@@ -40,32 +40,31 @@ func (p *Parser) parseGoImport() *ast.GoImport {
 			Name:  p.this().Literal,
 		}
 
-		node.Imports = append(node.Imports, ident)
+		imports = append(imports, ident)
 		p.symbols.DefineGoImport(ident)
 	}
 
 	p.advance("parseGoImport )") // consume ')'
 
-	return node
+	return p.ast.NewGoImport(importToken, imports)
 }
 
-func (p *Parser) parseGoCallExpression(ctx context.Context) *ast.GoCallExpression {
-	node := &ast.GoCallExpression{
-		Token: p.this(),
-	}
+func (p *Parser) parseGoCallExpression(ctx context.Context) ast.ExprIndex {
+	expr := ast.New[ast.GoCallExpression](p.ast)
+	expr.Token = p.this()
 
 	p.advance("parseGoCallExpression @go") // consume @go
 
 	if p.this().Type != tokens.Dot {
 		p.error(p.this(), "expected '.' after @go", "parseGoCallExpression")
-		return nil
+		return ast.ZeroExprIndex
 	}
 
 	p.advance("parseGoCallExpression .") // consume .
 
 	if p.this().Type != tokens.Identifier {
 		p.error(p.this(), "expected identifier after '.' in @go call", "parseGoCallExpression")
-		return nil
+		return ast.ZeroExprIndex
 	}
 
 	_, ok := p.symbols.ResolveGoImport(p.this().Literal)
@@ -73,7 +72,8 @@ func (p *Parser) parseGoCallExpression(ctx context.Context) *ast.GoCallExpressio
 		p.error(p.this(), "undefined Go import", "parseGoCallExpression")
 	}
 
-	node.Import = &ast.Identifier{
+	// TODO: handle identifiers.
+	expr.Import = &ast.Identifier{
 		Token: p.this(),
 		Name:  p.this().Literal,
 	}
@@ -82,14 +82,14 @@ func (p *Parser) parseGoCallExpression(ctx context.Context) *ast.GoCallExpressio
 
 	if p.this().Type != tokens.Dot {
 		p.error(p.this(), "expected '.' after Go import", "parseGoCallExpression")
-		return nil
+		return ast.ZeroExprIndex
 	}
 
 	p.advance("parseGoCallExpression import .") // consume .
 
 	if p.this().Type != tokens.Identifier {
 		p.error(p.this(), "expected call after '.' in Go import", "parseGoCallExpression")
-		return nil
+		return ast.ZeroExprIndex
 	}
 
 	callIdent := &ast.Identifier{
@@ -103,15 +103,15 @@ func (p *Parser) parseGoCallExpression(ctx context.Context) *ast.GoCallExpressio
 	// TODO: also support imported variables / constants
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), "expected '(' after call in Go import", "parseGoCallExpression")
-		return nil
+		return ast.ZeroExprIndex
 	}
 
-	node.CallIdentifier = callIdent
-	node.Arguments = p.parseCallArguments(ctx, nil)
+	expr.CallIdentifier = callIdent
+	expr.Arguments = p.parseCallArguments(ctx, nil)
 
 	if !ok {
-		return nil
+		return ast.ZeroExprIndex
 	}
 
-	return node
+	return p.ast.AddExpr(expr)
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
 
@@ -25,16 +26,17 @@ show : func<T ~ int32 | utf8>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
+
+		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
 		block := procLit.Body
 
 		if len(block.Statements) == 0 {
 			t.Fatal("expected statements in function body")
 		}
 
-		matchStmt, ok := block.Statements[0].(*ast.Match)
+		matchStmt, ok := f.Node(block.Statements[0]).(*ast.Match)
 		if !ok {
-			t.Fatalf("expected *ast.Match, got %T", block.Statements[0])
+			t.Fatalf("expected *ast.Match, got %T", f.Node(block.Statements[0]))
 		}
 
 		if matchStmt.Binding != nil {
@@ -69,8 +71,9 @@ show : func<T ~ int32 | utf8>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+
+		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
+		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
 
 		if matchStmt.Binding == nil {
 			t.Fatal("expected binding")
@@ -100,8 +103,9 @@ show : func<T ~ any>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+
+		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
+		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
 
 		if len(matchStmt.Cases) != 1 {
 			t.Fatalf("expected 1 case, got %d", len(matchStmt.Cases))
@@ -127,8 +131,9 @@ show : func<T ~ any>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+
+		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
+		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
 
 		if !matchStmt.Cases[0].Tilde {
 			t.Error("expected tilde flag to be true")
@@ -170,8 +175,9 @@ show : func<T ~ int32 | utf8>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+
+		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
+		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
 
 		if len(matchStmt.Cases[0].Body) != 2 {
 			t.Errorf("expected 2 statements in first case, got %d", len(matchStmt.Cases[0].Body))
@@ -197,8 +203,9 @@ show : func<T ~ any>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
+
+		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
+		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
 
 		if len(matchStmt.Cases) != 2 {
 			t.Fatalf("expected 2 cases, got %d", len(matchStmt.Cases))
@@ -220,16 +227,17 @@ show : func<T ~ int32 | utf8>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
 
-		s := matchStmt.String()
-		if s == "" {
-			t.Error("expected non-empty string representation")
+		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
+		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
+
+		if matchStmt.Token.Type != tokens.Match {
+			t.Errorf("expected token type Match, got %s", matchStmt.Token.Type)
 		}
 
-		mustContainStr(t, s, "match")
-		mustContainStr(t, s, "case")
+		if matchStmt.Cases[0].Token.Type != tokens.Case {
+			t.Errorf("expected first case token type Case, got %s", matchStmt.Cases[0].Token.Type)
+		}
 	})
 
 	t.Run("match_case_string", func(t *testing.T) {
@@ -247,30 +255,18 @@ show : func<T ~ any>(x : T) = {
 main : proc() = {}`)
 
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
-		matchStmt := procLit.Body.Statements[0].(*ast.Match)
 
-		caseStr := matchStmt.Cases[0].String()
+		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
+		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
 
-		mustContainStr(t, caseStr, "case")
-		mustContainStr(t, caseStr, "~")
-	})
-}
+		matchCase := matchStmt.Cases[0]
 
-func mustContainStr(t *testing.T, got, want string) {
-	t.Helper()
-
-	if len(got) == 0 {
-		t.Errorf("output is empty, expected it to contain %q", want)
-
-		return
-	}
-
-	for i := 0; i <= len(got)-len(want); i++ {
-		if got[i:i+len(want)] == want {
-			return
+		if matchCase.Token.Type != tokens.Case {
+			t.Errorf("expected token type Case, got %s", matchCase.Token.Type)
 		}
-	}
 
-	t.Errorf("output missing %q\ngot:\n%s", want, got)
+		if !matchCase.Tilde {
+			t.Error("expected tilde flag to be true")
+		}
+	})
 }

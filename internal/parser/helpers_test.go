@@ -9,7 +9,7 @@ import (
 	"github.com/samborkent/cog/internal/lexer"
 )
 
-func parse(t *testing.T, src string) *ast.File {
+func parse(t *testing.T, src string) *ast.AST {
 	t.Helper()
 
 	l := lexer.NewLexer(strings.NewReader(src))
@@ -56,16 +56,18 @@ func parseShouldError(t *testing.T, src string) {
 	}
 }
 
-func stmtAs[T ast.Statement](t *testing.T, f *ast.File, i int) T {
+func stmtAs[T ast.Node](t *testing.T, f *ast.AST, i int) T {
 	t.Helper()
 
-	if i >= len(f.Statements) {
-		t.Fatalf("expected at least %d statements, got %d", i+1, len(f.Statements))
+	file := f.Node(1).(*ast.File)
+
+	if i >= len(file.Statements) {
+		t.Fatalf("expected at least %d statements, got %d", i+1, len(file.Statements))
 	}
 
-	s, ok := f.Statements[i].(T)
+	s, ok := f.Node(file.Statements[i]).(T)
 	if !ok {
-		t.Fatalf("statement %d: expected %T, got %T", i, *new(T), f.Statements[i])
+		t.Fatalf("statement %d: expected %T, got %T", i, *new(T), f.Node(file.Statements[i]))
 	}
 
 	return s

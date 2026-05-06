@@ -6,35 +6,39 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Branch{}
+var _ Node = &Branch{}
 
 type Branch struct {
-	statement
-
 	Token tokens.Token // break or continue token
-	Label *Identifier
+	Label *Identifier  // may be nil
 }
 
-func (b *Branch) Pos() (uint32, uint16) {
-	return b.Token.Ln, b.Token.Col
+func (a *AST) NewBranch(token tokens.Token, label *Identifier) NodeIndex {
+	node := New[Branch](a)
+	node.Token = token
+	node.Label = label
+	return a.AddNode(node)
 }
 
-func (b *Branch) Hash() uint64 {
-	return hash(b)
+func (n *Branch) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (b *Branch) stringTo(out *strings.Builder) {
-	_, _ = out.WriteString(b.Token.Type.String())
+func (n *Branch) Hash() uint64 {
+	return hash(n)
+}
 
-	if b.Label != nil {
+func (n *Branch) StringTo(out *strings.Builder, _ *AST) {
+	_, _ = out.WriteString(n.Token.Type.String())
+
+	if n.Label != nil {
 		_ = out.WriteByte(' ')
-		_, _ = out.WriteString(b.Label.Name)
+		_, _ = out.WriteString(n.Label.Name)
 	}
 }
 
-func (b *Branch) String() string {
+func (n *Branch) String() string {
 	var out strings.Builder
-	b.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

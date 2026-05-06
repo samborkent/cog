@@ -10,12 +10,14 @@ import (
 )
 
 func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
-	expr, err := t.convertExpr(n.Subject)
+	subjectExpr := t.Expr(n.Subject)
+
+	expr, err := t.convertExpr(subjectExpr)
 	if err != nil {
 		return nil, fmt.Errorf("converting match subject: %w", err)
 	}
 
-	subjectType := n.Subject.Type()
+	subjectType := subjectExpr.Type()
 
 	if subjectType.Kind() == types.EitherKind {
 		eitherType := subjectType.(*types.Either)
@@ -45,7 +47,7 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 				}
 
 				for _, stmt := range leftCase.Body {
-					convStmt, err := t.convertStmt(stmt)
+					convStmt, err := t.convertStmt(t.Node(stmt))
 					if err != nil {
 						return nil, fmt.Errorf("converting match left case statement: %w", err)
 					}
@@ -66,7 +68,7 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 				}
 
 				for _, stmt := range rightCase.Body {
-					convStmt, err := t.convertStmt(stmt)
+					convStmt, err := t.convertStmt(t.Node(stmt))
 					if err != nil {
 						return nil, fmt.Errorf("converting match right case statement: %w", err)
 					}
@@ -122,8 +124,9 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 		stmts := make([]goast.Stmt, 0, len(c.Body))
 
 		t.symbols = NewEnclosedSymbolTable(t.symbols)
+
 		for _, stmt := range c.Body {
-			convStmt, err := t.convertStmt(stmt)
+			convStmt, err := t.convertStmt(t.Node(stmt))
 			if err != nil {
 				return nil, fmt.Errorf("converting match case statement: %w", err)
 			}
@@ -143,8 +146,9 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 		stmts := make([]goast.Stmt, 0, len(n.Default.Body))
 
 		t.symbols = NewEnclosedSymbolTable(t.symbols)
+
 		for _, stmt := range n.Default.Body {
-			convStmt, err := t.convertStmt(stmt)
+			convStmt, err := t.convertStmt(t.Node(stmt))
 			if err != nil {
 				return nil, fmt.Errorf("converting match default statement: %w", err)
 			}

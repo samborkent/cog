@@ -13,7 +13,7 @@ goimport (
 	"strings"
 )
 main : proc() = {}`)
-		if len(f.Statements) < 1 {
+		if f.LenNodes() < 1 {
 			t.Fatal("expected at least goimport + main")
 		}
 	})
@@ -33,7 +33,7 @@ main : proc() = {
 	x := @go.strings.ToUpper("hello")
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})

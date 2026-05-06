@@ -30,7 +30,7 @@ func transpileSource(t *testing.T, src string) string {
 		t.Fatalf("lexer error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -40,7 +40,7 @@ func transpileSource(t *testing.T, src string) string {
 		t.Fatalf("parser parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspiler([]*ast.File{f})
+	tr := transpiler.NewTranspiler(ast.MergeASTs(f))
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -98,14 +98,19 @@ func goModCacheDir(t *testing.T, module string) string {
 	return ""
 }
 
-func runGenerated(t *testing.T, code string) (string, error) {
+// runGeneratedMulti compiles and runs multiple generated Go files, returning output.
+// The files map is filename → Go source code.
+func runGeneratedMulti(t *testing.T, files map[string]string) (string, error) {
 	t.Helper()
 
 	tmpDir := t.TempDir()
 
-	srcPath := filepath.Join(tmpDir, "main.go")
-	if err := os.WriteFile(srcPath, []byte(code), 0o600); err != nil {
-		t.Fatalf("write generated file: %v", err)
+	// Write each Go file.
+	for name, code := range files {
+		srcPath := filepath.Join(tmpDir, name)
+		if err := os.WriteFile(srcPath, []byte(code), 0o600); err != nil {
+			t.Fatalf("write generated file %s: %v", name, err)
+		}
 	}
 
 	root := projectRoot(t)
@@ -149,6 +154,13 @@ replace (
 	return string(out), err
 }
 
+func runGenerated(t *testing.T, code string) (string, error) {
+	t.Helper()
+
+	// Single file: use main.go
+	return runGeneratedMulti(t, map[string]string{"main.go": code})
+}
+
 // tryTranspile attempts to run the full pipeline and returns generated code or an error.
 func tryTranspile(ctx context.Context, src string) (string, error) {
 	l := lexer.NewLexer(strings.NewReader(src))
@@ -158,7 +170,7 @@ func tryTranspile(ctx context.Context, src string) (string, error) {
 		return "", fmt.Errorf("lexer: %w", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
 	if err != nil {
 		return "", fmt.Errorf("parser init: %w", err)
 	}
@@ -168,7 +180,7 @@ func tryTranspile(ctx context.Context, src string) (string, error) {
 		return "", fmt.Errorf("parser parse: %w", err)
 	}
 
-	tr := transpiler.NewTranspiler([]*ast.File{f})
+	tr := transpiler.NewTranspiler(ast.MergeASTs(f))
 
 	gofile, err := tr.Transpile()
 	if err != nil {
@@ -266,7 +278,7 @@ func TestMissingPackageProducesError(t *testing.T) {
 		t.Fatalf("lexer error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -278,6 +290,8 @@ func TestMissingPackageProducesError(t *testing.T) {
 }
 
 func TestEnumPrintsUnderlyingValue(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 Status ~ enum<utf8> {
@@ -291,8 +305,6 @@ main : proc() = {
 
 	code := transpileSource(t, src)
 
-	t.Parallel()
-
 	out, err := runGenerated(t, code)
 	if err != nil {
 		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
@@ -304,6 +316,8 @@ main : proc() = {
 }
 
 func TestDynamicVarDefaultAndOverwrite(t *testing.T) {
+	t.Parallel()
+
 	src := `package main
 
 dyn val : utf8 = "default"
@@ -315,8 +329,6 @@ main : proc() = {
 }`
 
 	code := transpileSource(t, src)
-
-	t.Parallel()
 
 	out, err := runGenerated(t, code)
 	if err != nil {
@@ -344,7 +356,7 @@ main : proc() = {}`
 		t.Fatalf("lexer error: %v", err)
 	}
 
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), true, "")
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), true, "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -860,8 +872,8 @@ main : proc() = {
 
 // transpilePackage runs the multi-file pipeline: lex each source, share one
 // symbol table for globals, parse each file, then transpile all files together.
-// The files map is filename → cog source.
-func transpilePackage(t *testing.T, files map[string]string) string {
+// Returns a map of Go filenames to their content.
+func transpilePackage(t *testing.T, files map[string]string) map[string]string {
 	t.Helper()
 
 	type lexedFile struct {
@@ -895,7 +907,7 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name)
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name, uint16(i), nil)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", lf.name, err)
 		}
@@ -904,7 +916,8 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 		parsers[i] = p
 	}
 
-	astFiles := make([]*ast.File, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
+
 	for i, lf := range lexed {
 		f, err := parsers[i].ParseOnly(t.Context(), lf.name)
 		if err != nil {
@@ -914,19 +927,28 @@ func transpilePackage(t *testing.T, files map[string]string) string {
 		astFiles[i] = f
 	}
 
-	tr := transpiler.NewTranspiler(astFiles)
+	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
-	gofile, err := tr.Transpile()
+	gofiles, err := tr.TranspileFiles()
 	if err != nil {
 		t.Fatalf("transpile error: %v", err)
 	}
 
-	var buf bytes.Buffer
-	if err := tr.Print(&buf, gofile); err != nil {
-		t.Fatalf("printing go ast: %v", err)
+	result := make(map[string]string, len(gofiles))
+	for i, gofile := range gofiles {
+		var buf bytes.Buffer
+		if err := tr.Print(&buf, gofile); err != nil {
+			t.Fatalf("printing go ast: %v", err)
+		}
+		// Use .go extension and numbered names to avoid collisions
+		fname := fmt.Sprintf("file%d.go", i)
+		if i == 0 {
+			fname = "main.go"
+		}
+		result[fname] = buf.String()
 	}
 
-	return buf.String()
+	return result
 }
 
 // tryTranspilePackage is the error-returning variant of transpilePackage.
@@ -962,7 +984,7 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name)
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name, uint16(i), nil)
 		if err != nil {
 			return "", fmt.Errorf("parser init (%s): %w", lf.name, err)
 		}
@@ -971,7 +993,7 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 		parsers[i] = p
 	}
 
-	astFiles := make([]*ast.File, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
 	for i, lf := range lexed {
 		f, err := parsers[i].ParseOnly(t.Context(), lf.name)
 		if err != nil {
@@ -981,16 +1003,18 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 		astFiles[i] = f
 	}
 
-	tr := transpiler.NewTranspiler(astFiles)
+	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
-	gofile, err := tr.Transpile()
+	gofiles, err := tr.TranspileFiles()
 	if err != nil {
 		return "", fmt.Errorf("transpile: %w", err)
 	}
 
 	var buf bytes.Buffer
-	if err := tr.Print(&buf, gofile); err != nil {
-		return "", fmt.Errorf("printing go ast: %w", err)
+	for _, gofile := range gofiles {
+		if err := tr.Print(&buf, gofile); err != nil {
+			return "", fmt.Errorf("printing go ast: %w", err)
+		}
 	}
 
 	return buf.String(), nil
@@ -1023,13 +1047,13 @@ main : proc() = {
 `,
 	}
 
-	code := transpilePackage(t, files)
+	goFiles := transpilePackage(t, files)
 
 	t.Parallel()
 
-	out, err := runGenerated(t, code)
+	out, err := runGeneratedMulti(t, goFiles)
 	if err != nil {
-		t.Fatalf("running generated program failed: %v\noutput:\n%s\ncode:\n%s", err, out, code)
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
 	}
 
 	if !strings.Contains(out, "1.5") || !strings.Contains(out, "2.5") {
@@ -1077,13 +1101,13 @@ main : proc() = {
 `,
 	}
 
-	code := transpilePackage(t, files)
+	goFiles := transpilePackage(t, files)
 
 	t.Parallel()
 
-	out, err := runGenerated(t, code)
+	out, err := runGeneratedMulti(t, goFiles)
 	if err != nil {
-		t.Fatalf("running generated program failed: %v\noutput:\n%s\ncode:\n%s", err, out, code)
+		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
 	}
 
 	if !strings.Contains(out, "hello world") {
@@ -1112,7 +1136,7 @@ main : proc() = {
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false, "test.cog")
+	p, err := parser.NewParserWithSymbols(toks, symbols, false, "test.cog", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -1290,7 +1314,7 @@ main : proc() = {
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false, "")
+	p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -1314,7 +1338,7 @@ func TestFunctionTranspilation(t *testing.T) {
 	t.Parallel()
 
 	// Test that functions are transpiled as function declarations, not variable declarations
-	got := transpilePackage(t, map[string]string{
+	goFiles := transpilePackage(t, map[string]string{
 		"main.cog": `package main
 
 // Regular function
@@ -1334,13 +1358,19 @@ main : proc() = {
 }`,
 	})
 
+	// Concatenate all generated files for string checks
+	var got strings.Builder
+	for _, code := range goFiles {
+		got.WriteString(code)
+	}
+
 	// Should contain function declarations, not variable declarations
-	mustContain(t, got, "func add(a int64, b int64) int64 {")
-	mustContain(t, got, "func greet(ctx go_context.Context, name string)")
+	mustContain(t, got.String(), "func add(a int64, b int64) int64 {")
+	mustContain(t, got.String(), "func greet(ctx go_context.Context, name string)")
 
 	// Should NOT contain the old variable declaration format
-	mustNotContain(t, got, "var add func")
-	mustNotContain(t, got, "var greet")
+	mustNotContain(t, got.String(), "var add func")
+	mustNotContain(t, got.String(), "var greet")
 }
 
 func TestGenericFunctionCallInferred(t *testing.T) {

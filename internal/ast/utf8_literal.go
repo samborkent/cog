@@ -9,20 +9,18 @@ import (
 
 type utf8 = string
 
-var _ Expression = &UTF8Literal{}
+var _ Expr = &UTF8Literal{}
 
 type UTF8Literal struct {
-	expression
-
 	Token tokens.Token
 	Value utf8
 }
 
-func NewUTF8Literal(t tokens.Token) *UTF8Literal {
-	return &UTF8Literal{
-		Token: t,
-		Value: t.Literal,
-	}
+func (a *AST) NewUTF8Literal(t tokens.Token) ExprIndex {
+	expr := New[UTF8Literal](a)
+	expr.Token = t
+	expr.Value = t.Literal
+	return a.AddExpr(expr)
 }
 
 func (l *UTF8Literal) Pos() (uint32, uint16) {
@@ -33,7 +31,7 @@ func (l *UTF8Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *UTF8Literal) stringTo(out *strings.Builder) {
+func (l *UTF8Literal) StringTo(out *strings.Builder, _ *AST) {
 	if strings.ContainsAny(l.Value, "\n\t") {
 		_, _ = out.WriteString("(`")
 		_, _ = out.WriteString(l.Value)
@@ -49,8 +47,7 @@ func (l *UTF8Literal) stringTo(out *strings.Builder) {
 
 func (l *UTF8Literal) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

@@ -1,40 +1,32 @@
 # Compiler optimization plan
 
-## 1. Get rid of Node interface in AST
+## 1. Flat AST
 
-Instead of `Node` interface, define:
+Nodes don't store pointers to other nodes, but instead store a `type NodeIndex uint32`. This index is used to index into two flat AST slices: `[]Node` & `[]Expr` AST. Nodes can be added with `append`, and removed if needed by replacing index with `nil`.
+`Nodes[0]` & `Exprs[0]` must be an empty `nil` node, so unset nodes can use `NodeIndex == 0`.
 
-```go
-type NodeKind uint8
+## 2. Arena based parser allocation
 
-const ZeroKind NodeKind = 0
+Allocate all AST nodes on an arena, and deallocate once parsing is done. Need an arena per file.
 
-type Node struct {
-    Kind NodeKind
-    node any
-}
-```
+## 3. Store kinds in index
 
-Where node stores a pointer to a specific node matching Kind. Store AST as `[]Node`, where `Node` is a value.
+Store `NodeKind` in `NodeIndex` & `ExprIndex`, and store `TypeKind` in `ExprIndex`.
 
-## 2. Flat AST (follows 1)
-
-Nodes don't store pointers to other nodes, but instead store a `type NodeIndex uint32`. This index is used to index into the flat `[]Node` AST. Nodes can be added with `append`, and removed if needed by replacing index with `Node{}`.
-
-## 3. Text-based transpiler
+## 4. Text-based transpiler
 
 Instead of transpiling Cog AST to `go/ast`, node will implement `PrintGo(*string.Builder)`.
 This method will print the equivalent Go code to the buffer or builder. We can still keep using the `internal/transpiler/component` package to to make use of pre-defined Go AST components for correct printing if needed.
 
-## 4. Parallelized lexer
+## 5. Parallelized lexer
 
 Each file is lexed in a separate Go routine. Perhaps with a Go routine pool limited by GOMAXPROCS.
 
-## 5. Parallelized transpiler (follows 3)
+## 6. Parallelized transpiler (follows 3)
 
 With text-based transpiler we can easily parallelize printing per file. Perhaps with a Go routine pool limited by GOMAXPROCS.
 
-## 6. Merge two globals passes into ONE
+## 7. Merge two globals passes into ONE
 Current state: Parser has 2 globals passes:
 
 1. `preRegisterTypeNames` - scans and pre-registers only type names with empty ValueType
@@ -53,7 +45,7 @@ Then the main `FindGlobals` loop fills in full definitions for all symbols, not 
 
 Expected gain: ~15-25% reduction in parsing time by eliminating redundant scan
 
-## 7. Parallelized parser (follows 6)
+## 8. Parallelized parser (follows 6)
 
 After merging passes into single scan, parallelize per-file:
 
@@ -62,5 +54,3 @@ After merging passes into single scan, parallelize per-file:
 - Use Go routine pool limited by GOMAXPROCS
 
 Note: Must complete globals pass for ALL files before starting AST creation pass, since imports need resolved symbol tables.
-
-

@@ -8,8 +8,11 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
+
+	"github.com/KimMachineGun/automemlimit/memlimit"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
@@ -18,16 +21,19 @@ import (
 	"github.com/samborkent/cog/internal/transpiler"
 )
 
+func init() {
+}
+
 var (
 	fileName        string
-	debug           bool
+	debugMode       bool
 	write           bool
 	replaceLocalCog bool
 )
 
 func main() {
 	flag.StringVar(&fileName, "file", "", "Name of .cog/.cogs file or directory containing .cog files.")
-	flag.BoolVar(&debug, "debug", false, "Enable debug parser mode.")
+	flag.BoolVar(&debugMode, "debug", false, "Enable debug parser mode.")
 	flag.BoolVar(&write, "write", false, "Write to file.")
 	flag.BoolVar(&replaceLocalCog, "replace-local-cog", false, "Add replace directive for local cog module in generated go.mod.")
 	flag.Parse()
@@ -38,6 +44,18 @@ func main() {
 	if fileName == "" {
 		panic("missing file or directory name")
 	}
+
+	// Set GOMEMLIMIT based on 90% of available memory.
+	memlimit.SetGoMemLimitWithOpts(
+		memlimit.WithRatio(0.9),
+		memlimit.WithProvider(memlimit.ApplyFallback(
+			memlimit.FromCgroup,
+			memlimit.FromSystem,
+		)),
+	)
+
+	// Disable GC to improve performance of large projects.
+	debug.SetGCPercent(-1)
 
 	files := discoverFiles(fileName)
 
@@ -133,7 +151,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewScriptParserWithSymbols(toks, symbols, debug)
+	p, err := parser.NewScriptParserWithSymbols(toks, symbols, debugMode, nil)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -181,7 +199,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 	}
 
 	// Transpile the script file.
-	t := transpiler.NewTranspilerWithModule(goModuleName, []*ast.File{f})
+	t := transpiler.NewTranspilerWithModule(goModuleName, ast.MergeASTs(f))
 
 	gofile, err := t.TranspileScript()
 	if err != nil {
@@ -241,10 +259,10 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 // compiledPackage holds the output of compiling a single cog package.
 type compiledPackage struct {
-	importPath string      // relative import path (empty for the entry package)
-	pkgName    string      // Go package name
-	files      []lexedFile // original file paths
-	astFiles   []*ast.File // parsed ASTs
+	importPath string        // relative import path (empty for the entry package)
+	pkgName    string        // Go package name
+	files      []lexedFile   // original file paths
+	astFiles   ast.MergedAST // parsed ASTs
 	symbols    *parser.SymbolTable
 }
 
@@ -294,7 +312,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 	}
 
 	// Step 4: Full parse the entry package (now with import exports available).
-	entryASTs := make([]*ast.File, len(entryLexed))
+	entryASTs := make([]*ast.AST, len(entryLexed))
 
 	for i, lf := range entryLexed {
 		f, err := entryParsers[i].ParseOnly(ctx, lf.path)
@@ -305,7 +323,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 		entryASTs[i] = f
 
 		if !write {
-			fmt.Printf("--- %s ---\n%s\n\n", lf.path, f)
+			fmt.Printf("--- %s ---\n%s\n\n", lf.path, f.Node(1))
 
 			if err != nil {
 				return err
@@ -317,7 +335,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 	entryPkg := &compiledPackage{
 		pkgName:  entryPkgName,
 		files:    entryLexed,
-		astFiles: entryASTs,
+		astFiles: ast.MergeASTs(entryASTs...),
 		symbols:  entrySymbols,
 	}
 
@@ -397,7 +415,7 @@ func findGlobals(ctx context.Context, lexed []lexedFile, symbols *parser.SymbolT
 	parsers := make([]*parser.Parser, len(lexed))
 
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, debug, lf.path)
+		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, debugMode, lf.path, uint16(i), nil)
 		if err != nil {
 			fmt.Println(err.Error())
 			return nil
@@ -437,7 +455,8 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		return nil
 	}
 
-	astFiles := make([]*ast.File, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
+
 	for i, lf := range lexed {
 		f, err := parsers[i].ParseOnly(ctx, lf.path)
 		if err != nil {
@@ -452,7 +471,7 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		importPath: importPath,
 		pkgName:    pkgName,
 		files:      lexed,
-		astFiles:   astFiles,
+		astFiles:   ast.MergeASTs(astFiles...),
 		symbols:    symbols,
 	}
 }

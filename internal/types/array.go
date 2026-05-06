@@ -2,7 +2,7 @@ package types
 
 type Array struct {
 	Element Type
-	Length  expression
+	Length  Expression
 }
 
 func (a *Array) Kind() Kind {
@@ -10,7 +10,7 @@ func (a *Array) Kind() Kind {
 }
 
 func (a *Array) String() string {
-	return "[" + a.Length.String() + "]" + a.Element.String()
+	return "[" + a.Length.String + "]" + a.Element.String()
 }
 
 func (a *Array) Underlying() Type {

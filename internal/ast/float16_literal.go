@@ -13,25 +13,24 @@ import (
 
 type float16 = f16.Float16
 
-var _ Expression = &Float16Literal{}
+var _ Expr = &Float16Literal{}
 
 type Float16Literal struct {
-	expression
-
 	Token tokens.Token
 	Value float16
 }
 
-func NewFloat16Literal(t tokens.Token) (*Float16Literal, error) {
+func (a *AST) NewFloat16Literal(t tokens.Token) (ExprIndex, error) {
 	value, err := strconv.ParseFloat(t.Literal, 32)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse float literal to float16: %w", err)
+		return ZeroExprIndex, fmt.Errorf("unable to parse float literal to float16: %w", err)
 	}
 
-	return &Float16Literal{
-		Token: t,
-		Value: f16.Fromfloat32(float32(value)),
-	}, nil
+	expr := New[Float16Literal](a)
+	expr.Token = t
+	expr.Value = f16.Fromfloat32(float32(value))
+
+	return a.AddExpr(expr), nil
 }
 
 func (l *Float16Literal) Pos() (uint32, uint16) {
@@ -42,7 +41,7 @@ func (l *Float16Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *Float16Literal) stringTo(out *strings.Builder) {
+func (l *Float16Literal) StringTo(out *strings.Builder, _ *AST) {
 	_ = out.WriteByte('(')
 	_, _ = out.WriteString(l.Value.String())
 	_, _ = out.WriteString(" : float16)")
@@ -50,8 +49,7 @@ func (l *Float16Literal) stringTo(out *strings.Builder) {
 
 func (l *Float16Literal) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

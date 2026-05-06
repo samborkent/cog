@@ -11,7 +11,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
+func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 	var returnStmts []goast.Stmt
 
 	switch n := node.(type) {
@@ -26,6 +26,8 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		return []goast.Stmt{&goast.DeclStmt{Decl: t.commentDecl(text)[0]}}, nil
 	case *ast.Assignment:
 		ident := &goast.Ident{Name: "_"}
+
+		assignmentExpr := t.Expr(n.Expr)
 
 		if n.Identifier.Name != "_" {
 			name := component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global)
@@ -44,7 +46,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 				// Dynamic variable assignment via struct field.
 				t.usesDyn = true
 
-				val, err := t.convertExpr(n.Expression)
+				val, err := t.convertExpr(assignmentExpr)
 				if err != nil {
 					return nil, err
 				}
@@ -57,7 +59,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			ident = id
 		}
 
-		expr, err := t.convertExpr(n.Expression)
+		expr, err := t.convertExpr(assignmentExpr)
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +109,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 		ln, _ := node.Pos()
 		comment := &goast.Comment{Text: fmt.Sprintf("\n//line %s:%d", t.file.Name, ln)}
 
-		if n.Assignment.Expression == nil {
+		if n.Assignment.Expr == ast.ZeroExprIndex {
 			declType, err := t.convertType(typ)
 			if err != nil {
 				return nil, fmt.Errorf("converting type in declaration: %w", err)
@@ -133,7 +135,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			break
 		}
 
-		expr, err := t.convertExpr(n.Assignment.Expression)
+		expr, err := t.convertExpr(t.Expr(n.Assignment.Expr))
 		if err != nil {
 			return nil, err
 		}
@@ -190,7 +192,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			},
 		}}
 	case *ast.ExpressionStatement:
-		expr, err := t.convertExpr(n.Expression)
+		expr, err := t.convertExpr(t.Expr(n.Expr))
 		if err != nil {
 			return nil, err
 		}
@@ -206,14 +208,14 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 		var stmt goast.Stmt
 
-		if n.Range == nil {
+		if n.Range == ast.ZeroExprIndex {
 			// C-style for loop.
 			stmt = &goast.ForStmt{
 				Body: body,
 			}
 		} else {
 			// Range based for loop.
-			rangeExpr, err := t.convertExpr(n.Range)
+			rangeExpr, err := t.convertExpr(t.Expr(n.Range))
 			if err != nil {
 				return nil, err
 			}
@@ -250,14 +252,14 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 		if n.Label != nil {
 			returnStmts = []goast.Stmt{&goast.LabeledStmt{
-				Label: component.Ident(n.Label.Label),
+				Label: component.Ident(n.Label),
 				Stmt:  stmt,
 			}}
 		} else {
 			returnStmts = []goast.Stmt{stmt}
 		}
 	case *ast.IfStatement:
-		cond, err := t.convertExpr(n.Condition)
+		cond, err := t.convertExpr(t.Expr(n.Condition))
 		if err != nil {
 			return nil, err
 		}
@@ -293,7 +295,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 		if n.Label != nil {
 			stmts = append(stmts, &goast.LabeledStmt{
-				Label: &goast.Ident{Name: n.Label.Label.Name},
+				Label: component.Ident(n.Label),
 				Stmt:  noOp,
 			})
 		}
@@ -307,29 +309,23 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 		returnStmts = stmts
 	case *ast.Return:
-		if len(n.Values) == 0 {
+		if n.Value == ast.ZeroExprIndex {
 			return []goast.Stmt{&goast.ReturnStmt{}}, nil
 		}
 
-		exprs := make([]goast.Expr, 0, len(n.Values))
-
-		for _, val := range n.Values {
-			expr, err := t.convertExpr(val)
-			if err != nil {
-				return nil, fmt.Errorf("converting return expression: %w", err)
-			}
-
-			exprs = append(exprs, expr)
+		expr, err := t.convertExpr(t.Expr(n.Value))
+		if err != nil {
+			return nil, fmt.Errorf("converting return expression: %w", err)
 		}
 
 		returnStmts = []goast.Stmt{&goast.ReturnStmt{
-			Results: exprs,
+			Results: []goast.Expr{expr},
 		}}
 	case *ast.Switch:
 		cases := make([]goast.Stmt, 0, len(n.Cases))
 
 		for _, c := range n.Cases {
-			expr, err := t.convertExpr(c.Condition)
+			expr, err := t.convertExpr(t.Expr(c.Condition))
 			if err != nil {
 				return nil, fmt.Errorf("converting case expression: %w", err)
 			}
@@ -342,7 +338,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			}
 
 			for _, stmt := range c.Body {
-				caseStmt, err := t.convertStmt(stmt)
+				caseStmt, err := t.convertStmt(t.Node(stmt))
 				if err != nil {
 					return nil, fmt.Errorf("converting case statement: %w", err)
 				}
@@ -370,7 +366,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 			}
 
 			for _, stmt := range n.Default.Body {
-				defaultStmt, err := t.convertStmt(stmt)
+				defaultStmt, err := t.convertStmt(t.Node(stmt))
 				if err != nil {
 					return nil, fmt.Errorf("converting default statement: %w", err)
 				}
@@ -409,7 +405,7 @@ func (t *Transpiler) convertStmt(node ast.Statement) ([]goast.Stmt, error) {
 
 		if n.Label != nil {
 			returnStmts = []goast.Stmt{&goast.LabeledStmt{
-				Label: component.Ident(n.Label.Label),
+				Label: component.Ident(n.Label),
 				Stmt:  switchStmt,
 			}}
 		} else {

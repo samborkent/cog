@@ -89,7 +89,7 @@ func Equal(a, b Type) bool {
 		return Equal(at.Element, bt.Element)
 	case *Array:
 		bt := bu.(*Array)
-		if at.Length.String() != bt.Length.String() {
+		if at.Length.String != bt.Length.String {
 			return false
 		}
 

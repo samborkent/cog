@@ -18,11 +18,9 @@ const (
 	// QualifierConstant
 )
 
-var _ Expression = &Identifier{}
+var _ Expr = &Identifier{}
 
 type Identifier struct {
-	expression
-
 	Token     tokens.Token
 	Name      string
 	ValueType types.Type
@@ -39,7 +37,7 @@ func (e *Identifier) Hash() uint64 {
 	return hash(e)
 }
 
-func (e *Identifier) stringTo(out *strings.Builder) {
+func (e *Identifier) StringTo(out *strings.Builder, _ *AST) {
 	_, _ = out.WriteString(e.Name)
 }
 
@@ -48,9 +46,5 @@ func (e *Identifier) String() string {
 }
 
 func (e *Identifier) Type() types.Type {
-	if e.ValueType == nil {
-		panic("identifier with nil type detected")
-	}
-
 	return e.ValueType
 }

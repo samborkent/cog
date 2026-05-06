@@ -32,7 +32,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			return nil, nil
 		}
 
-		ident := t.symbols.Define(component.ConvertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global))
+		name := component.ConvertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global)
+		ident := t.symbols.Define(name)
+
+		// If the identifier was predeclared with a placeholder "_" name,
+		// update it to the proper name now.
+		ident.Name = name
 
 		tok := gotoken.CONST
 
@@ -40,7 +45,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			tok = gotoken.VAR
 		}
 
-		if n.Assignment.Expression == nil {
+		if n.Assignment.Expr == ast.ZeroExprIndex {
 			declType, err := t.convertType(n.Assignment.Identifier.ValueType)
 			if err != nil {
 				return nil, fmt.Errorf("converting type in declaration: %w", err)
@@ -72,7 +77,9 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			}
 		}
 
-		expr, err := t.convertExpr(n.Assignment.Expression)
+		assignmentExpr := t.Expr(n.Assignment.Expr)
+
+		expr, err := t.convertExpr(assignmentExpr)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +87,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		bodyUsesDyn := t.usesDyn
 		t.usesDyn = prevUsesDyn
 
-		if n.Assignment.Expression.Type().Kind() == types.ProcedureKind {
+		if assignmentExpr.Type().Kind() == types.ProcedureKind {
 			// Procedure declaration - convert to function declaration
 			funcLiteral, ok := expr.(*goast.FuncLit)
 			if !ok {
@@ -177,7 +184,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 			// Non-main proc: inject dyn preamble only when body uses dyn.
 			if bodyUsesDyn && len(t.symbols.dynamics) > 0 {
-				procType, ok := n.Assignment.Expression.Type().(*types.Procedure)
+				procType, ok := assignmentExpr.Type().(*types.Procedure)
 				if ok && !procType.Function {
 					funcDecl.Body.List = append(component.DynProcEntry(), funcDecl.Body.List...)
 				}
@@ -239,10 +246,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 		if n.Receiver != nil {
 			t.symbols = NewEnclosedSymbolTable(t.symbols)
-			recIdent = t.symbols.Define(n.Receiver.Name)
+			// Create receiver ident with proper name directly
+			recIdent = &goast.Ident{Name: component.ConvertExport(n.Receiver.Name, n.Receiver.Exported, n.Receiver.Global)}
+			t.symbols.table[n.Receiver.Name] = recIdent
 		}
 
-		decls, err := t.convertDecl(n.Declaration)
+		decls, err := t.convertDecl(t.Node(n.Declaration))
 
 		if n.Receiver != nil {
 			t.symbols = t.symbols.Outer
@@ -357,7 +366,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 	exprs := make([]goast.Expr, 0, len(values))
 
 	for i, enumVal := range values {
-		val := enumVal.Value.(ast.Expression)
+		val := enumVal.Value.Expr.(ast.Expr)
 
 		expr, err := t.convertExpr(val)
 		if err != nil {
@@ -375,7 +384,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		}
 
 		spec := &goast.ValueSpec{
-			Names: []*goast.Ident{{Name: identifier + titleCaser.String(enumVal.Name)}},
+			Names: []*goast.Ident{{Name: identifier + t.titleCaser.String(enumVal.Name)}},
 		}
 
 		if i == 0 {

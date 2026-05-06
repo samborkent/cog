@@ -9,25 +9,24 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Int16Literal{}
+var _ Expr = &Int16Literal{}
 
 type Int16Literal struct {
-	expression
-
 	Token tokens.Token
 	Value int16
 }
 
-func NewInt16Literal(t tokens.Token) (*Int16Literal, error) {
+func (a *AST) NewInt16Literal(t tokens.Token) (ExprIndex, error) {
 	value, err := strconv.ParseInt(t.Literal, 10, 16)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse int literal to int16: %w", err)
+		return ZeroExprIndex, fmt.Errorf("unable to parse int literal to int16: %w", err)
 	}
 
-	return &Int16Literal{
-		Token: t,
-		Value: int16(value),
-	}, nil
+	expr := New[Int16Literal](a)
+	expr.Token = t
+	expr.Value = int16(value)
+
+	return a.AddExpr(expr), nil
 }
 
 func (l *Int16Literal) Pos() (uint32, uint16) {
@@ -38,7 +37,7 @@ func (l *Int16Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *Int16Literal) stringTo(out *strings.Builder) {
+func (l *Int16Literal) StringTo(out *strings.Builder, _ *AST) {
 	_ = out.WriteByte('(')
 	_, _ = out.WriteString(strconv.FormatInt(int64(l.Value), 10))
 	_, _ = out.WriteString(" : int16)")
@@ -46,8 +45,7 @@ func (l *Int16Literal) stringTo(out *strings.Builder) {
 
 func (l *Int16Literal) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

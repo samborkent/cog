@@ -8,16 +8,14 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &BoolLiteral{}
+var _ Expr = &BoolLiteral{}
 
 type BoolLiteral struct {
-	expression
-
 	Token tokens.Token
 	Value bool
 }
 
-func NewBoolLiteral(t tokens.Token) (*BoolLiteral, error) {
+func (a *AST) NewBoolLiteral(t tokens.Token) ExprIndex {
 	var val bool
 
 	switch t.Type {
@@ -25,13 +23,14 @@ func NewBoolLiteral(t tokens.Token) (*BoolLiteral, error) {
 	case tokens.True:
 		val = true
 	default:
-		return nil, fmt.Errorf("invalid bool token %q", t)
+		panic(fmt.Sprintf("unexpected token type %q for bool literal", t.Type))
 	}
 
-	return &BoolLiteral{
-		Token: t,
-		Value: val,
-	}, nil
+	expr := New[BoolLiteral](a)
+	expr.Token = t
+	expr.Value = val
+
+	return a.AddExpr(expr)
 }
 
 func (l *BoolLiteral) Pos() (uint32, uint16) {
@@ -42,7 +41,7 @@ func (l *BoolLiteral) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *BoolLiteral) stringTo(out *strings.Builder) {
+func (l *BoolLiteral) StringTo(out *strings.Builder, _ *AST) {
 	_, _ = out.WriteString(l.Token.Type.String())
 }
 

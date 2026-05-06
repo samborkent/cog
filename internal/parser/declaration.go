@@ -8,34 +8,31 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier) *ast.Declaration {
+func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier) ast.NodeIndex {
+	declToken := p.prev()
+
 	identType := p.parseCombinedType(ctx, ident.Exported, ident.Global)
 	if identType == nil {
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	ident.ValueType = identType
 
-	node := p.parseDeclaration(ctx, ident)
-	if node == nil {
-		return nil
-	}
-
-	return node
+	return p.parseDeclaration(ctx, declToken, ident)
 }
 
-func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *ast.Declaration {
+func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, ident *ast.Identifier) ast.NodeIndex {
 	symbol, ok := p.symbols.Resolve(ident.Name)
 	if ok && symbol.Scope != ScanScope && ident.Qualifier != ast.QualifierMethod {
 		p.error(ident.Token, "cannot redeclare variable", "parseDeclaration")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	if ident.Name == "main" {
 		procType, isProc := ident.ValueType.(*types.Procedure)
 		if !isProc || procType.Function || len(procType.Parameters) != 0 || procType.ReturnType != nil {
 			p.error(ident.Token, `"main" can only be declared as proc()`, "parseDeclaration")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 	}
 
@@ -43,39 +40,36 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 		ident.ValueType = types.None
 	}
 
-	node := &ast.Declaration{
-		Assignment: &ast.Assignment{
-			Token:      p.this(),
-			Identifier: ident,
-		},
+	assignment := &ast.Assignment{
+		Token:      p.this(),
+		Identifier: ident,
 	}
 
 	if !p.match(tokens.Assign, tokens.Declaration) {
 		if ident.Qualifier == ast.QualifierImmutable {
 			p.error(p.this(), "immutable declarations must be initialized", "parseDeclaration")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 
 		// Uninitialized variable
 		p.symbols.Define(ident)
 
-		return node
+		return p.ast.NewDeclaration(declToken, assignment)
 	}
 
 	p.advance("parseDeclaration") // consume := or =
 
 	expr := p.expression(ctx, ident.ValueType)
-	if expr == nil {
-		return nil
+	if expr == ast.ZeroExprIndex {
+		return ast.ZeroNodeIndex
 	}
 
-	node.Assignment.Expression = expr
+	assignment.Expr = expr
+	exprType := p.ast.Expr(expr).Type()
 
 	if ident.ValueType == types.None {
-		exprType := expr.Type()
-
 		ident.ValueType = exprType
-		node.Assignment.Identifier.ValueType = exprType
+		assignment.Identifier.ValueType = exprType
 	}
 
 	if ident.Qualifier != ast.QualifierMethod {
@@ -86,22 +80,20 @@ func (p *Parser) parseDeclaration(ctx context.Context, ident *ast.Identifier) *a
 	// result's value or error type, we know statically which variant it is.
 	// Wrap in ResultLiteral so the transpiler emits the correct Go struct.
 	if resultType, ok := ident.ValueType.Underlying().(*types.Result); ok {
-		if state, isVariant := resultExprState(resultType, expr); isVariant {
-			node.Assignment.Expression = wrapResultLiteral(node.Assignment.Token, ident.ValueType, expr)
+		if state, isVariant := resultExprState(resultType, exprType); isVariant {
+			assignment.Expr = p.ast.NewResultLiteral(assignment.Token, ident.ValueType, expr, exprType.Kind() == types.ErrorKind)
 			p.symbols.MarkChecked(ident.Name, state)
 		}
 	}
 
-	return node
+	return p.ast.NewDeclaration(declToken, assignment)
 }
 
 // resultExprState checks whether an expression assigned to a result type
 // is a valid value or error variant and returns the corresponding check state.
 // Returns (state, true) if the expression matches a variant, or (0, false)
 // if it matches the full result type (e.g. a function call returning T ! E).
-func resultExprState(resolved *types.Result, expr ast.Expression) (checkState, bool) {
-	exprType := expr.Type()
-
+func resultExprState(resolved *types.Result, exprType types.Type) (checkState, bool) {
 	if exprType.Kind() == types.ErrorKind {
 		return checkError, true
 	}
@@ -111,19 +103,4 @@ func resultExprState(resolved *types.Result, expr ast.Expression) (checkState, b
 	}
 
 	return 0, false
-}
-
-// wrapResultLiteral wraps an expression in a ResultLiteral for assignment
-// to a result-typed variable. It determines whether the expression is the
-// error or value variant based on the expression type's kind.
-// Returns nil if the expression type doesn't match either variant.
-func wrapResultLiteral(tok tokens.Token, resultType types.Type, expr ast.Expression) *ast.ResultLiteral {
-	isError := expr.Type().Kind() == types.ErrorKind
-
-	return &ast.ResultLiteral{
-		Token:      tok,
-		ResultType: resultType,
-		Value:      expr,
-		IsError:    isError,
-	}
 }

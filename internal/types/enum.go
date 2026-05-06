@@ -11,7 +11,7 @@ type Enum struct {
 
 type EnumValue struct {
 	Name  string
-	Value expression
+	Value Expression
 }
 
 func (*Enum) Kind() Kind {
@@ -47,7 +47,7 @@ func (e *Enum) String() string {
 			str.WriteString("\n")
 		}
 
-		str.WriteString(val.Name + " := " + val.Value.String() + ",\n")
+		str.WriteString(val.Name + " := " + val.Value.String + ",\n")
 	}
 
 	str.WriteString("}")
