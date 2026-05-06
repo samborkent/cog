@@ -20,8 +20,8 @@ main : proc() = {
 	genFunc("hello")
 }`)
 		// main proc body should contain the call.
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -35,8 +35,8 @@ genFunc : func<T ~ any>(x : T) = {
 main : proc() = {
 	genFunc(42)
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -50,8 +50,8 @@ genFunc : func<T ~ any>(x : T) = {
 main : proc() = {
 	genFunc<utf8>("hello")
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -66,8 +66,8 @@ main : proc() = {
 	result := identity("hello")
 	@print(result)
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -82,8 +82,8 @@ main : proc() = {
 	result := identity<utf8>("hello")
 	@print(result)
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -97,8 +97,8 @@ showNum : func<T ~ number>(x : T) = {
 main : proc() = {
 	showNum(42)
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -112,8 +112,8 @@ main : proc() = {
 genFunc : func<T ~ any>(x : T) = {
 	@print(x)
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -175,8 +175,8 @@ main : proc() = {
 	}
 	genFunc("hello")
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -191,21 +191,21 @@ main : proc() = {
 }`)
 		// Get the main proc body and find the call.
 		mainDecl := stmtAs[*ast.Declaration](t, f, 1)
-		procLit := mainDecl.Assignment.Expression.(*ast.ProcedureLiteral)
+		procLit := f.Expr(mainDecl.Assignment.Expr).(*ast.ProcedureLiteral)
 
 		block := procLit.Body
 		if len(block.Statements) == 0 {
 			t.Fatal("expected statements in main block")
 		}
 
-		exprStmt, ok := block.Statements[0].(*ast.ExpressionStatement)
+		exprStmt, ok := f.Node(block.Statements[0]).(*ast.ExpressionStatement)
 		if !ok {
-			t.Fatalf("expected ExpressionStatement, got %T", block.Statements[0])
+			t.Fatalf("expected ExpressionStatement, got %T", f.Node(block.Statements[0]))
 		}
 
-		call, ok := exprStmt.Expression.(*ast.Call)
+		call, ok := f.Expr(exprStmt.Expr).(*ast.Call)
 		if !ok {
-			t.Fatalf("expected Call, got %T", exprStmt.Expression)
+			t.Fatalf("expected Call, got %T", f.Expr(exprStmt.Expr))
 		}
 
 		if len(call.TypeArgs) != 1 {
@@ -228,8 +228,8 @@ noArgs : proc() = {
 main : proc() = {
 	noArgs()
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -244,8 +244,8 @@ main : proc() = {
 	x := getVal()
 	@print(x)
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 
@@ -286,13 +286,13 @@ intOnly : func<T ~ int32 | int64>(x : T) = {
 main : proc() = {
 	intOnly(42)
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 
 		// Verify the first func's type parameter has concrete type constraints.
 		decl := stmtAs[*ast.Declaration](t, f, 0)
-		procLit := decl.Assignment.Expression.(*ast.ProcedureLiteral)
+		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
 
 		procType := procLit.ProcedureType.(*types.Procedure)
 		if len(procType.TypeParams) != 1 {
@@ -328,8 +328,8 @@ utf8Only : func<T ~ utf8>(x : T) = {
 main : proc() = {
 	utf8Only("hello")
 }`)
-		if len(f.Statements) < 2 {
-			t.Fatalf("expected at least 2 statements, got %d", len(f.Statements))
+		if f.LenNodes() < 2 {
+			t.Fatalf("expected at least 2 statements, got %d", f.LenNodes())
 		}
 	})
 }

@@ -9,33 +9,30 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast.Type {
+func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.NodeIndex {
 	if p.symbols.Outer == nil {
 		// Ensure type already exists (created during find globals sweep)
 		_, ok := p.symbols.Resolve(ident.Name)
 		if !ok {
 			p.error(p.this(), fmt.Sprintf("missing global type symbol %q", ident.Name), "parseTypeAlias")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 	}
 
 	ident.Qualifier = ast.QualifierType
 
-	typeDecl := &ast.Type{
-		Token:      p.this(),
-		Identifier: ident,
-	}
+	typeToken := p.this()
 
 	// Parse optional type parameters: <T ~ any, K ~ comparable>
 	var typeParams []*types.Alias
 
 	if p.this().Type == tokens.LT {
-		typeParams = p.parseTypeParams(ctx)
-		if typeParams == nil {
-			return nil
+		tp := p.parseTypeParams(ctx)
+		if tp == nil {
+			return ast.ZeroNodeIndex
 		}
 
-		typeDecl.TypeParameters = typeParams
+		typeParams = tp
 	}
 
 	p.advance("parseTypeAlias export ident ~") // consume ~
@@ -59,7 +56,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 
 	typ := p.parseCombinedType(ctx, ident.Exported, ident.Global)
 	if typ == nil {
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	// Carry over methods registered during the global scan:
@@ -73,8 +70,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 		}
 	}
 
-	typeDecl.Identifier.ValueType = typ
-	typeDecl.Alias = typ
+	ident.ValueType = typ
 
 	// Store type params on the alias for transpilation.
 	if len(typeParams) > 0 {
@@ -98,13 +94,13 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 	// Define type if in inner scope
 	// TODO: find out why we had these restrictions.
 	// if p.symbols.Outer != nil && len(typeParams) == 0 {
-	p.symbols.Define(typeDecl.Identifier)
+	p.symbols.Define(ident)
 	// }
 
-	if iface, ok := typeDecl.Identifier.ValueType.(*types.Interface); ok {
+	if iface, ok := ident.ValueType.(*types.Interface); ok {
 		// Register interface methods as methods on the type for method call resolution.
 		for _, method := range iface.Methods {
-			p.symbols.DefineMethod(typeDecl.Identifier.Name, &ast.Identifier{
+			p.symbols.DefineMethod(ident.Name, &ast.Identifier{
 				Name:      method.Name,
 				ValueType: method.Procedure,
 				Qualifier: ast.QualifierMethod,
@@ -112,5 +108,5 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) *ast
 		}
 	}
 
-	return typeDecl
+	return p.ast.NewType(typeToken, ident, typeParams, typ)
 }

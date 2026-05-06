@@ -9,25 +9,24 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Int8Literal{}
+var _ Expr = &Int8Literal{}
 
 type Int8Literal struct {
-	expression
-
 	Token tokens.Token
 	Value int8
 }
 
-func NewInt8Literal(t tokens.Token) (*Int8Literal, error) {
+func (a *AST) NewInt8Literal(t tokens.Token) (ExprIndex, error) {
 	value, err := strconv.ParseInt(t.Literal, 10, 8)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse int literal to int8: %w", err)
+		return ZeroExprIndex, fmt.Errorf("unable to parse int literal to int8: %w", err)
 	}
 
-	return &Int8Literal{
-		Token: t,
-		Value: int8(value),
-	}, nil
+	expr := New[Int8Literal](a)
+	expr.Token = t
+	expr.Value = int8(value)
+
+	return a.AddExpr(expr), nil
 }
 
 func (l *Int8Literal) Pos() (uint32, uint16) {
@@ -38,7 +37,7 @@ func (l *Int8Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *Int8Literal) stringTo(out *strings.Builder) {
+func (l *Int8Literal) StringTo(out *strings.Builder, _ *AST) {
 	_ = out.WriteByte('(')
 	_, _ = out.WriteString(strconv.FormatInt(int64(l.Value), 10))
 	_, _ = out.WriteString(" : int8)")
@@ -46,8 +45,7 @@ func (l *Int8Literal) stringTo(out *strings.Builder) {
 
 func (l *Int8Literal) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

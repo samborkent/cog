@@ -31,7 +31,7 @@ func (e *Error) String() string {
 		}
 
 		if e.ValueType != nil {
-			str.WriteString(val.Name + " := " + val.Value.String() + ",\n")
+			str.WriteString(val.Name + " := " + val.Value.String + ",\n")
 		} else {
 			str.WriteString(val.Name + ",\n")
 		}

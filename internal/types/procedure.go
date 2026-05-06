@@ -15,7 +15,7 @@ type Parameter struct {
 	Name     string
 	Optional bool
 	Type     Type
-	Default  expression // cannot be ast.Expression due to import cycle
+	Default  *Expression // cannot be ast.Expression due to import cycle
 }
 
 func (p *Procedure) Kind() Kind {
@@ -60,7 +60,7 @@ func (p *Procedure) String() string {
 
 		if param.Default != nil {
 			_, _ = out.WriteString(" = ")
-			_, _ = out.WriteString(param.Default.String())
+			_, _ = out.WriteString(param.Default.String)
 		}
 
 		if i < len(p.Parameters)-1 {

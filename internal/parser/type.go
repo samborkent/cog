@@ -179,7 +179,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		}
 
 		lenExpr := p.expression(ctx, types.None)
-		if lenExpr == nil {
+		if lenExpr == ast.ZeroExprIndex {
 			return nil
 		}
 
@@ -197,7 +197,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 		return &types.Array{
 			Element: elemType,
-			Length:  lenExpr,
+			Length:  p.typeExpr(lenExpr),
 		}
 	case tokens.Map:
 		p.advance("parseType map") // consume map
@@ -720,8 +720,8 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 			p.advance("parseParameters loop =") // consume '='
 
 			expr := p.expression(ctx, paramType)
-			if expr != nil {
-				param.Default = expr
+			if expr != ast.ZeroExprIndex {
+				param.Default = new(p.typeExpr(expr))
 			}
 		}
 
@@ -850,10 +850,10 @@ func (p *Parser) parseEnumType(ctx context.Context, ident *ast.Identifier) types
 		p.advance("parseEnumType :=") // consume :=
 
 		enumExpr := p.expression(ctx, valType)
-		if enumExpr != nil {
+		if enumExpr != ast.ZeroExprIndex {
 			typ.Values = append(typ.Values, &types.EnumValue{
 				Name:  valIdent.Name,
-				Value: enumExpr,
+				Value: p.typeExpr(enumExpr),
 			})
 		}
 
@@ -944,19 +944,24 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 			p.advance("parseErrorType :=") // consume :=
 
 			enumExpr := p.expression(ctx, typ.ValueType)
-			if enumExpr != nil {
+			if enumExpr != ast.ZeroExprIndex {
 				typ.Values = append(typ.Values, &types.EnumValue{
 					Name:  valName,
-					Value: enumExpr,
+					Value: p.typeExpr(enumExpr),
 				})
 			}
 		} else {
+			literal := &ast.UTF8Literal{
+				Token: tokens.Token{Type: tokens.StringLiteral, Literal: valName},
+				Value: valName,
+			}
+
 			// Typeless error: value is the variant name as a string literal.
 			typ.Values = append(typ.Values, &types.EnumValue{
 				Name: valName,
-				Value: &ast.UTF8Literal{
-					Token: tokens.Token{Type: tokens.StringLiteral, Literal: valName},
-					Value: valName,
+				Value: types.Expression{
+					Expr:   literal,
+					String: literal.String(),
 				},
 			})
 		}

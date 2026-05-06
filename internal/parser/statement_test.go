@@ -13,7 +13,7 @@ add : func(a : int64, b : int64) int64 = {
 	return a + b
 }
 main : proc() = {}`)
-		if len(f.Statements) < 2 {
+		if f.LenNodes() < 2 {
 			t.Fatal("expected at least 2 statements")
 		}
 	})
@@ -32,7 +32,7 @@ main : proc() = {
 	var f := Foo{ value = "hello" }
 	f.Greet()
 }`)
-		if len(f.Statements) < 3 {
+		if f.LenNodes() < 3 {
 			t.Fatal("expected at least 3 statements")
 		}
 	})

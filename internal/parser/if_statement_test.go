@@ -14,7 +14,7 @@ main : proc() = {
 		@print("yes")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -30,7 +30,7 @@ main : proc() = {
 		@print("no")
 	}
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -322,7 +322,7 @@ main : proc() = {
 MyErr ~ error { Fail }
 main : proc() = {
 	var r : int64 ! MyErr
-	r = 10
+	r = 10 // value literal assigned, marked as checked value
 	@print(r)
 }`)
 	})

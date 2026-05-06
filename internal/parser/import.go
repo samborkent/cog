@@ -9,17 +9,15 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseImport() *ast.Import {
-	node := &ast.Import{
-		Token:   p.this(),
-		Imports: make([]*ast.Identifier, 0),
-	}
+func (p *Parser) parseImport() ast.NodeIndex {
+	importToken := p.this()
+	imports := make([]*ast.Identifier, 0, importPreallocationSize)
 
 	p.advance("parseImport import") // consume 'import'
 
 	if p.this().Type != tokens.LParen {
 		p.error(p.this(), "expected '(' after import", "parseImport")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	p.advance("parseImport (") // consume '('
@@ -27,7 +25,7 @@ func (p *Parser) parseImport() *ast.Import {
 	for ; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; p.advance("parseImport loop") {
 		if p.this().Type != tokens.StringLiteral {
 			p.error(p.this(), "found non-string token in import list: "+p.this().Literal, "parseImport")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 
 		importPath := p.this().Literal
@@ -35,7 +33,7 @@ func (p *Parser) parseImport() *ast.Import {
 		// Safety: disallow parent traversal and absolute paths.
 		if strings.Contains(importPath, "..") || strings.HasPrefix(importPath, "/") {
 			p.error(p.this(), "import path must be a relative subdirectory path (no '..' or leading '/')", "parseImport")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 
 		// Package name is the last segment of the path.
@@ -49,7 +47,7 @@ func (p *Parser) parseImport() *ast.Import {
 				Name:      importPath,
 				ValueType: types.None,
 			}
-			node.Imports = append(node.Imports, ident)
+			imports = append(imports, ident)
 
 			continue
 		}
@@ -60,7 +58,7 @@ func (p *Parser) parseImport() *ast.Import {
 			ValueType: types.None,
 		}
 
-		node.Imports = append(node.Imports, ident)
+		imports = append(imports, ident)
 
 		// Register the import in the symbol table.
 		// Exports will be populated later by the driver (cmd/main.go)
@@ -74,5 +72,5 @@ func (p *Parser) parseImport() *ast.Import {
 
 	p.advance("parseImport )") // consume ')'
 
-	return node
+	return p.ast.NewImport(importToken, imports)
 }

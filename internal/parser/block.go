@@ -7,11 +7,14 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
+// TODO: base on heuristics.
+const blockPreacclocationSize = 8
+
 func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
-	node := &ast.Block{
-		Start:      p.this(),
-		Statements: make([]ast.Statement, 0),
-	}
+	startToken := p.this()
+	stmts := make([]ast.NodeIndex, 0, blockPreacclocationSize)
+
+	var endToken tokens.Token
 
 	p.advance("parseBlock") // consume '{'
 
@@ -24,15 +27,15 @@ func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
 		}
 
 		if p.this().Type == tokens.RBrace {
-			node.End = p.this()
+			endToken = p.this()
 			break
 		}
 
 		prev := p.i
 
 		stmt := p.parseStatement(ctx)
-		if stmt != nil {
-			node.Statements = append(node.Statements, stmt)
+		if stmt != ast.ZeroNodeIndex {
+			stmts = append(stmts, stmt)
 		} else {
 			// Synchronize to recover from errors within a block.
 			p.synchronize()
@@ -54,5 +57,10 @@ func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
 	// Restore scope
 	p.symbols = p.symbols.Outer
 
-	return node
+	block := ast.New[ast.Block](p.ast)
+	block.Start = startToken
+	block.End = endToken
+	block.Statements = stmts
+
+	return block
 }

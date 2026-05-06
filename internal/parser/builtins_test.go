@@ -12,7 +12,7 @@ func TestParseBuiltinPrint(t *testing.T) {
 main : proc() = {
 	@print("hello")
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -29,7 +29,7 @@ main : proc() = {
 	x := @if(true, 1, 2)
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -42,7 +42,7 @@ main : proc() = {
 	x : int32 = @if(true, 1, 2)
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -55,7 +55,7 @@ main : proc() = {
 	x := @if(true, "yes", "no")
 	@print(x)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -72,7 +72,7 @@ main : proc() = {
 	xs := @slice<int64>(3)
 	@print(xs)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -85,7 +85,7 @@ main : proc() = {
 	xs := @slice<int64>(3, 10)
 	@print(xs)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -98,7 +98,7 @@ main : proc() = {
 	xs := @slice<int64, uint8>(3, 10)
 	@print(xs)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -115,7 +115,7 @@ main : proc() = {
 	m := @map<utf8, int64>()
 	@print(m)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -128,7 +128,7 @@ main : proc() = {
 	m := @map<utf8, int64>(10)
 	@print(m)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -141,7 +141,7 @@ main : proc() = {
 	m := @map<utf8, int64, uint32>(10)
 	@print(m)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -158,7 +158,7 @@ main : proc() = {
 	s := @set<int64>()
 	@print(s)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -171,7 +171,7 @@ main : proc() = {
 	s := @set<utf8>(5)
 	@print(s)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -189,7 +189,7 @@ main : proc() = {
 	y := @cast<int16>(x)
 	@print(y)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -203,7 +203,7 @@ main : proc() = {
 	y := @cast<float32>(x)
 	@print(y)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -217,7 +217,7 @@ main : proc() = {
 	y := @cast<uint8>(x)
 	@print(y)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -231,7 +231,7 @@ main : proc() = {
 	y := @cast<uint32>(x)
 	@print(y)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -245,7 +245,7 @@ main : proc() = {
 	y := @cast<int128>(x)
 	@print(y)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -259,7 +259,7 @@ main : proc() = {
 	y := @cast<int16, int8>(x)
 	@print(y)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -272,7 +272,7 @@ main : proc() = {
 	y := @cast<int16, int8>(1)
 	@print(y)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})
@@ -316,7 +316,7 @@ main : proc() = {
 	y := @cast<utf8>(x)
 	@print(y)
 }`)
-		if len(f.Statements) == 0 {
+		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
 		}
 	})

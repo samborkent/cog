@@ -10,7 +10,7 @@ func TestConvertDecl(t *testing.T) {
 		got := transpile(t, `package p
 x := 42
 main : proc() = {}`)
-		mustContain(t, got, "const _ int64 = 42")
+		mustContain(t, got, "const x int64 = 42")
 	})
 
 	t.Run("typed_int", func(t *testing.T) {
@@ -18,7 +18,7 @@ main : proc() = {}`)
 		got := transpile(t, `package p
 x : int64 = 42
 main : proc() = {}`)
-		mustContain(t, got, "const _ int64 = 42")
+		mustContain(t, got, "const x int64 = 42")
 	})
 
 	t.Run("var_declaration", func(t *testing.T) {
@@ -45,7 +45,7 @@ main : proc() = {}`)
 		got := transpile(t, `package p
 s := "hello"
 main : proc() = {}`)
-		mustContain(t, got, `const _ string = "hello"`)
+		mustContain(t, got, `const s string = "hello"`)
 	})
 
 	t.Run("bool_const", func(t *testing.T) {
@@ -53,7 +53,7 @@ main : proc() = {}`)
 		got := transpile(t, `package p
 b := true
 main : proc() = {}`)
-		mustContain(t, got, "const _ bool = true")
+		mustContain(t, got, "const b bool = true")
 	})
 
 	t.Run("dyn_skipped", func(t *testing.T) {

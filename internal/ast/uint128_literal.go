@@ -12,25 +12,24 @@ import (
 
 type uint128 = u128.Uint128
 
-var _ Expression = &Uint128Literal{}
+var _ Expr = &Uint128Literal{}
 
 type Uint128Literal struct {
-	expression
-
 	Token tokens.Token
 	Value uint128
 }
 
-func NewUint128Literal(t tokens.Token) (*Uint128Literal, error) {
+func (a *AST) NewUint128Literal(t tokens.Token) (ExprIndex, error) {
 	value, err := u128.FromString(t.Literal)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse int literal to uint128: %w", err)
+		return ZeroExprIndex, fmt.Errorf("unable to parse int literal to uint128: %w", err)
 	}
 
-	return &Uint128Literal{
-		Token: t,
-		Value: value,
-	}, nil
+	expr := New[Uint128Literal](a)
+	expr.Token = t
+	expr.Value = value
+
+	return a.AddExpr(expr), nil
 }
 
 func (l *Uint128Literal) Pos() (uint32, uint16) {
@@ -41,7 +40,7 @@ func (l *Uint128Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *Uint128Literal) stringTo(out *strings.Builder) {
+func (l *Uint128Literal) StringTo(out *strings.Builder, _ *AST) {
 	_ = out.WriteByte('(')
 	_, _ = out.WriteString(l.Value.String())
 	_, _ = out.WriteString(" : uint128)")
@@ -49,8 +48,7 @@ func (l *Uint128Literal) stringTo(out *strings.Builder) {
 
 func (l *Uint128Literal) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

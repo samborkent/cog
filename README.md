@@ -11,15 +11,33 @@ The following basic features are missing that need to be implemented before Cog 
 ### Bugs
 - When declaring type alias in script mode, the type gets placed in global scope, instead of inside of main.
     This is required for method declaration, so we need to manually disallow using a type which is only defined later in the file in script mode.
-- Syntax ambiguity `&` method reference receiver vs bitwise AND
 
 ### Features
+- Set `GOMEMLIMIT` using `https://github.com/KimMachineGun/automemlimit`:
+
+```go
+func init() {
+    memlimit.SetGoMemLimitWithOpts(
+        memlimit.WithRatio(0.9),
+        memlimit.WithProvider(
+            memlimit.ApplyFallback(
+                memlimit.FromCgroup,
+                memlimit.FromSystem,
+            ),
+        ),
+        memlimit.WithRefreshInterval(time.Minute),
+    )
+}
+```
+
 - Remove `@ref` allocator.
 - Change `@cast` signature to `@cast<B, A any>(x A) B?`. Return type will only be set if lossless cast is possible.
+- Implement `@as<B, A any>(x A) B`.
 - Define builtin functions as `cog` functions.
 - Design how iterators should work.
     - Range over int (or other literal) should not be possible.
     - Instead we should range over an iterator function which takes literal as argument.
+- Automatically use `https://github.com/go4org/hashtriemap` as map type in concurrent scenarios.
 
 ### Improvements
 - Get rid of symbol table in transpiler if possible.

@@ -1,6 +1,19 @@
 package transpiler_test
 
-import "testing"
+import (
+	"bytes"
+	"context"
+	"fmt"
+	goprinter "go/printer"
+	gotoken "go/token"
+	"strings"
+	"testing"
+
+	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/lexer"
+	"github.com/samborkent/cog/internal/parser"
+	"github.com/samborkent/cog/internal/transpiler"
+)
 
 func TestConvertMethod(t *testing.T) {
 	t.Parallel()
@@ -62,7 +75,7 @@ Counter ~ struct {}
 (c : &Counter).Increment : proc() = {}
 main : proc() = {}`)
 
-		mustContain(t, got, "func (_ *_Counter) _Increment(")
+		mustContain(t, got, "func (c *_Counter) _Increment(")
 	})
 
 	t.Run("method_with_params", func(t *testing.T) {
@@ -96,4 +109,63 @@ main : proc() = {}`)
 		mustContain(t, got, "func (f _Foo) _Greet(")
 		mustContain(t, got, "f.name")
 	})
+}
+
+func TestMethodTranspilation(t *testing.T) {
+	t.Parallel()
+
+	src := `package p
+Foo ~ struct {
+	value : utf8
+}
+(f : Foo).GetValue : func() utf8 = {
+	return f.value
+}
+main : proc() = {}`
+
+	l := lexer.NewLexer(strings.NewReader(src))
+
+	toks, err := l.Parse(context.Background())
+	if err != nil {
+		t.Fatalf("lex error: %v", err)
+	}
+
+	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
+	if err != nil {
+		t.Fatalf("parser init error: %v", err)
+	}
+
+	f, err := p.Parse(t.Context(), "test.cog")
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	// Print AST nodes for debugging
+	fmt.Println("=== AST Statements ===")
+	file := f.Node(f.FileIndex).(*ast.File)
+	for i, stmtIdx := range file.Statements {
+		node := f.Node(stmtIdx)
+		fmt.Printf("%d: %T\n", i, node)
+		if m, ok := node.(*ast.Method); ok {
+			decl := f.Node(m.Declaration).(*ast.Declaration)
+			fmt.Printf("   Method: %s, Receiver: %+v\n", decl.Assignment.Identifier.Name, m.Receiver)
+		}
+	}
+
+	tr := transpiler.NewTranspiler(ast.MergeASTs(f))
+
+	gofile, err := tr.Transpile()
+	if err != nil {
+		t.Fatalf("transpile error: %v", err)
+	}
+
+	var buf bytes.Buffer
+
+	fset := gotoken.NewFileSet()
+	if err := goprinter.Fprint(&buf, fset, gofile); err != nil {
+		t.Fatalf("printing go ast: %v", err)
+	}
+
+	fmt.Println("\n=== Generated Go Code ===")
+	fmt.Println(buf.String())
 }

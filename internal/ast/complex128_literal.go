@@ -8,11 +8,9 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-var _ Expression = &Complex128Literal{}
+var _ Expr = &Complex128Literal{}
 
 type Complex128Literal struct {
-	expression
-
 	Token tokens.Token
 	Value complex128
 }
@@ -25,14 +23,13 @@ func (l *Complex128Literal) Hash() uint64 {
 	return hash(l)
 }
 
-func (l *Complex128Literal) stringTo(out *strings.Builder) {
+func (l *Complex128Literal) StringTo(out *strings.Builder, _ *AST) {
 	fmt.Fprintf(out, "(%g : complex128)", l.Value)
 }
 
 func (l *Complex128Literal) String() string {
 	var out strings.Builder
-	l.stringTo(&out)
-
+	l.StringTo(&out, nil)
 	return out.String()
 }
 

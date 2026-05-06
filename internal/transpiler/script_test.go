@@ -34,7 +34,7 @@ func transpileScript(t *testing.T, src string) string {
 		t.Fatalf("parse error: %v", err)
 	}
 
-	tr := transpiler.NewTranspiler([]*ast.File{f})
+	tr := transpiler.NewTranspiler(ast.MergeASTs(f))
 
 	gofile, err := tr.TranspileScript()
 	if err != nil {

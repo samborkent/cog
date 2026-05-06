@@ -6,28 +6,33 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 )
 
-var _ Statement = &Import{}
+var _ Node = &Import{}
 
 type Import struct {
-	statement
-
 	Token   tokens.Token
 	Imports []*Identifier
 }
 
-func (i *Import) Pos() (uint32, uint16) {
-	return i.Token.Ln, i.Token.Col
+func (a *AST) NewImport(token tokens.Token, imports []*Identifier) NodeIndex {
+	node := New[Import](a)
+	node.Token = token
+	node.Imports = imports
+	return a.AddNode(node)
 }
 
-func (i *Import) Hash() uint64 {
-	return hash(i)
+func (n *Import) Pos() (uint32, uint16) {
+	return n.Token.Ln, n.Token.Col
 }
 
-func (i *Import) stringTo(out *strings.Builder) {
-	_, _ = out.WriteString(i.Token.Type.String())
+func (n *Import) Hash() uint64 {
+	return hash(n)
+}
+
+func (n *Import) StringTo(out *strings.Builder, _ *AST) {
+	_, _ = out.WriteString(n.Token.Type.String())
 	_, _ = out.WriteString(" (\n")
 
-	for _, imprt := range i.Imports {
+	for _, imprt := range n.Imports {
 		_, _ = out.WriteString("\t\"")
 		_, _ = out.WriteString(imprt.Name)
 		_, _ = out.WriteString("\"\n")
@@ -36,9 +41,8 @@ func (i *Import) stringTo(out *strings.Builder) {
 	_ = out.WriteByte(')')
 }
 
-func (i *Import) String() string {
+func (n *Import) String() string {
 	var out strings.Builder
-	i.stringTo(&out)
-
+	n.StringTo(&out, nil)
 	return out.String()
 }

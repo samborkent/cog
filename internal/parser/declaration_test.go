@@ -21,7 +21,7 @@ main : proc() = {}`)
 			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Name)
 		}
 
-		if d.Assignment.Expression == nil {
+		if d.Assignment.Expr == ast.ZeroExprIndex {
 			t.Error("expected expression in declaration")
 		}
 	})
@@ -40,6 +40,7 @@ main : proc() = {}`)
 
 	t.Run("var", func(t *testing.T) {
 		t.Parallel()
+
 		f := parse(t, `package p
 main : proc() = {
 	var x := 1
@@ -47,12 +48,12 @@ main : proc() = {
 }`)
 		d := stmtAs[*ast.Declaration](t, f, 0)
 
-		proc, ok := d.Assignment.Expression.(*ast.ProcedureLiteral)
+		proc, ok := f.Expr(d.Assignment.Expr).(*ast.ProcedureLiteral)
 		if !ok {
-			t.Fatalf("expected ProcedureLiteral, got %T", d.Assignment.Expression)
+			t.Fatalf("expected ProcedureLiteral, got %T", d.Assignment.Expr)
 		}
 
-		varDecl, ok := proc.Body.Statements[0].(*ast.Declaration)
+		varDecl, ok := f.Node(proc.Body.Statements[0]).(*ast.Declaration)
 		if !ok {
 			t.Fatalf("expected Declaration, got %T", proc.Body.Statements[0])
 		}

@@ -9,15 +9,29 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
-	node := &ast.Match{
-		Token: p.this(),
+// TODO: base on heuristics.
+const matchPreallocationSize = 4
+
+func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
+	var label *ast.Identifier
+
+	if p.prev().Type == tokens.Identifier && p.this().Type == tokens.Colon {
+		label = &ast.Identifier{
+			Token: p.prev(),
+			Name:  p.prev().Literal,
+		}
+
+		p.advance("parseSwitch :") // consume colon
 	}
+
+	matchToken := p.this()
 
 	p.advance("parseMatch match") // consume match
 
+	var binding *ast.Identifier
+
 	if p.this().Type == tokens.Identifier && p.next().Type == tokens.Declaration {
-		node.Binding = &ast.Identifier{
+		binding = &ast.Identifier{
 			Token:     p.this(),
 			Name:      p.this().Literal,
 			Exported:  false,
@@ -28,13 +42,13 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 		p.advance("parseMatch binding :=")    // consume :=
 	}
 
-	node.Subject = p.expression(ctx, types.None)
-	if node.Subject == nil {
+	subject := p.expression(ctx, types.None)
+	if subject == ast.ZeroExprIndex {
 		p.error(p.this(), "unable to parse match subject", "parseMatch")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
-	subjectType := node.Subject.Type()
+	subjectType := p.ast.Expr(subject).Type()
 
 	isEither := subjectType.Kind() == types.EitherKind
 
@@ -50,15 +64,17 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 
 	if !isEither && !isGeneric {
 		p.error(p.this(), fmt.Sprintf("match subject must be an either type or a generic type parameter bounded by a union or any, got %s", subjectType.String()), "parseMatch")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	if p.this().Type != tokens.LBrace {
 		p.error(p.this(), "expected '{' after match subject", "parseMatch")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	p.advance("parseMatch {") // consume {
+
+	cases := make([]*ast.MatchCase, 0)
 
 	for p.this().Type == tokens.Case {
 		caseNode := &ast.MatchCase{
@@ -76,34 +92,34 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 		caseType := p.parseType(ctx)
 		if caseType == nil {
 			p.error(p.this(), "unable to parse case type", "parseMatch")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 
 		caseNode.MatchType = caseType
 
 		if p.this().Type != tokens.Colon {
 			p.error(p.this(), "expected ':' after case type", "parseMatch")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 
 		p.advance("parseMatch case :") // consume :
 
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
-		if node.Binding != nil {
-			node.Binding.ValueType = caseType
-			p.symbols.Define(node.Binding)
+		if binding != nil {
+			binding.ValueType = caseType
+			p.symbols.Define(binding)
 		}
 
 		for !p.match(tokens.Case, tokens.Default, tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
-				return nil
+				return ast.ZeroNodeIndex
 			}
 
 			prev := p.i
 
 			stmt := p.parseStatement(ctx)
-			if stmt != nil {
+			if stmt != ast.ZeroNodeIndex {
 				caseNode.Body = append(caseNode.Body, stmt)
 			} else {
 				p.synchronize()
@@ -116,11 +132,13 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 
 		p.symbols = p.symbols.Outer
 
-		node.Cases = append(node.Cases, caseNode)
+		cases = append(cases, caseNode)
 	}
 
+	var defaultNode *ast.Default
+
 	if p.this().Type == tokens.Default {
-		defaultNode := &ast.Default{
+		defaultNode = &ast.Default{
 			Token: p.this(),
 		}
 
@@ -128,28 +146,28 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 
 		if p.this().Type != tokens.Colon {
 			p.error(p.this(), "expected ':' after default", "parseMatch")
-			return nil
+			return ast.ZeroNodeIndex
 		}
 
 		p.advance("parseMatch default :") // consume :
 
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
-		if node.Binding != nil {
+		if binding != nil {
 			// In default case, binding variable takes the original subject type
-			node.Binding.ValueType = subjectType
-			p.symbols.Define(node.Binding)
+			binding.ValueType = subjectType
+			p.symbols.Define(binding)
 		}
 
 		for !p.match(tokens.RBrace, tokens.EOF) {
 			if ctx.Err() != nil {
-				return nil
+				return ast.ZeroNodeIndex
 			}
 
 			prev := p.i
 
 			stmt := p.parseStatement(ctx)
-			if stmt != nil {
+			if stmt != ast.ZeroNodeIndex {
 				defaultNode.Body = append(defaultNode.Body, stmt)
 			} else {
 				p.synchronize()
@@ -161,16 +179,14 @@ func (p *Parser) parseMatch(ctx context.Context) *ast.Match {
 		}
 
 		p.symbols = p.symbols.Outer
-
-		node.Default = defaultNode
 	}
 
 	if p.this().Type != tokens.RBrace {
 		p.error(p.this(), "expected '}' to close match statement", "parseMatch")
-		return nil
+		return ast.ZeroNodeIndex
 	}
 
 	p.advance("parseMatch }") // consume }
 
-	return node
+	return p.ast.NewMatch(matchToken, label, binding, subject, cases, defaultNode)
 }
