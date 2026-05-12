@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -9,8 +10,10 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/KimMachineGun/automemlimit/memlimit"
 
@@ -20,9 +23,6 @@ import (
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/transpiler"
 )
-
-func init() {
-}
 
 var (
 	fileName        string
@@ -38,11 +38,12 @@ func main() {
 	flag.BoolVar(&replaceLocalCog, "replace-local-cog", false, "Add replace directive for local cog module in generated go.mod.")
 	flag.Parse()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	if fileName == "" {
-		panic("missing file or directory name")
+		fmt.Println("missing file or directory name")
+		return
 	}
 
 	// Set GOMEMLIMIT based on 90% of available memory.
@@ -57,7 +58,11 @@ func main() {
 	// Disable GC to improve performance of large projects.
 	debug.SetGCPercent(-1)
 
-	files := discoverFiles(fileName)
+	files, err := discoverFiles(fileName)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
 
 	// Script mode: single .cogs file.
 	if strings.HasSuffix(files[0], ".cogs") {
@@ -77,27 +82,27 @@ func main() {
 // discoverFiles resolves the input flag to a sorted list of .cog file paths.
 // If a single .cog file is given, only that file is returned.
 // If a directory is given, all .cog files in that directory are returned.
-func discoverFiles(input string) []string {
+func discoverFiles(input string) ([]string, error) {
 	input = filepath.Clean(input)
 
 	info, err := os.Stat(input)
 	if err != nil {
-		panic(fmt.Errorf("cannot access %q: %w", input, err))
+		return nil, fmt.Errorf("cannot access %q: %w", input, err)
 	}
 
 	// Single file: return just that file.
 	if !info.IsDir() {
 		if !strings.HasSuffix(input, ".cog") && !strings.HasSuffix(input, ".cogs") {
-			panic("invalid file extension, must be .cog or .cogs")
+			return nil, fmt.Errorf("invalid file extension, must be .cog or .cogs")
 		}
 
-		return []string{input}
+		return []string{input}, nil
 	}
 
 	// Directory: scan for all .cog files.
 	entries, err := os.ReadDir(input)
 	if err != nil {
-		panic(fmt.Errorf("reading directory %q: %w", input, err))
+		return nil, fmt.Errorf("reading directory %q: %w", input, err)
 	}
 
 	files := make([]string, 0, len(entries))
@@ -111,12 +116,12 @@ func discoverFiles(input string) []string {
 	}
 
 	if len(files) == 0 {
-		panic(fmt.Errorf("no .cog files found in %q", input))
+		return nil, fmt.Errorf("no .cog files found in %q", input)
 	}
 
-	sort.Strings(files)
+	slices.Sort(files)
 
-	return files
+	return files, nil
 }
 
 // lexFile lexes a single .cog file and returns its token stream.
@@ -163,9 +168,9 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 	importedPkgs := make(map[string]*compiledPackage)
 
 	for _, imp := range symbols.CogImports() {
-		pkg := compileImportedPackage(ctx, projectRoot, imp.Path)
-		if pkg == nil {
-			fmt.Printf("failed to compile imported package %q\n", imp.Path)
+		pkg, err := compileImportedPackage(ctx, projectRoot, imp.Path)
+		if err != nil {
+			fmt.Printf("failed to compile imported package %q: %v\n", imp.Path, err)
 			return
 		}
 
@@ -300,9 +305,9 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 	importedPkgs := make(map[string]*compiledPackage) // key: import path
 
 	for _, imp := range entrySymbols.CogImports() {
-		pkg := compileImportedPackage(ctx, projectRoot, imp.Path)
-		if pkg == nil {
-			return fmt.Errorf("failed to compile imported package %q", imp.Path)
+		pkg, err := compileImportedPackage(ctx, projectRoot, imp.Path)
+		if err != nil {
+			return fmt.Errorf("failed to compile imported package %q: %w", imp.Path, err)
 		}
 
 		importedPkgs[imp.Path] = pkg
@@ -429,30 +434,32 @@ func findGlobals(ctx context.Context, lexed []lexedFile, symbols *parser.SymbolT
 }
 
 // compileImportedPackage discovers, lexes, parses, and validates an imported package.
-func compileImportedPackage(ctx context.Context, projectRoot, importPath string) *compiledPackage {
+func compileImportedPackage(ctx context.Context, projectRoot, importPath string) (*compiledPackage, error) {
 	pkgDir := filepath.Join(projectRoot, filepath.FromSlash(importPath))
-	files := discoverFiles(pkgDir)
+
+	files, err := discoverFiles(pkgDir)
+	if err != nil {
+		return nil, fmt.Errorf("finding .cog files: %w", err)
+	}
 
 	lexed, pkgName, err := lexAndValidate(ctx, files)
 	if err != nil {
-		fmt.Println(err.Error())
-		return nil
+		return nil, fmt.Errorf("lexing files: %w", err)
 	}
 
 	symbols := parser.NewSymbolTable()
 
 	parsers := findGlobals(ctx, lexed, symbols)
 	if parsers == nil {
-		return nil
+		return nil, errors.New("finding globals failed")
 	}
 
 	// Imported packages must not declare a main proc.
 	if sym, hasMain := symbols.Resolve("main"); hasMain {
 		ln, col := sym.Identifier.Token.Ln, sym.Identifier.Token.Col
-		fmt.Printf("%s:%d:%d: imported package %q must not declare a main proc\n",
-			files[0], ln, col, pkgName)
 
-		return nil
+		return nil, fmt.Errorf("%s:%d:%d: imported package %q must not declare a main proc",
+			files[0], ln, col, pkgName)
 	}
 
 	astFiles := make([]*ast.AST, len(lexed))
@@ -461,7 +468,7 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		f, err := parsers[i].ParseOnly(ctx, lf.path)
 		if err != nil {
 			fmt.Println(err.Error())
-			return nil
+			return nil, fmt.Errorf("parsing file %q: %w", lf.path, err)
 		}
 
 		astFiles[i] = f
@@ -473,7 +480,7 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		files:      lexed,
 		astFiles:   ast.MergeASTs(astFiles...),
 		symbols:    symbols,
-	}
+	}, nil
 }
 
 // populateImportExports fills a CogImport's Exports map from the imported package's symbol table.
