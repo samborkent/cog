@@ -17,7 +17,7 @@ import (
 func transpileScript(t *testing.T, src string) string {
 	t.Helper()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {

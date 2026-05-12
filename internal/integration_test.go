@@ -23,7 +23,7 @@ import (
 func transpileSource(t *testing.T, src string) string {
 	t.Helper()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -163,7 +163,7 @@ func runGenerated(t *testing.T, code string) (string, error) {
 
 // tryTranspile attempts to run the full pipeline and returns generated code or an error.
 func tryTranspile(ctx context.Context, src string) (string, error) {
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(ctx)
 	if err != nil {
@@ -271,7 +271,7 @@ func TestMissingPackageProducesError(t *testing.T) {
 	// No package declaration -> parser should return an error
 	src := `main : proc() = {}`
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -349,7 +349,7 @@ a := 1
 a := 2
 
 main : proc() = {}`
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -892,7 +892,7 @@ func transpilePackage(t *testing.T, files map[string]string) map[string]string {
 	lexed := make([]lexedFile, 0, len(files))
 
 	for _, name := range names {
-		l := lexer.NewLexer(strings.NewReader(files[name]))
+		l := lexer.New(strings.NewReader(files[name]))
 
 		toks, err := l.Parse(t.Context())
 		if err != nil {
@@ -970,7 +970,7 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 	lexed := make([]lexedFile, 0, len(files))
 
 	for _, name := range names {
-		l := lexer.NewLexer(strings.NewReader(files[name]))
+		l := lexer.New(strings.NewReader(files[name]))
 
 		toks, err := l.Parse(t.Context())
 		if err != nil {
@@ -1127,7 +1127,7 @@ main : proc() = {
 }
 `
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -1305,7 +1305,7 @@ main : proc() = {
 }
 `
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {

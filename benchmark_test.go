@@ -120,7 +120,7 @@ func lexPackage(t testing.TB, pkg packageFiles) []lexedFile {
 	lexed := make([]lexedFile, len(names))
 
 	for i, name := range names {
-		l := lexer.NewLexerWithFileID(strings.NewReader(pkg.files[name]), uint16(i))
+		l := lexer.New(strings.NewReader(pkg.files[name]))
 
 		toks, err := l.Parse(t.Context())
 		if err != nil {
@@ -247,8 +247,8 @@ func BenchmarkLexing(b *testing.B) {
 		names := sortedKeys(allFiles)
 		b.StartTimer()
 
-		for i, name := range names {
-			l := lexer.NewLexerWithFileID(strings.NewReader(allFiles[name]), uint16(i))
+		for _, name := range names {
+			l := lexer.New(strings.NewReader(allFiles[name]))
 
 			toks, err := l.Parse(b.Context())
 			if err != nil {

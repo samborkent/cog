@@ -35,7 +35,7 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 
 	lexed := make([]lf, 0, len(files))
 	for _, name := range names {
-		l := lexer.NewLexer(strings.NewReader(files[name]))
+		l := lexer.New(strings.NewReader(files[name]))
 
 		toks, err := l.Parse(t.Context())
 		if err != nil {
@@ -94,7 +94,7 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 func transpileWithModule(t *testing.T, moduleName, src string) string {
 	t.Helper()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -292,7 +292,7 @@ import (
 
 main : proc() = {}
 `
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {

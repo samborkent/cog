@@ -18,7 +18,7 @@ import (
 func transpile(t *testing.T, src string) string {
 	t.Helper()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -57,7 +57,7 @@ func transpile(t *testing.T, src string) string {
 func transpileWithPrint(t *testing.T, src string) string {
 	t.Helper()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -111,7 +111,7 @@ func mustNotContain(t *testing.T, got, want string) {
 func mustFailTranspile(t *testing.T, src, want string) {
 	t.Helper()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
