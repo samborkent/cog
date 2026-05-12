@@ -228,7 +228,7 @@ func compileProject(t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
 
 var lexingToks []tokens.Token
 
-// BenchmarkLexing benchmarks just the lexer phase across all example files.
+// BenchmarkLexing benchmarks just the lexer phase across all example files using Parse.
 func BenchmarkLexing(b *testing.B) {
 	b.ReportAllocs()
 
@@ -256,6 +256,36 @@ func BenchmarkLexing(b *testing.B) {
 			}
 
 			lexingToks = toks
+		}
+	}
+}
+
+var lexingRangeTok tokens.Token
+
+// BenchmarkLexingRange benchmarks just the lexer phase across all example files using Range.
+func BenchmarkLexingRange(b *testing.B) {
+	b.ReportAllocs()
+
+	for b.Loop() {
+		b.StopTimer()
+		entry, imported := loadExamplePackages(b)
+
+		allFiles := make(map[string]string)
+		maps.Copy(allFiles, entry.files)
+
+		for _, pkg := range imported {
+			maps.Copy(allFiles, pkg.files)
+		}
+
+		names := sortedKeys(allFiles)
+		b.StartTimer()
+
+		for _, name := range names {
+			l := lexer.New(strings.NewReader(allFiles[name]))
+
+			for _, tok := range l.Range() {
+				lexingRangeTok = tok
+			}
 		}
 	}
 }

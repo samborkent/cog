@@ -14,12 +14,12 @@ import (
 )
 
 type Lexer struct {
-	scan           *scanner.Scanner
-	window         [5]tokens.Token
-	errs           []error
-	scanErrorCount int
-	index          int
-	cursor         uint8
+	scan    *scanner.Scanner
+	window  [5]tokens.Token // ring buffer: offsets [-2, -1, 0, +1, +2] from cursor
+	errs    []error
+	index   int   // absolute index of the current token
+	cursor  uint8 // window slot of the current token
+	scanErr bool  // set by s.Error callback, cleared after each scanNext iteration
 }
 
 func New(r io.Reader) *Lexer {
@@ -27,13 +27,29 @@ func New(r io.Reader) *Lexer {
 	s.Init(r)
 	s.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
 
-	return &Lexer{
+	l := &Lexer{
 		scan:  s,
 		errs:  make([]error, 0),
 		index: -1, // Init at -1, so first Next() call increments to 0.
 	}
+
+	s.Error = func(s *scanner.Scanner, msg string) {
+		l.scanErr = true
+		l.errs = append(l.errs, fmt.Errorf("\tln %d, col %d: scanner error: %s", s.Line, s.Column, msg))
+	}
+
+	return l
 }
 
+func (l *Lexer) Err() error {
+	if err := errors.Join(l.errs...); err != nil {
+		return fmt.Errorf("tokenization error(s):\n%w", err)
+	}
+
+	return nil
+}
+
+// Range iterates all tokens until EOF. The index is absolute and shared with Next.
 func (l *Lexer) Range() iter.Seq2[int, tokens.Token] {
 	return func(yield func(int, tokens.Token) bool) {
 		for {
@@ -57,20 +73,24 @@ func (l *Lexer) Next() tokens.Token {
 
 	l.index++
 
-	tok := l.Peek(1)
+	// Read directly from the +1 slot; call scanNext only if it's unfilled.
+	aheadIdx := l.windowIndex(1)
+	tok := l.window[aheadIdx]
 	if tok == (tokens.Token{}) {
 		tok = l.scanNext()
 	}
 
-	l.cursor = l.windowIndex(1)
+	l.cursor = aheadIdx
 	l.window[l.cursor] = tok
 
-	// Clear the newly exposed farthest lookahead slot.
+	// Clear the stale +2 slot exposed by the cursor rotation.
 	l.window[l.windowIndex(2)] = tokens.Token{}
 
 	return tok
 }
 
+// Peek returns a token at offset n from current (0 = current, ±1/±2 = look-ahead/behind).
+// Returns tokens.Token{} for out-of-range or unavailable history.
 func (l *Lexer) Peek(n int) tokens.Token {
 	if n < -2 || n > 2 {
 		return tokens.Token{}
@@ -80,8 +100,9 @@ func (l *Lexer) Peek(n int) tokens.Token {
 	case 0:
 		return l.window[l.cursor]
 	case -1, -2:
-		return l.window[l.windowIndex(n)]
+		return l.window[l.windowIndex(n)] // zero-value if fewer than |n| tokens consumed
 	case 1, 2:
+		// Fill lookahead slots lazily.
 		for i := 1; i <= n; i++ {
 			idx := l.windowIndex(i)
 			if l.window[idx] != (tokens.Token{}) {
@@ -101,6 +122,7 @@ func (l *Lexer) Peek(n int) tokens.Token {
 			return tok
 		}
 
+		// EOF arrived before offset n; return the nearest filled slot (the EOF token).
 		for i := n - 1; i >= 1; i-- {
 			tok = l.window[l.windowIndex(i)]
 			if tok != (tokens.Token{}) {
@@ -114,6 +136,7 @@ func (l *Lexer) Peek(n int) tokens.Token {
 	}
 }
 
+// windowIndex converts a relative offset to a window array index.
 func (l *Lexer) windowIndex(offset int) uint8 {
 	const windowSize = 5
 
@@ -126,13 +149,13 @@ func (l *Lexer) scanNext() tokens.Token {
 	s := l.scan
 
 	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
-		txt := s.TokenText()
-
-		if s.ErrorCount > l.scanErrorCount {
-			l.scanErrorCount = s.ErrorCount
-			l.errs = append(l.errs, fmt.Errorf("\tln %d, col %d: scanner error: %s", s.Line, s.Column, txt))
+		// The Error callback sets scanErr; clear and skip the invalid token.
+		if l.scanErr {
+			l.scanErr = false
 			continue
 		}
+
+		txt := s.TokenText()
 
 		t := tokens.Token{
 			Ln:  uint32(min(s.Line, math.MaxUint32)),

@@ -40,4 +40,16 @@ BenchmarkTranspileAndPrint-10                138            868813 ns/op      80
 BenchmarkFullPipeline-10                     100           1225316 ns/op     1505447 B/op      15982 allocs/op
 BenchmarkGoBuild-10                            1         127322083 ns/op       13704 B/op         66 allocs/op
 BenchmarkLargeFile-10                         93           1265872 ns/op     1501629 B/op      15981 allocs/op
-BenchmarkMultiFileTranspile-10               100           1209253 ns/op          804722 B/op         11299 allocs/op
+BenchmarkMultiFileTranspile-10               100           1209253 ns/op          804722 B/op  11299 allocs/op
+
+2026-05-12 23:29
+BenchmarkLexing-10                           985            115036 ns/op          284020 B/op       1015 allocs/op
+BenchmarkLexingRange-10                     1135            103018 ns/op           22120 B/op       1007 allocs/op
+BenchmarkParsing-10                          457            253997 ns/op          522025 B/op       4683 allocs/op
+BenchmarkTranspiling-10                      480            212595 ns/op          331318 B/op       8591 allocs/op
+BenchmarkPrinting-10                         189            624213 ns/op          469105 B/op       2705 allocs/op
+BenchmarkTranspileAndPrint-10                138            868159 ns/op          796039 B/op      11298 allocs/op
+BenchmarkFullPipeline-10                     100           1164547 ns/op         1328004 B/op      15985 allocs/op
+BenchmarkGoBuild-10                            1         129521666 ns/op           14760 B/op         69 allocs/op
+BenchmarkLargeFile-10                         85           1210322 ns/op         1328299 B/op      15986 allocs/op
+BenchmarkMultiFileTranspile-10               135            880710 ns/op          805126 B/op      11298 allocs/op

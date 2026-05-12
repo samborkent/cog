@@ -675,6 +675,10 @@ func TestNextScannerErrorTracking(t *testing.T) {
 		t.Fatalf("expected exactly 1 scanner error, got %d (%v)", len(l.errs), l.errs)
 	}
 
+	if err := l.Err(); err == nil {
+		t.Fatal("Err() should return non-nil after scanner error")
+	}
+
 	expected := []tokens.Type{tokens.Identifier, tokens.Declaration, tokens.IntLiteral, tokens.EOF}
 	if len(gotTypes) != len(expected) {
 		t.Fatalf("expected %d tokens, got %d (%v)", len(expected), len(gotTypes), gotTypes)

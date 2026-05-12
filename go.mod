@@ -10,7 +10,4 @@ require (
 	lukechampine.com/uint128 v1.3.0
 )
 
-require (
-	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
-	golang.org/x/exp v0.0.0-20260508232706-74f9aab9d74a // indirect
-)
+require github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
