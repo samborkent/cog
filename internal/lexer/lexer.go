@@ -92,10 +92,6 @@ func (l *Lexer) Next() tokens.Token {
 // Peek returns a token at offset n from current (0 = current, ±1/±2 = look-ahead/behind).
 // Returns tokens.Token{} for out-of-range or unavailable history.
 func (l *Lexer) Peek(n int) tokens.Token {
-	if n < -2 || n > 2 {
-		return tokens.Token{}
-	}
-
 	switch n {
 	case 0:
 		return l.window[l.cursor]
@@ -129,11 +125,9 @@ func (l *Lexer) Peek(n int) tokens.Token {
 				return tok
 			}
 		}
-
-		return tokens.Token{}
-	default:
-		return tokens.Token{}
 	}
+
+	return tokens.Token{}
 }
 
 // windowIndex converts a relative offset to a window array index.
