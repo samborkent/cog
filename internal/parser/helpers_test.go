@@ -12,7 +12,7 @@ import (
 func parse(t *testing.T, src string) *ast.AST {
 	t.Helper()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -38,7 +38,7 @@ func parseShouldError(t *testing.T, src string) {
 	ctx, cancel := context.WithTimeout(t.Context(), 3e9)
 	defer cancel()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(ctx)
 	if err != nil {

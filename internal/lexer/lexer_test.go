@@ -11,7 +11,7 @@ import (
 func lex(t *testing.T, src string) []tokens.Token {
 	t.Helper()
 
-	l := NewLexer(strings.NewReader(src))
+	l := New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -549,7 +549,7 @@ func TestContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	l := NewLexer(strings.NewReader("x := 42"))
+	l := New(strings.NewReader("x := 42"))
 
 	toks, err := l.Parse(ctx)
 	if err != nil {
@@ -616,5 +616,180 @@ main : proc() = {
 
 	if toks[len(toks)-1].Type != tokens.EOF {
 		t.Errorf("expected EOF as last token, got %s", toks[len(toks)-1].Type)
+	}
+}
+
+func TestNextMatchesParse(t *testing.T) {
+	t.Parallel()
+
+	src := "x := 42 // trailing\n@print(\"ok\")"
+
+	fromParse := lex(t, src)
+
+	l := New(strings.NewReader(src))
+	fromNext := make([]tokens.Token, 0, len(fromParse))
+
+	for {
+		tok := l.Next()
+		fromNext = append(fromNext, tok)
+		if tok.Type == tokens.EOF {
+			break
+		}
+	}
+
+	if len(fromNext) != len(fromParse) {
+		t.Fatalf("expected %d tokens from Next, got %d", len(fromParse), len(fromNext))
+	}
+
+	for i := range fromParse {
+		if fromParse[i].Type == tokens.EOF {
+			if fromNext[i].Type != tokens.EOF {
+				t.Fatalf("token %d mismatch: expected EOF, got %+v", i, fromNext[i])
+			}
+
+			continue
+		}
+
+		if fromNext[i] != fromParse[i] {
+			t.Fatalf("token %d mismatch: Next=%+v Parse=%+v", i, fromNext[i], fromParse[i])
+		}
+	}
+}
+
+func TestNextScannerErrorTracking(t *testing.T) {
+	t.Parallel()
+
+	// Unterminated string triggers a scanner error; Next should still continue with later tokens.
+	l := New(strings.NewReader("\"unterminated\nx := 1"))
+
+	gotTypes := make([]tokens.Type, 0, 8)
+	for {
+		tok := l.Next()
+		gotTypes = append(gotTypes, tok.Type)
+		if tok.Type == tokens.EOF {
+			break
+		}
+	}
+
+	if len(l.errs) != 1 {
+		t.Fatalf("expected exactly 1 scanner error, got %d (%v)", len(l.errs), l.errs)
+	}
+
+	if err := l.Err(); err == nil {
+		t.Fatal("Err() should return non-nil after scanner error")
+	}
+
+	expected := []tokens.Type{tokens.Identifier, tokens.Declaration, tokens.IntLiteral, tokens.EOF}
+	if len(gotTypes) != len(expected) {
+		t.Fatalf("expected %d tokens, got %d (%v)", len(expected), len(gotTypes), gotTypes)
+	}
+
+	for i := range expected {
+		if gotTypes[i] != expected[i] {
+			t.Fatalf("token %d: expected %s, got %s", i, expected[i], gotTypes[i])
+		}
+	}
+}
+
+func TestPeekDoesNotConsume(t *testing.T) {
+	t.Parallel()
+
+	l := New(strings.NewReader("x := 42"))
+
+	peek1 := l.Peek(1)
+	peek2 := l.Peek(2)
+	peek1Again := l.Peek(1)
+
+	if peek1.Type != tokens.Identifier || peek1.Literal != "x" {
+		t.Fatalf("peek(1): expected Identifier 'x', got %s %q", peek1.Type, peek1.Literal)
+	}
+
+	if peek2.Type != tokens.Declaration {
+		t.Fatalf("peek(2): expected Declaration, got %s", peek2.Type)
+	}
+
+	if peek1Again != peek1 {
+		t.Fatalf("peek(1) should be stable, got %+v then %+v", peek1, peek1Again)
+	}
+
+	next := l.Next()
+	if next != peek1 {
+		t.Fatalf("next should match prior peek(1): next=%+v peek=%+v", next, peek1)
+	}
+}
+
+func TestPeekBeyondEOFReturnsEOF(t *testing.T) {
+	t.Parallel()
+
+	l := New(strings.NewReader("x"))
+
+	if tok := l.Peek(1); tok.Type != tokens.Identifier {
+		t.Fatalf("peek(1): expected Identifier, got %s", tok.Type)
+	}
+
+	if tok := l.Peek(2); tok.Type != tokens.EOF {
+		t.Fatalf("peek(2): expected EOF, got %s", tok.Type)
+	}
+
+	if tok := l.Peek(3); tok != (tokens.Token{}) {
+		t.Fatalf("peek(3): expected zero token, got %+v", tok)
+	}
+
+	if tok := l.Next(); tok.Type != tokens.Identifier {
+		t.Fatalf("next 1: expected Identifier, got %s", tok.Type)
+	}
+
+	if tok := l.Next(); tok.Type != tokens.EOF {
+		t.Fatalf("next 2: expected EOF, got %s", tok.Type)
+	}
+}
+
+func TestPeekCurrentAndHistory(t *testing.T) {
+	t.Parallel()
+
+	l := New(strings.NewReader("x := 42"))
+
+	if tok := l.Peek(0); tok != (tokens.Token{}) {
+		t.Fatalf("peek(0) before first next: expected zero token, got %+v", tok)
+	}
+
+	if tok := l.Peek(-1); tok != (tokens.Token{}) {
+		t.Fatalf("peek(-1) before first next: expected zero token, got %+v", tok)
+	}
+
+	if tok := l.Next(); tok.Type != tokens.Identifier {
+		t.Fatalf("next 1: expected Identifier, got %s", tok.Type)
+	}
+
+	if tok := l.Peek(0); tok.Type != tokens.Identifier {
+		t.Fatalf("peek(0) after first next: expected Identifier, got %s", tok.Type)
+	}
+
+	if tok := l.Peek(-1); tok != (tokens.Token{}) {
+		t.Fatalf("peek(-1) after first next: expected zero token, got %+v", tok)
+	}
+
+	if tok := l.Next(); tok.Type != tokens.Declaration {
+		t.Fatalf("next 2: expected Declaration, got %s", tok.Type)
+	}
+
+	if tok := l.Peek(-1); tok.Type != tokens.Identifier {
+		t.Fatalf("peek(-1) after second next: expected Identifier, got %s", tok.Type)
+	}
+
+	if tok := l.Peek(-2); tok != (tokens.Token{}) {
+		t.Fatalf("peek(-2) after second next: expected zero token, got %+v", tok)
+	}
+
+	if tok := l.Next(); tok.Type != tokens.IntLiteral {
+		t.Fatalf("next 3: expected IntLiteral, got %s", tok.Type)
+	}
+
+	if tok := l.Peek(-1); tok.Type != tokens.Declaration {
+		t.Fatalf("peek(-1) after third next: expected Declaration, got %s", tok.Type)
+	}
+
+	if tok := l.Peek(-2); tok.Type != tokens.Identifier {
+		t.Fatalf("peek(-2) after third next: expected Identifier, got %s", tok.Type)
 	}
 }

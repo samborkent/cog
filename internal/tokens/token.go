@@ -1,29 +1,43 @@
 package tokens
 
-import "fmt"
+import (
+	"strconv"
+	"strings"
+)
 
 type Token struct {
-	Type    Type
 	Literal string
-	FileID  uint16
 	Ln      uint32
 	Col     uint16
+	Type    Type
 }
 
 func (t Token) String() string {
-	if t.Literal == "" {
-		return fmt.Sprintf("file %d, ln %d, col %d: %s",
-			t.FileID, t.Ln, t.Col, t.Type,
-		)
+	var out strings.Builder
+	t.StringTo(&out, "")
+	return out.String()
+}
+
+func (t Token) StringTo(out *strings.Builder, fileName string) {
+	if fileName != "" {
+		_, _ = out.WriteString(fileName)
+		_, _ = out.WriteString(": ")
 	}
+
+	_, _ = out.WriteString("ln ")
+	_, _ = out.WriteString(strconv.FormatUint(uint64(t.Ln), 10))
+	_, _ = out.WriteString(", col ")
+	_, _ = out.WriteString(strconv.FormatUint(uint64(t.Col), 10))
+	_, _ = out.WriteString(": ")
 
 	if t.Type == Builtin {
-		return fmt.Sprintf("file %d, ln %d, col %d: @%s",
-			t.FileID, t.Ln, t.Col, t.Literal,
-		)
+		_ = out.WriteByte('@')
 	}
 
-	return fmt.Sprintf("file %d, ln %d, col %d: %s: %s",
-		t.FileID, t.Ln, t.Col, t.Type, t.Literal,
-	)
+	_, _ = out.WriteString(t.Type.String())
+
+	if t.Literal != "" {
+		_, _ = out.WriteString(": ")
+		_, _ = out.WriteString(t.Literal)
+	}
 }

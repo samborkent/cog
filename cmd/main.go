@@ -125,7 +125,7 @@ func discoverFiles(input string) ([]string, error) {
 }
 
 // lexFile lexes a single .cog file and returns its token stream.
-func lexFile(ctx context.Context, path string, fileID uint16) ([]tokens.Token, error) {
+func lexFile(ctx context.Context, path string) ([]tokens.Token, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("opening %q: %w", path, err)
@@ -133,7 +133,7 @@ func lexFile(ctx context.Context, path string, fileID uint16) ([]tokens.Token, e
 
 	defer func() { _ = file.Close() }()
 
-	l := lexer.NewLexerWithFileID(file, fileID)
+	l := lexer.New(file)
 
 	toks, err := l.Parse(ctx)
 	if err != nil {
@@ -148,7 +148,7 @@ func lexFile(ctx context.Context, path string, fileID uint16) ([]tokens.Token, e
 // in cmd/{scriptName}/ with package main and a func main() wrapping the body.
 // If goModuleName is empty, the script name is used and go.mod is written.
 func runScript(ctx context.Context, projectRoot string, scriptPath string, goModuleName string) {
-	toks, err := lexFile(ctx, scriptPath, 0)
+	toks, err := lexFile(ctx, scriptPath)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -382,7 +382,7 @@ func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string, e
 	lexed := make([]lexedFile, 0, len(files))
 
 	for i, path := range files {
-		toks, err := lexFile(ctx, path, uint16(i))
+		toks, err := lexFile(ctx, path)
 		if err != nil {
 			return nil, "", err
 		}

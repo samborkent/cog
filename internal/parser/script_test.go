@@ -13,7 +13,7 @@ import (
 func parseScript(t *testing.T, src string) {
 	t.Helper()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -43,7 +43,7 @@ func parseScriptShouldError(t *testing.T, src string) {
 	ctx, cancel := context.WithTimeout(t.Context(), 3e9)
 	defer cancel()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(ctx)
 	if err != nil {

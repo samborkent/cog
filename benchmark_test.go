@@ -120,7 +120,7 @@ func lexPackage(t testing.TB, pkg packageFiles) []lexedFile {
 	lexed := make([]lexedFile, len(names))
 
 	for i, name := range names {
-		l := lexer.NewLexerWithFileID(strings.NewReader(pkg.files[name]), uint16(i))
+		l := lexer.New(strings.NewReader(pkg.files[name]))
 
 		toks, err := l.Parse(t.Context())
 		if err != nil {
@@ -228,7 +228,7 @@ func compileProject(t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
 
 var lexingToks []tokens.Token
 
-// BenchmarkLexing benchmarks just the lexer phase across all example files.
+// BenchmarkLexing benchmarks just the lexer phase across all example files using Parse.
 func BenchmarkLexing(b *testing.B) {
 	b.ReportAllocs()
 
@@ -247,8 +247,8 @@ func BenchmarkLexing(b *testing.B) {
 		names := sortedKeys(allFiles)
 		b.StartTimer()
 
-		for i, name := range names {
-			l := lexer.NewLexerWithFileID(strings.NewReader(allFiles[name]), uint16(i))
+		for _, name := range names {
+			l := lexer.New(strings.NewReader(allFiles[name]))
 
 			toks, err := l.Parse(b.Context())
 			if err != nil {
@@ -256,6 +256,36 @@ func BenchmarkLexing(b *testing.B) {
 			}
 
 			lexingToks = toks
+		}
+	}
+}
+
+var lexingRangeTok tokens.Token
+
+// BenchmarkLexingRange benchmarks just the lexer phase across all example files using Range.
+func BenchmarkLexingRange(b *testing.B) {
+	b.ReportAllocs()
+
+	for b.Loop() {
+		b.StopTimer()
+		entry, imported := loadExamplePackages(b)
+
+		allFiles := make(map[string]string)
+		maps.Copy(allFiles, entry.files)
+
+		for _, pkg := range imported {
+			maps.Copy(allFiles, pkg.files)
+		}
+
+		names := sortedKeys(allFiles)
+		b.StartTimer()
+
+		for _, name := range names {
+			l := lexer.New(strings.NewReader(allFiles[name]))
+
+			for _, tok := range l.Range() {
+				lexingRangeTok = tok
+			}
 		}
 	}
 }

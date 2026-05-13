@@ -123,7 +123,7 @@ Foo ~ struct {
 }
 main : proc() = {}`
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(context.Background())
 	if err != nil {

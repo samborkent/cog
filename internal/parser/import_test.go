@@ -26,7 +26,7 @@ func parseWithSharedSymbols(t *testing.T, sources map[string]string) map[string]
 	fileID := uint16(0)
 
 	for name, src := range sources {
-		l := lexer.NewLexer(strings.NewReader(src))
+		l := lexer.New(strings.NewReader(src))
 
 		toks, err := l.Parse(t.Context())
 		if err != nil {
@@ -62,7 +62,7 @@ func parseWithSharedSymbols(t *testing.T, sources map[string]string) map[string]
 func findGlobalsShouldError(t *testing.T, src string) {
 	t.Helper()
 
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
@@ -98,7 +98,7 @@ import (
 
 main : proc() = {}
 `
-		l := lexer.NewLexer(strings.NewReader(src))
+		l := lexer.New(strings.NewReader(src))
 
 		toks, err := l.Parse(t.Context())
 		if err != nil {
@@ -140,7 +140,7 @@ import (
 
 main : proc() = {}
 `
-		l := lexer.NewLexer(strings.NewReader(src))
+		l := lexer.New(strings.NewReader(src))
 
 		toks, err := l.Parse(t.Context())
 		if err != nil {
@@ -182,7 +182,7 @@ import (
 
 main : proc() = {}
 `
-		l := lexer.NewLexer(strings.NewReader(src))
+		l := lexer.New(strings.NewReader(src))
 
 		toks, err := l.Parse(t.Context())
 		if err != nil {
@@ -264,7 +264,7 @@ main : proc() = {
 
 val := 42
 `
-		l1 := lexer.NewLexer(strings.NewReader(src1))
+		l1 := lexer.New(strings.NewReader(src1))
 		toks1, _ := l1.Parse(t.Context())
 		p1, _ := parser.NewParserWithSymbols(toks1, syms, false, "", 0, nil)
 		p1.FindGlobals(t.Context())
@@ -275,7 +275,7 @@ main : proc() = {
 	@print(val)
 }
 `
-		l2 := lexer.NewLexer(strings.NewReader(src2))
+		l2 := lexer.New(strings.NewReader(src2))
 		toks2, _ := l2.Parse(t.Context())
 		p2, _ := parser.NewParserWithSymbols(toks2, syms, false, "", 0, nil)
 		p2.FindGlobals(t.Context())
@@ -308,7 +308,7 @@ import (
 
 main : proc() = {}
 `
-	l := lexer.NewLexer(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src))
 
 	toks, err := l.Parse(t.Context())
 	if err != nil {
