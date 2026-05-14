@@ -112,7 +112,7 @@ func runGeneratedMulti(t *testing.T, files map[string]string) (string, error) {
 	// Write a go.mod so the generated code can resolve its imports.
 	goMod := fmt.Sprintf(`module main
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/samborkent/cog v0.0.0

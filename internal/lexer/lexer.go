@@ -1,11 +1,9 @@
 package lexer
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
-	"iter"
 	"math"
 	"runtime"
 	"slices"
@@ -78,29 +76,6 @@ func (l *Lexer) Reset() {
 	l.scanErr = false
 	l.window = [7]tokens.Token{}
 	l.Step()
-}
-
-// Range iterates all tokens until EOF, stopping before yielding EOF.
-func (l *Lexer) Range(ctx context.Context) iter.Seq[tokens.Token] {
-	return func(yield func(tokens.Token) bool) {
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-
-			tok := l.Peek(0)
-
-			if tok.Type == tokens.EOF {
-				return
-			}
-
-			if !yield(tok) {
-				return
-			}
-
-			l.Step()
-		}
-	}
 }
 
 // Step advances the lexer cursor by one token.

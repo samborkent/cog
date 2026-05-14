@@ -23,7 +23,8 @@ func (p *Parser) parseGoImport(ctx context.Context) ast.NodeIndex {
 
 	p.lex.Step() // consume '('
 
-	for t := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		t := p.lex.This()
 		if t.Type == tokens.RParen {
 			break
 		}
@@ -45,6 +46,8 @@ func (p *Parser) parseGoImport(ctx context.Context) ast.NodeIndex {
 
 		imports = append(imports, ident)
 		p.symbols.DefineGoImport(ident)
+
+		p.lex.Step()
 	}
 
 	p.lex.Step() // consume ')'

@@ -419,7 +419,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 			p.lex.Step() // consume {
 
-			for tok := range p.lex.Range(ctx) {
+			for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+				tok := p.lex.This()
 				if tok.Type == tokens.RBrace {
 					break
 				}
@@ -544,7 +545,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 			p.lex.Step() // consume {
 
-			for tok := range p.lex.Range(ctx) {
+			for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+				tok := p.lex.This()
 				if tok.Type == tokens.RBrace {
 					break
 				}
@@ -581,7 +583,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 			p.lex.Step() // consume {
 
-			for tok := range p.lex.Range(ctx) {
+			for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+				tok := p.lex.This()
 				if tok.Type == tokens.RBrace {
 					break
 				}
@@ -610,7 +613,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 			p.lex.Step() // consume {
 
-			for tok := range p.lex.Range(ctx) {
+			for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+				tok := p.lex.This()
 				if tok.Type == tokens.RBrace {
 					break
 				}
@@ -749,10 +753,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				p.error(p.lex.Peek(-1), "cannot infer type for untyped literal", "primary")
 				p.lex.Step() // consume {
 
-				for tok := range p.lex.Range(ctx) {
-					if tok.Type == tokens.RBrace {
+				for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+					if p.lex.This().Type == tokens.RBrace {
 						break
 					}
+					p.lex.Step()
 				}
 
 				if p.lex.This().Type == tokens.RBrace {

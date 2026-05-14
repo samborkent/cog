@@ -115,8 +115,8 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 			p.symbols.Define(binding)
 		}
 
-		for t := range p.lex.Range(ctx) {
-			if p.match(t, tokens.Case, tokens.Default, tokens.RBrace) {
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.match(p.lex.This(), tokens.Case, tokens.Default, tokens.RBrace) {
 				break
 			}
 
@@ -157,8 +157,8 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 			p.symbols.Define(binding)
 		}
 
-		for t := range p.lex.Range(ctx) {
-			if t.Type == tokens.RBrace {
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.lex.This().Type == tokens.RBrace {
 				break
 			}
 

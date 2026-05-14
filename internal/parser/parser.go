@@ -131,10 +131,12 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.AST, erro
 	file := p.ast.NewFile(fileName, pkg, stmts, false)
 
 	// Iterate tokens.
-	for t := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		t := p.lex.This()
 		switch t.Type {
 		case tokens.Comment:
 			stmts = append(stmts, p.ast.NewComment(t))
+			p.lex.Step() // consume comment
 		case tokens.Dynamic,
 			tokens.Export,
 			tokens.Identifier,
@@ -206,9 +208,8 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.AST, erro
 // synchronize advances tokens until it finds a token that can begin a new statement.
 // This enables error recovery by skipping malformed input.
 func (p *Parser) synchronize(ctx context.Context) {
-	for range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 		// Check next token, if it can start a statement, return to the main parse loop.
-		// Current token will be advances by surrounding Range loop.
 		switch p.lex.Peek(1).Type {
 		case tokens.Identifier,
 			tokens.Builtin,
@@ -225,8 +226,11 @@ func (p *Parser) synchronize(ctx context.Context) {
 			tokens.RBrace,
 			tokens.Break,
 			tokens.Continue:
+			p.lex.Step()
 			return
 		}
+
+		p.lex.Step()
 	}
 }
 

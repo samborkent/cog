@@ -231,7 +231,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 		// Only write go.mod when running as a standalone script (not part of a project).
 		if standalone {
-			gomod := fmt.Sprintf("module %s\n\ngo 1.26.2\n", goModuleName)
+			gomod := fmt.Sprintf("module %s\n\ngo 1.26.3\n", goModuleName)
 			if replaceLocalCog {
 				gomod += "\nreplace github.com/samborkent/cog => ./..\n"
 			}
@@ -507,7 +507,7 @@ func outputProject(goModuleName string, entry *compiledPackage, imported map[str
 	if write {
 		// Write go.mod so `go run .` works from tmp/.
 		// Only declare the module and Go version; `go mod tidy` resolves all dependencies.
-		gomod := fmt.Sprintf("module %s\n\ngo 1.26.2\n", goModuleName)
+		gomod := fmt.Sprintf("module %s\n\ngo 1.26.3\n", goModuleName)
 		if replaceLocalCog {
 			gomod += "\nreplace github.com/samborkent/cog => ./..\n"
 		}

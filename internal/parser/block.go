@@ -21,7 +21,8 @@ func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
 	// Enter scope.
 	p.symbols = NewEnclosedSymbolTable(p.symbols)
 
-	for t := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		t := p.lex.This()
 		if t.Type == tokens.RBrace {
 			endToken = t
 			break

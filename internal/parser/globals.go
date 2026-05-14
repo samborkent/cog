@@ -44,11 +44,13 @@ func (p *Parser) FindGlobals(ctx context.Context) {
 	// Pre-register all type names so forward references can be resolved.
 	p.preRegisterTypeNames(ctx)
 
-	for t := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		t := p.lex.This()
 		exported := false
 
 		if t.Type == tokens.Export {
 			if p.scriptMode {
+				p.lex.Step()
 				continue
 			}
 
@@ -94,7 +96,7 @@ func (p *Parser) FindGlobals(ctx context.Context) {
 		case tokens.GoImport:
 			p.lex.Step() // consume goimport
 
-			if t.Type == tokens.LParen {
+			if p.lex.This().Type == tokens.LParen {
 				p.skipGrouped(ctx)
 			}
 		case tokens.Import:
@@ -118,6 +120,8 @@ func (p *Parser) FindGlobals(ctx context.Context) {
 			}
 		case tokens.Package:
 			p.lex.Step() // consume package
+		default:
+			p.lex.Step() // skip unknown token
 		}
 	}
 
@@ -129,8 +133,8 @@ func (p *Parser) findScriptImports(ctx context.Context) {
 	// Pre-register type names so that type aliases can be resolved during parsing.
 	p.preRegisterTypeNames(ctx)
 
-	for t := range p.lex.Range(ctx) {
-		switch t.Type {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		switch p.lex.This().Type {
 		case tokens.Import:
 			p.parseImport(ctx)
 		case tokens.GoImport:
@@ -139,6 +143,8 @@ func (p *Parser) findScriptImports(ctx context.Context) {
 			if p.lex.This().Type == tokens.LParen {
 				p.skipGrouped(ctx)
 			}
+		default:
+			p.lex.Step()
 		}
 	}
 
@@ -147,11 +153,13 @@ func (p *Parser) findScriptImports(ctx context.Context) {
 }
 
 func (p *Parser) preRegisterTypeNames(ctx context.Context) {
-	for t := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		t := p.lex.This()
 		exported := false
 
 		if t.Type == tokens.Export {
 			if p.scriptMode {
+				p.lex.Step()
 				continue
 			}
 
@@ -358,13 +366,15 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 		p.lex.Step() // consume {
 
-		for t := range p.lex.Range(ctx) {
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			t := p.lex.This()
 			if t.Type == tokens.RBrace {
 				break
 			}
 
 			if t.Type != tokens.Identifier {
 				p.error(t, "expected identifier in enum literal", "findGlobalType")
+				p.lex.Step()
 				continue
 			}
 
@@ -479,13 +489,15 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 func (p *Parser) skipScope(ctx context.Context) {
 	braceIndex := 0
 
-	for t := range p.lex.Range(ctx) {
-		switch t.Type {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		switch p.lex.This().Type {
 		case tokens.LBrace:
 			braceIndex++
 		case tokens.RBrace:
 			braceIndex--
 		}
+
+		p.lex.Step()
 
 		if braceIndex == 0 {
 			return
@@ -496,13 +508,15 @@ func (p *Parser) skipScope(ctx context.Context) {
 func (p *Parser) skipGrouped(ctx context.Context) {
 	parenIndex := 0
 
-	for t := range p.lex.Range(ctx) {
-		switch t.Type {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		switch p.lex.This().Type {
 		case tokens.LParen:
 			parenIndex++
 		case tokens.RParen:
 			parenIndex--
 		}
+
+		p.lex.Step()
 
 		if parenIndex == 0 {
 			return
@@ -593,13 +607,15 @@ func (p *Parser) findGlobalMethod(ctx context.Context, exported bool) {
 func (p *Parser) skipTypeParams(ctx context.Context) {
 	parenIndex := 0
 
-	for t := range p.lex.Range(ctx) {
-		switch t.Type {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		switch p.lex.This().Type {
 		case tokens.LT:
 			parenIndex++
 		case tokens.GT:
 			parenIndex--
 		}
+
+		p.lex.Step()
 
 		if parenIndex == 0 {
 			return

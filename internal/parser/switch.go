@@ -41,7 +41,8 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 
 	cases := make([]*ast.Case, 0, switchCasePreallocationSize)
 
-	for t := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		t := p.lex.This()
 		if t.Type != tokens.Case {
 			break
 		}
@@ -67,8 +68,8 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 
 		p.lex.Step() // consume :
 
-		for t := range p.lex.Range(ctx) {
-			if p.match(t, tokens.Case, tokens.Default, tokens.RBrace) {
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.match(p.lex.This(), tokens.Case, tokens.Default, tokens.RBrace) {
 				break
 			}
 
@@ -99,8 +100,8 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 
 		p.lex.Step() // consume :
 
-		for t := range p.lex.Range(ctx) {
-			if t.Type == tokens.RBrace {
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.lex.This().Type == tokens.RBrace {
 				break
 			}
 
@@ -140,7 +141,8 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 
 	cases := make([]*ast.Case, 0, switchCasePreallocationSize)
 
-	for t := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		t := p.lex.This()
 		if t.Type != tokens.Case {
 			break
 		}
@@ -171,8 +173,8 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 
 		p.lex.Step() // consume :
 
-		for t := range p.lex.Range(ctx) {
-			if p.match(t, tokens.Case, tokens.Default, tokens.RBrace) {
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.match(p.lex.This(), tokens.Case, tokens.Default, tokens.RBrace) {
 				break
 			}
 
@@ -203,8 +205,8 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 
 		p.lex.Step() // consume :
 
-		for t := range p.lex.Range(ctx) {
-			if t.Type == tokens.RBrace {
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.lex.This().Type == tokens.RBrace {
 				break
 			}
 

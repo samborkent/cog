@@ -245,8 +245,20 @@ func BenchmarkLexing(b *testing.B) {
 			file := allFiles[name]
 			l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
 
-			for tok := range l.Range(b.Context()) {
+			for {
+				if b.Context().Err() != nil {
+					return
+				}
+
+				tok := l.Peek(0)
+
 				lexingRangeTok = tok
+
+				if tok.Type == tokens.EOF {
+					break
+				}
+
+				l.Step()
 			}
 		}
 	}
@@ -495,7 +507,7 @@ func BenchmarkGoBuild(b *testing.B) {
 
 		goMod := fmt.Sprintf(`module main
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/samborkent/cog v0.0.0

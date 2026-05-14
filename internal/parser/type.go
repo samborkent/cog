@@ -122,8 +122,8 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 		tuple.Types[0] = first
 
-		for tok := range p.lex.Range(ctx) {
-			if tok.Type != tokens.Comma {
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.lex.This().Type != tokens.Comma {
 				break
 			}
 
@@ -485,7 +485,8 @@ func (p *Parser) parseInterface(ctx context.Context) types.Type {
 
 	methods := []*types.Method{}
 
-	for tok := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		tok := p.lex.This()
 		if tok.Type == tokens.RBrace {
 			break
 		}
@@ -539,7 +540,8 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 
 	isComplex := false
 
-	for tok := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		tok := p.lex.This()
 		if tok.Type == tokens.RBrace {
 			break
 		}
@@ -551,8 +553,8 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 			if p.lex.This().Type == tokens.LParen {
 				p.lex.Step() // consume (
 
-				for tok := range p.lex.Range(ctx) {
-					if tok.Type == tokens.RParen {
+				for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+					if p.lex.This().Type == tokens.RParen {
 						break
 					}
 
@@ -677,7 +679,8 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 	// When a parameter is marked as optional, all following parameters must also be optional.
 	haveOptional := false
 
-	for tok := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		tok := p.lex.This()
 		if tok.Type == tokens.RParen {
 			break
 		}
@@ -830,7 +833,8 @@ func (p *Parser) parseEnumType(ctx context.Context, ident *ast.Identifier) types
 		Values:    make([]*types.EnumValue, 0),
 	}
 
-	for tok := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		tok := p.lex.This()
 		if tok.Type == tokens.RBrace {
 			break
 		}
@@ -913,7 +917,8 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 
 	p.lex.Step() // consume {
 
-	for tok := range p.lex.Range(ctx) {
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		tok := p.lex.This()
 		if tok.Type == tokens.RBrace {
 			break
 		}

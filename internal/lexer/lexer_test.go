@@ -1,7 +1,6 @@
 package lexer
 
 import (
-	"slices"
 	"strings"
 	"testing"
 
@@ -13,15 +12,29 @@ func lex(t *testing.T, src string) []tokens.Token {
 
 	l := New(strings.NewReader(src), uint32(len(src)), false)
 
-	return slices.Collect(l.Range(t.Context()))
+	var toks []tokens.Token
+	for {
+		tok := l.This()
+		toks = append(toks, tok)
+		if tok.Type == tokens.EOF {
+			break
+		}
+		l.Step()
+	}
+
+	return toks
 }
 
 func lexOne(t *testing.T, src string) tokens.Token {
 	t.Helper()
 
 	toks := lex(t, src)
-	if len(toks) < 1 {
-		t.Fatalf("expected at least 1 token, got %d tokens", len(toks))
+	if len(toks) < 2 {
+		t.Fatalf("expected at least 1 token + EOF, got %d tokens", len(toks))
+	}
+
+	if toks[len(toks)-1].Type != tokens.EOF {
+		t.Fatalf("expected last token to be EOF, got %s", toks[len(toks)-1].Type)
 	}
 
 	return toks[0]
@@ -379,8 +392,8 @@ func TestCommentsArePreserved(t *testing.T) {
 			t.Parallel()
 
 			toks := lex(t, tt.src)
-			if len(toks) != 2 {
-				t.Fatalf("expected 2 tokens (comment + int), got %d: %v", len(toks), toks)
+			if len(toks) != 3 {
+				t.Fatalf("expected 3 tokens (comment + int + EOF), got %d: %v", len(toks), toks)
 			}
 
 			if toks[0].Type != tokens.Comment {
@@ -402,8 +415,8 @@ func TestInlineComment(t *testing.T) {
 	t.Parallel()
 
 	toks := lex(t, "42 // trailing")
-	if len(toks) != 2 {
-		t.Fatalf("expected 2 tokens (int + comment), got %d: %v", len(toks), toks)
+	if len(toks) != 3 {
+		t.Fatalf("expected 3 tokens (int + comment + EOF), got %d: %v", len(toks), toks)
 	}
 
 	if toks[0].Type != tokens.IntLiteral {
@@ -423,8 +436,8 @@ func TestMultiLineComment(t *testing.T) {
 	t.Parallel()
 
 	toks := lex(t, "/* multi\nline\ncomment */ 42")
-	if len(toks) != 2 {
-		t.Fatalf("expected 2 tokens (comment + int), got %d: %v", len(toks), toks)
+	if len(toks) != 3 {
+		t.Fatalf("expected 3 tokens (comment + int + EOF), got %d: %v", len(toks), toks)
 	}
 
 	if toks[0].Type != tokens.Comment {
@@ -444,14 +457,12 @@ func TestEOFOnlyForEmptyInput(t *testing.T) {
 	t.Parallel()
 
 	toks := lex(t, "")
-	if len(toks) != 0 {
-		t.Fatalf("expected 0 tokens for empty input, got %d", len(toks))
+	if len(toks) != 1 {
+		t.Fatalf("expected 1 token (EOF), got %d", len(toks))
 	}
 
-	// EOF should still be accessible via This()
-	l := New(strings.NewReader(""), uint32(0), false)
-	if l.This().Type != tokens.EOF {
-		t.Errorf("expected This() to be EOF for empty input, got %s", l.This().Type)
+	if toks[0].Type != tokens.EOF {
+		t.Errorf("expected EOF, got %s", toks[0].Type)
 	}
 }
 
@@ -459,20 +470,13 @@ func TestEOFPositionMatchesLastToken(t *testing.T) {
 	t.Parallel()
 
 	toks := lex(t, "foo bar")
-	if len(toks) != 2 {
-		t.Fatalf("expected 2 tokens, got %d", len(toks))
+	if len(toks) != 3 {
+		t.Fatalf("expected 3 tokens, got %d", len(toks))
 	}
 
 	lastTok := toks[1]
 
-	// EOF is accessible via stepping past the last token
-	l := New(strings.NewReader("foo bar"), uint32(7), false)
-	l.Step() // past foo
-	l.Step() // past bar
-	eof := l.This()
-	if eof.Type != tokens.EOF {
-		t.Fatalf("expected EOF after stepping past all tokens, got %s", eof.Type)
-	}
+	eof := toks[2]
 	if eof.Ln < lastTok.Ln || (eof.Ln == lastTok.Ln && eof.Col < lastTok.Col) {
 		t.Errorf("EOF position (%d:%d) should not be before last token (%d:%d)",
 			eof.Ln, eof.Col, lastTok.Ln, lastTok.Col)
@@ -483,8 +487,8 @@ func TestMultipleTokenSequence(t *testing.T) {
 	t.Parallel()
 
 	toks := lex(t, "x := 42")
-	if len(toks) != 3 {
-		t.Fatalf("expected 3 tokens, got %d: %v", len(toks), toks)
+	if len(toks) != 4 {
+		t.Fatalf("expected 4 tokens, got %d: %v", len(toks), toks)
 	}
 
 	if toks[0].Type != tokens.Identifier || toks[0].Literal != "x" {
@@ -498,19 +502,23 @@ func TestMultipleTokenSequence(t *testing.T) {
 	if toks[2].Type != tokens.IntLiteral || toks[2].Literal != "42" {
 		t.Errorf("token 2: expected IntLiteral '42', got %s %q", toks[2].Type, toks[2].Literal)
 	}
+
+	if toks[3].Type != tokens.EOF {
+		t.Errorf("token 3: expected EOF, got %s", toks[3].Type)
+	}
 }
 
 func TestDeclarationSequence(t *testing.T) {
 	t.Parallel()
 
 	toks := lex(t, `dyn val : utf8 = "hello"`)
-	if len(toks) != 6 {
-		t.Fatalf("expected 6 tokens, got %d: %v", len(toks), toks)
+	if len(toks) != 7 {
+		t.Fatalf("expected 7 tokens, got %d: %v", len(toks), toks)
 	}
 
 	expected := []tokens.Type{
 		tokens.Dynamic, tokens.Identifier, tokens.Colon,
-		tokens.UTF8, tokens.Assign, tokens.StringLiteral,
+		tokens.UTF8, tokens.Assign, tokens.StringLiteral, tokens.EOF,
 	}
 	for i, exp := range expected {
 		if toks[i].Type != exp {
@@ -523,14 +531,14 @@ func TestProcDeclarationSequence(t *testing.T) {
 	t.Parallel()
 
 	toks := lex(t, "main : proc() = {}")
-	if len(toks) != 8 {
-		t.Fatalf("expected 8 tokens, got %d: %v", len(toks), toks)
+	if len(toks) != 9 {
+		t.Fatalf("expected 9 tokens, got %d: %v", len(toks), toks)
 	}
 
 	expected := []tokens.Type{
 		tokens.Identifier, tokens.Colon, tokens.Procedure,
 		tokens.LParen, tokens.RParen, tokens.Assign,
-		tokens.LBrace, tokens.RBrace,
+		tokens.LBrace, tokens.RBrace, tokens.EOF,
 	}
 	for i, exp := range expected {
 		if toks[i].Type != exp {
@@ -543,8 +551,8 @@ func TestLineAndColumnTracking(t *testing.T) {
 	t.Parallel()
 
 	toks := lex(t, "x\ny")
-	if len(toks) != 2 {
-		t.Fatalf("expected 2 tokens, got %d", len(toks))
+	if len(toks) != 3 {
+		t.Fatalf("expected 3 tokens, got %d", len(toks))
 	}
 
 	if toks[0].Ln != 1 || toks[0].Col != 1 {
@@ -588,8 +596,8 @@ main : proc() = {
 		t.Error("expected to find @print builtin token")
 	}
 
-	if toks[len(toks)-1].Type == tokens.EOF {
-		t.Errorf("Range should not yield EOF, but last token is EOF")
+	if toks[len(toks)-1].Type != tokens.EOF {
+		t.Errorf("expected last token to be EOF, got %s", toks[len(toks)-1].Type)
 	}
 }
 
@@ -598,28 +606,27 @@ func TestStepMatchesParse(t *testing.T) {
 
 	src := "x := 42 // trailing\n@print(\"ok\")"
 
-	fromRange := lex(t, src)
+	fromLex := lex(t, src)
 
 	l := New(strings.NewReader(src), uint32(len(src)), false)
-	fromStep := make([]tokens.Token, 0, len(fromRange))
+	var fromStep []tokens.Token
 
 	for {
 		tok := l.This()
+		fromStep = append(fromStep, tok)
 		if tok.Type == tokens.EOF {
 			break
 		}
-
-		fromStep = append(fromStep, tok)
 		l.Step()
 	}
 
-	if len(fromStep) != len(fromRange) {
-		t.Fatalf("expected %d tokens from Step, got %d", len(fromRange), len(fromStep))
+	if len(fromStep) != len(fromLex) {
+		t.Fatalf("expected %d tokens from Step, got %d", len(fromLex), len(fromStep))
 	}
 
-	for i := range fromRange {
-		if fromStep[i] != fromRange[i] {
-			t.Fatalf("token %d mismatch: Step=%+v Range=%+v", i, fromStep[i], fromRange[i])
+	for i := range fromLex {
+		if fromStep[i] != fromLex[i] {
+			t.Fatalf("token %d mismatch: Step=%+v Lex=%+v", i, fromStep[i], fromLex[i])
 		}
 	}
 }
