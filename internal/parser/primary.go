@@ -30,7 +30,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			// Handle option literal.
 			optionType, ok := typeToken.(*types.Option)
 			if !ok {
-				p.error(p.this(), "unable to assert option type", "primary")
+				p.error(p.lex.This(), "unable to assert option type", "primary")
 				return ast.ZeroExprIndex
 			}
 
@@ -40,11 +40,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			// Handle either literal.
 			eitherType, ok := typeToken.(*types.Either)
 			if !ok {
-				p.error(p.this(), "unable to assert either type", "primary")
+				p.error(p.lex.This(), "unable to assert either type", "primary")
 				return ast.ZeroExprIndex
 			}
 
-			token := p.this()
+			token := p.lex.This()
 
 			// Infer type.
 			expr := p.primary(ctx, types.None)
@@ -61,7 +61,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			} else if types.Equal(exprType, eitherType.Right) {
 				isRight = true
 			} else {
-				p.error(p.this(), fmt.Sprintf("expression of type %q not in either type %q", exprType, eitherType), "primary")
+				p.error(p.lex.This(), fmt.Sprintf("expression of type %q not in either type %q", exprType, eitherType), "primary")
 				return ast.ZeroExprIndex
 			}
 
@@ -69,28 +69,28 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 		}
 	}
 
-	if p.match(tokens.LBracket, tokens.Map, tokens.Set) {
+	if p.match(p.lex.This(), tokens.LBracket, tokens.Map, tokens.Set) {
 		// Literal with type annotation.
 		literalType := p.parseType(ctx)
 
 		// TODO: should probably use [types.Equal]? This could just compare name for [*types.Alias].
 		if typeToken != types.None && literalType.String() != typeToken.String() {
-			p.error(p.this(), fmt.Sprintf("literal type %q does not match expected type %q", literalType, typeToken), "primary")
+			p.error(p.lex.This(), fmt.Sprintf("literal type %q does not match expected type %q", literalType, typeToken), "primary")
 			return ast.ZeroExprIndex
 		}
 
 		typeToken = literalType
 	}
 
-	switch p.this().Type {
+	switch p.lex.This().Type {
 	case tokens.Builtin:
-		t := p.this()
+		t := p.lex.This()
 
 		if t.Literal == "go" {
 			return p.parseGoCallExpression(ctx)
 		}
 
-		p.advance("primary builtin") // consume @
+		p.lex.Step() // consume @
 
 		builtinParser, ok := p.builtins[t.Literal]
 		if !ok {
@@ -109,20 +109,20 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 		tokens.StringLiteral:
 		return p.parseLiteral(typeToken)
 	case tokens.False, tokens.True:
-		p.advance("primary literal") // consume literal
-		return p.ast.NewBoolLiteral(p.prev())
+		p.lex.Step() // consume literal
+		return p.ast.NewBoolLiteral(p.lex.Peek(-1))
 	case tokens.LParen: // Grouped expression
-		lparenToken := p.this()
-		p.advance("primary (") // consume '('
+		lparenToken := p.lex.This()
+		p.lex.Step() // consume '('
 
 		expr := p.expression(ctx, typeToken)
 
-		if p.this().Type != tokens.RParen {
-			p.error(p.this(), "expected ')' after grouped expression", "primary")
+		if p.lex.This().Type != tokens.RParen {
+			p.error(p.lex.This(), "expected ')' after grouped expression", "primary")
 			return ast.ZeroExprIndex
 		}
 
-		p.advance("primary )") // consume ')'
+		p.lex.Step() // consume ')'
 
 		var exprType types.Type = types.None
 		if expr != ast.ZeroExprIndex {
@@ -134,22 +134,22 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 		return p.ast.NewGrouped(lparenToken, expr, exprType)
 	case tokens.Identifier:
-		symbol, ok := p.symbols.Resolve(p.this().Literal)
+		symbol, ok := p.symbols.Resolve(p.lex.This().Literal)
 		if !ok {
 			// Check if this is an imported cog package name.
-			imp, isImport := p.symbols.ResolveCogImport(p.this().Literal)
+			imp, isImport := p.symbols.ResolveCogImport(p.lex.This().Literal)
 			if isImport {
 				return p.parsePkgSelector(ctx, imp)
 			}
 
-			p.error(p.this(), "undefined identifier", "primary")
+			p.error(p.lex.This(), "undefined identifier", "primary")
 
 			return ast.ZeroExprIndex
 		}
 
-		p.advance("primary identifier") // consume identifier
+		p.lex.Step() // consume identifier
 
-		if symbol.Identifier.Qualifier == ast.QualifierType && p.this().Type == tokens.LBrace {
+		if symbol.Identifier.Qualifier == ast.QualifierType && p.lex.This().Type == tokens.LBrace {
 			// Named struct literal
 			literal := p.primary(ctx, symbol.Type())
 			if literal == ast.ZeroExprIndex {
@@ -159,7 +159,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			literalExpr := p.ast.Expr(literal)
 
 			literalExpr.(*ast.StructLiteral).StructType = &types.Alias{
-				Name:     symbol.Identifier.Name,
+				Name:     symbol.Identifier.Token.Literal,
 				Derived:  literalExpr.Type(),
 				Exported: symbol.Identifier.Exported,
 				Global:   symbol.Identifier.Global,
@@ -168,14 +168,14 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			return literal
 		}
 
-		switch p.this().Type {
+		switch p.lex.This().Type {
 		case tokens.LParen:
-			callToken := p.this()
+			callToken := p.lex.This()
 
 			// Function call
 			procType, ok := symbol.Identifier.ValueType.(*types.Procedure)
 			if !ok {
-				p.error(p.this(), "identifier is not callable", "primary")
+				p.error(p.lex.This(), "identifier is not callable", "primary")
 				return ast.ZeroExprIndex
 			}
 
@@ -210,10 +210,10 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				return ast.ZeroExprIndex
 			}
 
-			callToken := p.this()
+			callToken := p.lex.This()
 
-			if p.this().Type != tokens.LParen {
-				p.error(p.this(), "expected '(' after type arguments in generic call", "primary")
+			if p.lex.This().Type != tokens.LParen {
+				p.error(p.lex.This(), "expected '(' after type arguments in generic call", "primary")
 				return ast.ZeroExprIndex
 			}
 
@@ -232,22 +232,22 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 			if symbol.Identifier.Qualifier == ast.QualifierType &&
 				kind != types.EnumKind && kind != types.ErrorKind {
-				p.error(p.this(), fmt.Sprintf("%q is a type, not a value: cannot invoke methods on types", symbol.Identifier.Name), "primary")
+				p.error(p.lex.This(), fmt.Sprintf("%q is a type, not a value: cannot invoke methods on types", symbol.Identifier.Token.Literal), "primary")
 				return ast.ZeroExprIndex
 			}
 
 			// Selector expression
-			selector := p.this()
+			selector := p.lex.This()
 
 			expr := p.ast.AddExpr(symbol.Identifier)
 
 			var selExpr *ast.Selector
 
-			for p.this().Type == tokens.Dot && p.this().Type != tokens.EOF {
-				p.advance("primary identifier .") // consume .
+			for p.lex.This().Type == tokens.Dot && p.lex.This().Type != tokens.EOF {
+				p.lex.Step() // consume .
 
-				if p.this().Type != tokens.Identifier {
-					p.error(p.this(), "expected field identifier after . selector", "primary")
+				if p.lex.This().Type != tokens.Identifier {
+					p.error(p.lex.This(), "expected field identifier after . selector", "primary")
 					return ast.ZeroExprIndex
 				}
 
@@ -262,27 +262,27 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 				switch kind {
 				case types.EnumKind, types.ErrorKind:
-					typName = symbol.Identifier.Name
+					typName = symbol.Identifier.Token.Literal
 				default:
 					typName = symbolType.String()
 				}
 
-				field, ok := p.symbols.ResolveField(typName, p.this().Literal)
+				field, ok := p.symbols.ResolveField(typName, p.lex.This().Literal)
 				if !ok {
-					p.error(p.this(), fmt.Sprintf("undefined field %q for selector %q", p.this().Literal, typName), "primary")
+					p.error(p.lex.This(), fmt.Sprintf("undefined field %q for selector %q", p.lex.This().Literal, typName), "primary")
 					return ast.ZeroExprIndex
 				}
 
-				field.Identifier.Token = p.this()
+				field.Identifier.Token = p.lex.This()
 
-				p.advance("primary identifier field") // consume field identifier
+				p.lex.Step() // consume field identifier
 
 				// For enum selectors, wrap the field type in an alias so the enum
 				// type can be inferred downstream.  For struct fields, preserve the
 				// original field type (e.g. float64) so arithmetic works correctly.
 				if field.Scope == EnumScope {
 					field.Identifier.ValueType = &types.Alias{
-						Name:     symbol.Identifier.Name,
+						Name:     symbol.Identifier.Token.Literal,
 						Derived:  symbol.Type(),
 						Exported: symbol.Identifier.Exported,
 						Global:   symbol.Identifier.Global,
@@ -300,12 +300,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				expr = p.ast.AddExpr(selExpr)
 			}
 
-			if p.match(tokens.LParen, tokens.LT) {
+			if p.match(p.lex.This(), tokens.LParen, tokens.LT) {
 				exprType := p.ast.Expr(expr).Type()
 
 				// Method call expression
 				if exprType.Kind() != types.ProcedureKind {
-					p.error(p.prev(), fmt.Sprintf("cannot call expression: expression of type %q is not a function", exprType))
+					p.error(p.lex.Peek(-1), fmt.Sprintf("cannot call expression: expression of type %q is not a function", exprType))
 					return ast.ZeroExprIndex
 				}
 
@@ -316,14 +316,14 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 				var typeArgs []types.Type
 
-				if p.this().Type == tokens.LT {
+				if p.lex.This().Type == tokens.LT {
 					typeArgs = p.parseTypeArguments(ctx)
 					if typeArgs == nil {
 						return ast.ZeroExprIndex
 					}
 				}
 
-				callToken := p.this()
+				callToken := p.lex.This()
 
 				args := p.parseCallArguments(ctx, procType)
 				if args == nil {
@@ -337,7 +337,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 		default:
 			// Variable reference
 			if symbol.Identifier == nil {
-				p.error(p.this(), "nil identifier in variable reference", "primary")
+				p.error(p.lex.This(), "nil identifier in variable reference", "primary")
 				return ast.ZeroExprIndex
 			}
 
@@ -347,7 +347,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				// Allow option-typed identifiers when the inner type matches the expected type.
 				optType, isOption := symbol.Identifier.ValueType.(*types.Option)
 				if !isOption || optType.Value.Kind() != typeToken.Kind() {
-					p.error(p.this(), fmt.Sprintf("type of identifier %q (%s) does not match expected type (%s)", symbol.Identifier.Name, symbol.Identifier.ValueType, typeToken), "primary")
+					p.error(p.lex.This(), fmt.Sprintf("type of identifier %q (%s) does not match expected type (%s)", symbol.Identifier.Token.Literal, symbol.Identifier.ValueType, typeToken), "primary")
 					return ast.ZeroExprIndex
 				}
 			}
@@ -384,13 +384,13 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 			return expr
 		case *types.Array:
-			arrayToken := p.this()
+			arrayToken := p.lex.This()
 			// TODO: see if it's possible to evaluate array length
 			values := make([]ast.ExprIndex, 0, arrayLiteralPreallocationSize)
 
-			p.advance("primary array {") // consume {
+			p.lex.Step() // consume {
 
-			for !p.match(tokens.RBrace, tokens.EOF) {
+			for !p.match(p.lex.This(), tokens.RBrace, tokens.EOF) {
 				if ctx.Err() != nil {
 					return ast.ZeroExprIndex
 				}
@@ -400,28 +400,28 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 					values = append(values, value)
 				}
 
-				if p.this().Type == tokens.Comma {
-					p.advance("primary array ,") // consume ','
+				if p.lex.This().Type == tokens.Comma {
+					p.lex.Step() // consume ','
 				}
 			}
 
-			if p.this().Type != tokens.RBrace {
+			if p.lex.This().Type != tokens.RBrace {
 				p.error(arrayToken, "array literal is missing closing }", "primary")
 				return ast.ZeroExprIndex
 			}
 
-			p.advance("primary array }") // consume }
+			p.lex.Step() // consume }
 
 			return p.ast.NewArrayLiteral(arrayToken, t, values)
 		case *types.Map:
-			mapToken := p.this()
+			mapToken := p.lex.This()
 			pairs := make([]ast.KeyValue, 0, mapLiteralPreallocationSize)
 
-			p.advance("primary map {") // consume {
+			p.lex.Step() // consume {
 
-			for !p.match(tokens.RBrace, tokens.EOF) {
-				if ctx.Err() != nil {
-					return ast.ZeroExprIndex
+			for tok := range p.lex.Range(ctx) {
+				if tok.Type == tokens.RBrace {
+					break
 				}
 
 				key := p.expression(ctx, t.Key)
@@ -429,18 +429,18 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 					// TODO: optimize
 					for i := range pairs {
 						if p.ExprString(pairs[i].Key) == p.ExprString(key) {
-							p.error(p.prev(), "duplicate key in map literal", "primary")
+							p.error(p.lex.Peek(-1), "duplicate key in map literal", "primary")
 							return ast.ZeroExprIndex
 						}
 					}
 				}
 
-				if p.this().Type != tokens.Colon {
-					p.error(p.this(), "expected colon after key in map literal", "primary")
+				if p.lex.This().Type != tokens.Colon {
+					p.error(p.lex.This(), "expected colon after key in map literal", "primary")
 					return ast.ZeroExprIndex
 				}
 
-				p.advance("primary map :") // consume :
+				p.lex.Step() // consume :
 
 				val := p.expression(ctx, t.Value)
 				if val == ast.ZeroExprIndex {
@@ -452,21 +452,21 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 					Value: val,
 				})
 
-				if p.this().Type == tokens.Comma {
-					p.advance("primary map ,") // consume ,
+				if p.lex.This().Type == tokens.Comma {
+					p.lex.Step() // consume ,
 				}
 			}
 
-			if p.this().Type != tokens.RBrace {
+			if p.lex.This().Type != tokens.RBrace {
 				p.error(mapToken, "map literal is missing closing }", "primary")
 				return ast.ZeroExprIndex
 			}
 
-			p.advance("primary map }") // consume }
+			p.lex.Step() // consume }
 
 			return p.ast.NewMapLiteral(mapToken, t, pairs)
 		case *types.Procedure:
-			procToken := p.this()
+			procToken := p.lex.This()
 
 			// Re-enter type parameter scope so methods are visible in the body.
 			if len(t.TypeParams) > 0 {
@@ -474,7 +474,10 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 				for _, tp := range t.TypeParams {
 					p.symbols.Define(&ast.Identifier{
-						Name:      tp.Name,
+						Token: tokens.Token{
+							Type:    tokens.Identifier,
+							Literal: tp.Name,
+						},
 						ValueType: tp,
 						Qualifier: ast.QualifierType,
 					})
@@ -484,7 +487,10 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 					if ok {
 						for _, method := range iface.Methods {
 							p.symbols.DefineMethod(tp.Name, &ast.Identifier{
-								Name:      method.Name,
+								Token: tokens.Token{
+									Type:    tokens.Identifier,
+									Literal: method.Name,
+								},
 								ValueType: method.Procedure,
 								Qualifier: ast.QualifierMethod,
 							})
@@ -499,7 +505,10 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 				for _, param := range t.Parameters {
 					p.symbols.Define(&ast.Identifier{
-						Name:      param.Name,
+						Token: tokens.Token{
+							Type:    tokens.Identifier,
+							Literal: param.Name,
+						},
 						ValueType: param.Type,
 						Qualifier: ast.QualifierImmutable,
 					})
@@ -530,14 +539,14 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 			return p.ast.NewProcedureLiteral(procToken, t, body)
 		case *types.Set:
-			setToken := p.this()
+			setToken := p.lex.This()
 			values := make([]ast.ExprIndex, 0, setLiteralPreallocationSize)
 
-			p.advance("primary set {") // consume {
+			p.lex.Step() // consume {
 
-			for !p.match(tokens.RBrace, tokens.EOF) {
-				if ctx.Err() != nil {
-					return ast.ZeroExprIndex
+			for tok := range p.lex.Range(ctx) {
+				if tok.Type == tokens.RBrace {
+					break
 				}
 
 				value := p.expression(ctx, t.Element)
@@ -545,7 +554,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 					for i := range values {
 						// TODO: optimize
 						if p.ExprString(values[i]) == p.ExprString(value) {
-							p.error(p.prev(), "duplicate key in set literal", "primary")
+							p.error(p.lex.Peek(-1), "duplicate key in set literal", "primary")
 							return ast.ZeroExprIndex
 						}
 					}
@@ -553,28 +562,28 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 					values = append(values, value)
 				}
 
-				if p.this().Type == tokens.Comma {
-					p.advance("primary set ,") // consume ','
+				if p.lex.This().Type == tokens.Comma {
+					p.lex.Step() // consume ','
 				}
 			}
 
-			if p.this().Type != tokens.RBrace {
+			if p.lex.This().Type != tokens.RBrace {
 				p.error(setToken, "set literal is missing closing }", "primary")
 				return ast.ZeroExprIndex
 			}
 
-			p.advance("primary set }") // consume }
+			p.lex.Step() // consume }
 
 			return p.ast.NewSetLiteral(setToken, t, values)
 		case *types.Slice:
-			sliceToken := p.this()
+			sliceToken := p.lex.This()
 			values := make([]ast.ExprIndex, 0, sliceLiteralPreallocationSize)
 
-			p.advance("primary slice {") // consume {
+			p.lex.Step() // consume {
 
-			for !p.match(tokens.RBrace, tokens.EOF) {
-				if ctx.Err() != nil {
-					return ast.ZeroExprIndex
+			for tok := range p.lex.Range(ctx) {
+				if tok.Type == tokens.RBrace {
+					break
 				}
 
 				value := p.expression(ctx, t.Element)
@@ -582,58 +591,58 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 					values = append(values, value)
 				}
 
-				if p.this().Type == tokens.Comma {
-					p.advance("primary array ,") // consume ','
+				if p.lex.This().Type == tokens.Comma {
+					p.lex.Step() // consume ','
 				}
 			}
 
-			if p.this().Type != tokens.RBrace {
+			if p.lex.This().Type != tokens.RBrace {
 				p.error(sliceToken, "slice literal is missing closing }", "primary")
 				return ast.ZeroExprIndex
 			}
 
-			p.advance("primary slice }") // consume }
+			p.lex.Step() // consume }
 
 			return p.ast.NewSliceLiteral(sliceToken, t, values)
 		case *types.Struct:
-			structToken := p.this()
+			structToken := p.lex.This()
 			values := make([]ast.FieldValue, 0, len(t.Fields))
 
-			p.advance("primary struct {") // consume {
+			p.lex.Step() // consume {
 
-			for !p.match(tokens.RBrace, tokens.EOF) {
-				if ctx.Err() != nil {
-					return ast.ZeroExprIndex
+			for tok := range p.lex.Range(ctx) {
+				if tok.Type == tokens.RBrace {
+					break
 				}
 
-				if p.this().Type != tokens.Identifier {
-					p.error(p.this(), "expected identifier at in struct literal", "primary")
+				if tok.Type != tokens.Identifier {
+					p.error(tok, "expected identifier at in struct literal", "primary")
 					return ast.ZeroExprIndex
 				}
 
 				index := slices.IndexFunc(t.Fields, func(f *types.Field) bool {
-					return f.Name == p.this().Literal
+					return f.Name == tok.Literal
 				})
 
 				if index == -1 {
-					p.error(p.this(), "unknown field found in struct literal", "primary")
+					p.error(tok, "unknown field found in struct literal", "primary")
 					return ast.ZeroExprIndex
 				}
 
 				fieldValue := ast.FieldValue{
-					Name: p.this().Literal,
+					Name: tok.Literal,
 				}
 
-				p.advance("primary struct identifier") // consume identifier
+				p.lex.Step() // consume identifier
 
-				if p.this().Type != tokens.Assign {
-					p.error(p.this(), "expected = after identifier in struct literal", "primary")
+				if p.lex.This().Type != tokens.Assign {
+					p.error(p.lex.This(), "expected = after identifier in struct literal", "primary")
 					return ast.ZeroExprIndex
 				}
 
-				p.advance("primary struct =") // consume =
+				p.lex.Step() // consume =
 
-				startToken := p.this()
+				startToken := p.lex.This()
 
 				value := p.expression(ctx, t.Fields[index].Type)
 				if value == ast.ZeroExprIndex {
@@ -643,29 +652,29 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 				fieldValue.Value = value
 
-				if p.this().Type == tokens.Comma {
-					p.advance("primary struct ,") // consume ','
+				if p.lex.This().Type == tokens.Comma {
+					p.lex.Step() // consume ','
 				}
 
 				values = append(values, fieldValue)
 			}
 
-			if p.this().Type != tokens.RBrace {
+			if p.lex.This().Type != tokens.RBrace {
 				p.error(structToken, "struct literal is missing closing }", "primary")
 				return ast.ZeroExprIndex
 			}
 
-			p.advance("primary struct }") // consume }
+			p.lex.Step() // consume }
 
 			return p.ast.NewStructLiteral(structToken, t, values)
 		case *types.Tuple:
-			tupleToken := p.this()
+			tupleToken := p.lex.This()
 			values := make([]ast.ExprIndex, 0, len(t.Types))
 
-			p.advance("primary tuple {") // consume {
+			p.lex.Step() // consume {
 
 			for i := range t.Types {
-				startToken := p.this()
+				startToken := p.lex.This()
 
 				value := p.expression(ctx, t.Index(i))
 				if value == ast.ZeroExprIndex {
@@ -676,55 +685,55 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				values = append(values, value)
 
 				if i < len(t.Types)-1 {
-					if p.this().Type != tokens.Comma {
-						p.error(p.this(), "expected , after expression in tuple literal", "primary")
+					if p.lex.This().Type != tokens.Comma {
+						p.error(p.lex.This(), "expected , after expression in tuple literal", "primary")
 						return ast.ZeroExprIndex
 					}
 
-					p.advance("primary tuple ,") // consume ','
+					p.lex.Step() // consume ','
 				}
 			}
 
-			if p.this().Type != tokens.RBrace {
+			if p.lex.This().Type != tokens.RBrace {
 				p.error(tupleToken, "tuple literal is missing closing }", "primary")
 				return ast.ZeroExprIndex
 			}
 
-			p.advance("primary tuple }") // consume }
+			p.lex.Step() // consume }
 
 			return p.ast.NewTupleLiteral(tupleToken, t, values)
 		case *types.Basic:
 			if t.Kind() != types.Complex32 {
-				p.error(p.this(), fmt.Sprintf("unexpected basic type %q for expression starting with {", t.String()), "primary")
+				p.error(p.lex.This(), fmt.Sprintf("unexpected basic type %q for expression starting with {", t.String()), "primary")
 				return ast.ZeroExprIndex
 			}
 
-			token := p.this()
-			p.advance("primary complex32 {") // consume {
+			token := p.lex.This()
+			p.lex.Step() // consume {
 
 			realPart := p.expression(ctx, types.Basics[types.Float16])
 			if realPart == ast.ZeroExprIndex {
 				return ast.ZeroExprIndex
 			}
 
-			if p.this().Type != tokens.Comma {
-				p.error(p.this(), "expected , after real part in complex32 literal", "primary")
+			if p.lex.This().Type != tokens.Comma {
+				p.error(p.lex.This(), "expected , after real part in complex32 literal", "primary")
 				return ast.ZeroExprIndex
 			}
 
-			p.advance("primary complex32 ,") // consume ,
+			p.lex.Step() // consume ,
 
 			imagPart := p.expression(ctx, types.Basics[types.Float16])
 			if imagPart == ast.ZeroExprIndex {
 				return ast.ZeroExprIndex
 			}
 
-			if p.this().Type != tokens.RBrace {
-				p.error(p.this(), "expected } after imaginary part in complex32 literal", "primary")
+			if p.lex.This().Type != tokens.RBrace {
+				p.error(p.lex.This(), "expected } after imaginary part in complex32 literal", "primary")
 				return ast.ZeroExprIndex
 			}
 
-			p.advance("primary complex32 }") // consume }
+			p.lex.Step() // consume }
 
 			realLit, realOk := p.ast.Expr(realPart).(*ast.Float16Literal)
 			imagLit, imagOk := p.ast.Expr(imagPart).(*ast.Float16Literal)
@@ -737,30 +746,32 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			return p.ast.NewComplex32Literal(token, ast.Complex32{realLit.Value, imagLit.Value})
 		default:
 			if typeToken == nil || typeToken == types.None {
-				p.error(p.prev(), "cannot infer type for untyped literal", "primary")
-				p.advance("primary {") // consume {
+				p.error(p.lex.Peek(-1), "cannot infer type for untyped literal", "primary")
+				p.lex.Step() // consume {
 
-				for !p.match(tokens.RBrace, tokens.EOF) {
-					p.advance("primary skip token")
+				for tok := range p.lex.Range(ctx) {
+					if tok.Type == tokens.RBrace {
+						break
+					}
 				}
 
-				if p.this().Type == tokens.RBrace {
-					p.advance("primary }") // consume }
+				if p.lex.This().Type == tokens.RBrace {
+					p.lex.Step() // consume }
 				}
 
 				return ast.ZeroExprIndex
 			}
 
-			p.error(p.this(), fmt.Sprintf("unexpected type %q for expression starting with {", typeToken.String()), "primary")
+			p.error(p.lex.This(), fmt.Sprintf("unexpected type %q for expression starting with {", typeToken.String()), "primary")
 
 			return ast.ZeroExprIndex
 		}
 	default:
-		p.error(p.this(), "unexpected token encountered while parsing expression", "primary")
+		p.error(p.lex.This(), "unexpected token encountered while parsing expression", "primary")
 		return ast.ZeroExprIndex
 	}
 }
 
-func (p *Parser) match(types ...tokens.Type) bool {
-	return slices.Contains(types, p.this().Type)
+func (p *Parser) match(t tokens.Token, types ...tokens.Type) bool {
+	return slices.Contains(types, t.Type)
 }

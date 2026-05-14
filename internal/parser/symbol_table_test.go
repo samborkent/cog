@@ -11,7 +11,6 @@ import (
 func makeIdent(name string, vt types.Type) *ast.Identifier {
 	return &ast.Identifier{
 		Token:     tokens.Token{Type: tokens.Identifier, Literal: name},
-		Name:      name,
 		ValueType: vt,
 	}
 }
@@ -60,7 +59,6 @@ func TestDefineNilType(t *testing.T) {
 
 	ident := &ast.Identifier{
 		Token: tokens.Token{Type: tokens.Identifier, Literal: "y"},
-		Name:  "y",
 	}
 	s.Define(ident)
 
@@ -144,8 +142,8 @@ func TestDefineAndResolveGoImport(t *testing.T) {
 		t.Fatal("expected to resolve go import")
 	}
 
-	if got.Name != "strings" {
-		t.Errorf("name = %q, want strings", got.Name)
+	if got.Token.Literal != "strings" {
+		t.Errorf("name = %q, want strings", got.Token.Literal)
 	}
 }
 

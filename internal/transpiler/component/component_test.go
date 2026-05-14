@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/transpiler/component"
 )
 
@@ -16,7 +17,7 @@ func TestIdent(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		t.Parallel()
 
-		ident := &ast.Identifier{Name: "foo", Exported: false, Global: false}
+		ident := &ast.Identifier{Token: tokens.Token{Literal: "foo"}, Exported: false, Global: false}
 		got := component.Ident(ident)
 
 		if got == nil {
@@ -40,7 +41,7 @@ func TestIdent(t *testing.T) {
 	t.Run("cached", func(t *testing.T) {
 		t.Parallel()
 
-		ident := &ast.Identifier{Name: "cached", Exported: false, Global: false}
+		ident := &ast.Identifier{Token: tokens.Token{Literal: "cached"}, Exported: false, Global: false}
 		a := component.Ident(ident)
 		b := component.Ident(ident)
 
@@ -52,7 +53,7 @@ func TestIdent(t *testing.T) {
 	t.Run("exported", func(t *testing.T) {
 		t.Parallel()
 
-		ident := &ast.Identifier{Name: "foo", Exported: true, Global: false}
+		ident := &ast.Identifier{Token: tokens.Token{Literal: "foo"}, Exported: true, Global: false}
 		got := component.Ident(ident)
 
 		if got.Name != "Foo" {
@@ -63,7 +64,7 @@ func TestIdent(t *testing.T) {
 	t.Run("global_unexported", func(t *testing.T) {
 		t.Parallel()
 
-		ident := &ast.Identifier{Name: "Foo", Exported: false, Global: true}
+		ident := &ast.Identifier{Token: tokens.Token{Literal: "Foo"}, Exported: false, Global: true}
 		got := component.Ident(ident)
 
 		if got.Name != "_Foo" {

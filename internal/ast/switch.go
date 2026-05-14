@@ -37,7 +37,7 @@ func (n *Switch) Hash() uint64 {
 
 func (n *Switch) StringTo(out *strings.Builder, a *AST) {
 	if n.Label != nil {
-		_, _ = out.WriteString(n.Label.Name)
+		_, _ = out.WriteString(n.Label.Token.Literal)
 		_, _ = out.WriteString(":\n")
 	}
 
@@ -45,7 +45,7 @@ func (n *Switch) StringTo(out *strings.Builder, a *AST) {
 	_ = out.WriteByte(' ')
 
 	if n.Identifier != nil {
-		_, _ = out.WriteString(n.Identifier.Name)
+		_, _ = out.WriteString(n.Identifier.Token.Literal)
 	}
 
 	_, _ = out.WriteString(" {\n")

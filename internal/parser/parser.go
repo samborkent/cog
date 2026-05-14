@@ -5,10 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/lexer"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
@@ -20,15 +20,13 @@ const (
 )
 
 type Parser struct {
-	tokens   []tokens.Token
+	lex      *lexer.Lexer
 	symbols  *SymbolTable
 	builtins map[string]BuiltinParser
 	filePath string
 
 	ast               *ast.AST
 	Errs              []error
-	i                 int
-	debug             bool
 	scriptMode        bool
 	currentReturnType types.Type // return type of the enclosing procedure (for result wrapping)
 	definedMethods    map[string]struct{}
@@ -38,17 +36,16 @@ type Parser struct {
 // This allows multiple parsers (one per file) to share a single symbol table
 // so that global declarations from one file are visible in all others.
 // If a is non-nil, it is used for AST node allocations.
-func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool, fileName string, fileID uint16, a *arena.Arena) (*Parser, error) {
-	if len(tokens) == 0 {
-		return nil, errors.New("no tokens provided to parser")
+func NewParserWithSymbols(lex *lexer.Lexer, symbols *SymbolTable, fileName string, fileID uint16, a *arena.Arena) (*Parser, error) {
+	if lex == nil {
+		return nil, errors.New("no lexer provided to parser")
 	}
 
 	p := &Parser{
-		tokens:         tokens,
+		lex:            lex,
 		symbols:        symbols,
-		ast:            ast.NewAST(a, fileID, len(tokens)),
+		ast:            ast.NewAST(a, fileID, lex.Len),
 		Errs:           make([]error, 0, errorPreallocationSize),
-		debug:          debug,
 		definedMethods: make(map[string]struct{}),
 	}
 
@@ -57,24 +54,23 @@ func NewParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug boo
 
 // NewScriptParser creates a parser in script mode for .cogs files.
 // Script mode forbids package declarations and export keywords.
-func NewScriptParser(tokens []tokens.Token, debug bool) (*Parser, error) {
-	return NewScriptParserWithSymbols(tokens, NewSymbolTable(), debug, nil)
+func NewScriptParser(lexer *lexer.Lexer) (*Parser, error) {
+	return NewScriptParserWithSymbols(lexer, NewSymbolTable(), nil)
 }
 
 // NewScriptParserWithSymbols creates a script-mode parser with a shared symbol table.
 // If a is non-nil, it is used for AST node allocations.
-func NewScriptParserWithSymbols(tokens []tokens.Token, symbols *SymbolTable, debug bool, a *arena.Arena) (*Parser, error) {
-	if len(tokens) == 0 {
-		return nil, errors.New("no tokens provided to parser")
+func NewScriptParserWithSymbols(lex *lexer.Lexer, symbols *SymbolTable, a *arena.Arena) (*Parser, error) {
+	if lex == nil {
+		return nil, errors.New("no lexer provided to parser")
 	}
 
 	p := &Parser{
-		tokens:  tokens,
+		lex:     lex,
 		symbols: symbols,
 		// TODO: allow multi-file scripts?
-		ast:            ast.NewAST(a, 0, len(tokens)),
+		ast:            ast.NewAST(a, 0, lex.Len),
 		Errs:           make([]error, 0, errorPreallocationSize),
-		debug:          debug,
 		scriptMode:     true,
 		definedMethods: make(map[string]struct{}),
 	}
@@ -93,8 +89,8 @@ func (p *Parser) Parse(ctx context.Context, fileName string) (*ast.AST, error) {
 // across multiple files.
 func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.AST, error) {
 	// Reset position and errors for a clean parse.
-	p.i = 0
 	p.Errs = p.Errs[:0]
+	p.lex.Reset()
 
 	p.builtins = map[string]BuiltinParser{
 		"cast":  p.parseBuiltinCast,
@@ -110,17 +106,22 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.AST, erro
 
 	if p.scriptMode {
 		// Script mode: no package declaration allowed.
-		if p.tokens[0].Type == tokens.Package {
-			p.error(p.tokens[0], "package declaration not allowed in script files", "Parse")
+		if p.lex.This().Type == tokens.Package {
+			p.error(p.lex.This(), "package declaration not allowed in script files", "Parse")
 		}
 
 		// Synthesize package main.
 		pkg = ast.New[ast.Package](p.ast)
 		pkg.Token = tokens.Token{Type: tokens.Package, Literal: "package"}
-		pkg.Identifier = &ast.Identifier{Name: "main"}
+		pkg.Identifier = &ast.Identifier{
+			Token: tokens.Token{
+				Type:    tokens.Identifier,
+				Literal: "main",
+			},
+		}
 	} else {
-		if p.tokens[0].Type != tokens.Package {
-			p.error(p.tokens[0], "missing package declaration", "Parse")
+		if p.lex.This().Type != tokens.Package {
+			p.error(p.lex.This(), "missing package declaration", "Parse")
 		}
 
 		pkg = p.parsePackage()
@@ -130,18 +131,10 @@ func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.AST, erro
 	file := p.ast.NewFile(fileName, pkg, stmts, false)
 
 	// Iterate tokens.
-tokenLoop:
-	for p.this().Type != tokens.EOF {
-		if ctx.Err() != nil {
-			return p.ast, fmt.Errorf("parser error:\n%w", errors.Join(p.Errs...))
-		}
-
-		prev := p.i
-
-		switch p.this().Type {
+	for t := range p.lex.Range(ctx) {
+		switch t.Type {
 		case tokens.Comment:
-			stmts = append(stmts, p.ast.NewComment(p.this()))
-			p.advance("Parse comment")
+			stmts = append(stmts, p.ast.NewComment(t))
 		case tokens.Dynamic,
 			tokens.Export,
 			tokens.Identifier,
@@ -155,7 +148,7 @@ tokenLoop:
 			tokens.Continue,
 			tokens.BitAnd,
 			tokens.LParen:
-			ident := p.this().Literal
+			ident := t.Literal
 
 			node := p.parseStatement(ctx)
 			if node != ast.ZeroNodeIndex {
@@ -165,38 +158,40 @@ tokenLoop:
 
 				stmts = append(stmts, node)
 			} else {
-				p.synchronize()
+				p.synchronize(ctx)
 			}
 		case tokens.GoImport:
-			node := p.parseGoImport()
+			node := p.parseGoImport(ctx)
 			if node != ast.ZeroNodeIndex {
 				stmts = append(stmts, node)
 			} else {
-				p.synchronize()
+				p.synchronize(ctx)
 			}
 		case tokens.Import:
-			node := p.parseImport()
+			node := p.parseImport(ctx)
 			if node != ast.ZeroNodeIndex {
 				stmts = append(stmts, node)
 			} else {
-				p.synchronize()
+				p.synchronize(ctx)
 			}
-		case tokens.EOF:
-			break tokenLoop
 		default:
-			p.error(p.this(), "unexpected token", "Parse")
-			p.synchronize()
+			p.error(t, "unexpected token", "Parse")
+			p.synchronize(ctx)
 		}
 
-		// Guard against infinite loops: if no progress was made, force advance.
-		if p.i == prev {
-			p.advance("Parse recovery")
-		}
+		// // Guard against infinite loops: if no progress was made, force advance.
+		// if p.lex.This() == t {
+		// 	p.lex.Step()
+		// }
 
-		// Check for EOF again, in case it was reached during parsing.
-		if p.this().Type == tokens.EOF {
-			break tokenLoop
-		}
+		// // Check for EOF again, in case it was reached during parsing.
+		// if t.Type == tokens.EOF {
+		// 	break tokenLoop
+		// }
+	}
+
+	if ctx.Err() != nil {
+		return p.ast, fmt.Errorf("parser error: %w", ctx.Err())
 	}
 
 	if err := errors.Join(p.Errs...); err != nil {
@@ -208,58 +203,13 @@ tokenLoop:
 	return p.ast, nil
 }
 
-func (p *Parser) prev() tokens.Token {
-	if p.i == 0 {
-		return tokens.Token{}
-	}
-
-	return p.tokens[p.i-1]
-}
-
-func (p *Parser) this() tokens.Token {
-	return p.tokens[p.i]
-}
-
-func (p *Parser) next() tokens.Token {
-	if p.i >= len(p.tokens)-1 {
-		return tokens.Token{}
-	}
-
-	return p.tokens[p.i+1]
-}
-
-func (p *Parser) advance(scope string) {
-	if p.i >= len(p.tokens)-1 {
-		return
-	}
-
-	if p.debug && p.this().Type != tokens.Comment {
-		from := p.this().Type.String()
-		if slices.Contains([]tokens.Type{
-			tokens.Identifier, tokens.StringLiteral, tokens.IntLiteral, tokens.FloatLiteral,
-		}, p.this().Type) {
-			from = p.this().Literal
-		}
-
-		to := p.next().Type.String()
-		if slices.Contains([]tokens.Type{
-			tokens.Identifier, tokens.StringLiteral, tokens.IntLiteral, tokens.FloatLiteral,
-		}, p.next().Type) {
-			to = p.next().Literal
-		}
-
-		_, _ = fmt.Printf("ADVANCE: ln %d, col %d:\t%s\t\tfrom %q,\tto %q\n",
-			p.this().Ln, p.this().Col, scope, from, to)
-	}
-
-	p.i++
-}
-
 // synchronize advances tokens until it finds a token that can begin a new statement.
 // This enables error recovery by skipping malformed input.
-func (p *Parser) synchronize() {
-	for p.this().Type != tokens.EOF {
-		switch p.this().Type {
+func (p *Parser) synchronize(ctx context.Context) {
+	for range p.lex.Range(ctx) {
+		// Check next token, if it can start a statement, return to the main parse loop.
+		// Current token will be advances by surrounding Range loop.
+		switch p.lex.Peek(1).Type {
 		case tokens.Identifier,
 			tokens.Builtin,
 			tokens.Comment,
@@ -276,8 +226,6 @@ func (p *Parser) synchronize() {
 			tokens.Break,
 			tokens.Continue:
 			return
-		default:
-			p.advance("synchronize")
 		}
 	}
 }

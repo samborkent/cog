@@ -10,99 +10,100 @@ import (
 
 const importPreallocationSize = 4
 
-func (p *Parser) parseGoImport() ast.NodeIndex {
-	importToken := p.this()
+func (p *Parser) parseGoImport(ctx context.Context) ast.NodeIndex {
+	importToken := p.lex.This()
 	imports := make([]*ast.Identifier, 0, importPreallocationSize)
 
-	p.advance("parseGoImport goimport") // consume 'goimport'
+	p.lex.Step() // consume 'goimport'
 
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after goimport", "parseGoImport")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after goimport", "parseGoImport")
 		return ast.ZeroNodeIndex
 	}
 
-	p.advance("parseGoImport (") // consume '('
+	p.lex.Step() // consume '('
 
-	for ; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; p.advance("parseGoImport loop") {
-		if p.this().Type != tokens.StringLiteral {
-			p.error(p.this(), "found non-string token in goimport list: "+p.this().Literal, "parseGoImport")
+	for t := range p.lex.Range(ctx) {
+		if t.Type == tokens.RParen {
+			break
+		}
+
+		if t.Type != tokens.StringLiteral {
+			p.error(t, "found non-string token in goimport list: "+t.Literal, "parseGoImport")
 			return ast.ZeroNodeIndex
 		}
 
-		_, ok := p.symbols.ResolveGoImport(p.this().Literal)
+		_, ok := p.symbols.ResolveGoImport(t.Literal)
 		if ok {
-			p.error(p.this(), "cannot redeclare Go imports", "parseGoImport")
+			p.error(t, "cannot redeclare Go imports", "parseGoImport")
 			return ast.ZeroNodeIndex
 		}
 
 		ident := &ast.Identifier{
-			Token: p.this(),
-			Name:  p.this().Literal,
+			Token: t,
 		}
 
 		imports = append(imports, ident)
 		p.symbols.DefineGoImport(ident)
 	}
 
-	p.advance("parseGoImport )") // consume ')'
+	p.lex.Step() // consume ')'
 
 	return p.ast.NewGoImport(importToken, imports)
 }
 
 func (p *Parser) parseGoCallExpression(ctx context.Context) ast.ExprIndex {
 	expr := ast.New[ast.GoCallExpression](p.ast)
-	expr.Token = p.this()
+	expr.Token = p.lex.This()
 
-	p.advance("parseGoCallExpression @go") // consume @go
+	p.lex.Step() // consume @go
 
-	if p.this().Type != tokens.Dot {
-		p.error(p.this(), "expected '.' after @go", "parseGoCallExpression")
+	if p.lex.This().Type != tokens.Dot {
+		p.error(p.lex.This(), "expected '.' after @go", "parseGoCallExpression")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseGoCallExpression .") // consume .
+	p.lex.Step() // consume .
 
-	if p.this().Type != tokens.Identifier {
-		p.error(p.this(), "expected identifier after '.' in @go call", "parseGoCallExpression")
+	if p.lex.This().Type != tokens.Identifier {
+		p.error(p.lex.This(), "expected identifier after '.' in @go call", "parseGoCallExpression")
 		return ast.ZeroExprIndex
 	}
 
-	_, ok := p.symbols.ResolveGoImport(p.this().Literal)
+	_, ok := p.symbols.ResolveGoImport(p.lex.This().Literal)
 	if !ok {
-		p.error(p.this(), "undefined Go import", "parseGoCallExpression")
+		p.error(p.lex.This(), "undefined Go import", "parseGoCallExpression")
 	}
 
 	// TODO: handle identifiers.
 	expr.Import = &ast.Identifier{
-		Token: p.this(),
-		Name:  p.this().Literal,
+		Token: p.lex.This(),
 	}
 
-	p.advance("parseGoCallExpression import") // consume import identifier
+	p.lex.Step() // consume import identifier
 
-	if p.this().Type != tokens.Dot {
-		p.error(p.this(), "expected '.' after Go import", "parseGoCallExpression")
+	if p.lex.This().Type != tokens.Dot {
+		p.error(p.lex.This(), "expected '.' after Go import", "parseGoCallExpression")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseGoCallExpression import .") // consume .
+	p.lex.Step() // consume .
 
-	if p.this().Type != tokens.Identifier {
-		p.error(p.this(), "expected call after '.' in Go import", "parseGoCallExpression")
+	if p.lex.This().Type != tokens.Identifier {
+		p.error(p.lex.This(), "expected call after '.' in Go import", "parseGoCallExpression")
 		return ast.ZeroExprIndex
 	}
 
 	callIdent := &ast.Identifier{
-		Token:     p.this(),
-		Name:      p.this().Literal,
+		Token:     p.lex.This(),
 		ValueType: types.None, // TODO: figure out how to deal with Go types and type conversion
 	}
 
-	p.advance("parseGoCallExpression import call") // consume call identifier
+	p.lex.Step() // consume call identifier
 
 	// TODO: also support imported variables / constants
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after call in Go import", "parseGoCallExpression")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after call in Go import", "parseGoCallExpression")
 		return ast.ZeroExprIndex
 	}
 

@@ -21,8 +21,8 @@ main : proc() = {}`)
 			t.Fatal("expected package node")
 		}
 
-		if file.Package.Identifier.Name != "mypackage" {
-			t.Errorf("expected package name 'mypackage', got %q", file.Package.Identifier.Name)
+		if file.Package.Identifier.Token.Literal != "mypackage" {
+			t.Errorf("expected package name 'mypackage', got %q", file.Package.Identifier.Token.Literal)
 		}
 	})
 

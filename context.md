@@ -65,7 +65,7 @@ User noticed `parseTypeParams` is unused. Confirmed it's infrastructure from Pha
 
 - **`internal/parser/arguments.go`**:
   - Added `resolveConstraintToken()` helper: handles both keyword tokens (e.g. `any`, `number`) and identifier tokens (`int`, `uint`, `float`, `complex`) for constraint lookup. This was needed because `int` etc. are not keyword tokens but are valid constraint names.
-  - Fixed `parseTypeParams` to use `p.this().Type.String()` (then fallback to literal) instead of just `p.this().Literal` (which was empty for keyword tokens)
+  - Fixed `parseTypeParams` to use `p.lex.This().Type.String()` (then fallback to literal) instead of just `p.lex.This().Literal` (which was empty for keyword tokens)
 
 **Parser — Generic instantiation:**
 

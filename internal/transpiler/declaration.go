@@ -32,7 +32,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			return nil, nil
 		}
 
-		name := component.ConvertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global)
+		name := component.ConvertExport(n.Assignment.Identifier.Token.Literal, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global)
 		ident := t.symbols.Define(name)
 
 		// If the identifier was predeclared with a placeholder "_" name,
@@ -67,7 +67,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 		// Pre-define ctx and dyn in the symbol table for main so that
 		// the body conversion can reference them (e.g. passing ctx to procs).
-		if n.Assignment.Identifier.Name == "main" {
+		if n.Assignment.Identifier.Token.Literal == "main" {
 			if len(t.symbols.dynamics) > 0 {
 				t.symbols.Define("dyn")
 			}
@@ -91,11 +91,11 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			// Procedure declaration - convert to function declaration
 			funcLiteral, ok := expr.(*goast.FuncLit)
 			if !ok {
-				return nil, fmt.Errorf("unable to assert function literal for %q", n.Assignment.Identifier.Name)
+				return nil, fmt.Errorf("unable to assert function literal for %q", n.Assignment.Identifier.Token.Literal)
 			}
 
 			// Create a function declaration instead of a variable declaration
-			funcName := component.ConvertExport(n.Assignment.Identifier.Name, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global)
+			funcName := component.ConvertExport(n.Assignment.Identifier.Token.Literal, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global)
 			funcDecl := &goast.FuncDecl{
 				Name: &goast.Ident{Name: funcName},
 				Type: funcLiteral.Type,
@@ -103,7 +103,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			}
 
 			// For procedure declarations, return function declaration instead of variable declaration
-			if n.Assignment.Identifier.Name == "main" {
+			if n.Assignment.Identifier.Token.Literal == "main" {
 				t.addStdLibImport("context")
 				t.addStdLibImport("os/signal")
 				t.addStdLibImport("syscall")
@@ -247,8 +247,8 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		if n.Receiver != nil {
 			t.symbols = NewEnclosedSymbolTable(t.symbols)
 			// Create receiver ident with proper name directly
-			recIdent = &goast.Ident{Name: component.ConvertExport(n.Receiver.Name, n.Receiver.Exported, n.Receiver.Global)}
-			t.symbols.table[n.Receiver.Name] = recIdent
+			recIdent = &goast.Ident{Name: component.ConvertExport(n.Receiver.Token.Literal, n.Receiver.Exported, n.Receiver.Global)}
+			t.symbols.table[n.Receiver.Token.Literal] = recIdent
 		}
 
 		decls, err := t.convertDecl(t.Node(n.Declaration))
@@ -312,7 +312,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				Tok: gotoken.TYPE,
 				Specs: []goast.Spec{
 					&goast.TypeSpec{
-						Name: &goast.Ident{Name: component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global) + "Hash"},
+						Name: &goast.Ident{Name: component.ConvertExport(n.Identifier.Token.Literal, n.Identifier.Exported, n.Identifier.Global) + "Hash"},
 						Type: &goast.Ident{Name: gotypes.Typ[gotypes.Uint64].String()},
 					},
 				},
@@ -347,7 +347,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		return nil, fmt.Errorf("cannot convert type %q to enum", n.Alias)
 	}
 
-	identifier := component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global)
+	identifier := component.ConvertExport(n.Identifier.Token.Literal, n.Identifier.Exported, n.Identifier.Global)
 
 	var enumName string
 	if n.Alias.Kind() == types.ErrorKind {

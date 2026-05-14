@@ -10,11 +10,10 @@ import (
 )
 
 func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) types.Type {
-	switch p.this().Type {
+	switch p.lex.This().Type {
 	case tokens.Enum:
 		ident := &ast.Identifier{
-			Token:    p.tokens[p.i-2],
-			Name:     p.tokens[p.i-2].Literal,
+			Token:    p.lex.Peek(-2),
 			Exported: exported,
 			Global:   global,
 		}
@@ -22,8 +21,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 		return p.parseEnumType(ctx, ident)
 	case tokens.Error:
 		ident := &ast.Identifier{
-			Token:    p.tokens[p.i-2],
-			Name:     p.tokens[p.i-2].Literal,
+			Token:    p.lex.Peek(-2),
 			Exported: exported,
 			Global:   global,
 		}
@@ -41,10 +39,10 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 		t.Global = global
 	}
 
-	switch p.this().Type {
+	switch p.lex.This().Type {
 	case tokens.BitXor:
 		// Either (concrete two-type union with Left/Right)
-		p.advance("parseCombinedType either ^") // consume ^
+		p.lex.Step() // consume ^
 
 		right := p.parseType(ctx)
 		if right == nil {
@@ -59,7 +57,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 		}
 	case tokens.Not:
 		// Result type: T ! E
-		p.advance("parseCombinedType result !") // consume !
+		p.lex.Step() // consume !
 
 		errorType := p.parseCombinedType(ctx, exported, global)
 		if errorType == nil {
@@ -67,12 +65,12 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 		}
 
 		if errorType.Kind() != types.ErrorKind {
-			p.error(p.prev(), "result error type must be an error type", "parseCombinedType")
+			p.error(p.lex.Peek(-1), "result error type must be an error type", "parseCombinedType")
 			return nil
 		}
 
 		if typ.Kind() == types.ErrorKind {
-			p.error(p.prev(), "result value type cannot be an error type", "parseCombinedType")
+			p.error(p.lex.Peek(-1), "result value type cannot be an error type", "parseCombinedType")
 			return nil
 		}
 
@@ -87,7 +85,7 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 
 // canStartType reports whether the current token can begin a type expression.
 func (p *Parser) canStartType() bool {
-	switch p.this().Type {
+	switch p.lex.This().Type {
 	case tokens.Interface, tokens.LBracket, tokens.LParen, tokens.Map, tokens.Set,
 		tokens.Struct, tokens.BitAnd, tokens.Function, tokens.Procedure:
 		return true
@@ -95,26 +93,26 @@ func (p *Parser) canStartType() bool {
 		return true
 	}
 	// Check for built-in type keywords (int64, utf8, etc.).
-	_, ok := types.Lookup[p.this().Type]
+	_, ok := types.Lookup[p.lex.This().Type]
 
 	return ok
 }
 
 func (p *Parser) parseType(ctx context.Context) types.Type {
-	switch p.this().Type {
+	switch p.lex.This().Type {
 	case tokens.Interface:
 		return p.parseInterface(ctx)
 	case tokens.LParen:
 		// Tuple type: (T1, T2, ...)
-		p.advance("parseType (") // consume (
+		p.lex.Step() // consume (
 
 		first := p.parseType(ctx)
 		if first == nil {
 			return nil
 		}
 
-		if p.this().Type != tokens.Comma {
-			p.error(p.this(), "expected ',' after first tuple element type", "parseType")
+		if p.lex.This().Type != tokens.Comma {
+			p.error(p.lex.This(), "expected ',' after first tuple element type", "parseType")
 			return nil
 		}
 
@@ -124,8 +122,12 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 		tuple.Types[0] = first
 
-		for p.this().Type == tokens.Comma {
-			p.advance("parseType tuple ,") // consume ,
+		for tok := range p.lex.Range(ctx) {
+			if tok.Type != tokens.Comma {
+				break
+			}
+
+			p.lex.Step() // consume ,
 
 			next := p.parseType(ctx)
 			if next != nil {
@@ -133,25 +135,25 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 			}
 		}
 
-		if p.this().Type != tokens.RParen {
-			p.error(p.this(), "expected ')' to close tuple type", "parseType")
+		if p.lex.This().Type != tokens.RParen {
+			p.error(p.lex.This(), "expected ')' to close tuple type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType )") // consume )
+		p.lex.Step() // consume )
 
 		return tuple
 	case tokens.LBracket:
-		p.advance("parseType [") // consume [
+		p.lex.Step() // consume [
 
-		if p.this().Type == tokens.RBracket {
+		if p.lex.This().Type == tokens.RBracket {
 			// Slice type
-			if p.this().Type != tokens.RBracket {
-				p.error(p.this(), "expected closing ] in slice type", "parseType")
+			if p.lex.This().Type != tokens.RBracket {
+				p.error(p.lex.This(), "expected closing ] in slice type", "parseType")
 				return nil
 			}
 
-			p.advance("parseType ]") // consume ]
+			p.lex.Step() // consume ]
 
 			elemType := p.parseType(ctx)
 			if elemType == nil {
@@ -164,17 +166,17 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		}
 
 		// Array type
-		switch p.this().Type {
+		switch p.lex.This().Type {
 		case tokens.IntLiteral:
 		case tokens.Identifier:
-			symbol, ok := p.symbols.Resolve(p.this().Literal)
+			symbol, ok := p.symbols.Resolve(p.lex.This().Literal)
 			if ok && types.IsFixed(symbol.Identifier.ValueType) {
 				break
 			}
 
 			fallthrough
 		default:
-			p.error(p.this(), "expected fixed-point number type as array length", "parseCombinedType")
+			p.error(p.lex.This(), "expected fixed-point number type as array length", "parseCombinedType")
 			return nil
 		}
 
@@ -183,12 +185,12 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 			return nil
 		}
 
-		if p.this().Type != tokens.RBracket {
-			p.error(p.this(), "expected closing ] in array type", "parseType")
+		if p.lex.This().Type != tokens.RBracket {
+			p.error(p.lex.This(), "expected closing ] in array type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType ]") // consume ]
+		p.lex.Step() // consume ]
 
 		elemType := p.parseType(ctx)
 		if elemType == nil {
@@ -200,71 +202,71 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 			Length:  p.typeExpr(lenExpr),
 		}
 	case tokens.Map:
-		p.advance("parseType map") // consume map
+		p.lex.Step() // consume map
 
-		if p.this().Type != tokens.LT {
-			p.error(p.this(), "expected < after map type", "parseType")
+		if p.lex.This().Type != tokens.LT {
+			p.error(p.lex.This(), "expected < after map type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType map <") // consume <
+		p.lex.Step() // consume <
 
 		keyType := p.parseType(ctx)
 		if keyType == nil {
 			return nil
 		}
 
-		if p.this().Type != tokens.Comma {
-			p.error(p.this(), "expected , after map key type", "parseType")
+		if p.lex.This().Type != tokens.Comma {
+			p.error(p.lex.This(), "expected , after map key type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType map ,") // consume ,
+		p.lex.Step() // consume ,
 
 		valType := p.parseType(ctx)
 		if valType == nil {
 			return nil
 		}
 
-		if p.this().Type != tokens.GT {
-			p.error(p.this(), "expected > after map value type", "parseType")
+		if p.lex.This().Type != tokens.GT {
+			p.error(p.lex.This(), "expected > after map value type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType map >") // consume >
+		p.lex.Step() // consume >
 
 		return &types.Map{
 			Key:   keyType,
 			Value: valType,
 		}
 	case tokens.Set:
-		p.advance("parseType set") // consume set
+		p.lex.Step() // consume set
 
-		if p.this().Type != tokens.LT {
-			p.error(p.this(), "expected < after set type", "parseType")
+		if p.lex.This().Type != tokens.LT {
+			p.error(p.lex.This(), "expected < after set type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType set <") // consume <
+		p.lex.Step() // consume <
 
 		elemType := p.parseType(ctx)
 		if elemType == nil {
 			return nil
 		}
 
-		if p.this().Type != tokens.GT {
-			p.error(p.this(), "expected > after set element type", "parseType")
+		if p.lex.This().Type != tokens.GT {
+			p.error(p.lex.This(), "expected > after set element type", "parseType")
 			return nil
 		}
 
-		p.advance("parseType set >") // consume >
+		p.lex.Step() // consume >
 
 		return &types.Set{Element: elemType}
 	case tokens.Struct:
 		return p.parseStruct(ctx)
 	case tokens.BitAnd:
 		// Reference type parsing
-		p.advance("parseType &") // consume &
+		p.lex.Step() // consume &
 
 		valType := p.parseType(ctx)
 		if valType == nil {
@@ -273,7 +275,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 		// TODO: check if this is correct.
 		if types.IsPointer(valType) {
-			p.error(p.this(), fmt.Sprintf("reference of pointer type %q not allowed", valType.Kind()), "parseType")
+			p.error(p.lex.This(), fmt.Sprintf("reference of pointer type %q not allowed", valType.Kind()), "parseType")
 			return nil
 		}
 
@@ -282,46 +284,46 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		}
 	}
 
-	typ, ok := types.Lookup[p.this().Type]
+	typ, ok := types.Lookup[p.lex.This().Type]
 	if !ok {
 		// Check for imported package type: pkg.Type
-		if p.this().Type == tokens.Identifier && p.next().Type == tokens.Dot {
-			if imp, isImport := p.symbols.ResolveCogImport(p.this().Literal); isImport {
-				p.advance("parseType pkg") // consume package name
-				p.advance("parseType .")   // consume '.'
+		if p.lex.This().Type == tokens.Identifier && p.lex.Peek(1).Type == tokens.Dot {
+			if imp, isImport := p.symbols.ResolveCogImport(p.lex.This().Literal); isImport {
+				p.lex.Step() // consume package name
+				p.lex.Step() // consume '.'
 
-				if p.this().Type != tokens.Identifier {
-					p.error(p.this(), "expected type name after package selector", "parseType")
+				if p.lex.This().Type != tokens.Identifier {
+					p.error(p.lex.This(), "expected type name after package selector", "parseType")
 					return nil
 				}
 
-				sym, found := imp.Exports[p.this().Literal]
+				sym, found := imp.Exports[p.lex.This().Literal]
 				if !found || sym.Identifier.Qualifier != ast.QualifierType {
-					p.error(p.this(), fmt.Sprintf("package %q has no exported type %q", imp.Name, p.this().Literal), "parseType")
+					p.error(p.lex.This(), fmt.Sprintf("package %q has no exported type %q", imp.Name, p.lex.This().Literal), "parseType")
 					return nil
 				}
 
 				ident := sym.Identifier
 				if types.IsNone(ident.ValueType) {
-					typ = types.NewForwardAlias(ident.Name, ident.Exported, ident.Global, func() types.Type {
+					typ = types.NewForwardAlias(ident.Token.Literal, ident.Exported, ident.Global, func() types.Type {
 						return ident.ValueType
 					})
 				} else {
 					typ = &types.Alias{
-						Name:     ident.Name,
+						Name:     ident.Token.Literal,
 						Derived:  ident.ValueType,
 						Exported: ident.Exported,
 						Global:   ident.Global,
 					}
 				}
 
-				p.advance("parseType pkg type") // consume type name
+				p.lex.Step() // consume type name
 
-				if p.this().Type == tokens.Question {
-					p.advance("parseType ?") // consume ?
+				if p.lex.This().Type == tokens.Question {
+					p.lex.Step() // consume ?
 
 					if typ.Kind() == types.OptionKind {
-						p.error(p.this(), "nested optional types are not allowed", "parseType")
+						p.error(p.lex.This(), "nested optional types are not allowed", "parseType")
 						return nil
 					}
 
@@ -333,9 +335,9 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		}
 
 		// Non-basic type, try to find in symbol table.
-		typeSymbol, ok := p.symbols.Resolve(p.this().Literal)
+		typeSymbol, ok := p.symbols.Resolve(p.lex.This().Literal)
 		if !ok || typeSymbol.Identifier.Qualifier != ast.QualifierType {
-			p.error(p.this(), "unknown type found in type declaration", "parseType")
+			p.error(p.lex.This(), "unknown type found in type declaration", "parseType")
 			return nil
 		}
 
@@ -344,14 +346,14 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		// If the symbol is a type parameter (inside a generic alias body),
 		// return the type parameter alias directly.
 		if alias, ok := ident.ValueType.(*types.Alias); ok && alias.IsTypeParam() {
-			p.advance("parseType typeparam") // consume type param name
+			p.lex.Step() // consume type param name
 			return alias
 		}
 
 		if types.IsNone(ident.ValueType) {
 			// Forward reference: type name is pre-registered but not yet resolved.
 			// Create a lazy alias that resolves when the type is accessed.
-			typ = types.NewForwardAlias(ident.Name, ident.Exported, ident.Global, func() types.Type {
+			typ = types.NewForwardAlias(ident.Token.Literal, ident.Exported, ident.Global, func() types.Type {
 				return ident.ValueType
 			})
 		} else {
@@ -363,7 +365,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 			}
 
 			typ = &types.Alias{
-				Name:       ident.Name,
+				Name:       ident.Token.Literal,
 				Derived:    ident.ValueType,
 				Exported:   ident.Exported,
 				Global:     ident.Global,
@@ -372,22 +374,22 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		}
 	}
 
-	p.advance("parseType type") // consume type
+	p.lex.Step() // consume type
 
 	// Check for generic instantiation: Alias<int32, utf8>
-	if p.this().Type == tokens.LT {
+	if p.lex.This().Type == tokens.LT {
 		typ = p.instantiateGenericAlias(ctx, typ)
 		if typ == nil {
 			return nil
 		}
 	}
 
-	if p.this().Type == tokens.Question {
+	if p.lex.This().Type == tokens.Question {
 		// Optional type
-		p.advance("parseType ?") // consume ?
+		p.lex.Step() // consume ?
 
 		if typ.Kind() == types.OptionKind {
-			p.error(p.this(), "nested optional types are not allowed", "parseType")
+			p.error(p.lex.This(), "nested optional types are not allowed", "parseType")
 			return nil
 		}
 
@@ -404,7 +406,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) types.Type {
 	alias, ok := typ.(*types.Alias)
 	if !ok {
-		p.error(p.this(), "type arguments on non-alias type", "instantiateGenericAlias")
+		p.error(p.lex.This(), "type arguments on non-alias type", "instantiateGenericAlias")
 		return nil
 	}
 
@@ -435,7 +437,7 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 	}
 
 	if genAlias == nil {
-		p.error(p.this(), fmt.Sprintf("type %q is not generic", alias.Name), "instantiateGenericAlias")
+		p.error(p.lex.This(), fmt.Sprintf("type %q is not generic", alias.Name), "instantiateGenericAlias")
 		return nil
 	}
 
@@ -445,7 +447,7 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 	}
 
 	if len(typeArgs) != len(genAlias.TypeParams) {
-		p.error(p.this(), fmt.Sprintf("wrong number of type arguments for %q: expected %d, got %d",
+		p.error(p.lex.This(), fmt.Sprintf("wrong number of type arguments for %q: expected %d, got %d",
 			alias.Name, len(genAlias.TypeParams), len(typeArgs)), "instantiateGenericAlias")
 
 		return nil
@@ -455,7 +457,7 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 	for i, arg := range typeArgs {
 		tp := genAlias.TypeParams[i]
 		if !tp.SatisfiedBy(arg) {
-			p.error(p.this(), fmt.Sprintf("type argument %q does not satisfy constraint %q for parameter %q",
+			p.error(p.lex.This(), fmt.Sprintf("type argument %q does not satisfy constraint %q for parameter %q",
 				arg.String(), tp.ConstraintString(), tp.Name), "instantiateGenericAlias")
 
 			return nil
@@ -472,39 +474,39 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 }
 
 func (p *Parser) parseInterface(ctx context.Context) types.Type {
-	p.advance("parseInterface interface") // consume interface
+	p.lex.Step() // consume interface
 
-	if p.this().Type != tokens.LBrace {
-		p.error(p.this(), "expected { after interface declaration", "parseInterface")
+	if p.lex.This().Type != tokens.LBrace {
+		p.error(p.lex.This(), "expected { after interface declaration", "parseInterface")
 		return nil
 	}
 
-	p.advance("parseInterface {") // consume {
+	p.lex.Step() // consume {
 
 	methods := []*types.Method{}
 
-	for p.this().Type != tokens.RBrace {
-		if ctx.Err() != nil {
-			return nil
+	for tok := range p.lex.Range(ctx) {
+		if tok.Type == tokens.RBrace {
+			break
 		}
 
-		if p.this().Type != tokens.Identifier {
-			p.error(p.this(), "unexpected token found in interface declaration", "parseInterface")
+		if tok.Type != tokens.Identifier {
+			p.error(tok, "unexpected token found in interface declaration", "parseInterface")
 			return nil
 		}
 
 		method := &types.Method{
-			Name: p.this().Literal,
+			Name: tok.Literal,
 		}
 
-		p.advance("parseInterface identifier") // consume identifier
+		p.lex.Step() // consume identifier
 
-		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected : after method name in interface method", "parseInterface")
+		if p.lex.This().Type != tokens.Colon {
+			p.error(p.lex.This(), "expected : after method name in interface method", "parseInterface")
 			return nil
 		}
 
-		p.advance("parseInterface :") // consume :
+		p.lex.Step() // consume :
 
 		methodType := p.parseProcedureType(ctx, true, false)
 		if methodType == nil {
@@ -516,7 +518,7 @@ func (p *Parser) parseInterface(ctx context.Context) types.Type {
 		methods = append(methods, method)
 	}
 
-	p.advance("parseInterface }") // consume }
+	p.lex.Step() // consume }
 
 	return &types.Interface{
 		Methods: methods,
@@ -524,32 +526,36 @@ func (p *Parser) parseInterface(ctx context.Context) types.Type {
 }
 
 func (p *Parser) parseStruct(ctx context.Context) types.Type {
-	p.advance("parseStruct struct") // consume struct
+	p.lex.Step() // consume struct
 
-	if p.this().Type != tokens.LBrace {
-		p.error(p.this(), "expected { after struct declaration", "parseStruct")
+	if p.lex.This().Type != tokens.LBrace {
+		p.error(p.lex.This(), "expected { after struct declaration", "parseStruct")
 		return nil
 	}
 
-	p.advance("parseStruct {") // consume {
+	p.lex.Step() // consume {
 
 	fields := []*types.Field{}
 
 	isComplex := false
 
-	for p.this().Type != tokens.RBrace {
-		if ctx.Err() != nil {
-			return nil
+	for tok := range p.lex.Range(ctx) {
+		if tok.Type == tokens.RBrace {
+			break
 		}
 
-		switch p.this().Type {
+		switch tok.Type {
 		case tokens.Export:
-			p.advance("parseStruct export") // consume export
+			p.lex.Step() // consume export
 
-			if p.this().Type == tokens.LParen {
-				p.advance("parseStruct export (") // consume (
+			if p.lex.This().Type == tokens.LParen {
+				p.lex.Step() // consume (
 
-				for p.this().Type != tokens.RParen {
+				for tok := range p.lex.Range(ctx) {
+					if tok.Type == tokens.RParen {
+						break
+					}
+
 					field := p.parseField(ctx, true)
 					if field == nil {
 						return nil
@@ -562,7 +568,7 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 					fields = append(fields, field)
 				}
 
-				p.advance("parseStruct export )") // consume )
+				p.lex.Step() // consume )
 
 				continue
 			}
@@ -581,12 +587,12 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 
 			fields = append(fields, field)
 		default:
-			p.error(p.this(), "unexpected token found in struct declaration", "parseStruct")
+			p.error(p.lex.This(), "unexpected token found in struct declaration", "parseStruct")
 			return nil
 		}
 	}
 
-	p.advance("parseStruct }") // consume }
+	p.lex.Step() // consume }
 
 	return &types.Struct{
 		Fields:    fields,
@@ -596,18 +602,18 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 
 func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 	field := &types.Field{
-		Name:     p.this().Literal,
+		Name:     p.lex.This().Literal,
 		Exported: exported,
 	}
 
-	p.advance("parseField identifier") // consume identifier
+	p.lex.Step() // consume identifier
 
-	if p.this().Type != tokens.Colon {
-		p.error(p.this(), "expected : after field name in struct declaration", "parseStruct")
+	if p.lex.This().Type != tokens.Colon {
+		p.error(p.lex.This(), "expected : after field name in struct declaration", "parseStruct")
 		return nil
 	}
 
-	p.advance("parseField :") // consume :
+	p.lex.Step() // consume :
 
 	fieldType := p.parseCombinedType(ctx, exported, false)
 	if fieldType == nil {
@@ -627,13 +633,13 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 
 func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) *types.Procedure {
 	procType := &types.Procedure{
-		Function:   p.this().Type == tokens.Function,
+		Function:   p.lex.This().Type == tokens.Function,
 		Parameters: make([]*types.Parameter, 0),
 	}
 
-	p.advance("parseProcedureType proc/func")
+	p.lex.Step() // consume proc/func
 
-	if p.this().Type == tokens.LT {
+	if p.lex.This().Type == tokens.LT {
 		procType.TypeParams = p.parseTypeParams(ctx)
 		if procType.TypeParams == nil {
 			return nil
@@ -645,7 +651,10 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 		// Pre-register type parameters in symbol table for recursive references.
 		for _, tp := range procType.TypeParams {
 			p.symbols.Define(&ast.Identifier{
-				Name:      tp.Name,
+				Token: tokens.Token{
+					Type:    tokens.Identifier,
+					Literal: tp.Name,
+				},
 				ValueType: tp,
 				Qualifier: ast.QualifierType,
 			})
@@ -657,67 +666,67 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 		}()
 	}
 
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), fmt.Sprintf("expected '(' after %q in type", p.prev().Type), "parseProcedureType")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), fmt.Sprintf("expected '(' after %q in type", p.lex.Peek(-1).Type), "parseProcedureType")
 		return nil
 	}
 
-	p.advance("parseProcedureType (") // consume (
+	p.lex.Step() // consume (
 
 	// Flag to keep track of if any of the parameters is optional.
 	// When a parameter is marked as optional, all following parameters must also be optional.
 	haveOptional := false
 
-	for i := 0; !p.match(tokens.RParen, tokens.EOF); i++ {
-		if ctx.Err() != nil {
-			return nil
+	for tok := range p.lex.Range(ctx) {
+		if tok.Type == tokens.RParen {
+			break
 		}
 
-		if p.this().Type != tokens.Identifier {
-			p.error(p.this(), "expected parameter identifier", "parseParameters")
+		if tok.Type != tokens.Identifier {
+			p.error(tok, "expected parameter identifier", "parseParameters")
 			return nil
 		}
 
 		param := &types.Parameter{
-			Name: p.this().Literal,
+			Name: tok.Literal,
 		}
 
-		p.advance("parseParameters loop identifier") // consume identifier
+		p.lex.Step() // consume identifier
 
-		if p.this().Type == tokens.Question {
+		if p.lex.This().Type == tokens.Question {
 			param.Optional = true
 			haveOptional = true
 
-			p.advance("parseParameters loop ?") // consume ?
+			p.lex.Step() // consume ?
 		} else if haveOptional {
 			// This parameter is not optional, but a previous parameter was, this is not allowed.
-			p.error(p.prev(), "all input parameters following an optional parameter must also be optional", "parseParameters")
+			p.error(p.lex.Peek(-1), "all input parameters following an optional parameter must also be optional", "parseParameters")
 			return nil
 		}
 
-		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after input parameter identifier", "parseParameters")
+		if p.lex.This().Type != tokens.Colon {
+			p.error(p.lex.This(), "expected ':' after input parameter identifier", "parseParameters")
 			return nil
 		}
 
-		p.advance("parseParameters loop :") // consume :
+		p.lex.Step() // consume :
 
 		paramType := p.parseCombinedType(ctx, false, false)
 		if paramType == nil {
-			p.error(p.this(), "unknown parameter type", "parseParameters")
+			p.error(p.lex.This(), "unknown parameter type", "parseParameters")
 			return nil
 		}
 
 		param.Type = paramType
 
-		if p.this().Type == tokens.Assign {
+		if p.lex.This().Type == tokens.Assign {
 			if !param.Optional {
-				p.error(p.this(), "default values are only allowed for optional input parameters", "parseParameters")
+				p.error(p.lex.This(), "default values are only allowed for optional input parameters", "parseParameters")
 				return nil
 			}
 
 			// Default parameter value assignment
-			p.advance("parseParameters loop =") // consume '='
+			p.lex.Step() // consume '='
 
 			expr := p.expression(ctx, paramType)
 			if expr != ast.ZeroExprIndex {
@@ -727,14 +736,14 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 
 		procType.Parameters = append(procType.Parameters, param)
 
-		if p.this().Type == tokens.Comma {
-			p.advance("parseParameters loop ,") // consume ','
+		if p.lex.This().Type == tokens.Comma {
+			p.lex.Step() // consume ','
 		}
 	}
 
-	p.advance("parseProcedureType )") // consume )
+	p.lex.Step() // consume )
 
-	if p.this().Type == tokens.Assign {
+	if p.lex.This().Type == tokens.Assign {
 		// No return type.
 		return procType
 	}
@@ -758,8 +767,8 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 	}
 
 	// Result type: T ! E
-	if p.this().Type == tokens.Not {
-		p.advance("parseProcedureType !") // consume !
+	if p.lex.This().Type == tokens.Not {
+		p.lex.Step() // consume !
 
 		errorType := p.parseCombinedType(ctx, exported, global)
 		if errorType == nil {
@@ -767,12 +776,12 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 		}
 
 		if errorType.Kind() != types.ErrorKind {
-			p.error(p.prev(), "result error type must be an error type", "parseProcedureType")
+			p.error(p.lex.Peek(-1), "result error type must be an error type", "parseProcedureType")
 			return nil
 		}
 
 		if returnType.Kind() == types.ErrorKind {
-			p.error(p.prev(), "result value type cannot be an error type", "parseProcedureType")
+			p.error(p.lex.Peek(-1), "result value type cannot be an error type", "parseProcedureType")
 			return nil
 		}
 
@@ -788,95 +797,94 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 }
 
 func (p *Parser) parseEnumType(ctx context.Context, ident *ast.Identifier) types.Type {
-	p.advance("parseEnumType enum") // consume enum
+	p.lex.Step() // consume enum
 
-	if p.this().Type != tokens.LT {
-		p.error(p.this(), "expected < after enum type", "parseEnumType")
+	if p.lex.This().Type != tokens.LT {
+		p.error(p.lex.This(), "expected < after enum type", "parseEnumType")
 		return nil
 	}
 
-	p.advance("parseEnumType <") // consume <
+	p.lex.Step() // consume <
 
 	valType := p.parseType(ctx)
 	if valType == nil {
 		return nil
 	}
 
-	if p.this().Type != tokens.GT {
-		p.error(p.this(), "expected > after enum value type", "parseEnumType")
+	if p.lex.This().Type != tokens.GT {
+		p.error(p.lex.This(), "expected > after enum value type", "parseEnumType")
 		return nil
 	}
 
-	p.advance("parseEnumType >") // consume >
+	p.lex.Step() // consume >
 
-	if p.this().Type != tokens.LBrace {
-		p.error(p.this(), "expected { after enum type", "parseEnumType")
+	if p.lex.This().Type != tokens.LBrace {
+		p.error(p.lex.This(), "expected { after enum type", "parseEnumType")
 		return nil
 	}
 
-	p.advance("parseEnumType {") // consume {
+	p.lex.Step() // consume {
 
 	typ := &types.Enum{
 		ValueType: valType,
 		Values:    make([]*types.EnumValue, 0),
 	}
 
-	for !p.match(tokens.RBrace, tokens.EOF) {
-		if ctx.Err() != nil {
-			return nil
+	for tok := range p.lex.Range(ctx) {
+		if tok.Type == tokens.RBrace {
+			break
 		}
 
-		if p.this().Type != tokens.Identifier {
-			p.error(p.this(), "expected identifier in enum declaration", "parseEnumType")
+		if tok.Type != tokens.Identifier {
+			p.error(tok, "expected identifier in enum declaration", "parseEnumType")
 			return nil
 		}
 
 		valIdent := &ast.Identifier{
-			Token:     p.this(),
-			Name:      p.this().Literal,
+			Token:     tok,
 			ValueType: valType,
 			Exported:  ident.Exported,
 		}
 
-		p.symbols.DefineEnumValue(ident.Name, valIdent)
+		p.symbols.DefineEnumValue(ident.Token.Literal, valIdent)
 
-		p.advance("parseEnumType identifier") // consume identifier
+		p.lex.Step() // consume identifier
 
-		if p.this().Type != tokens.Declaration {
-			p.error(p.this(), "expected := in enum literal", "parseEnumType")
+		if p.lex.This().Type != tokens.Declaration {
+			p.error(p.lex.This(), "expected := in enum literal", "parseEnumType")
 			return nil
 		}
 
-		p.advance("parseEnumType :=") // consume :=
+		p.lex.Step() // consume :=
 
 		enumExpr := p.expression(ctx, valType)
 		if enumExpr != ast.ZeroExprIndex {
 			typ.Values = append(typ.Values, &types.EnumValue{
-				Name:  valIdent.Name,
+				Name:  valIdent.Token.Literal,
 				Value: p.typeExpr(enumExpr),
 			})
 		}
 
-		if p.this().Type == tokens.Comma {
-			p.advance("parseEnumType ,") // consume ,
+		if p.lex.This().Type == tokens.Comma {
+			p.lex.Step() // consume ,
 		}
 	}
 
-	p.advance("parseEnumType }") // consume }
+	p.lex.Step() // consume }
 
 	return typ
 }
 
 func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) types.Type {
-	p.advance("parseErrorType error") // consume error
+	p.lex.Step() // consume error
 
 	typ := &types.Error{
 		Values: make([]*types.EnumValue, 0),
 	}
 
-	if p.this().Type == tokens.LT {
+	if p.lex.This().Type == tokens.LT {
 		// Typed error: error<ascii> or error<utf8>
-		p.advance("parseErrorType <") // consume <
+		p.lex.Step() // consume <
 
 		valType := p.parseType(ctx)
 		if valType == nil {
@@ -884,38 +892,38 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 		}
 
 		if valType.Kind() != types.ASCII && valType.Kind() != types.UTF8 {
-			p.error(p.this(), "error type parameter must be ascii or utf8", "parseErrorType")
+			p.error(p.lex.This(), "error type parameter must be ascii or utf8", "parseErrorType")
 			return nil
 		}
 
 		typ.ValueType = valType
 
-		if p.this().Type != tokens.GT {
-			p.error(p.this(), "expected > after error value type", "parseErrorType")
+		if p.lex.This().Type != tokens.GT {
+			p.error(p.lex.This(), "expected > after error value type", "parseErrorType")
 			return nil
 		}
 
-		p.advance("parseErrorType >") // consume >
+		p.lex.Step() // consume >
 	}
 
-	if p.this().Type != tokens.LBrace {
-		p.error(p.this(), "expected { after error type", "parseErrorType")
+	if p.lex.This().Type != tokens.LBrace {
+		p.error(p.lex.This(), "expected { after error type", "parseErrorType")
 		return nil
 	}
 
-	p.advance("parseErrorType {") // consume {
+	p.lex.Step() // consume {
 
-	for !p.match(tokens.RBrace, tokens.EOF) {
-		if ctx.Err() != nil {
+	for tok := range p.lex.Range(ctx) {
+		if tok.Type == tokens.RBrace {
+			break
+		}
+
+		if tok.Type != tokens.Identifier {
+			p.error(tok, "expected identifier in error declaration", "parseErrorType")
 			return nil
 		}
 
-		if p.this().Type != tokens.Identifier {
-			p.error(p.this(), "expected identifier in error declaration", "parseErrorType")
-			return nil
-		}
-
-		valName := p.this().Literal
+		valName := tok.Literal
 
 		// For typeless errors, the value type is utf8 (printed as the variant name).
 		valType := typ.ValueType
@@ -924,24 +932,23 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 		}
 
 		valIdent := &ast.Identifier{
-			Token:     p.this(),
-			Name:      valName,
+			Token:     tok,
 			ValueType: valType,
 			Exported:  ident.Exported,
 		}
 
-		p.symbols.DefineEnumValue(ident.Name, valIdent)
+		p.symbols.DefineEnumValue(ident.Token.Literal, valIdent)
 
-		p.advance("parseErrorType identifier") // consume identifier
+		p.lex.Step() // consume identifier
 
 		if typ.ValueType != nil {
 			// Typed error: require := value
-			if p.this().Type != tokens.Declaration {
-				p.error(p.this(), "expected := in typed error literal", "parseErrorType")
+			if p.lex.This().Type != tokens.Declaration {
+				p.error(p.lex.This(), "expected := in typed error literal", "parseErrorType")
 				return nil
 			}
 
-			p.advance("parseErrorType :=") // consume :=
+			p.lex.Step() // consume :=
 
 			enumExpr := p.expression(ctx, typ.ValueType)
 			if enumExpr != ast.ZeroExprIndex {
@@ -966,12 +973,12 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 			})
 		}
 
-		if p.this().Type == tokens.Comma {
-			p.advance("parseErrorType ,") // consume ,
+		if p.lex.This().Type == tokens.Comma {
+			p.lex.Step() // consume ,
 		}
 	}
 
-	p.advance("parseErrorType }") // consume }
+	p.lex.Step() // consume }
 
 	return typ
 }

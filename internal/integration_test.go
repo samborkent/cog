@@ -15,7 +15,6 @@ import (
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
 	"github.com/samborkent/cog/internal/parser"
-	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/transpiler"
 )
 
@@ -23,14 +22,9 @@ import (
 func transpileSource(t *testing.T, src string) string {
 	t.Helper()
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lexer error: %v", err)
-	}
-
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, parser.NewSymbolTable(), "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -163,14 +157,9 @@ func runGenerated(t *testing.T, code string) (string, error) {
 
 // tryTranspile attempts to run the full pipeline and returns generated code or an error.
 func tryTranspile(ctx context.Context, src string) (string, error) {
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(ctx)
-	if err != nil {
-		return "", fmt.Errorf("lexer: %w", err)
-	}
-
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, parser.NewSymbolTable(), "", 0, nil)
 	if err != nil {
 		return "", fmt.Errorf("parser init: %w", err)
 	}
@@ -271,14 +260,9 @@ func TestMissingPackageProducesError(t *testing.T) {
 	// No package declaration -> parser should return an error
 	src := `main : proc() = {}`
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lexer error: %v", err)
-	}
-
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, parser.NewSymbolTable(), "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -349,14 +333,9 @@ a := 1
 a := 2
 
 main : proc() = {}`
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lexer error: %v", err)
-	}
-
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), true, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, parser.NewSymbolTable(), "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -877,8 +856,8 @@ func transpilePackage(t *testing.T, files map[string]string) map[string]string {
 	t.Helper()
 
 	type lexedFile struct {
-		name   string
-		tokens []tokens.Token
+		name  string
+		lexer *lexer.Lexer
 	}
 
 	// Deterministic order.
@@ -892,14 +871,10 @@ func transpilePackage(t *testing.T, files map[string]string) map[string]string {
 	lexed := make([]lexedFile, 0, len(files))
 
 	for _, name := range names {
-		l := lexer.New(strings.NewReader(files[name]))
+		file := files[name]
+		l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
 
-		toks, err := l.Parse(t.Context())
-		if err != nil {
-			t.Fatalf("lexer error (%s): %v", name, err)
-		}
-
-		lexed = append(lexed, lexedFile{name: name, tokens: toks})
+		lexed = append(lexed, lexedFile{name: name, lexer: l})
 	}
 
 	// Shared symbol table across all files.
@@ -907,7 +882,7 @@ func transpilePackage(t *testing.T, files map[string]string) map[string]string {
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name, uint16(i), nil)
+		p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.name, uint16(i), nil)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", lf.name, err)
 		}
@@ -956,8 +931,8 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 	t.Helper()
 
 	type lexedFile struct {
-		name   string
-		tokens []tokens.Token
+		name  string
+		lexer *lexer.Lexer
 	}
 
 	names := make([]string, 0, len(files))
@@ -970,21 +945,17 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 	lexed := make([]lexedFile, 0, len(files))
 
 	for _, name := range names {
-		l := lexer.New(strings.NewReader(files[name]))
+		file := files[name]
+		l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
 
-		toks, err := l.Parse(t.Context())
-		if err != nil {
-			return "", fmt.Errorf("lexer (%s): %w", name, err)
-		}
-
-		lexed = append(lexed, lexedFile{name: name, tokens: toks})
+		lexed = append(lexed, lexedFile{name: name, lexer: l})
 	}
 
 	symbols := parser.NewSymbolTable()
 
 	parsers := make([]*parser.Parser, len(lexed))
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.name, uint16(i), nil)
+		p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.name, uint16(i), nil)
 		if err != nil {
 			return "", fmt.Errorf("parser init (%s): %w", lf.name, err)
 		}
@@ -1127,16 +1098,10 @@ main : proc() = {
 }
 `
 
-	l := lexer.New(strings.NewReader(src))
-
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lexer error: %v", err)
-	}
-
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false, "test.cog", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, symbols, "test.cog", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -1146,12 +1111,6 @@ main : proc() = {
 	// Replicate the check from runProject: main exists but package != "main".
 	if _, hasMain := symbols.Resolve("main"); !hasMain {
 		t.Fatal("expected symbol table to contain main")
-	}
-
-	// The package name comes from the token stream (tokens[1]).
-	pkgName := toks[1].Literal
-	if pkgName == "main" {
-		t.Fatal("expected non-main package name")
 	}
 }
 
@@ -1305,16 +1264,10 @@ main : proc() = {
 }
 `
 
-	l := lexer.New(strings.NewReader(src))
-
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lexer error: %v", err)
-	}
-
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, symbols, "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -1324,13 +1277,6 @@ main : proc() = {
 	// Replicate the check from compileImportedPackage: imported packages must not have main.
 	if _, hasMain := symbols.Resolve("main"); !hasMain {
 		t.Fatal("expected symbol table to contain main for this test scenario")
-	}
-
-	// In the real pipeline, this would cause compileImportedPackage to return nil.
-	// Here we just verify the symbol is detected.
-	pkgName := toks[1].Literal
-	if pkgName == "main" {
-		t.Fatal("expected non-main package name for imported package test")
 	}
 }
 

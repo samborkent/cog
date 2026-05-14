@@ -9,7 +9,7 @@ import (
 )
 
 func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier) ast.NodeIndex {
-	declToken := p.prev()
+	declToken := p.lex.Peek(-1)
 
 	identType := p.parseCombinedType(ctx, ident.Exported, ident.Global)
 	if identType == nil {
@@ -22,13 +22,13 @@ func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifie
 }
 
 func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, ident *ast.Identifier) ast.NodeIndex {
-	symbol, ok := p.symbols.Resolve(ident.Name)
+	symbol, ok := p.symbols.Resolve(ident.Token.Literal)
 	if ok && symbol.Scope != ScanScope && ident.Qualifier != ast.QualifierMethod {
 		p.error(ident.Token, "cannot redeclare variable", "parseDeclaration")
 		return ast.ZeroNodeIndex
 	}
 
-	if ident.Name == "main" {
+	if ident.Token.Literal == "main" {
 		procType, isProc := ident.ValueType.(*types.Procedure)
 		if !isProc || procType.Function || len(procType.Parameters) != 0 || procType.ReturnType != nil {
 			p.error(ident.Token, `"main" can only be declared as proc()`, "parseDeclaration")
@@ -40,14 +40,15 @@ func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, i
 		ident.ValueType = types.None
 	}
 
+	assignToken := p.lex.This()
 	assignment := &ast.Assignment{
-		Token:      p.this(),
+		Token:      assignToken,
 		Identifier: ident,
 	}
 
-	if !p.match(tokens.Assign, tokens.Declaration) {
+	if !p.match(assignToken, tokens.Assign, tokens.Declaration) {
 		if ident.Qualifier == ast.QualifierImmutable {
-			p.error(p.this(), "immutable declarations must be initialized", "parseDeclaration")
+			p.error(assignToken, "immutable declarations must be initialized", "parseDeclaration")
 			return ast.ZeroNodeIndex
 		}
 
@@ -57,7 +58,7 @@ func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, i
 		return p.ast.NewDeclaration(declToken, assignment)
 	}
 
-	p.advance("parseDeclaration") // consume := or =
+	p.lex.Step() // consume := or =
 
 	expr := p.expression(ctx, ident.ValueType)
 	if expr == ast.ZeroExprIndex {
@@ -82,7 +83,7 @@ func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, i
 	if resultType, ok := ident.ValueType.Underlying().(*types.Result); ok {
 		if state, isVariant := resultExprState(resultType, exprType); isVariant {
 			assignment.Expr = p.ast.NewResultLiteral(assignment.Token, ident.ValueType, expr, exprType.Kind() == types.ErrorKind)
-			p.symbols.MarkChecked(ident.Name, state)
+			p.symbols.MarkChecked(ident.Token.Literal, state)
 		}
 	}
 

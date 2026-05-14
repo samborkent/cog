@@ -23,8 +23,8 @@ import (
 
 // lexedFile holds lexer output for a single .cog file.
 type lexedFile struct {
-	path   string
-	tokens []tokens.Token
+	path  string
+	lexer *lexer.Lexer
 }
 
 // packageFiles groups .cog source files by package directory.
@@ -120,14 +120,10 @@ func lexPackage(t testing.TB, pkg packageFiles) []lexedFile {
 	lexed := make([]lexedFile, len(names))
 
 	for i, name := range names {
-		l := lexer.New(strings.NewReader(pkg.files[name]))
+		file := pkg.files[name]
+		l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
 
-		toks, err := l.Parse(t.Context())
-		if err != nil {
-			t.Fatalf("lexer error (%s): %v", name, err)
-		}
-
-		lexed[i] = lexedFile{path: name, tokens: toks}
+		lexed[i] = lexedFile{path: name, lexer: l}
 	}
 
 	return lexed
@@ -141,7 +137,7 @@ func findGlobals(t testing.TB, lexed []lexedFile, symbols *parser.SymbolTable) [
 	parsers := make([]*parser.Parser, len(lexed))
 
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, false, lf.path, uint16(i), nil)
+		p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", lf.path, err)
 		}
@@ -226,9 +222,8 @@ func compileProject(t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
 	return astFiles, entrySymbols
 }
 
-var lexingToks []tokens.Token
+var lexingRangeTok tokens.Token
 
-// BenchmarkLexing benchmarks just the lexer phase across all example files using Parse.
 func BenchmarkLexing(b *testing.B) {
 	b.ReportAllocs()
 
@@ -236,7 +231,6 @@ func BenchmarkLexing(b *testing.B) {
 		b.StopTimer()
 		entry, imported := loadExamplePackages(b)
 
-		// Collect all files across all packages for lexing.
 		allFiles := make(map[string]string)
 		maps.Copy(allFiles, entry.files)
 
@@ -248,42 +242,10 @@ func BenchmarkLexing(b *testing.B) {
 		b.StartTimer()
 
 		for _, name := range names {
-			l := lexer.New(strings.NewReader(allFiles[name]))
+			file := allFiles[name]
+			l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
 
-			toks, err := l.Parse(b.Context())
-			if err != nil {
-				b.Fatalf("lexer error (%s): %v", name, err)
-			}
-
-			lexingToks = toks
-		}
-	}
-}
-
-var lexingRangeTok tokens.Token
-
-// BenchmarkLexingRange benchmarks just the lexer phase across all example files using Range.
-func BenchmarkLexingRange(b *testing.B) {
-	b.ReportAllocs()
-
-	for b.Loop() {
-		b.StopTimer()
-		entry, imported := loadExamplePackages(b)
-
-		allFiles := make(map[string]string)
-		maps.Copy(allFiles, entry.files)
-
-		for _, pkg := range imported {
-			maps.Copy(allFiles, pkg.files)
-		}
-
-		names := sortedKeys(allFiles)
-		b.StartTimer()
-
-		for _, name := range names {
-			l := lexer.New(strings.NewReader(allFiles[name]))
-
-			for _, tok := range l.Range() {
+			for tok := range l.Range(b.Context()) {
 				lexingRangeTok = tok
 			}
 		}

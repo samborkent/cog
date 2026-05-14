@@ -31,7 +31,7 @@ func (e *Selector) Hash() uint64 {
 
 func (e *Selector) StringTo(out *strings.Builder, _ *AST) {
 	for i := range e.Fields {
-		_, _ = out.WriteString(e.Fields[i].Name)
+		_, _ = out.WriteString(e.Fields[i].Token.Literal)
 
 		if i < len(e.Fields)-1 {
 			_ = out.WriteByte('.')

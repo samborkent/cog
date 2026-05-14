@@ -1,21 +1,42 @@
 package parser_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/lexer"
 	"github.com/samborkent/cog/internal/parser"
-	"github.com/samborkent/cog/internal/tokens"
 )
 
-func NewTestParser(t *testing.T, tokens []tokens.Token, debug bool) (*parser.Parser, error) {
+func NewTestParser(t *testing.T, lex *lexer.Lexer) (*parser.Parser, error) {
 	t.Helper()
 
-	return parser.NewParserWithSymbols(tokens, parser.NewSymbolTable(), debug, "", 0, nil)
+	return parser.NewParserWithSymbols(lex, parser.NewSymbolTable(), "", 0, nil)
 }
 
 func TestParse(t *testing.T) {
 	t.Parallel()
+
+	t.Run("parse_only_after_findglobals_starts_at_package", func(t *testing.T) {
+		t.Parallel()
+
+		src := `package p
+main : proc() = {}`
+
+		l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
+
+		p, err := NewTestParser(t, l)
+		if err != nil {
+			t.Fatalf("parser init error: %v", err)
+		}
+
+		p.FindGlobals(t.Context())
+
+		if _, err := p.ParseOnly(t.Context(), "test.cog"); err != nil {
+			t.Fatalf("parse-only error: %v", err)
+		}
+	})
 
 	t.Run("file_name", func(t *testing.T) {
 		t.Parallel()
@@ -38,8 +59,8 @@ B ~ int32
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
-		if ta.Identifier.Name != "A" {
-			t.Errorf("expected name 'A', got %q", ta.Identifier.Name)
+		if ta.Identifier.Token.Literal != "A" {
+			t.Errorf("expected name 'A', got %q", ta.Identifier.Token.Literal)
 		}
 	})
 

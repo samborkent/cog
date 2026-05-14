@@ -125,22 +125,18 @@ func discoverFiles(input string) ([]string, error) {
 }
 
 // lexFile lexes a single .cog file and returns its token stream.
-func lexFile(ctx context.Context, path string) ([]tokens.Token, error) {
+func lexFile(ctx context.Context, path string) (*lexer.Lexer, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("opening %q: %w", path, err)
 	}
 
-	defer func() { _ = file.Close() }()
-
-	l := lexer.New(file)
-
-	toks, err := l.Parse(ctx)
+	fileInfo, err := file.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("lexing %q: %w", path, err)
+		return nil, fmt.Errorf("stat %q: %w", path, err)
 	}
 
-	return toks, nil
+	return lexer.New(file, uint32(fileInfo.Size()), debugMode), nil
 }
 
 // runScript compiles a single .cogs script file.
@@ -156,7 +152,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewScriptParserWithSymbols(toks, symbols, debugMode, nil)
+	p, err := parser.NewScriptParserWithSymbols(toks, symbols, nil)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -273,7 +269,7 @@ type compiledPackage struct {
 
 type lexedFile struct {
 	path   string
-	tokens []tokens.Token
+	lexer  *lexer.Lexer
 	fileID uint16
 }
 
@@ -382,12 +378,12 @@ func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string, e
 	lexed := make([]lexedFile, 0, len(files))
 
 	for i, path := range files {
-		toks, err := lexFile(ctx, path)
+		lex, err := lexFile(ctx, path)
 		if err != nil {
 			return nil, "", err
 		}
 
-		lexed = append(lexed, lexedFile{path: path, tokens: toks, fileID: uint16(i)})
+		lexed = append(lexed, lexedFile{path: path, lexer: lex, fileID: uint16(i)})
 	}
 
 	dirName := filepath.Base(filepath.Dir(files[0]))
@@ -395,11 +391,11 @@ func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string, e
 	var pkgName string
 
 	for _, lf := range lexed {
-		if len(lf.tokens) < 2 || lf.tokens[0].Type != tokens.Package {
+		if lf.lexer.Len < 2 || lf.lexer.Peek(0).Type != tokens.Package {
 			return nil, "", fmt.Errorf("%s: missing package declaration", lf.path)
 		}
 
-		name := lf.tokens[1].Literal
+		name := lf.lexer.Peek(1).Literal
 
 		if pkgName == "" {
 			pkgName = name
@@ -420,7 +416,7 @@ func findGlobals(ctx context.Context, lexed []lexedFile, symbols *parser.SymbolT
 	parsers := make([]*parser.Parser, len(lexed))
 
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.tokens, symbols, debugMode, lf.path, uint16(i), nil)
+		p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
 		if err != nil {
 			fmt.Println(err.Error())
 			return nil

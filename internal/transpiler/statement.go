@@ -29,18 +29,18 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 
 		assignmentExpr := t.Expr(n.Expr)
 
-		if n.Identifier.Name != "_" {
-			name := component.ConvertExport(n.Identifier.Name, n.Identifier.Exported, n.Identifier.Global)
+		if n.Identifier.Token.Literal != "_" {
+			name := component.ConvertExport(n.Identifier.Token.Literal, n.Identifier.Exported, n.Identifier.Global)
 
 			id, ok := t.symbols.Resolve(name)
 			if !ok {
 				_, ok := t.symbols.ResolveDynamic(name)
 				if !ok {
-					return nil, fmt.Errorf("undefined dynamic variable '%s'", n.Identifier.Name)
+					return nil, fmt.Errorf("undefined dynamic variable '%s'", n.Identifier.Token.Literal)
 				}
 
 				if t.inFunc {
-					return nil, fmt.Errorf("func cannot assign dynamically scoped variable %q", n.Identifier.Name)
+					return nil, fmt.Errorf("func cannot assign dynamically scoped variable %q", n.Identifier.Token.Literal)
 				}
 
 				// Dynamic variable assignment via struct field.
@@ -103,7 +103,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		}}
 	case *ast.Declaration:
 		// Define as unused variable.
-		ident := t.symbols.Define(n.Assignment.Identifier.Name)
+		ident := t.symbols.Define(n.Assignment.Identifier.Token.Literal)
 		typ := n.Assignment.Identifier.ValueType
 
 		ln, _ := node.Pos()
@@ -232,13 +232,13 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 			}
 
 			if n.Index != nil && n.Value != nil {
-				key = &goast.Ident{Name: n.Index.Name}
-				val = &goast.Ident{Name: n.Value.Name}
+				key = &goast.Ident{Name: n.Index.Token.Literal}
+				val = &goast.Ident{Name: n.Value.Token.Literal}
 			} else if n.Index != nil && n.Value == nil {
-				key = &goast.Ident{Name: n.Index.Name}
+				key = &goast.Ident{Name: n.Index.Token.Literal}
 			} else if n.Index == nil && n.Value != nil {
 				key = &goast.Ident{Name: "_"}
-				val = &goast.Ident{Name: n.Value.Name}
+				val = &goast.Ident{Name: n.Value.Token.Literal}
 			}
 
 			stmt = &goast.RangeStmt{
@@ -391,12 +391,12 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		}
 
 		if n.Identifier != nil {
-			ident, ok := t.symbols.Resolve(n.Identifier.Name)
+			ident, ok := t.symbols.Resolve(n.Identifier.Token.Literal)
 			if !ok {
-				return nil, fmt.Errorf("unknown identifier %q", n.Identifier.Name)
+				return nil, fmt.Errorf("unknown identifier %q", n.Identifier.Token.Literal)
 			}
 
-			if err := t.symbols.MarkUsed(n.Identifier.Name); err != nil {
+			if err := t.symbols.MarkUsed(n.Identifier.Token.Literal); err != nil {
 				return nil, fmt.Errorf("marking switch identifier used: %w", err)
 			}
 

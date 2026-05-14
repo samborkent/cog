@@ -38,7 +38,7 @@ func (n *Type) StringTo(out *strings.Builder, _ *AST) {
 		_, _ = out.WriteString("export ")
 	}
 
-	_, _ = out.WriteString(n.Identifier.Name)
+	_, _ = out.WriteString(n.Identifier.Token.Literal)
 
 	if len(n.TypeParameters) > 0 {
 		_, _ = out.WriteString("<")

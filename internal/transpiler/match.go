@@ -42,7 +42,7 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 			if len(leftCase.Body) > 0 {
 				t.symbols = NewEnclosedSymbolTable(t.symbols)
 				if n.Binding != nil {
-					ident := t.symbols.Define(n.Binding.Name)
+					ident := t.symbols.Define(n.Binding.Token.Literal)
 					leftBody = append(leftBody, component.AssignDef(ident, component.Selector(expr, "Left")))
 				}
 
@@ -63,7 +63,7 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 			if len(rightCase.Body) > 0 {
 				t.symbols = NewEnclosedSymbolTable(t.symbols)
 				if n.Binding != nil {
-					ident := t.symbols.Define(n.Binding.Name)
+					ident := t.symbols.Define(n.Binding.Token.Literal)
 					rightBody = append(rightBody, component.AssignDef(ident, component.Selector(expr, "Right")))
 				}
 
@@ -102,7 +102,7 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 	tagExpr := component.Call(component.IdentName("any"), expr)
 
 	if n.Binding != nil {
-		ident := t.symbols.Define(n.Binding.Name)
+		ident := t.symbols.Define(n.Binding.Token.Literal)
 		assignStmt = component.AssignDef(ident, component.TypeAssert(tagExpr, nil))
 	} else {
 		assignStmt = &goast.ExprStmt{X: component.TypeAssert(tagExpr, nil)}

@@ -34,7 +34,7 @@ func (n *Import) StringTo(out *strings.Builder, _ *AST) {
 
 	for _, imprt := range n.Imports {
 		_, _ = out.WriteString("\t\"")
-		_, _ = out.WriteString(imprt.Name)
+		_, _ = out.WriteString(imprt.Token.Literal)
 		_, _ = out.WriteString("\"\n")
 	}
 

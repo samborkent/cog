@@ -12,14 +12,9 @@ import (
 func parse(t *testing.T, src string) *ast.AST {
 	t.Helper()
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lex error: %v", err)
-	}
-
-	p, err := NewTestParser(t, toks, false)
+	p, err := NewTestParser(t, l)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -38,16 +33,11 @@ func parseShouldError(t *testing.T, src string) {
 	ctx, cancel := context.WithTimeout(t.Context(), 3e9)
 	defer cancel()
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(ctx)
+	p, err := NewTestParser(t, l)
 	if err != nil {
-		return
-	}
-
-	p, err := NewTestParser(t, toks, false)
-	if err != nil {
-		return
+		t.Fatalf("parser creation error: %v", err)
 	}
 
 	_, err = p.Parse(ctx, "test.cog")

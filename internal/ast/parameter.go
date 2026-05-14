@@ -24,8 +24,8 @@ func (n *Parameter) Hash() uint64 {
 }
 
 func (n *Parameter) StringTo(out *strings.Builder, a *AST) {
-	if n.Identifier != nil && n.Identifier.Name != "" {
-		_, _ = out.WriteString(n.Identifier.Name)
+	if n.Identifier != nil && n.Identifier.Token.Literal != "" {
+		_, _ = out.WriteString(n.Identifier.Token.Literal)
 
 		if n.Optional {
 			_, _ = out.WriteString("? : ")

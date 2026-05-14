@@ -17,8 +17,8 @@ MyInt ~ int32
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
-		if ta.Identifier.Name != "MyInt" {
-			t.Errorf("expected name 'MyInt', got %q", ta.Identifier.Name)
+		if ta.Identifier.Token.Literal != "MyInt" {
+			t.Errorf("expected name 'MyInt', got %q", ta.Identifier.Token.Literal)
 		}
 
 		if ta.Alias.Kind() != types.Int32 {
@@ -250,8 +250,8 @@ List<T ~ any> ~ []T
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
-		if ta.Identifier.Name != "List" {
-			t.Errorf("expected name 'List', got %q", ta.Identifier.Name)
+		if ta.Identifier.Token.Literal != "List" {
+			t.Errorf("expected name 'List', got %q", ta.Identifier.Token.Literal)
 		}
 
 		if len(ta.TypeParameters) != 1 {
@@ -469,8 +469,8 @@ Stringer ~ interface {
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
-		if ta.Identifier.Name != "Stringer" {
-			t.Errorf("expected name 'Stringer', got %q", ta.Identifier.Name)
+		if ta.Identifier.Token.Literal != "Stringer" {
+			t.Errorf("expected name 'Stringer', got %q", ta.Identifier.Token.Literal)
 		}
 
 		if ta.Alias.Kind() != types.InterfaceKind {

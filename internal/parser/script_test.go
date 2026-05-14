@@ -13,14 +13,9 @@ import (
 func parseScript(t *testing.T, src string) {
 	t.Helper()
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lex error: %v", err)
-	}
-
-	p, err := parser.NewScriptParser(toks, false)
+	p, err := parser.NewScriptParser(l)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -32,7 +27,7 @@ func parseScript(t *testing.T, src string) {
 
 	file := f.Node(1).(*ast.File)
 
-	if file.Package == nil || file.Package.Identifier.Name != "main" {
+	if file.Package == nil || file.Package.Identifier.Token.Literal != "main" {
 		t.Fatal("expected synthesized package main")
 	}
 }
@@ -43,14 +38,9 @@ func parseScriptShouldError(t *testing.T, src string) {
 	ctx, cancel := context.WithTimeout(t.Context(), 3e9)
 	defer cancel()
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(ctx)
-	if err != nil {
-		return
-	}
-
-	p, err := parser.NewScriptParser(toks, false)
+	p, err := parser.NewScriptParser(l)
 	if err != nil {
 		return
 	}

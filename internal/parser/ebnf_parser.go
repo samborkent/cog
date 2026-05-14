@@ -12,27 +12,27 @@ import (
 func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.boolean(ctx, typeToken)
 
-	for p.match(tokens.LBracket) {
+	for p.lex.This().Type == tokens.LBracket {
 		if ctx.Err() != nil || expr == ast.ZeroExprIndex {
 			return ast.ZeroExprIndex
 		}
 
-		operator := p.this()
-		p.advance("expression [") // consume [
+		operator := p.lex.This()
+		p.lex.Step() // consume [
 
 		index := p.boolean(ctx, types.None)
 
-		if p.this().Type != tokens.RBracket {
-			p.error(p.this(), "expected ] after index expression", "expression")
+		if p.lex.This().Type != tokens.RBracket {
+			p.error(p.lex.This(), "expected ] after index expression", "expression")
 			return ast.ZeroExprIndex
 		}
 
-		p.advance("expression ]") // consume ]
+		p.lex.Step() // consume ]
 
 		exprType := p.ast.Expr(expr).Type()
 
 		if !types.IsIndexable(exprType) {
-			p.error(p.this(), fmt.Sprintf("type %q is not indexable", exprType), "expression")
+			p.error(p.lex.This(), fmt.Sprintf("type %q is not indexable", exprType), "expression")
 			return ast.ZeroExprIndex
 		}
 
@@ -73,17 +73,13 @@ func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.ExprI
 func (p *Parser) boolean(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.equality(ctx, typeToken)
 
-	for p.match(tokens.And, tokens.Or) {
-		if ctx.Err() != nil || expr == ast.ZeroExprIndex {
-			return ast.ZeroExprIndex
-		}
-
-		operator := p.this()
-		p.advance("boolean operator") // consume operator
+	for p.match(p.lex.This(), tokens.And, tokens.Or) {
+		operator := p.lex.This()
+		p.lex.Step() // consume operator
 		right := p.equality(ctx, types.Basics[types.Bool])
 
 		if !types.IsBool(p.ast.Expr(expr).Type()) {
-			p.error(p.this(), "operator requires bool type", "boolean")
+			p.error(p.lex.This(), "operator requires bool type", "boolean")
 			return ast.ZeroExprIndex
 		}
 
@@ -97,15 +93,11 @@ func (p *Parser) boolean(ctx context.Context, typeToken types.Type) ast.ExprInde
 func (p *Parser) equality(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.comparison(ctx, typeToken)
 
-	for p.match(tokens.Equal, tokens.NotEqual) {
-		if ctx.Err() != nil || expr == ast.ZeroExprIndex {
-			return ast.ZeroExprIndex
-		}
-
+	for p.match(p.lex.This(), tokens.Equal, tokens.NotEqual) {
 		left := p.ast.Expr(expr)
 
-		operator := p.this()
-		p.advance("equality operator") // consume operator
+		operator := p.lex.This()
+		p.lex.Step() // consume operator
 		rightIndex := p.comparison(ctx, types.None)
 
 		right := p.ast.Expr(rightIndex)
@@ -124,18 +116,14 @@ func (p *Parser) equality(ctx context.Context, typeToken types.Type) ast.ExprInd
 func (p *Parser) comparison(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.term(ctx, typeToken)
 
-	for p.match(tokens.GT, tokens.GTEqual, tokens.LT, tokens.LTEqual) {
-		if ctx.Err() != nil || expr == ast.ZeroExprIndex {
-			return ast.ZeroExprIndex
-		}
-
-		operator := p.this()
-		p.advance("comparison operator") // consume operator
+	for p.match(p.lex.This(), tokens.GT, tokens.GTEqual, tokens.LT, tokens.LTEqual) {
+		operator := p.lex.This()
+		p.lex.Step() // consume operator
 		// TODO: should we pass expr.Type()?
 		rightIndex := p.term(ctx, types.None)
 
 		if !types.IsNumber(p.ast.Expr(expr).Type()) {
-			p.error(p.this(), "operator requires numeric type", "comparison")
+			p.error(operator, "operator requires numeric type", "comparison")
 			return ast.ZeroExprIndex
 		}
 
@@ -156,13 +144,9 @@ func (p *Parser) comparison(ctx context.Context, typeToken types.Type) ast.ExprI
 func (p *Parser) term(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.factor(ctx, typeToken)
 
-	for p.match(tokens.Minus, tokens.Plus) {
-		if ctx.Err() != nil || expr == ast.ZeroExprIndex {
-			return ast.ZeroExprIndex
-		}
-
-		operator := p.this()
-		p.advance("term operator") // consume operator
+	for p.match(p.lex.This(), tokens.Minus, tokens.Plus) {
+		operator := p.lex.This()
+		p.lex.Step() // consume operator
 
 		exprType := p.ast.Expr(expr).Type()
 		right := p.factor(ctx, exprType)
@@ -171,13 +155,13 @@ func (p *Parser) term(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 		if exprType != types.None {
 			if operator.Type == tokens.Plus {
 				if !types.IsSummable(exprType) {
-					p.error(p.this(), fmt.Sprintf("operator requires numeric or string type, got %q", exprType), "term")
+					p.error(operator, fmt.Sprintf("operator requires numeric or string type, got %q", exprType), "term")
 					return ast.ZeroExprIndex
 				}
 			} else {
 				// Minus
 				if !types.IsNumber(exprType) {
-					p.error(p.this(), fmt.Sprintf("operator requires numeric type, got %q", exprType), "term")
+					p.error(operator, fmt.Sprintf("operator requires numeric type, got %q", exprType), "term")
 					return ast.ZeroExprIndex
 				}
 			}
@@ -192,19 +176,15 @@ func (p *Parser) term(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 func (p *Parser) factor(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.unary(ctx, typeToken)
 
-	for p.match(tokens.Asterisk, tokens.Divide) {
-		if ctx.Err() != nil || expr == ast.ZeroExprIndex {
-			return ast.ZeroExprIndex
-		}
-
-		operator := p.this()
-		p.advance("factor operator") // consume operator
+	for p.match(p.lex.This(), tokens.Asterisk, tokens.Divide) {
+		operator := p.lex.This()
+		p.lex.Step() // consume operator
 
 		exprType := p.ast.Expr(expr).Type()
 		right := p.unary(ctx, exprType)
 
 		if !types.IsNumber(exprType) {
-			p.error(p.this(), "operator requires numeric type", "factor")
+			p.error(operator, "operator requires numeric type", "factor")
 			return ast.ZeroExprIndex
 		}
 
@@ -215,22 +195,22 @@ func (p *Parser) factor(ctx context.Context, typeToken types.Type) ast.ExprIndex
 }
 
 func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex {
-	if p.match(tokens.Not, tokens.Minus, tokens.BitAnd) {
+	if p.match(p.lex.This(), tokens.Not, tokens.Minus, tokens.BitAnd) {
 		// Previous operator is stored, to disallow double references.
-		prevOperator := p.prev()
-		if prevOperator.Type == tokens.LParen && p.i >= 2 && p.tokens[p.i-2].Type == tokens.BitAnd {
-			prevOperator = p.tokens[p.i-2]
+		prevOperator := p.lex.Peek(-1)
+		if prevOperator.Type == tokens.LParen && p.lex.Peek(-2).Type == tokens.BitAnd {
+			prevOperator = p.lex.Peek(-2)
 		}
 
-		operator := p.this()
-		p.advance("unary operator") // consume operator
+		operator := p.lex.This()
+		p.lex.Step() // consume operator
 
 		exprType := typeToken
 
 		if operator.Type == tokens.BitAnd {
 			// Special reference handling.
 			if prevOperator.Type == tokens.BitAnd {
-				p.error(p.this(), "double reference is not allowed", "unary")
+				p.error(operator, "double reference is not allowed", "unary")
 				return ast.ZeroExprIndex
 			}
 
@@ -238,7 +218,7 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex 
 				// If a type is specified, we need to pass the reference underlying type to the expression parsing.
 				refType, ok := typeToken.(*types.Reference)
 				if !ok {
-					p.error(p.this(), "unable to assert reference type", "unary")
+					p.error(p.lex.This(), "unable to assert reference type", "unary")
 					return ast.ZeroExprIndex
 				}
 
@@ -254,24 +234,24 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex 
 		rightType := p.ast.Expr(right).Type()
 
 		if operator.Type == tokens.Not && !types.IsBool(rightType) {
-			p.error(p.this(), "operator requires bool type", "unary")
+			p.error(operator, "operator requires bool type", "unary")
 			return ast.ZeroExprIndex
 		} else if operator.Type == tokens.Minus && !types.IsSigned(rightType) {
-			p.error(p.this(), "operator requires signed numeric type", "unary")
+			p.error(operator, "operator requires signed numeric type", "unary")
 			return ast.ZeroExprIndex
 		}
 
 		return p.ast.NewPrefix(operator, rightType, right)
 	}
 
-	if (typeToken == nil || typeToken == types.None) && p.this().Type == tokens.Identifier {
+	if (typeToken == nil || typeToken == types.None) && p.lex.This().Type == tokens.Identifier {
 		// TODO: get rid of double lookup for identifiers
-		symbol, ok := p.symbols.Resolve(p.this().Literal)
+		symbol, ok := p.symbols.Resolve(p.lex.This().Literal)
 		if !ok {
 			// If this is an imported package name, skip the type pre-lookup;
 			// primary() will handle it via parsePkgSelector.
-			if _, isImport := p.symbols.ResolveCogImport(p.this().Literal); !isImport {
-				p.error(p.this(), "undefined identifier", "primary")
+			if _, isImport := p.symbols.ResolveCogImport(p.lex.This().Literal); !isImport {
+				p.error(p.lex.This(), "undefined identifier", "primary")
 				return ast.ZeroExprIndex
 			}
 		} else {
@@ -284,9 +264,9 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex 
 		return ast.ZeroExprIndex
 	}
 
-	if p.this().Type == tokens.Question {
-		token := p.this()
-		p.advance("unary ?") // consume ?
+	if p.lex.This().Type == tokens.Question {
+		token := p.lex.This()
+		p.lex.Step() // consume ?
 
 		// ? works on both option and result types.
 		if typeToken.Kind() != types.OptionKind && typeToken.Kind() != types.ResultKind {
@@ -297,9 +277,9 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex 
 		return p.ast.NewSuffix(token, typeToken, expr)
 	}
 
-	if p.this().Type == tokens.Not {
-		token := p.this()
-		p.advance("unary !") // consume !
+	if p.lex.This().Type == tokens.Not {
+		token := p.lex.This()
+		p.lex.Step() // consume !
 
 		if typeToken.Kind() != types.ResultKind {
 			p.error(token, "! operator requires result type", "unary")
@@ -308,8 +288,8 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex 
 
 		// Must-check: cannot extract error without checking ? first.
 		if ident, ok := p.ast.Expr(expr).(*ast.Identifier); ok {
-			if !p.symbols.IsErrorChecked(ident.Name) {
-				p.error(ident.Token, "must check "+ident.Name+" before accessing error", "unary")
+			if !p.symbols.IsErrorChecked(ident.Token.Literal) {
+				p.error(ident.Token, "must check "+ident.Token.Literal+" before accessing error", "unary")
 				return ast.ZeroExprIndex
 			}
 		}
@@ -321,8 +301,8 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex 
 	if ident, ok := p.ast.Expr(expr).(*ast.Identifier); ok {
 		kind := typeToken.Kind()
 
-		if (kind == types.OptionKind || kind == types.ResultKind) && !p.symbols.IsValueChecked(ident.Name) {
-			p.error(ident.Token, "must check "+ident.Name+" before accessing value", "unary")
+		if (kind == types.OptionKind || kind == types.ResultKind) && !p.symbols.IsValueChecked(ident.Token.Literal) {
+			p.error(ident.Token, "must check "+ident.Token.Literal+" before accessing value", "unary")
 			return ast.ZeroExprIndex
 		}
 	}

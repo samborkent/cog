@@ -26,9 +26,9 @@ func (e *GoCallExpression) Hash() uint64 {
 
 func (e *GoCallExpression) StringTo(out *strings.Builder, a *AST) {
 	_, _ = out.WriteString("@go.")
-	_, _ = out.WriteString(e.Import.Name)
+	_, _ = out.WriteString(e.Import.Token.Literal)
 	_ = out.WriteByte('.')
-	_, _ = out.WriteString(e.CallIdentifier.Name)
+	_, _ = out.WriteString(e.CallIdentifier.Token.Literal)
 	_ = out.WriteByte('(')
 
 	for i, arg := range e.Arguments {

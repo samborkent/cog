@@ -79,9 +79,9 @@ type AST struct {
 // allocations (arena mode); otherwise regular heap allocation is used.
 // The caller manages the arena lifecycle — typically via a pool sized by
 // GOMAXPROCS, with one arena per parser worker.
-func NewAST(a *arena.Arena, fileIndex uint16, numTokens int) *AST {
-	nodeCap := max(numTokens/8, 1)
-	exprCap := max(numTokens/16, 1)
+func NewAST(a *arena.Arena, fileIndex uint16, numBytes uint32) *AST {
+	nodeCap := max(numBytes/4/8, 1)
+	exprCap := max(numBytes/4/16, 1)
 
 	return &AST{
 		arena:     a,

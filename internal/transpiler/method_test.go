@@ -2,7 +2,6 @@ package transpiler_test
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	goprinter "go/printer"
 	gotoken "go/token"
@@ -123,14 +122,9 @@ Foo ~ struct {
 }
 main : proc() = {}`
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(context.Background())
-	if err != nil {
-		t.Fatalf("lex error: %v", err)
-	}
-
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, parser.NewSymbolTable(), "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -148,7 +142,7 @@ main : proc() = {}`
 		fmt.Printf("%d: %T\n", i, node)
 		if m, ok := node.(*ast.Method); ok {
 			decl := f.Node(m.Declaration).(*ast.Declaration)
-			fmt.Printf("   Method: %s, Receiver: %+v\n", decl.Assignment.Identifier.Name, m.Receiver)
+			fmt.Printf("   Method: %s, Receiver: %+v\n", decl.Assignment.Identifier.Token.Literal, m.Receiver)
 		}
 	}
 

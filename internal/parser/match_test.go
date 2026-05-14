@@ -79,8 +79,8 @@ main : proc() = {}`)
 			t.Fatal("expected binding")
 		}
 
-		if matchStmt.Binding.Name != "val" {
-			t.Errorf("expected binding name 'val', got %q", matchStmt.Binding.Name)
+		if matchStmt.Binding.Token.Literal != "val" {
+			t.Errorf("expected binding name 'val', got %q", matchStmt.Binding.Token.Literal)
 		}
 
 		if len(matchStmt.Cases) != 2 {

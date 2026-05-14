@@ -17,14 +17,9 @@ import (
 func transpileScript(t *testing.T, src string) string {
 	t.Helper()
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lex error: %v", err)
-	}
-
-	p, err := parser.NewScriptParser(toks, false)
+	p, err := parser.NewScriptParser(l)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}

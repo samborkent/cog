@@ -39,14 +39,14 @@ func (n *ForStatement) Hash() uint64 {
 
 func (n *ForStatement) StringTo(out *strings.Builder, a *AST) {
 	if n.Label != nil {
-		_, _ = out.WriteString(n.Label.Name)
+		_, _ = out.WriteString(n.Label.Token.Literal)
 		_, _ = out.WriteString(":\n")
 	}
 
 	_, _ = out.WriteString("for ")
 
 	if n.Value != nil {
-		_, _ = out.WriteString(n.Value.Name)
+		_, _ = out.WriteString(n.Value.Token.Literal)
 		_, _ = out.WriteString(" in ")
 	}
 

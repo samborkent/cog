@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"context"
 	"path"
 	"strings"
 
@@ -9,30 +10,34 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-func (p *Parser) parseImport() ast.NodeIndex {
-	importToken := p.this()
+func (p *Parser) parseImport(ctx context.Context) ast.NodeIndex {
+	importToken := p.lex.This()
 	imports := make([]*ast.Identifier, 0, importPreallocationSize)
 
-	p.advance("parseImport import") // consume 'import'
+	p.lex.Step() // consume 'import'
 
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after import", "parseImport")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after import", "parseImport")
 		return ast.ZeroNodeIndex
 	}
 
-	p.advance("parseImport (") // consume '('
+	p.lex.Step() // consume '('
 
-	for ; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; p.advance("parseImport loop") {
-		if p.this().Type != tokens.StringLiteral {
-			p.error(p.this(), "found non-string token in import list: "+p.this().Literal, "parseImport")
+	for t := range p.lex.Range(ctx) {
+		if t.Type == tokens.RParen {
+			break
+		}
+
+		if t.Type != tokens.StringLiteral {
+			p.error(t, "found non-string token in import list: "+t.Literal, "parseImport")
 			return ast.ZeroNodeIndex
 		}
 
-		importPath := p.this().Literal
+		importPath := t.Literal
 
 		// Safety: disallow parent traversal and absolute paths.
 		if strings.Contains(importPath, "..") || strings.HasPrefix(importPath, "/") {
-			p.error(p.this(), "import path must be a relative subdirectory path (no '..' or leading '/')", "parseImport")
+			p.error(t, "import path must be a relative subdirectory path (no '..' or leading '/')", "parseImport")
 			return ast.ZeroNodeIndex
 		}
 
@@ -43,8 +48,7 @@ func (p *Parser) parseImport() ast.NodeIndex {
 		if alreadyImported {
 			// Already registered (e.g. during FindGlobals); just record in the AST node.
 			ident := &ast.Identifier{
-				Token:     p.this(),
-				Name:      importPath,
+				Token:     t,
 				ValueType: types.None,
 			}
 			imports = append(imports, ident)
@@ -53,8 +57,7 @@ func (p *Parser) parseImport() ast.NodeIndex {
 		}
 
 		ident := &ast.Identifier{
-			Token:     p.this(),
-			Name:      importPath,
+			Token:     t,
 			ValueType: types.None,
 		}
 
@@ -70,7 +73,7 @@ func (p *Parser) parseImport() ast.NodeIndex {
 		})
 	}
 
-	p.advance("parseImport )") // consume ')'
+	p.lex.Step() // consume ')'
 
 	return p.ast.NewImport(importToken, imports)
 }

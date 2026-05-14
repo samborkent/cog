@@ -22,7 +22,6 @@ var _ Expr = &Identifier{}
 
 type Identifier struct {
 	Token     tokens.Token
-	Name      string
 	ValueType types.Type
 	Exported  bool
 	Qualifier Qualifier
@@ -38,11 +37,11 @@ func (e *Identifier) Hash() uint64 {
 }
 
 func (e *Identifier) StringTo(out *strings.Builder, _ *AST) {
-	_, _ = out.WriteString(e.Name)
+	_, _ = out.WriteString(e.Token.Literal)
 }
 
 func (e *Identifier) String() string {
-	return e.Name
+	return e.Token.Literal
 }
 
 func (e *Identifier) Type() types.Type {

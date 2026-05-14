@@ -14,59 +14,61 @@ import (
 // parsePkgSelector parses an imported package selector expression: pkg.Symbol
 // The cursor is on the package name identifier.
 func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.ExprIndex {
-	pkgToken := p.this()
+	pkgToken := p.lex.This()
 
-	p.advance("parsePkgSelector pkg") // consume package name
+	p.lex.Step() // consume package name
 
-	if p.this().Type != tokens.Dot {
-		p.error(p.this(), "expected '.' after package name", "parsePkgSelector")
+	if p.lex.This().Type != tokens.Dot {
+		p.error(p.lex.This(), "expected '.' after package name", "parsePkgSelector")
 		return ast.ZeroExprIndex
 	}
 
-	selToken := p.this()
+	selToken := p.lex.This()
 
-	p.advance("parsePkgSelector .") // consume '.'
+	p.lex.Step() // consume '.'
 
-	if p.this().Type != tokens.Identifier {
-		p.error(p.this(), "expected identifier after package selector", "parsePkgSelector")
+	if p.lex.This().Type != tokens.Identifier {
+		p.error(p.lex.This(), "expected identifier after package selector", "parsePkgSelector")
 		return ast.ZeroExprIndex
 	}
 
-	symbolName := p.this().Literal
+	symbolName := p.lex.This().Literal
 
 	// Look up the exported symbol from the imported package.
 	sym, ok := imp.Exports[symbolName]
 	if !ok {
-		p.error(p.this(), fmt.Sprintf("package %q has no exported symbol %q", imp.Name, symbolName), "parsePkgSelector")
+		p.error(p.lex.This(), fmt.Sprintf("package %q has no exported symbol %q", imp.Name, symbolName), "parsePkgSelector")
 		return ast.ZeroExprIndex
 	}
 
+	pkgToken.Literal = imp.Name // ensure package token is the import name
 	pkgIdent := &ast.Identifier{
 		Token:     pkgToken,
-		Name:      imp.Name,
 		ValueType: types.None,
 	}
 
+	fieldToken := p.lex.This()
+	fieldToken.Literal = symbolName // ensure field token is the symbol name
+
 	fieldIdent := &ast.Identifier{
-		Token:     p.this(),
-		Name:      symbolName,
+		Token:     fieldToken,
 		ValueType: sym.Identifier.ValueType,
 		Exported:  true,
 	}
 
-	p.advance("parsePkgSelector symbol") // consume symbol identifier
+	p.lex.Step() // consume symbol identifier
 
 	sel := p.ast.NewSelector(selToken, pkgIdent, fieldIdent)
 
 	// If followed by '(', this is a function call: pkg.Func(args)
-	if p.this().Type == tokens.LParen {
+	if p.lex.This().Type == tokens.LParen {
 		procType, isProc := sym.Identifier.ValueType.(*types.Procedure)
 		if !isProc {
-			p.error(p.this(), fmt.Sprintf("%s.%s is not callable", imp.Name, symbolName), "parsePkgSelector")
+			p.error(p.lex.This(), fmt.Sprintf("%s.%s is not callable", imp.Name, symbolName), "parsePkgSelector")
 			return ast.ZeroExprIndex
 		}
 
-		return p.ast.NewCall(p.this(), sel, p.parseCallArguments(ctx, procType), procType.ReturnType)
+		return p.ast.NewCall(p.lex.This(), sel, p.parseCallArguments(ctx, procType), procType.ReturnType)
 	}
 
 	// Otherwise it's a value/type selector: pkg.Value

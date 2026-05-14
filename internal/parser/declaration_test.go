@@ -17,8 +17,8 @@ x := 1
 main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
-		if d.Assignment.Identifier.Name != "x" {
-			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Name)
+		if d.Assignment.Identifier.Token.Literal != "x" {
+			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Token.Literal)
 		}
 
 		if d.Assignment.Expr == ast.ZeroExprIndex {
@@ -118,8 +118,8 @@ x : int64 = 42
 main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
-		if d.Assignment.Identifier.Name != "x" {
-			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Name)
+		if d.Assignment.Identifier.Token.Literal != "x" {
+			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Token.Literal)
 		}
 
 		if d.Assignment.Identifier.ValueType.Kind() != types.Int64 {

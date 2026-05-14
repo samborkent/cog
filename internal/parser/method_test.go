@@ -29,8 +29,8 @@ main : proc() = {}`)
 			t.Fatal("method receiver is nil")
 		}
 
-		if m.Receiver.Name != "f" {
-			t.Errorf("expected receiver name f, got %q", m.Receiver.Name)
+		if m.Receiver.Token.Literal != "f" {
+			t.Errorf("expected receiver name f, got %q", m.Receiver.Token.Literal)
 		}
 
 		if m.Declaration == ast.ZeroNodeIndex {
@@ -39,8 +39,8 @@ main : proc() = {}`)
 
 		decl := f.Node(m.Declaration).(*ast.Declaration)
 
-		if decl.Assignment.Identifier.Name != "GetValue" {
-			t.Errorf("expected method name GetValue, got %q", decl.Assignment.Identifier.Name)
+		if decl.Assignment.Identifier.Token.Literal != "GetValue" {
+			t.Errorf("expected method name GetValue, got %q", decl.Assignment.Identifier.Token.Literal)
 		}
 	})
 
@@ -110,14 +110,14 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 2)
 
-		if m.Receiver.Name != "f" {
-			t.Errorf("expected receiver f, got %q", m.Receiver.Name)
+		if m.Receiver.Token.Literal != "f" {
+			t.Errorf("expected receiver f, got %q", m.Receiver.Token.Literal)
 		}
 
 		decl := f.Node(m.Declaration).(*ast.Declaration)
 
-		if decl.Assignment.Identifier.Name != "String" {
-			t.Errorf("expected method name String, got %q", decl.Assignment.Identifier.Name)
+		if decl.Assignment.Identifier.Token.Literal != "String" {
+			t.Errorf("expected method name String, got %q", decl.Assignment.Identifier.Token.Literal)
 		}
 	})
 
@@ -166,7 +166,7 @@ main : proc() = {}`)
 		}
 
 		if refType.Value.String() != "Foo" {
-			t.Errorf("expected receiver Foo, got %q", m.Receiver.Name)
+			t.Errorf("expected receiver Foo, got %q", m.Receiver.Token.Literal)
 		}
 	})
 
@@ -205,8 +205,8 @@ main : proc() = {}`)
 
 		decl := f.Node(m.Declaration).(*ast.Declaration)
 
-		if decl.Assignment.Identifier.Name != "Greet" {
-			t.Errorf("expected method name 'Greet', got %q", decl.Assignment.Identifier.Name)
+		if decl.Assignment.Identifier.Token.Literal != "Greet" {
+			t.Errorf("expected method name 'Greet', got %q", decl.Assignment.Identifier.Token.Literal)
 		}
 	})
 
@@ -232,12 +232,12 @@ main : proc() = {}`)
 		decl1 := f.Node(m1.Declaration).(*ast.Declaration)
 		decl2 := f.Node(m2.Declaration).(*ast.Declaration)
 
-		if decl1.Assignment.Identifier.Name != "GetX" {
-			t.Errorf("expected first method 'GetX', got %q", decl1.Assignment.Identifier.Name)
+		if decl1.Assignment.Identifier.Token.Literal != "GetX" {
+			t.Errorf("expected first method 'GetX', got %q", decl1.Assignment.Identifier.Token.Literal)
 		}
 
-		if decl2.Assignment.Identifier.Name != "GetY" {
-			t.Errorf("expected second method 'GetY', got %q", decl2.Assignment.Identifier.Name)
+		if decl2.Assignment.Identifier.Token.Literal != "GetY" {
+			t.Errorf("expected second method 'GetY', got %q", decl2.Assignment.Identifier.Token.Literal)
 		}
 	})
 

@@ -13,21 +13,21 @@ import (
 const argumentPreallocationSize = 2
 
 func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedure) []ast.ExprIndex {
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after call identifier", "parseCallArguments")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after call identifier", "parseCallArguments")
 		return nil
 	}
 
-	p.advance("parseCallArguments (") // consume '('
+	p.lex.Step() // consume '('
 
-	if p.this().Type == tokens.RParen {
-		p.advance("parseCallArguments )") // consume ')'
+	if p.lex.This().Type == tokens.RParen {
+		p.lex.Step() // consume ')'
 		return []ast.ExprIndex{}
 	}
 
 	args := make([]ast.ExprIndex, 0, argumentPreallocationSize)
 
-	for i := 0; p.this().Type != tokens.RParen && p.this().Type != tokens.EOF; i++ {
+	for i := 0; p.lex.This().Type != tokens.RParen && p.lex.This().Type != tokens.EOF; i++ {
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -41,7 +41,7 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 			}
 		} else {
 			if i >= len(procType.Parameters) {
-				p.error(p.this(), "too many arguments in function call", "parseCallArguments")
+				p.error(p.lex.This(), "too many arguments in function call", "parseCallArguments")
 				return nil
 			}
 
@@ -61,17 +61,17 @@ func (p *Parser) parseCallArguments(ctx context.Context, procType *types.Procedu
 
 		args = append(args, arg)
 
-		if p.this().Type == tokens.Comma {
-			p.advance("parseCallArguments ,") // consume ','
+		if p.lex.This().Type == tokens.Comma {
+			p.lex.Step() // consume ','
 		}
 	}
 
-	if p.this().Type != tokens.RParen {
-		p.error(p.this(), "expected ')' after function call arguments", "parseCallArguments")
+	if p.lex.This().Type != tokens.RParen {
+		p.error(p.lex.This(), "expected ')' after function call arguments", "parseCallArguments")
 		return nil
 	}
 
-	p.advance("parseCallArguments )") // consume ')'
+	p.lex.Step() // consume ')'
 
 	return args
 }
@@ -101,7 +101,7 @@ func (p *Parser) inferTypeArgs(
 		if existing, ok := argMap[tp.Name]; ok {
 			// Already inferred — check consistency.
 			if !types.Equal(existing, argType) {
-				p.error(p.this(), fmt.Sprintf(
+				p.error(p.lex.This(), fmt.Sprintf(
 					"conflicting types for type parameter %q: %s vs %s",
 					tp.Name, existing, argType), "inferTypeArgs")
 
@@ -113,7 +113,7 @@ func (p *Parser) inferTypeArgs(
 
 		// Validate constraint satisfaction.
 		if !tp.SatisfiedBy(argType) {
-			p.error(p.this(), fmt.Sprintf(
+			p.error(p.lex.This(), fmt.Sprintf(
 				"type %q does not satisfy constraint %q for parameter %q",
 				argType, tp.ConstraintString(), tp.Name), "inferTypeArgs")
 
@@ -128,7 +128,7 @@ func (p *Parser) inferTypeArgs(
 	for i, tp := range procType.TypeParams {
 		concrete, ok := argMap[tp.Name]
 		if !ok {
-			p.error(p.this(), fmt.Sprintf(
+			p.error(p.lex.This(), fmt.Sprintf(
 				"cannot infer type parameter %q from arguments", tp.Name), "inferTypeArgs")
 
 			return nil, nil
@@ -154,7 +154,7 @@ func (p *Parser) validateExplicitTypeArgs(
 	args []ast.ExprIndex,
 ) types.Type {
 	if len(typeArgs) != len(procType.TypeParams) {
-		p.error(p.this(), fmt.Sprintf(
+		p.error(p.lex.This(), fmt.Sprintf(
 			"wrong number of type arguments: expected %d, got %d",
 			len(procType.TypeParams), len(typeArgs)), "validateExplicitTypeArgs")
 
@@ -165,7 +165,7 @@ func (p *Parser) validateExplicitTypeArgs(
 
 	for i, tp := range procType.TypeParams {
 		if !tp.SatisfiedBy(typeArgs[i]) {
-			p.error(p.this(), fmt.Sprintf(
+			p.error(p.lex.This(), fmt.Sprintf(
 				"type argument %q does not satisfy constraint %q for parameter %q",
 				typeArgs[i], tp.ConstraintString(), tp.Name), "validateExplicitTypeArgs")
 
@@ -185,7 +185,7 @@ func (p *Parser) validateExplicitTypeArgs(
 		argType := p.ast.Expr(args[i]).Type()
 
 		if !types.Equal(expectedType, argType) && !types.AssignableTo(argType, expectedType) {
-			p.error(p.this(), fmt.Sprintf(
+			p.error(p.lex.This(), fmt.Sprintf(
 				"argument type %q does not match parameter type %q (after substitution)",
 				argType, expectedType), "validateExplicitTypeArgs")
 

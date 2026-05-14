@@ -11,22 +11,24 @@ import (
 func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 	var label *ast.Identifier
 
-	if p.prev().Type == tokens.Identifier && p.this().Type == tokens.Colon {
+	prev := p.lex.Peek(-1)
+
+	if prev.Type == tokens.Identifier &&
+		p.lex.This().Type == tokens.Colon {
 		label = &ast.Identifier{
-			Token: p.prev(),
-			Name:  p.prev().Literal,
+			Token: prev,
 		}
 
-		p.advance("parseIfStatement :") // consume colon
+		p.lex.Step() // consume colon
 	}
 
-	ifToken := p.this()
+	ifToken := p.lex.This()
 
-	p.advance("parseIfStatement if") // consume if
+	p.lex.Step() // consume if
 
 	condition := p.expression(ctx, types.None)
 	if condition == ast.ZeroExprIndex {
-		p.error(p.this(), "unable to parse bool expression in if condition", "parseIfStatement")
+		p.error(p.lex.This(), "unable to parse bool expression in if condition", "parseIfStatement")
 		return ast.ZeroNodeIndex
 	}
 
@@ -35,7 +37,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 	if expr.Type().Kind() != types.Bool &&
 		expr.Type().Kind() != types.ErrorKind &&
 		expr.Type().Kind() != types.OptionKind {
-		p.error(p.this(), "expected bool, result, or option expression in if condition", "parseIfStatement")
+		p.error(p.lex.This(), "expected bool, result, or option expression in if condition", "parseIfStatement")
 		return ast.ZeroNodeIndex
 	}
 
@@ -74,7 +76,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 	}
 
 	if consequence == nil {
-		p.error(p.this(), "unable to parse if block", "parseIfStatement")
+		p.error(p.lex.This(), "unable to parse if block", "parseIfStatement")
 		return ast.ZeroNodeIndex
 	}
 
@@ -92,12 +94,8 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 
 	var alternative *ast.Block
 
-	if p.this().Type == tokens.Else {
-		if ctx.Err() != nil {
-			return ast.ZeroNodeIndex
-		}
-
-		p.advance("parseIfStatement else") // consume 'else'
+	if p.lex.This().Type == tokens.Else {
+		p.lex.Step() // consume 'else'
 
 		if checkedVar != "" && negated {
 			// Negated check else: value safe.
@@ -115,7 +113,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 		}
 
 		if alternative == nil {
-			p.error(p.this(), "unable to parse else block", "parseIfStatement")
+			p.error(p.lex.This(), "unable to parse else block", "parseIfStatement")
 			return ast.ZeroNodeIndex
 		}
 	}
@@ -153,7 +151,7 @@ func (p *Parser) extractCheckVar(expr ast.Expr) (string, bool) {
 	case *ast.Suffix:
 		if e.Operator.Type == tokens.Question {
 			if ident, ok := p.ast.Expr(e.Left).(*ast.Identifier); ok {
-				return ident.Name, false
+				return ident.Token.Literal, false
 			}
 		}
 	case *ast.Prefix:

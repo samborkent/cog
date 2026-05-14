@@ -17,8 +17,8 @@ main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
 
-		if d.Assignment.Identifier.Name != "main" {
-			t.Errorf("expected name 'main', got %q", d.Assignment.Identifier.Name)
+		if d.Assignment.Identifier.Token.Literal != "main" {
+			t.Errorf("expected name 'main', got %q", d.Assignment.Identifier.Token.Literal)
 		}
 
 		if f.Expr(d.Assignment.Expr).Type().Kind() != types.ProcedureKind {
