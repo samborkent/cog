@@ -141,3 +141,50 @@ main : proc() = {}`)
 		}
 	})
 }
+
+func TestForwardValueReference(t *testing.T) {
+	t.Parallel()
+
+	t.Run("later_declared_global", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+foo : int64 = bar
+bar : int64 = 42
+main : proc() = {}`)
+
+		d := stmtAs[*ast.Declaration](t, f, 0)
+		if d.Assignment.Identifier.Token.Literal != "foo" {
+			t.Errorf("expected name 'foo', got %q", d.Assignment.Identifier.Token.Literal)
+		}
+
+		if d.Assignment.Identifier.ValueType.Kind() != types.Int64 {
+			t.Errorf("expected Int64, got %s", d.Assignment.Identifier.ValueType.Kind())
+		}
+
+		// The expression referencing 'bar' should resolve to int64.
+		expr := f.Expr(d.Assignment.Expr)
+		ident, ok := expr.(*ast.Identifier)
+		if !ok {
+			t.Fatalf("expected *ast.Identifier, got %T", expr)
+		}
+
+		if ident.Token.Literal != "bar" {
+			t.Errorf("expected reference to 'bar', got %q", ident.Token.Literal)
+		}
+
+		if types.IsNone(ident.ValueType) {
+			t.Error("forward value reference 'bar' was not resolved")
+		}
+
+		if ident.ValueType.Kind() != types.Int64 {
+			t.Errorf("expected bar type Int64, got %s", ident.ValueType.Kind())
+		}
+	})
+
+	t.Run("undefined_identifier_errors", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+foo : int64 = nonexistent
+main : proc() = {}`)
+	})
+}

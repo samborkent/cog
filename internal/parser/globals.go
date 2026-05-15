@@ -137,6 +137,14 @@ func (p *Parser) FindGlobals(ctx context.Context) {
 			p.error(sym.Identifier.Token, "undefined type: "+name, "FindGlobals")
 		}
 	}
+
+	// Check for unresolved forward value references.
+	for name, sym := range p.symbols.table {
+		if sym.Scope == ScanScope && sym.Identifier.Qualifier != ast.QualifierType &&
+			types.IsNone(sym.Identifier.ValueType) {
+			p.error(sym.Identifier.Token, "undefined identifier: "+name, "FindGlobals")
+		}
+	}
 }
 
 func (p *Parser) findScriptImports(ctx context.Context) {
@@ -173,8 +181,8 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 		return
 	}
 
-	_, ok := p.symbols.Resolve(p.lex.This().Literal)
-	if ok {
+	sym, ok := p.symbols.Resolve(p.lex.This().Literal)
+	if ok && !(sym.Scope == ScanScope && types.IsNone(sym.Identifier.ValueType)) {
 		// Report redeclare error and advance past the identifier to avoid an infinite loop
 		p.error(p.lex.This(), "cannot redeclare variable", "findGlobalDecl")
 		p.lex.Step() // consume identifier to make progress

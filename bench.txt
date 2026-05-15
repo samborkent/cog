@@ -43,12 +43,12 @@ BenchmarkLargeFile-10                         84           1215238 ns/op        
 BenchmarkMultiFileTranspile-10               136            866993 ns/op          798953 B/op      11297 allocs/op
 
 2025-05-15 13:25 - SkipBody in lexer
-BenchmarkLexing-10                          1035            111554 ns/op           22792 B/op       1007 allocs/op
-BenchmarkParsing-10                          411            269758 ns/op          261631 B/op       4346 allocs/op
-BenchmarkTranspiling-10                      494            228127 ns/op          331344 B/op       8591 allocs/op
-BenchmarkPrinting-10                         192            604971 ns/op          464589 B/op       2704 allocs/op
-BenchmarkTranspileAndPrint-10                134            886480 ns/op          797965 B/op      11297 allocs/op
-BenchmarkFullPipeline-10                     100           1179893 ns/op         1056675 B/op      15647 allocs/op
-BenchmarkGoBuild-10                            1         125849459 ns/op           14088 B/op         66 allocs/op
-BenchmarkLargeFile-10                         87           1220514 ns/op         1052807 B/op      15647 allocs/op
-BenchmarkMultiFileTranspile-10               135            884032 ns/op          795376 B/op      11297 allocs/op
+BenchmarkLexing-10                           987            117931 ns/op           23176 B/op           1007 allocs/op
+BenchmarkParsing-10                          379            289344 ns/op          266400 B/op           4482 allocs/op
+BenchmarkTranspiling-10                      470            231479 ns/op          331366 B/op           8591 allocs/op
+BenchmarkPrinting-10                         193            605779 ns/op          453813 B/op           2703 allocs/op
+BenchmarkTranspileAndPrint-10                130            909172 ns/op          793211 B/op          11297 allocs/op
+BenchmarkFullPipeline-10                     100           1210364 ns/op         1057624 B/op          15783 allocs/op
+BenchmarkGoBuild-10                            1         124994542 ns/op           14280 B/op             67 allocs/op
+BenchmarkLargeFile-10                         84           1268804 ns/op         1063443 B/op          15783 allocs/op
+BenchmarkMultiFileTranspile-10               132            903786 ns/op          792336 B/op          11297 allocs/op

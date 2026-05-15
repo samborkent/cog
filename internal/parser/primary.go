@@ -142,6 +142,22 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				return p.parsePkgSelector(ctx, imp)
 			}
 
+			if p.globalsPass {
+				// Forward value reference: create a stub that resolves
+				// when the real declaration is encountered later.
+				ident := &ast.Identifier{
+					Token:     p.lex.This(),
+					Qualifier: ast.QualifierImmutable,
+					Global:    true,
+					ValueType: types.None,
+				}
+
+				p.symbols.DefineGlobal(ident)
+				p.lex.Step() // consume identifier
+
+				return p.ast.AddExpr(ident)
+			}
+
 			p.error(p.lex.This(), "undefined identifier", "primary")
 
 			return ast.ZeroExprIndex

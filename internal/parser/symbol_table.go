@@ -170,6 +170,19 @@ func (s *SymbolTable) DefineEnumValue(selector string, field *ast.Identifier) {
 }
 
 func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
+	// If a forward value stub exists (created during globalsPass for
+	// forward references), resolve it by copying the real declaration's
+	// info into the existing stub. All expression nodes referencing the
+	// stub share the same pointer, so mutating it updates all referents.
+	if existing, ok := s.table[ident.Token.Literal]; ok &&
+		existing.Scope == ScanScope &&
+		types.IsNone(existing.Identifier.ValueType) {
+		existing.Identifier.ValueType = ident.ValueType
+		existing.Identifier.Qualifier = ident.Qualifier
+		existing.Identifier.Exported = ident.Exported
+		return
+	}
+
 	s.Define(ident)
 	symbol := s.table[ident.Token.Literal]
 	symbol.Scope = ScanScope
