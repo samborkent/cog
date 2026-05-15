@@ -4,8 +4,6 @@ github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 h1:onHthvaw9LFnH4t2D
 github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58/go.mod h1:DXv8WO4yhMYhSNPKjeNKa5WY9YCIEBRbNzFFPJbWO6Y=
 github.com/ryanavella/wide v0.0.0-20190709032049-e93517939246 h1:0SZhYbgJP6nLl9eR1jA52I3ODO/k/a7hfvj2hXYqgbg=
 github.com/ryanavella/wide v0.0.0-20190709032049-e93517939246/go.mod h1:BSx6mpeWyxA4fQ+ZQ54r4tiWVIwNR1BS4s28OWXr9Ns=
-github.com/tidwall/btype v0.2.0 h1:xYfiSwqmWxWMb9bi4d6d1xu9t/Bd6dGt0+1fpQp7haM=
-github.com/tidwall/btype v0.2.0/go.mod h1:IRq7GmniRp9OhEKPIalEyUe/3x9oR8AuuKrdv0ANFbc=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
 github.com/x448/float16 v0.8.4/go.mod h1:14CWIYCyZA/cWjXOioeEpHeN/83MdbZDRQHoFcYsOfg=
 golang.org/x/text v0.37.0 h1:Cqjiwd9eSg8e0QAkyCaQTNHFIIzWtidPahFWR83rTrc=
