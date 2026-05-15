@@ -193,7 +193,7 @@ main : proc() = {
 		mainDecl := stmtAs[*ast.Declaration](t, f, 1)
 		procLit := f.Expr(mainDecl.Assignment.Expr).(*ast.ProcedureLiteral)
 
-		block := procLit.Body
+		block := f.Node(procLit.Body).(*ast.Block)
 		if len(block.Statements) == 0 {
 			t.Fatal("expected statements in main block")
 		}

@@ -10,21 +10,34 @@ import (
 )
 
 func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, typeName string, exported, reference bool) ast.NodeIndex {
-	methodToken := p.this()
+	methodToken := p.lex.This()
 
 	storedReceiver, ok := p.symbols.Resolve(typeName)
-	if !ok {
-		p.error(p.this(), fmt.Sprintf("undefined receiver type %q", typeName), "parseMethod")
+	if !ok && p.globalsPass {
+		// Forward type reference for receiver — register stub.
+		ident := &ast.Identifier{
+			Token: tokens.Token{
+				Type:    tokens.Identifier,
+				Literal: typeName,
+			},
+			Qualifier: ast.QualifierType,
+			Global:    true,
+		}
+
+		p.symbols.DefineGlobal(ident)
+		storedReceiver = Symbol{Identifier: ident, Scope: ScanScope}
+	} else if !ok {
+		p.error(p.lex.This(), fmt.Sprintf("undefined receiver type %q", typeName), "parseMethod")
 		return ast.ZeroNodeIndex
 	}
 
 	if storedReceiver.Identifier.Qualifier != ast.QualifierType {
-		p.error(p.this(), "encountered non-type method receiver "+storedReceiver.Identifier.Name, "parseMethod")
+		p.error(p.lex.This(), "encountered non-type method receiver "+storedReceiver.Identifier.Token.Literal, "parseMethod")
 		return ast.ZeroNodeIndex
 	}
 
-	if exported && !storedReceiver.Identifier.Exported {
-		p.error(p.this(), "exported method not allowed on unexported type", "parseMethod")
+	if exported && !storedReceiver.Identifier.Exported && !types.IsNone(storedReceiver.Identifier.ValueType) {
+		p.error(p.lex.This(), "exported method not allowed on unexported type", "parseMethod")
 		return ast.ZeroNodeIndex
 	}
 
@@ -33,7 +46,7 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 	if reference {
 		methodType = &types.Reference{
 			Value: &types.Alias{
-				Name:     storedReceiver.Identifier.Name,
+				Name:     storedReceiver.Identifier.Token.Literal,
 				Derived:  storedReceiver.Identifier.ValueType,
 				Exported: storedReceiver.Identifier.Exported,
 				Global:   storedReceiver.Identifier.Global,
@@ -41,54 +54,100 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 		}
 	} else {
 		methodType = &types.Alias{
-			Name:     storedReceiver.Identifier.Name,
+			Name:     storedReceiver.Identifier.Token.Literal,
 			Derived:  storedReceiver.Identifier.ValueType,
 			Exported: storedReceiver.Identifier.Exported,
 			Global:   storedReceiver.Identifier.Global,
 		}
 	}
 
-	if p.this().Type != tokens.Dot {
-		p.error(p.this(), "expected . after reciver in method declaration", "parseMethod")
+	if p.lex.This().Type != tokens.Dot {
+		p.error(p.lex.This(), "expected . after reciver in method declaration", "parseMethod")
 		return ast.ZeroNodeIndex
 	}
 
-	p.advance("parseMethod .") // consume .
+	p.lex.Step() // consume .
 
-	if p.this().Type != tokens.Identifier {
-		p.error(p.this(), "expected method in name in type method declaration", "parseMethod")
+	if p.lex.This().Type != tokens.Identifier {
+		p.error(p.lex.This(), "expected method in name in type method declaration", "parseMethod")
 		return ast.ZeroNodeIndex
 	}
 
-	methodName := p.this().Literal
+	methodName := p.lex.This().Literal
 	methodSymbol, ok := p.symbols.ResolveField(typeName, methodName)
-	if !ok {
-		p.error(p.this(), "method is undefined", "parseMethod")
+
+	if !ok && p.globalsPass {
+		// During globals pass, register the method (replaces findGlobalMethod).
+		methodSymbol = Symbol{
+			Identifier: &ast.Identifier{
+				Token:     p.lex.This(),
+				Exported:  exported,
+				Qualifier: ast.QualifierMethod,
+				Global:    true,
+			},
+			Scope: ScanScope,
+		}
+	} else if !ok {
+		p.error(p.lex.This(), "method is undefined", "parseMethod")
 		return ast.ZeroNodeIndex
 	}
 
 	// Check for duplicate method definition.
 	methodKey := typeName + "." + methodName
 	if _, exists := p.definedMethods[methodKey]; exists {
-		p.error(p.this(), fmt.Sprintf("duplicate method definition: %s", methodKey), "parseMethod")
+		p.error(p.lex.This(), fmt.Sprintf("duplicate method definition: %s", methodKey), "parseMethod")
 		return ast.ZeroNodeIndex
 	}
 
 	p.definedMethods[methodKey] = struct{}{}
 
-	p.advance("parseMethod identifier") // consume identifier
-	p.advance("parseMethod :")          // consume :
+	p.lex.Step() // consume identifier
+	p.lex.Step() // consume :
 
 	if receiver != nil {
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 		p.symbols.Define(receiver)
 
-		defer func() { p.symbols = p.symbols.Outer }()
+		prevReceiver := p.currentReceiver
+		p.currentReceiver = receiver
+
+		defer func() {
+			p.symbols = p.symbols.Outer
+			p.currentReceiver = prevReceiver
+		}()
 	}
 
 	decl := p.parseTypedDeclaration(ctx, methodSymbol.Identifier)
 	if decl == ast.ZeroNodeIndex {
 		return ast.ZeroNodeIndex
+	}
+
+	// During globals pass, register method in symbol table and attach to struct.
+	if p.globalsPass {
+		if err := p.symbols.DefineMethod(typeName, methodSymbol.Identifier); err != nil {
+			p.error(p.lex.This(), err.Error(), "parseMethod")
+			return ast.ZeroNodeIndex
+		}
+
+		// Attach method to receiver's underlying struct for interface satisfaction.
+		if sym, ok := p.symbols.Resolve(typeName); ok && sym.Identifier.ValueType != nil {
+			procType, _ := methodSymbol.Identifier.ValueType.(*types.Procedure)
+			if procType != nil {
+				method := &types.Method{
+					Name:      methodName,
+					Procedure: procType,
+				}
+
+				switch v := sym.Identifier.ValueType.(type) {
+				case *types.Struct:
+					v.Methods = append(v.Methods, method)
+				case *types.Alias:
+					if s, ok := v.Underlying().(*types.Struct); ok {
+						s.Methods = append(s.Methods, method)
+					}
+				}
+			}
+		}
 	}
 
 	// Reject variable receiver on func (pure functions cannot mutate).

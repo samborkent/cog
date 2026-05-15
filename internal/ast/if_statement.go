@@ -36,7 +36,7 @@ func (n *IfStatement) Hash() uint64 {
 
 func (n *IfStatement) StringTo(out *strings.Builder, a *AST) {
 	if n.Label != nil {
-		_, _ = out.WriteString(n.Label.Name)
+		_, _ = out.WriteString(n.Label.Token.Literal)
 		_, _ = out.WriteString(":\n")
 	}
 

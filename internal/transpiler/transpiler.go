@@ -83,7 +83,7 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 	t.fileID = 0
 
 	gofile := &goast.File{
-		Name:  goast.NewIdent(t.file.Package.Identifier.Name),
+		Name:  goast.NewIdent(t.file.Package.Identifier.Token.Literal),
 		Decls: make([]goast.Decl, 0, len(t.file.Statements)),
 	}
 	errs := make([]error, 0)
@@ -105,7 +105,7 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 		switch s := t.files.Node(0, stmt).(type) {
 		case *ast.GoImport:
 			for _, imprt := range s.Imports {
-				t.addStdLibImport(imprt.Name)
+				t.addStdLibImport(imprt.Token.Literal)
 			}
 		case *ast.Import:
 			t.addCogImports(s)
@@ -163,7 +163,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 		t.lastSourceLine = 0
 
 		gofile := &goast.File{
-			Name:  goast.NewIdent(t.file.Package.Identifier.Name),
+			Name:  goast.NewIdent(t.file.Package.Identifier.Token.Literal),
 			Decls: make([]goast.Decl, 0, len(t.file.Statements)),
 		}
 
@@ -186,7 +186,7 @@ func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
 			switch s := t.files.Node(uint16(i), stmt).(type) {
 			case *ast.GoImport:
 				for _, imprt := range s.Imports {
-					t.addStdLibImport(imprt.Name)
+					t.addStdLibImport(imprt.Token.Literal)
 				}
 			case *ast.Import:
 				t.addCogImports(s)
@@ -243,7 +243,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 		switch s := t.files.Node(0, stmt).(type) {
 		case *ast.GoImport:
 			for _, imprt := range s.Imports {
-				t.addStdLibImport(imprt.Name)
+				t.addStdLibImport(imprt.Token.Literal)
 			}
 		case *ast.Import:
 			t.addCogImports(s)
@@ -313,7 +313,7 @@ func (t *Transpiler) predeclareGlobals() error {
 		for i, stmt := range f.Statements {
 			switch s := t.files.Node(uint16(id), stmt).(type) {
 			case *ast.Declaration:
-				name := component.ConvertExport(s.Assignment.Identifier.Name, s.Assignment.Identifier.Exported, s.Assignment.Identifier.Global)
+				name := component.ConvertExport(s.Assignment.Identifier.Token.Literal, s.Assignment.Identifier.Exported, s.Assignment.Identifier.Global)
 
 				if s.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
 					if err := t.symbols.DefineDynamic(s.Assignment.Identifier); err != nil {
@@ -346,7 +346,7 @@ func (t *Transpiler) predeclareGlobals() error {
 					}
 				}
 
-				if s.Assignment.Identifier.Name != "main" && s.Assignment.Expr != ast.ZeroExprIndex {
+				if s.Assignment.Identifier.Token.Literal != "main" && s.Assignment.Expr != ast.ZeroExprIndex {
 					if procType, ok := t.files.Expr(uint16(id), s.Assignment.Expr).Type().(*types.Procedure); ok && !procType.Function {
 						t.needsContext[uint16(id)] = true
 					}
@@ -360,7 +360,7 @@ func (t *Transpiler) predeclareGlobals() error {
 					t.needsContext[uint16(id)] = true
 				}
 			case *ast.Type:
-				t.symbols.Define(component.ConvertExport(s.Identifier.Name, s.Identifier.Exported, s.Identifier.Global))
+				t.symbols.Define(component.ConvertExport(s.Identifier.Token.Literal, s.Identifier.Exported, s.Identifier.Global))
 			}
 		}
 	}
@@ -375,7 +375,7 @@ func (t *Transpiler) predeclareGlobals() error {
 // addCogImports registers cog import paths as Go imports with the proper module prefix.
 func (t *Transpiler) addCogImports(node *ast.Import) {
 	for _, imprt := range node.Imports {
-		importPath := imprt.Name
+		importPath := imprt.Token.Literal
 
 		goPath := importPath
 		if t.goModulePath != "" {

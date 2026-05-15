@@ -166,3 +166,116 @@ func TestParseArithmeticExpressions(t *testing.T) {
 		})
 	}
 }
+
+func TestParseIndexExpression(t *testing.T) {
+	t.Parallel()
+
+	t.Run("slice_index", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	xs : []int64 = {10, 20, 30}
+	v := xs[1]
+	@print(v)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("array_index", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	arr : [3]int64 = {1, 2, 3}
+	v := arr[0]
+	@print(v)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("string_index", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	s : utf8 = "hello"
+	c := s[0]
+	@print(c)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("map_index", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+M ~ map<utf8, int64>
+main : proc() = {
+	m : M = {"a": 1}
+	v := m["a"]
+	@print(v)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+}
+
+func TestParseBooleanExpressions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"and_chain", `x : bool = true && true && false`},
+		{"or_chain", `x : bool = false || false || true`},
+		{"mixed_bool", `x : bool = true && false || true`},
+		{"not_and", `x : bool = !false && true`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
+			if f.LenNodes() == 0 {
+				t.Fatal("expected statements")
+			}
+		})
+	}
+}
+
+func TestParseArithmeticPrecedence(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"mul_then_add", `x : int64 = 2 * 3 + 1`},
+		{"div_then_sub", `x : int64 = 10 / 2 - 1`},
+		{"grouped", `x : int64 = (1 + 2) * (3 - 1)`},
+		{"nested_unary", `x : int64 = -(-5)`},
+		{"multi_term", `x : int64 = 1 + 2 + 3 + 4`},
+		{"multi_factor", `x : int64 = 2 * 3 * 4`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
+			if f.LenNodes() == 0 {
+				t.Fatal("expected statements")
+			}
+		})
+	}
+}

@@ -44,7 +44,7 @@ func (n *Method) StringTo(out *strings.Builder, a *AST) {
 
 	if n.Receiver != nil {
 		_ = out.WriteByte('(')
-		_, _ = out.WriteString(n.Receiver.Name)
+		_, _ = out.WriteString(n.Receiver.Token.Literal)
 		_, _ = out.WriteString(" : ")
 		_, _ = out.WriteString(n.Type.String())
 		_ = out.WriteByte(')')

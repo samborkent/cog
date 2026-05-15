@@ -1,5 +1,7 @@
 package types
 
+import "github.com/samborkent/cog/internal/tokens"
+
 // Constraints is the set of builtin named type constraints.
 // Each entry is a named Union whose Variants list the concrete types
 // that satisfy the constraint.
@@ -57,7 +59,25 @@ func init() {
 			[]Type{&Struct{}, &Array{}, &Enum{}, &Reference{}, &Tuple{}, &Set{}},
 		),
 	}
+
+	ConstraintLookup = map[tokens.Type]Type{
+		tokens.Any:        Any,
+		tokens.Int:        Constraints["int"],
+		tokens.Uint:       Constraints["uint"],
+		tokens.Float:      Constraints["float"],
+		tokens.Complex:    Constraints["complex"],
+		tokens.String:     Constraints["string"],
+		tokens.Signed:     Constraints["signed"],
+		tokens.Number:     Constraints["number"],
+		tokens.Ordered:    Constraints["ordered"],
+		tokens.Summable:   Constraints["summable"],
+		tokens.Comparable: Constraints["comparable"],
+	}
 }
+
+// ConstraintLookup maps constraint token types to their constraint type.
+// Populated in init after all Constraints entries are built.
+var ConstraintLookup map[tokens.Type]Type
 
 func flatten(slices ...[]Type) []Type {
 	var n int

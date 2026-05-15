@@ -29,7 +29,7 @@ func Ident(ident *ast.Identifier) *goast.Ident {
 		return nil
 	}
 
-	return cachedIdent(ConvertExport(ident.Name, ident.Exported, ident.Global))
+	return cachedIdent(ConvertExport(ident.Token.Literal, ident.Exported, ident.Global))
 }
 
 // IdentName converts a simple string name to a cached Go *ast.Ident.

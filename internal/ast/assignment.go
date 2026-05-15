@@ -31,7 +31,7 @@ func (n *Assignment) Hash() uint64 {
 }
 
 func (n *Assignment) StringTo(out *strings.Builder, a *AST) {
-	_, _ = out.WriteString(n.Identifier.Name)
+	_, _ = out.WriteString(n.Identifier.Token.Literal)
 	_ = out.WriteByte(' ')
 	_, _ = out.WriteString(n.Token.Type.String())
 	_ = out.WriteByte(' ')

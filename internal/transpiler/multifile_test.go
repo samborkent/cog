@@ -12,7 +12,6 @@ import (
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
 	"github.com/samborkent/cog/internal/parser"
-	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/transpiler"
 )
 
@@ -29,43 +28,41 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 	sort.Strings(names)
 
 	type lf struct {
-		name string
-		toks []tokens.Token
+		name  string
+		lexer *lexer.Lexer
 	}
 
 	lexed := make([]lf, 0, len(files))
 	for _, name := range names {
-		l := lexer.New(strings.NewReader(files[name]))
+		file := files[name]
+		l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
 
-		toks, err := l.Parse(t.Context())
-		if err != nil {
-			t.Fatalf("lex error (%s): %v", name, err)
-		}
-
-		lexed = append(lexed, lf{name: name, toks: toks})
+		lexed = append(lexed, lf{name: name, lexer: l})
 	}
 
 	symbols := parser.NewSymbolTable()
 
 	parsers := make([]*parser.Parser, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
 	for i, f := range lexed {
-		p, err := parser.NewParserWithSymbols(f.toks, symbols, false, f.name, uint16(i), nil)
+		p, err := parser.NewParserWithSymbols(f.lexer, symbols, f.name, uint16(i), nil)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", f.name, err)
 		}
 
-		p.FindGlobals(t.Context())
-		parsers[i] = p
-	}
-
-	astFiles := make([]*ast.AST, len(lexed))
-	for i, f := range lexed {
-		af, err := parsers[i].ParseOnly(t.Context(), f.name)
+		af, err := p.ParseGlobals(t.Context(), f.name)
 		if err != nil {
-			t.Fatalf("parse error (%s): %v", f.name, err)
+			t.Fatalf("parser globals (%s): %v", f.name, err)
 		}
 
+		parsers[i] = p
 		astFiles[i] = af
+	}
+
+	for i, f := range lexed {
+		if err := parsers[i].ParseBodies(t.Context()); err != nil {
+			t.Fatalf("parse bodies (%s): %v", f.name, err)
+		}
 	}
 
 	tr := transpiler.NewTranspilerWithModule("testmod", ast.MergeASTs(astFiles...))
@@ -94,14 +91,9 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 func transpileWithModule(t *testing.T, moduleName, src string) string {
 	t.Helper()
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lex error: %v", err)
-	}
-
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, parser.NewSymbolTable(), "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -292,14 +284,9 @@ import (
 
 main : proc() = {}
 `
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lex error: %v", err)
-	}
-
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, parser.NewSymbolTable(), "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init: %v", err)
 	}

@@ -9,29 +9,29 @@ import (
 )
 
 func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) ast.NodeIndex {
-	symbol, ok := p.symbols.Resolve(ident.Name)
+	symbol, ok := p.symbols.Resolve(ident.String())
 	if !ok {
-		p.error(p.prev(), "unknown identifier", "parseAssignment")
+		p.error(p.lex.Peek(-1), "unknown identifier", "parseAssignment")
 		return ast.ZeroNodeIndex
 	}
 
 	switch symbol.Identifier.Qualifier {
 	case ast.QualifierImmutable:
-		p.error(p.prev(), "cannot reassign a constant", "parseAssignment")
+		p.error(p.lex.Peek(-1), "cannot reassign a constant", "parseAssignment")
 
 		// Skip until next line.
-		p.advance("parseAssignment error =") // consume =
+		p.lex.Step() // consume =
 		_ = p.expression(ctx, symbol.Type())
 
 		return ast.ZeroNodeIndex
 	case ast.QualifierType:
-		p.error(p.prev(), "cannot assign to a type identifier", "parseAssignment")
+		p.error(p.lex.Peek(-1), "cannot assign to a type identifier", "parseAssignment")
 		return ast.ZeroNodeIndex
 	}
 
-	assignmentToken := p.this()
+	assignmentToken := p.lex.This()
 
-	p.advance("parseAssignment") // consume '='
+	p.lex.Step() // consume '='
 
 	expr := p.expression(ctx, symbol.Type())
 	if expr == ast.ZeroExprIndex {
@@ -40,7 +40,7 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) ast
 
 	exprType := p.ast.Expr(expr).Type()
 
-	if symbol.Identifier.Name != "_" &&
+	if symbol.Identifier.String() != "_" &&
 		// TODO: check if this is required, as [Parser.expression] should already enforce this, expect if symbol type is [types.None].
 		!types.Equal(symbol.Type(), exprType) &&
 		!types.AssignableTo(exprType, symbol.Type()) {
@@ -55,21 +55,21 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) ast
 		if state, isVariant := resultExprState(resultType, exprType); isVariant {
 			expr = p.ast.NewResultLiteral(assignmentToken, exprType, expr, exprType.Kind() == types.ErrorKind)
 
-			p.symbols.MarkChecked(ident.Name, state)
+			p.symbols.MarkChecked(ident.String(), state)
 		} else {
 			// Reassignment from an unknown result variant invalidates previous checks.
-			p.symbols.ClearChecked(ident.Name)
+			p.symbols.ClearChecked(ident.String())
 		}
 	}
 
-	if symbol.Identifier.Name != "_" &&
+	if symbol.Identifier.String() != "_" &&
 		(symbol.Identifier.ValueType == nil || symbol.Identifier.ValueType == types.None) {
 		symbol.Identifier.ValueType = exprType
 	}
 
-	if symbol.Identifier.Name != "_" && symbol.Type() == types.None {
+	if symbol.Identifier.String() != "_" && symbol.Type() == types.None {
 		// TODO: this seems unnecessary, as we do the same just above.
-		p.symbols.Update(ident.Name, exprType)
+		p.symbols.Update(ident.String(), exprType)
 	}
 
 	return p.ast.NewAssignment(assignmentToken, symbol.Identifier, expr)

@@ -24,7 +24,7 @@ func (n *Package) Hash() uint64 {
 func (n *Package) StringTo(out *strings.Builder, _ *AST) {
 	_, _ = out.WriteString(n.Token.Type.String())
 	_ = out.WriteByte(' ')
-	_, _ = out.WriteString(n.Identifier.Name)
+	_, _ = out.WriteString(n.Identifier.Token.Literal)
 }
 
 func (n Package) String() string {

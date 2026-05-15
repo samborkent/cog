@@ -4,7 +4,7 @@
 
 Cog is a custom programming language that transpiles to Go. The codebase lives at `/Users/sam/git/cog`.
 
-- **Go version**: 1.26.2, darwin-arm64, `GOEXPERIMENT=arenas`
+- **Go version**: 1.26.3, darwin-arm64, `GOEXPERIMENT=arenas`
 - **Branch**: `feature/any`
 - **Module**: `github.com/samborkent/cog`
 - **Build**: `task compile` compiles example code; `GOEXPERIMENT=arenas go test ./...` runs tests
@@ -65,7 +65,7 @@ User noticed `parseTypeParams` is unused. Confirmed it's infrastructure from Pha
 
 - **`internal/parser/arguments.go`**:
   - Added `resolveConstraintToken()` helper: handles both keyword tokens (e.g. `any`, `number`) and identifier tokens (`int`, `uint`, `float`, `complex`) for constraint lookup. This was needed because `int` etc. are not keyword tokens but are valid constraint names.
-  - Fixed `parseTypeParams` to use `p.this().Type.String()` (then fallback to literal) instead of just `p.this().Literal` (which was empty for keyword tokens)
+  - Fixed `parseTypeParams` to use `p.lex.This().Type.String()` (then fallback to literal) instead of just `p.lex.This().Literal` (which was empty for keyword tokens)
 
 **Parser — Generic instantiation:**
 

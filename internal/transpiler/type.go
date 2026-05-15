@@ -31,6 +31,28 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 		}
 
 		expr = &goast.Ident{Name: name}
+
+		if len(alias.TypeArgs) == 1 {
+			argExpr, err := t.convertType(alias.TypeArgs[0])
+			if err != nil {
+				return nil, fmt.Errorf("converting type argument: %w", err)
+			}
+
+			expr = &goast.IndexExpr{X: expr, Index: argExpr}
+		} else if len(alias.TypeArgs) > 1 {
+			indices := make([]goast.Expr, len(alias.TypeArgs))
+			for i, arg := range alias.TypeArgs {
+				argExpr, err := t.convertType(arg)
+				if err != nil {
+					return nil, fmt.Errorf("converting type argument %d: %w", i, err)
+				}
+
+				indices[i] = argExpr
+			}
+
+			expr = &goast.IndexListExpr{X: expr, Indices: indices}
+		}
+
 		t.typeCache[typ] = expr
 
 		return expr, nil
@@ -43,7 +65,7 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 			return nil, errors.New("unable to assert array type")
 		}
 
-		lenExpr, err := t.convertExpr(sliceType.Length.Expr.(ast.Expr))
+		lenExpr, err := t.convertExpr(t.Expr(ast.ExprIndex(sliceType.Length.Index)))
 		if err != nil {
 			return nil, fmt.Errorf("converting array length expression: %w", err)
 		}

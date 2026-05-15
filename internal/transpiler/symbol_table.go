@@ -47,7 +47,7 @@ func (s *SymbolTable) DefineDynamic(ident *ast.Identifier) error {
 		return fmt.Errorf("cannot define dynamically scoped variables outside of package scope")
 	}
 
-	name := component.ConvertExport(ident.Name, ident.Exported, ident.Global)
+	name := component.ConvertExport(ident.Token.Literal, ident.Exported, ident.Global)
 	s.dynamics[name] = ident
 
 	return nil

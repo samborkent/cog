@@ -15,36 +15,40 @@ const matchPreallocationSize = 4
 func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 	var label *ast.Identifier
 
-	if p.prev().Type == tokens.Identifier && p.this().Type == tokens.Colon {
+	prev := p.lex.Peek(-1)
+
+	if prev.Type == tokens.Identifier &&
+		p.lex.This().Type == tokens.Colon {
 		label = &ast.Identifier{
-			Token: p.prev(),
-			Name:  p.prev().Literal,
+			Token: prev,
 		}
 
-		p.advance("parseSwitch :") // consume colon
+		p.lex.Step() // consume colon
 	}
 
-	matchToken := p.this()
+	matchToken := p.lex.This()
 
-	p.advance("parseMatch match") // consume match
+	p.lex.Step() // consume match
 
 	var binding *ast.Identifier
 
-	if p.this().Type == tokens.Identifier && p.next().Type == tokens.Declaration {
+	this := p.lex.This()
+
+	if this.Type == tokens.Identifier &&
+		p.lex.Peek(1).Type == tokens.Declaration {
 		binding = &ast.Identifier{
-			Token:     p.this(),
-			Name:      p.this().Literal,
+			Token:     this,
 			Exported:  false,
 			Qualifier: ast.QualifierImmutable,
 			Global:    p.symbols.Outer == nil,
 		}
-		p.advance("parseMatch binding ident") // consume ident
-		p.advance("parseMatch binding :=")    // consume :=
+		p.lex.Step() // consume ident
+		p.lex.Step() // consume :=
 	}
 
 	subject := p.expression(ctx, types.None)
 	if subject == ast.ZeroExprIndex {
-		p.error(p.this(), "unable to parse match subject", "parseMatch")
+		p.error(p.lex.This(), "unable to parse match subject", "parseMatch")
 		return ast.ZeroNodeIndex
 	}
 
@@ -63,46 +67,46 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 	}
 
 	if !isEither && !isGeneric {
-		p.error(p.this(), fmt.Sprintf("match subject must be an either type or a generic type parameter bounded by a union or any, got %s", subjectType.String()), "parseMatch")
+		p.error(p.lex.This(), fmt.Sprintf("match subject must be an either type or a generic type parameter bounded by a union or any, got %s", subjectType.String()), "parseMatch")
 		return ast.ZeroNodeIndex
 	}
 
-	if p.this().Type != tokens.LBrace {
-		p.error(p.this(), "expected '{' after match subject", "parseMatch")
+	if p.lex.This().Type != tokens.LBrace {
+		p.error(p.lex.This(), "expected '{' after match subject", "parseMatch")
 		return ast.ZeroNodeIndex
 	}
 
-	p.advance("parseMatch {") // consume {
+	p.lex.Step() // consume {
 
-	cases := make([]*ast.MatchCase, 0)
+	cases := make([]*ast.MatchCase, 0, matchPreallocationSize)
 
-	for p.this().Type == tokens.Case {
+	for p.lex.This().Type == tokens.Case {
 		caseNode := &ast.MatchCase{
-			Token: p.this(),
+			Token: p.lex.This(),
 		}
 
-		p.advance("parseMatch case") // consume case
+		p.lex.Step() // consume case
 
-		if p.this().Type == tokens.Tilde {
+		if p.lex.This().Type == tokens.Tilde {
 			caseNode.Tilde = true
 
-			p.advance("parseMatch case ~") // consume ~
+			p.lex.Step() // consume ~
 		}
 
 		caseType := p.parseType(ctx)
 		if caseType == nil {
-			p.error(p.this(), "unable to parse case type", "parseMatch")
+			p.error(p.lex.This(), "unable to parse case type", "parseMatch")
 			return ast.ZeroNodeIndex
 		}
 
 		caseNode.MatchType = caseType
 
-		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after case type", "parseMatch")
+		if p.lex.This().Type != tokens.Colon {
+			p.error(p.lex.This(), "expected ':' after case type", "parseMatch")
 			return ast.ZeroNodeIndex
 		}
 
-		p.advance("parseMatch case :") // consume :
+		p.lex.Step() // consume :
 
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
@@ -111,22 +115,16 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 			p.symbols.Define(binding)
 		}
 
-		for !p.match(tokens.Case, tokens.Default, tokens.RBrace, tokens.EOF) {
-			if ctx.Err() != nil {
-				return ast.ZeroNodeIndex
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.match(p.lex.This(), tokens.Case, tokens.Default, tokens.RBrace) {
+				break
 			}
-
-			prev := p.i
 
 			stmt := p.parseStatement(ctx)
 			if stmt != ast.ZeroNodeIndex {
 				caseNode.Body = append(caseNode.Body, stmt)
 			} else {
-				p.synchronize()
-			}
-
-			if p.i == prev {
-				p.advance("parseMatch case recovery")
+				p.synchronize(ctx)
 			}
 		}
 
@@ -137,19 +135,19 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 
 	var defaultNode *ast.Default
 
-	if p.this().Type == tokens.Default {
+	if p.lex.This().Type == tokens.Default {
 		defaultNode = &ast.Default{
-			Token: p.this(),
+			Token: p.lex.This(),
 		}
 
-		p.advance("parseMatch default") // consume default
+		p.lex.Step() // consume default
 
-		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after default", "parseMatch")
+		if p.lex.This().Type != tokens.Colon {
+			p.error(p.lex.This(), "expected ':' after default", "parseMatch")
 			return ast.ZeroNodeIndex
 		}
 
-		p.advance("parseMatch default :") // consume :
+		p.lex.Step() // consume :
 
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
@@ -159,34 +157,28 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 			p.symbols.Define(binding)
 		}
 
-		for !p.match(tokens.RBrace, tokens.EOF) {
-			if ctx.Err() != nil {
-				return ast.ZeroNodeIndex
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.lex.This().Type == tokens.RBrace {
+				break
 			}
-
-			prev := p.i
 
 			stmt := p.parseStatement(ctx)
 			if stmt != ast.ZeroNodeIndex {
 				defaultNode.Body = append(defaultNode.Body, stmt)
 			} else {
-				p.synchronize()
-			}
-
-			if p.i == prev {
-				p.advance("parseMatch default recovery")
+				p.synchronize(ctx)
 			}
 		}
 
 		p.symbols = p.symbols.Outer
 	}
 
-	if p.this().Type != tokens.RBrace {
-		p.error(p.this(), "expected '}' to close match statement", "parseMatch")
+	if p.lex.This().Type != tokens.RBrace {
+		p.error(p.lex.This(), "expected '}' to close match statement", "parseMatch")
 		return ast.ZeroNodeIndex
 	}
 
-	p.advance("parseMatch }") // consume }
+	p.lex.Step() // consume }
 
 	return p.ast.NewMatch(matchToken, label, binding, subject, cases, defaultNode)
 }

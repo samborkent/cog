@@ -20,24 +20,30 @@ func (e *Error) String() string {
 	var str strings.Builder
 
 	if e.ValueType != nil {
-		str.WriteString("error<" + e.ValueType.String() + "> {")
+		_, _ = str.WriteString("error<")
+		_, _ = str.WriteString(e.ValueType.String())
+		_, _ = str.WriteString("> {")
 	} else {
-		str.WriteString("error {")
+		_, _ = str.WriteString("error {")
 	}
 
 	for i, val := range e.Values {
 		if i == 0 {
-			str.WriteString("\n")
+			_, _ = str.WriteString("\n")
 		}
 
 		if e.ValueType != nil {
-			str.WriteString(val.Name + " := " + val.Value.String + ",\n")
+			_, _ = str.WriteString(val.Name)
+			_, _ = str.WriteString(" := ")
+			_, _ = str.WriteString(val.Value.String)
+			_, _ = str.WriteString(",\n")
 		} else {
-			str.WriteString(val.Name + ",\n")
+			_, _ = str.WriteString(val.Name)
+			_, _ = str.WriteString(",\n")
 		}
 	}
 
-	str.WriteString("}")
+	_, _ = str.WriteString("}")
 
 	return str.String()
 }

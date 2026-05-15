@@ -18,14 +18,9 @@ import (
 func transpile(t *testing.T, src string) string {
 	t.Helper()
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lex error: %v", err)
-	}
-
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, parser.NewSymbolTable(), "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -57,14 +52,9 @@ func transpile(t *testing.T, src string) string {
 func transpileWithPrint(t *testing.T, src string) string {
 	t.Helper()
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lex error: %v", err)
-	}
-
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, parser.NewSymbolTable(), "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -111,14 +101,9 @@ func mustNotContain(t *testing.T, got, want string) {
 func mustFailTranspile(t *testing.T, src, want string) {
 	t.Helper()
 
-	l := lexer.New(strings.NewReader(src))
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lex error: %v", err)
-	}
-
-	p, err := parser.NewParserWithSymbols(toks, parser.NewSymbolTable(), false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, parser.NewSymbolTable(), "", 0, nil)
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}

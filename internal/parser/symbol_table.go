@@ -22,7 +22,6 @@ var None = &ast.Identifier{
 		Type:    tokens.Identifier,
 		Literal: "_",
 	},
-	Name:      "_",
 	ValueType: types.None,
 	Qualifier: ast.QualifierVariable,
 }
@@ -79,7 +78,7 @@ func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
 }
 
 func (s *SymbolTable) Define(ident *ast.Identifier) {
-	if ident.Name == "" {
+	if ident.Token.Literal == "" {
 		panic("empty identifier")
 	}
 
@@ -96,7 +95,7 @@ func (s *SymbolTable) Define(ident *ast.Identifier) {
 		symbol.Scope = GlobalScope
 	}
 
-	s.table[ident.Name] = symbol
+	s.table[ident.Token.Literal] = symbol
 
 	// TODO: investigate why this check was here
 	// if ident.Qualifier != ast.QualifierType {
@@ -107,17 +106,20 @@ func (s *SymbolTable) Define(ident *ast.Identifier) {
 			break
 		}
 
-		_, ok = s.fields[ident.Name]
+		_, ok = s.fields[ident.Token.Literal]
 		if ok {
 			break
 		}
 
-		s.fields[ident.Name] = make(map[string]Symbol, len(structType.Fields))
+		s.fields[ident.Token.Literal] = make(map[string]Symbol, len(structType.Fields))
 
 		for _, field := range structType.Fields {
-			s.fields[ident.Name][field.Name] = Symbol{
+			s.fields[ident.Token.Literal][field.Name] = Symbol{
 				Identifier: &ast.Identifier{
-					Name:      field.Name,
+					Token: tokens.Token{
+						Type:    tokens.Identifier,
+						Literal: field.Name,
+					},
 					ValueType: field.Type,
 					Exported:  field.Exported,
 				},
@@ -138,12 +140,12 @@ func (s *SymbolTable) DefineMethod(receiver string, method *ast.Identifier) erro
 		s.fields[receiver] = make(map[string]Symbol)
 	}
 
-	_, ok = s.fields[receiver][method.Name]
+	_, ok = s.fields[receiver][method.Token.Literal]
 	if ok {
-		return fmt.Errorf("method name conflict: field with name %q already exists for type %q", method.Name, receiver)
+		return fmt.Errorf("method name conflict: field with name %q already exists for type %q", method.String(), receiver)
 	}
 
-	s.fields[receiver][method.Name] = Symbol{
+	s.fields[receiver][method.Token.Literal] = Symbol{
 		Identifier: method,
 		Scope:      StructScope,
 	}
@@ -152,7 +154,7 @@ func (s *SymbolTable) DefineMethod(receiver string, method *ast.Identifier) erro
 }
 
 func (s *SymbolTable) DefineEnumValue(selector string, field *ast.Identifier) {
-	if field.Name == "" {
+	if field.Token.Literal == "" {
 		panic("empty enum value identifier")
 	}
 
@@ -161,21 +163,57 @@ func (s *SymbolTable) DefineEnumValue(selector string, field *ast.Identifier) {
 		s.fields[selector] = make(map[string]Symbol)
 	}
 
-	s.fields[selector][field.Name] = Symbol{
+	s.fields[selector][field.Token.Literal] = Symbol{
 		Identifier: field,
 		Scope:      EnumScope,
 	}
 }
 
 func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
+	// If a forward value stub exists (created during globalsPass for
+	// forward references), resolve it by copying the real declaration's
+	// info into the existing stub. All expression nodes referencing the
+	// stub share the same pointer, so mutating it updates all referents.
+	if existing, ok := s.table[ident.Token.Literal]; ok &&
+		existing.Scope == ScanScope &&
+		types.IsNone(existing.Identifier.ValueType) {
+		existing.Identifier.ValueType = ident.ValueType
+		existing.Identifier.Qualifier = ident.Qualifier
+		existing.Identifier.Exported = ident.Exported
+
+		// Register struct fields so selectors (e.g. val.x) resolve.
+		if ident.ValueType != nil && ident.ValueType.Kind() == types.StructKind {
+			if st, ok := ident.ValueType.Underlying().(*types.Struct); ok {
+				if _, exists := s.fields[ident.Token.Literal]; !exists {
+					s.fields[ident.Token.Literal] = make(map[string]Symbol, len(st.Fields))
+					for _, field := range st.Fields {
+						s.fields[ident.Token.Literal][field.Name] = Symbol{
+							Identifier: &ast.Identifier{
+								Token: tokens.Token{
+									Type:    tokens.Identifier,
+									Literal: field.Name,
+								},
+								ValueType: field.Type,
+								Exported:  field.Exported,
+							},
+							Scope: StructScope,
+						}
+					}
+				}
+			}
+		}
+
+		return
+	}
+
 	s.Define(ident)
-	symbol := s.table[ident.Name]
+	symbol := s.table[ident.Token.Literal]
 	symbol.Scope = ScanScope
-	s.table[ident.Name] = symbol
+	s.table[ident.Token.Literal] = symbol
 }
 
 func (s *SymbolTable) DefineGoImport(ident *ast.Identifier) {
-	if ident.Name == "" {
+	if ident.Token.Literal == "" {
 		panic("empty go import")
 	}
 
@@ -183,7 +221,7 @@ func (s *SymbolTable) DefineGoImport(ident *ast.Identifier) {
 		ident.ValueType = types.None
 	}
 
-	s.goimports[ident.Name] = ident
+	s.goimports[ident.Token.Literal] = ident
 }
 
 func (s *SymbolTable) Resolve(name string) (Symbol, bool) {

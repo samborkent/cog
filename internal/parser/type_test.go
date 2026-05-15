@@ -17,8 +17,8 @@ main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
 
-		if d.Assignment.Identifier.Name != "main" {
-			t.Errorf("expected name 'main', got %q", d.Assignment.Identifier.Name)
+		if d.Assignment.Identifier.Token.Literal != "main" {
+			t.Errorf("expected name 'main', got %q", d.Assignment.Identifier.Token.Literal)
 		}
 
 		if f.Expr(d.Assignment.Expr).Type().Kind() != types.ProcedureKind {
@@ -173,7 +173,7 @@ main : proc() = {}`)
 			t.Fatal("expected ProcedureLiteral")
 		}
 
-		ret, ok := f.Node(procLit.Body.Statements[0]).(*ast.Return)
+		ret, ok := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Return)
 		if !ok {
 			t.Fatal("expected Return statement")
 		}
@@ -205,7 +205,7 @@ main : proc() = {}`)
 			t.Fatal("expected ProcedureLiteral")
 		}
 
-		ret, ok := f.Node(procLit.Body.Statements[0]).(*ast.Return)
+		ret, ok := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Return)
 		if !ok {
 			t.Fatal("expected Return statement")
 		}
@@ -240,7 +240,7 @@ main : proc() = {}`)
 			t.Fatal("expected ProcedureLiteral")
 		}
 
-		ret, ok := f.Node(procLit.Body.Statements[0]).(*ast.Return)
+		ret, ok := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Return)
 		if !ok {
 			t.Fatal("expected Return statement")
 		}

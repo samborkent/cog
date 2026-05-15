@@ -7,10 +7,11 @@ import (
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
 	"github.com/samborkent/cog/internal/parser"
+	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
 
-// parseWithSharedSymbols uses the FindGlobals + ParseOnly flow with a shared symbol table.
+// parseWithSharedSymbols uses the ParseGlobals + ParseBodies flow with a shared symbol table.
 func parseWithSharedSymbols(t *testing.T, sources map[string]string) map[string]*ast.AST {
 	t.Helper()
 
@@ -19,6 +20,7 @@ func parseWithSharedSymbols(t *testing.T, sources map[string]string) map[string]
 	type entry struct {
 		name   string
 		parser *parser.Parser
+		ast    *ast.AST
 	}
 
 	var entries []entry
@@ -26,20 +28,19 @@ func parseWithSharedSymbols(t *testing.T, sources map[string]string) map[string]
 	fileID := uint16(0)
 
 	for name, src := range sources {
-		l := lexer.New(strings.NewReader(src))
+		l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-		toks, err := l.Parse(t.Context())
-		if err != nil {
-			t.Fatalf("lex error (%s): %v", name, err)
-		}
-
-		p, err := parser.NewParserWithSymbols(toks, symbols, false, src, fileID, nil)
+		p, err := parser.NewParserWithSymbols(l, symbols, src, fileID, nil)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", name, err)
 		}
 
-		p.FindGlobals(t.Context())
-		entries = append(entries, entry{name: name, parser: p})
+		f, err := p.ParseGlobals(t.Context(), name)
+		if err != nil {
+			t.Fatalf("parser globals (%s): %v", name, err)
+		}
+
+		entries = append(entries, entry{name: name, parser: p, ast: f})
 
 		fileID++
 	}
@@ -47,41 +48,14 @@ func parseWithSharedSymbols(t *testing.T, sources map[string]string) map[string]
 	result := make(map[string]*ast.AST, len(entries))
 
 	for _, e := range entries {
-		f, err := e.parser.ParseOnly(t.Context(), e.name)
-		if err != nil {
-			t.Fatalf("parse error (%s): %v", e.name, err)
+		if err := e.parser.ParseBodies(t.Context()); err != nil {
+			t.Fatalf("parse bodies error (%s): %v", e.name, err)
 		}
 
-		result[e.name] = f
+		result[e.name] = e.ast
 	}
 
 	return result
-}
-
-// findGlobalsShouldError runs FindGlobals + ParseOnly and expects an error.
-func findGlobalsShouldError(t *testing.T, src string) {
-	t.Helper()
-
-	l := lexer.New(strings.NewReader(src))
-
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		return // lexer error is fine
-	}
-
-	symbols := parser.NewSymbolTable()
-
-	p, err := parser.NewParserWithSymbols(toks, symbols, false, "test.cog", 0, nil)
-	if err != nil {
-		return
-	}
-
-	p.FindGlobals(t.Context())
-
-	_, err = p.ParseOnly(t.Context(), "test.cog")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
 }
 
 func TestFindGlobalsImport(t *testing.T) {
@@ -98,21 +72,18 @@ import (
 
 main : proc() = {}
 `
-		l := lexer.New(strings.NewReader(src))
-
-		toks, err := l.Parse(t.Context())
-		if err != nil {
-			t.Fatalf("lex error: %v", err)
-		}
+		l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
 		symbols := parser.NewSymbolTable()
 
-		p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0, nil)
+		p, err := parser.NewParserWithSymbols(l, symbols, src, 0, nil)
 		if err != nil {
 			t.Fatalf("parser init: %v", err)
 		}
 
-		p.FindGlobals(t.Context())
+		if _, err := p.ParseGlobals(t.Context(), "test.cog"); err != nil {
+			t.Fatalf("ParseGlobals: %v", err)
+		}
 
 		imports := symbols.CogImports()
 		if len(imports) != 1 {
@@ -140,21 +111,17 @@ import (
 
 main : proc() = {}
 `
-		l := lexer.New(strings.NewReader(src))
-
-		toks, err := l.Parse(t.Context())
-		if err != nil {
-			t.Fatalf("lex error: %v", err)
-		}
-
+		l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 		symbols := parser.NewSymbolTable()
 
-		p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0, nil)
+		p, err := parser.NewParserWithSymbols(l, symbols, "", 0, nil)
 		if err != nil {
 			t.Fatalf("parser init: %v", err)
 		}
 
-		p.FindGlobals(t.Context())
+		if _, err := p.ParseGlobals(t.Context(), "test.cog"); err != nil {
+			t.Fatalf("ParseGlobals: %v", err)
+		}
 
 		imp, ok := symbols.ResolveCogImport("metric")
 		if !ok {
@@ -182,21 +149,17 @@ import (
 
 main : proc() = {}
 `
-		l := lexer.New(strings.NewReader(src))
-
-		toks, err := l.Parse(t.Context())
-		if err != nil {
-			t.Fatalf("lex error: %v", err)
-		}
-
+		l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 		symbols := parser.NewSymbolTable()
 
-		p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0, nil)
+		p, err := parser.NewParserWithSymbols(l, symbols, src, 0, nil)
 		if err != nil {
 			t.Fatalf("parser init: %v", err)
 		}
 
-		p.FindGlobals(t.Context())
+		if _, err := p.ParseGlobals(t.Context(), "test.cog"); err != nil {
+			t.Fatalf("ParseGlobals: %v", err)
+		}
 
 		imports := symbols.CogImports()
 		if len(imports) != 2 {
@@ -206,7 +169,7 @@ main : proc() = {}
 
 	t.Run("import_invalid_parent_traversal", func(t *testing.T) {
 		t.Parallel()
-		findGlobalsShouldError(t, `package main
+		parseShouldError(t, `package main
 
 import (
 	"../escape"
@@ -218,7 +181,7 @@ main : proc() = {}
 
 	t.Run("import_invalid_absolute", func(t *testing.T) {
 		t.Parallel()
-		findGlobalsShouldError(t, `package main
+		parseShouldError(t, `package main
 
 import (
 	"/absolute"
@@ -264,10 +227,11 @@ main : proc() = {
 
 val := 42
 `
-		l1 := lexer.New(strings.NewReader(src1))
-		toks1, _ := l1.Parse(t.Context())
-		p1, _ := parser.NewParserWithSymbols(toks1, syms, false, "", 0, nil)
-		p1.FindGlobals(t.Context())
+		l1 := lexer.New(strings.NewReader(src1), uint32(len(src1)), false)
+		p1, _ := parser.NewParserWithSymbols(l1, syms, src1, 0, nil)
+		if _, err := p1.ParseGlobals(t.Context(), "val.cog"); err != nil {
+			t.Fatalf("ParseGlobals val.cog: %v", err)
+		}
 
 		src2 := `package main
 
@@ -275,10 +239,11 @@ main : proc() = {
 	@print(val)
 }
 `
-		l2 := lexer.New(strings.NewReader(src2))
-		toks2, _ := l2.Parse(t.Context())
-		p2, _ := parser.NewParserWithSymbols(toks2, syms, false, "", 0, nil)
-		p2.FindGlobals(t.Context())
+		l2 := lexer.New(strings.NewReader(src2), uint32(len(src2)), false)
+		p2, _ := parser.NewParserWithSymbols(l2, syms, src2, 0, nil)
+		if _, err := p2.ParseGlobals(t.Context(), "main.cog"); err != nil {
+			t.Fatalf("ParseGlobals main.cog: %v", err)
+		}
 
 		// val should be resolvable by the shared symbol table.
 		_, ok := syms.Resolve("val")
@@ -286,13 +251,13 @@ main : proc() = {
 			t.Fatal("expected 'val' to be in shared symbol table")
 		}
 
-		// Both files should parse successfully.
-		if _, err := p1.ParseOnly(t.Context(), "types.cog"); err != nil {
-			t.Fatalf("parse types.cog: %v", err)
+		// Both files should have their bodies parsed successfully.
+		if err := p1.ParseBodies(t.Context()); err != nil {
+			t.Fatalf("ParseBodies val.cog: %v", err)
 		}
 
-		if _, err := p2.ParseOnly(t.Context(), "main.cog"); err != nil {
-			t.Fatalf("parse main.cog: %v", err)
+		if err := p2.ParseBodies(t.Context()); err != nil {
+			t.Fatalf("ParseBodies main.cog: %v", err)
 		}
 	})
 }
@@ -308,21 +273,17 @@ import (
 
 main : proc() = {}
 `
-	l := lexer.New(strings.NewReader(src))
-
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("lex error: %v", err)
-	}
-
+	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 	symbols := parser.NewSymbolTable()
 
-	p, err := parser.NewParserWithSymbols(toks, symbols, false, "", 0, nil)
+	p, err := parser.NewParserWithSymbols(l, symbols, src, 0, nil)
 	if err != nil {
 		t.Fatalf("parser init: %v", err)
 	}
 
-	p.FindGlobals(t.Context())
+	if _, err := p.ParseGlobals(t.Context(), "test.cog"); err != nil {
+		t.Fatalf("ParseGlobals: %v", err)
+	}
 
 	// Simulate populating exports (as cmd/main.go does).
 	imp, ok := symbols.ResolveCogImport("geom")
@@ -332,14 +293,20 @@ main : proc() = {}
 
 	imp.Exports["Distance"] = parser.Symbol{
 		Identifier: &ast.Identifier{
-			Name:      "Distance",
+			Token: tokens.Token{
+				Type:    tokens.Identifier,
+				Literal: "Distance",
+			},
 			ValueType: &types.Procedure{Function: true, Parameters: []*types.Parameter{{Name: "a", Type: types.Basics[types.Float64]}, {Name: "b", Type: types.Basics[types.Float64]}}, ReturnType: types.Basics[types.Float64]},
 			Exported:  true,
 		},
 	}
 	imp.Exports["Pi"] = parser.Symbol{
 		Identifier: &ast.Identifier{
-			Name:      "Pi",
+			Token: tokens.Token{
+				Type:    tokens.Identifier,
+				Literal: "Pi",
+			},
 			ValueType: types.Basics[types.Float64],
 			Exported:  true,
 		},

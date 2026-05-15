@@ -14,37 +14,37 @@ type BuiltinParser func(ctx context.Context, t tokens.Token, tokenType types.Typ
 func (p *Parser) parseBuiltinIf(ctx context.Context, t tokens.Token, tokenType types.Type) ast.ExprIndex {
 	var typArgs []types.Type
 
-	if p.this().Type == tokens.LT {
+	if p.lex.This().Type == tokens.LT {
 		typArgs = p.parseTypeArguments(ctx)
 		if typArgs == nil {
 			return ast.ZeroExprIndex
 		}
 
 		if len(typArgs) > 2 {
-			p.error(p.this(), "@if expected at most 2 type arguments", "parseBuiltinIf")
+			p.error(p.lex.This(), "@if expected at most 2 type arguments", "parseBuiltinIf")
 			return ast.ZeroExprIndex
 		}
 
 		// If a type argument if provided, check it's the same as the expected type if any.
 		if len(typArgs) >= 1 && tokenType.Kind() != types.Invalid && typArgs[0].Kind() != tokenType.Kind() {
-			p.error(p.this(), "@if type argument does not match expected type", "parseBuiltinIf")
+			p.error(p.lex.This(), "@if type argument does not match expected type", "parseBuiltinIf")
 			return ast.ZeroExprIndex
 		}
 
 		if len(typArgs) == 2 && typArgs[1].Kind() != types.Bool {
-			p.error(p.this(), "@if second type argument must be of type ~bool", "parseBuiltinIf")
+			p.error(p.lex.This(), "@if second type argument must be of type ~bool", "parseBuiltinIf")
 			return ast.ZeroExprIndex
 		}
 
 		tokenType = typArgs[0]
 	}
 
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after @if", "parseIf")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after @if", "parseIf")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseIf (") // consume (
+	p.lex.Step() // consume (
 
 	// condition := p.expression(ctx, types.Basics[types.Bool])
 	condition := p.expression(ctx, types.None)
@@ -52,12 +52,12 @@ func (p *Parser) parseBuiltinIf(ctx context.Context, t tokens.Token, tokenType t
 		return ast.ZeroExprIndex
 	}
 
-	if p.this().Type != tokens.Comma {
-		p.error(p.this(), "expected ',' after condition in @if", "parseIf")
+	if p.lex.This().Type != tokens.Comma {
+		p.error(p.lex.This(), "expected ',' after condition in @if", "parseIf")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseIf , condition") // consume ,
+	p.lex.Step() // consume ,
 
 	thenExpr := p.expression(ctx, tokenType)
 	if thenExpr == ast.ZeroExprIndex {
@@ -68,8 +68,8 @@ func (p *Parser) parseBuiltinIf(ctx context.Context, t tokens.Token, tokenType t
 
 	args := []ast.ExprIndex{condition, thenExpr}
 
-	if p.this().Type == tokens.Comma {
-		p.advance("parseIf , then") // consume ,
+	if p.lex.This().Type == tokens.Comma {
+		p.lex.Step() // consume ,
 
 		elseExpr := p.expression(ctx, tokenType)
 		if elseExpr == ast.ZeroExprIndex {
@@ -86,12 +86,12 @@ func (p *Parser) parseBuiltinIf(ctx context.Context, t tokens.Token, tokenType t
 		args = append(args, elseExpr)
 	}
 
-	if p.this().Type != tokens.RParen {
-		p.error(p.this(), "expected ')' after else expression in @if", "parseIf")
+	if p.lex.This().Type != tokens.RParen {
+		p.error(p.lex.This(), "expected ')' after else expression in @if", "parseIf")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseIf )") // consume ')'
+	p.lex.Step() // consume ')'
 
 	return p.ast.NewBuiltin(t, "if", typArgs, args, thenType)
 }
@@ -99,7 +99,7 @@ func (p *Parser) parseBuiltinIf(ctx context.Context, t tokens.Token, tokenType t
 func (p *Parser) parseBuiltinMap(ctx context.Context, t tokens.Token, tokenType types.Type) ast.ExprIndex {
 	if tokenType.Kind() != types.Invalid && tokenType.Kind() != types.MapKind {
 		// If type is supplied, check if it's a map.
-		p.error(p.this(), "expected map type", "parseBuiltinMap")
+		p.error(p.lex.This(), "expected map type", "parseBuiltinMap")
 		return ast.ZeroExprIndex
 	}
 
@@ -109,38 +109,38 @@ func (p *Parser) parseBuiltinMap(ctx context.Context, t tokens.Token, tokenType 
 	}
 
 	if len(typArgs) < 2 || len(typArgs) > 3 {
-		p.error(p.this(), "@map wrong number of type arguments", "parseBuiltinMap")
+		p.error(p.lex.This(), "@map wrong number of type arguments", "parseBuiltinMap")
 		return ast.ZeroExprIndex
 	}
 
 	if tokenType.Kind() != types.Invalid {
 		mapType, ok := tokenType.Underlying().(*types.Map)
 		if !ok {
-			p.error(p.this(), "unable to cast supplied map type", "parseBuiltinMap")
+			p.error(p.lex.This(), "unable to cast supplied map type", "parseBuiltinMap")
 			return ast.ZeroExprIndex
 		}
 
 		if mapType.Key.Kind() != typArgs[0].Kind() {
-			p.error(p.this(), "type mismatch in @map key", "parseBuiltinMap")
+			p.error(p.lex.This(), "type mismatch in @map key", "parseBuiltinMap")
 			return ast.ZeroExprIndex
 		}
 
 		if mapType.Value.Kind() != typArgs[1].Kind() {
-			p.error(p.this(), "type mismatch in @map value", "parseBuiltinMap")
+			p.error(p.lex.This(), "type mismatch in @map value", "parseBuiltinMap")
 			return ast.ZeroExprIndex
 		}
 	}
 
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after @map", "parseBuiltinMap")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after @map", "parseBuiltinMap")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseBuiltinMap (") // consume (
+	p.lex.Step() // consume (
 
 	args := make([]ast.ExprIndex, 0, 1)
 
-	if p.this().Type != tokens.RParen {
+	if p.lex.This().Type != tokens.RParen {
 		var capType types.Type = types.None
 
 		if len(typArgs) == 3 {
@@ -155,26 +155,26 @@ func (p *Parser) parseBuiltinMap(ctx context.Context, t tokens.Token, tokenType 
 		args = append(args, capArg)
 	}
 
-	if p.this().Type != tokens.RParen {
-		p.error(p.this(), "expected ')' after argument in @map", "parseBuiltinMap")
+	if p.lex.This().Type != tokens.RParen {
+		p.error(p.lex.This(), "expected ')' after argument in @map", "parseBuiltinMap")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseBuiltinMap )") // consume ')'
+	p.lex.Step() // consume ')'
 
 	return p.ast.NewBuiltin(t, "map", typArgs, args, &types.Map{Key: typArgs[0], Value: typArgs[1]})
 }
 
 func (p *Parser) parseBuiltinPrint(ctx context.Context, t tokens.Token, tokenType types.Type) ast.ExprIndex {
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after @print", "parsePrint")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after @print", "parsePrint")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parsePrint (") // consume (
+	p.lex.Step() // consume (
 
-	if p.this().Type == tokens.RParen {
-		p.error(p.this(), "expected argument in @print", "parsePrint")
+	if p.lex.This().Type == tokens.RParen {
+		p.error(p.lex.This(), "expected argument in @print", "parsePrint")
 		return ast.ZeroExprIndex
 	}
 
@@ -185,12 +185,12 @@ func (p *Parser) parseBuiltinPrint(ctx context.Context, t tokens.Token, tokenTyp
 
 	// TODO: implement string formatting
 
-	if p.this().Type != tokens.RParen {
-		p.error(p.this(), "expected ')' after argument in @print", "parsePrint")
+	if p.lex.This().Type != tokens.RParen {
+		p.error(p.lex.This(), "expected ')' after argument in @print", "parsePrint")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parsePrint )") // consume ')'
+	p.lex.Step() // consume ')'
 
 	// TODO: handle ascii / utf8 type args.
 	return p.ast.NewBuiltin(t, "print", nil, []ast.ExprIndex{arg}, types.None)
@@ -200,7 +200,7 @@ func (p *Parser) parseBuiltinPrint(ctx context.Context, t tokens.Token, tokenTyp
 func (p *Parser) parseBuiltinRef(ctx context.Context, t tokens.Token, tokenType types.Type) ast.ExprIndex {
 	if tokenType.Kind() != types.Invalid && tokenType.Kind() != types.ReferenceKind {
 		// If type is supplied, check if it's a pointer.
-		p.error(p.this(), "expected pointer type", "parseBuiltinPtr")
+		p.error(p.lex.This(), "expected pointer type", "parseBuiltinPtr")
 		return ast.ZeroExprIndex
 	}
 
@@ -210,36 +210,36 @@ func (p *Parser) parseBuiltinRef(ctx context.Context, t tokens.Token, tokenType 
 	}
 
 	if len(typArgs) != 1 {
-		p.error(p.this(), "@ref requires one type argument", "parseBuiltinRef")
+		p.error(p.lex.This(), "@ref requires one type argument", "parseBuiltinRef")
 		return ast.ZeroExprIndex
 	}
 
 	if tokenType.Kind() != types.Invalid {
 		refType, ok := tokenType.Underlying().(*types.Reference)
 		if !ok {
-			p.error(p.this(), "unable to cast supplied reference type", "parseBuiltinRef")
+			p.error(p.lex.This(), "unable to cast supplied reference type", "parseBuiltinRef")
 			return ast.ZeroExprIndex
 		}
 
 		if refType.Value.Kind() != typArgs[0].Kind() {
-			p.error(p.this(), "type mismatch in @ref type", "parseBuiltinRef")
+			p.error(p.lex.This(), "type mismatch in @ref type", "parseBuiltinRef")
 			return ast.ZeroExprIndex
 		}
 	}
 
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after @ref", "parseBuiltinRef")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after @ref", "parseBuiltinRef")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseBuiltinRef (") // consume (
+	p.lex.Step() // consume (
 
-	if p.this().Type != tokens.RParen {
-		p.error(p.this(), "expected ')' after argument in @ref", "parseBuiltinPtr")
+	if p.lex.This().Type != tokens.RParen {
+		p.error(p.lex.This(), "expected ')' after argument in @ref", "parseBuiltinPtr")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseBuiltinRef )") // consume ')'
+	p.lex.Step() // consume ')'
 
 	return p.ast.NewBuiltin(t, "ref", typArgs, nil, &types.Reference{Value: typArgs[0]})
 }
@@ -247,7 +247,7 @@ func (p *Parser) parseBuiltinRef(ctx context.Context, t tokens.Token, tokenType 
 func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType types.Type) ast.ExprIndex {
 	if tokenType.Kind() != types.Invalid && tokenType.Kind() != types.SetKind {
 		// If type is supplied, check if it's a set.
-		p.error(p.this(), "expected set type", "parseBuiltinSet")
+		p.error(p.lex.This(), "expected set type", "parseBuiltinSet")
 		return ast.ZeroExprIndex
 	}
 
@@ -257,33 +257,33 @@ func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType 
 	}
 
 	if len(typArgs) == 0 || len(typArgs) > 2 {
-		p.error(p.this(), "@set wrong number of type arguments", "parseBuiltinSet")
+		p.error(p.lex.This(), "@set wrong number of type arguments", "parseBuiltinSet")
 		return ast.ZeroExprIndex
 	}
 
 	if tokenType.Kind() != types.Invalid {
 		setType, ok := tokenType.Underlying().(*types.Set)
 		if !ok {
-			p.error(p.this(), "unable to cast supplied set type", "parseBuiltinSet")
+			p.error(p.lex.This(), "unable to cast supplied set type", "parseBuiltinSet")
 			return ast.ZeroExprIndex
 		}
 
 		if setType.Element.Kind() != typArgs[0].Kind() {
-			p.error(p.this(), "type mismatch in @set element", "parseBuiltinSet")
+			p.error(p.lex.This(), "type mismatch in @set element", "parseBuiltinSet")
 			return ast.ZeroExprIndex
 		}
 	}
 
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after @set", "parseBuiltinSet")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after @set", "parseBuiltinSet")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseBuiltinSet (") // consume (
+	p.lex.Step() // consume (
 
 	args := make([]ast.ExprIndex, 0, 1)
 
-	if p.this().Type != tokens.RParen {
+	if p.lex.This().Type != tokens.RParen {
 		var capType types.Type = types.None
 
 		if len(typArgs) > 1 {
@@ -298,12 +298,12 @@ func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType 
 		args = append(args, capArg)
 	}
 
-	if p.this().Type != tokens.RParen {
-		p.error(p.this(), "expected ')' after argument in @set", "parseBuiltinSet")
+	if p.lex.This().Type != tokens.RParen {
+		p.error(p.lex.This(), "expected ')' after argument in @set", "parseBuiltinSet")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseBuiltinSet )") // consume ')'
+	p.lex.Step() // consume ')'
 
 	return p.ast.NewBuiltin(t, "set", typArgs, args, &types.Set{Element: typArgs[0]})
 }
@@ -311,7 +311,7 @@ func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType 
 func (p *Parser) parseBuiltinSlice(ctx context.Context, t tokens.Token, tokenType types.Type) ast.ExprIndex {
 	if tokenType.Kind() != types.Invalid && tokenType.Kind() != types.SliceKind {
 		// If type is supplied, check if it's a slice.
-		p.error(p.this(), "expected slice type", "parseBuiltinSlice")
+		p.error(p.lex.This(), "expected slice type", "parseBuiltinSlice")
 		return ast.ZeroExprIndex
 	}
 
@@ -321,29 +321,29 @@ func (p *Parser) parseBuiltinSlice(ctx context.Context, t tokens.Token, tokenTyp
 	}
 
 	if len(typArgs) < 1 || len(typArgs) > 2 {
-		p.error(p.this(), "@slice requires one or two type arguments", "parseBuiltinSlice")
+		p.error(p.lex.This(), "@slice requires one or two type arguments", "parseBuiltinSlice")
 		return ast.ZeroExprIndex
 	}
 
 	if tokenType.Kind() != types.Invalid {
 		sliceType, ok := tokenType.Underlying().(*types.Slice)
 		if !ok {
-			p.error(p.this(), "unable to cast supplied slice type", "parseBuiltinSlice")
+			p.error(p.lex.This(), "unable to cast supplied slice type", "parseBuiltinSlice")
 			return ast.ZeroExprIndex
 		}
 
 		if sliceType.Element.Kind() != typArgs[0].Kind() {
-			p.error(p.this(), "type mismatch in @slice element", "parseBuiltinSlice")
+			p.error(p.lex.This(), "type mismatch in @slice element", "parseBuiltinSlice")
 			return ast.ZeroExprIndex
 		}
 	}
 
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after @slice", "parseBuiltinSlice")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after @slice", "parseBuiltinSlice")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseBuiltinSlice (") // consume (
+	p.lex.Step() // consume (
 
 	var lenType types.Type = types.None
 
@@ -359,8 +359,8 @@ func (p *Parser) parseBuiltinSlice(ctx context.Context, t tokens.Token, tokenTyp
 	args := make([]ast.ExprIndex, 1, 2)
 	args[0] = lenArg
 
-	if p.this().Type == tokens.Comma {
-		p.advance("parseBuiltinSlice ,") // consume ','
+	if p.lex.This().Type == tokens.Comma {
+		p.lex.Step() // consume ','
 
 		capArg := p.expression(ctx, lenType)
 		if capArg == ast.ZeroExprIndex {
@@ -370,12 +370,12 @@ func (p *Parser) parseBuiltinSlice(ctx context.Context, t tokens.Token, tokenTyp
 		args = append(args, capArg)
 	}
 
-	if p.this().Type != tokens.RParen {
-		p.error(p.this(), "expected ')' after argument in @slice", "parseBuiltinSlice")
+	if p.lex.This().Type != tokens.RParen {
+		p.error(p.lex.This(), "expected ')' after argument in @slice", "parseBuiltinSlice")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseBuiltinSlice )") // consume ')'
+	p.lex.Step() // consume ')'
 
 	return p.ast.NewBuiltin(t, "slice", typArgs, args, &types.Slice{Element: typArgs[0]})
 }
@@ -400,12 +400,12 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 		return ast.ZeroExprIndex
 	}
 
-	if p.this().Type != tokens.LParen {
-		p.error(p.this(), "expected '(' after @cast", "parseBuiltinCast")
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after @cast", "parseBuiltinCast")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseBuiltinCast (") // consume (
+	p.lex.Step() // consume (
 
 	// If the second type argument (source type) is provided, use it to
 	// guide type inference for the argument expression (e.g. untyped literals).
@@ -419,12 +419,12 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 		return ast.ZeroExprIndex
 	}
 
-	if p.this().Type != tokens.RParen {
-		p.error(p.this(), "expected ')' after argument in @cast", "parseBuiltinCast")
+	if p.lex.This().Type != tokens.RParen {
+		p.error(p.lex.This(), "expected ')' after argument in @cast", "parseBuiltinCast")
 		return ast.ZeroExprIndex
 	}
 
-	p.advance("parseBuiltinCast )") // consume )
+	p.lex.Step() // consume )
 
 	// TODO: check if we can just use argType here.
 	sourceType := p.ast.Expr(arg).Type()

@@ -46,14 +46,14 @@ func (n *Match) Hash() uint64 {
 
 func (n *Match) StringTo(out *strings.Builder, a *AST) {
 	if n.Label != nil {
-		_, _ = out.WriteString(n.Label.Name)
+		_, _ = out.WriteString(n.Label.Token.Literal)
 		_, _ = out.WriteString(":\n")
 	}
 
 	out.WriteString("match ")
 
 	if n.Binding != nil {
-		_, _ = out.WriteString(n.Binding.Name)
+		_, _ = out.WriteString(n.Binding.Token.Literal)
 		_, _ = out.WriteString(" := ")
 	}
 

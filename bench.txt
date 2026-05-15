@@ -1,4 +1,4 @@
-2026-04-22 12:16
+2026-04-22 12:16 - Baseline
 BenchmarkLexing-10                           844            128737 ns/op          430043 B/op       1009 allocs/op
 BenchmarkParsing-10                          447            256105 ns/op          664629 B/op       4633 allocs/op
 BenchmarkTranspiling-10                      399            281826 ns/op          546915 B/op       9397 allocs/op
@@ -9,47 +9,57 @@ BenchmarkGoBuild-10                            1         124992375 ns/op        
 BenchmarkLargeFile-10                         81           1262587 ns/op         1672130 B/op      16741 allocs/op
 BenchmarkMultiFileTranspile-10               129            926002 ns/op         1008683 B/op      12104 allocs/op
 
-2026-05-04 22:10
-BenchmarkLexing-10                           757            139532 ns/op          430042 B/op       1009 allocs/op
-BenchmarkParsing-10                          111           1309619 ns/op        23841760 B/op       3800 allocs/op
-BenchmarkTranspiling-10                      616            185682 ns/op          330950 B/op       8590 allocs/op
-BenchmarkPrinting-10                         214            550399 ns/op          415452 B/op       2700 allocs/op
-BenchmarkTranspileAndPrint-10                159            745853 ns/op          744355 B/op      11288 allocs/op
-BenchmarkFullPipeline-10                      98           3196875 ns/op        24632836 B/op      15090 allocs/op
-BenchmarkGoBuild-10                            1         133044667 ns/op           14152 B/op         66 allocs/op
-BenchmarkLargeFile-10                        103           1571602 ns/op         3781801 B/op      15087 allocs/op
-BenchmarkMultiFileTranspile-10               158            751084 ns/op          744373 B/op      11288 allocs/op
+2026-05-06 22:28 - Flat AST
+BenchmarkLexing-10                          1009            114846 ns/op          430064 B/op       1009 allocs/op
+BenchmarkParsing-10                          396            294556 ns/op          691347 B/op       4677 allocs/op
+BenchmarkTranspiling-10                      490            233203 ns/op          331437 B/op       8592 allocs/op
+BenchmarkPrinting-10                         187            635198 ns/op          474097 B/op       2706 allocs/op
+BenchmarkTranspileAndPrint-10                138            868813 ns/op          802278 B/op      11299 allocs/op
+BenchmarkFullPipeline-10                     100           1225316 ns/op         1505447 B/op      15982 allocs/op
+BenchmarkGoBuild-10                            1         127322083 ns/op           13704 B/op         66 allocs/op
+BenchmarkLargeFile-10                         93           1265872 ns/op         1501629 B/op      15981 allocs/op
+BenchmarkMultiFileTranspile-10               100           1209253 ns/op          804722 B/op      11299 allocs/op
 
-2026-05-04 22:27
-BenchmarkLexing-10                           981            117227 ns/op          430064 B/op            1009 allocs/op
-BenchmarkParsing-10                          105           1273127 ns/op        22887389 B/op            3800 allocs/op
-BenchmarkTranspiling-10                      580            207211 ns/op          330969 B/op            8590 allocs/op
-BenchmarkPrinting-10                         207            576468 ns/op          415364 B/op            2698 allocs/op
-BenchmarkTranspileAndPrint-10                152            782676 ns/op          744402 B/op           11288 allocs/op
-BenchmarkFullPipeline-10                     110           1076237 ns/op         1376776 B/op           15086 allocs/op
-BenchmarkGoBuild-10                            1         134640416 ns/op           13672 B/op              65 allocs/op
-BenchmarkLargeFile-10                        100           1151017 ns/op         1375888 B/op           15086 allocs/op
-BenchmarkMultiFileTranspile-10               148            802397 ns/op          744422 B/op           11288 allocs/op
+2026-05-14 22:29 - Scanning lexer
+BenchmarkLexing-10                          1015            113321 ns/op           22408 B/op       1007 allocs/op
+BenchmarkParsing-10                          289            401382 ns/op          267818 B/op       6007 allocs/op
+BenchmarkTranspiling-10                      516            228715 ns/op          331354 B/op       8591 allocs/op
+BenchmarkPrinting-10                         193            611828 ns/op          460032 B/op       2704 allocs/op
+BenchmarkTranspileAndPrint-10                134            887055 ns/op          789247 B/op      11296 allocs/op
+BenchmarkFullPipeline-10                      98           1324303 ns/op         1060816 B/op      17308 allocs/op
+BenchmarkGoBuild-10                            1         121752625 ns/op           14648 B/op         68 allocs/op
+BenchmarkLargeFile-10                         79           1349410 ns/op         1060930 B/op      17308 allocs/op
+BenchmarkMultiFileTranspile-10               134            889738 ns/op          790210 B/op      11297 allocs/op
 
-2026-05-06 22:28
-BenchmarkLexing-10                          1009            114846 ns/op      430064 B/op       1009 allocs/op
-BenchmarkParsing-10                          396            294556 ns/op      691347 B/op       4677 allocs/op
-BenchmarkTranspiling-10                      490            233203 ns/op      331437 B/op       8592 allocs/op
-BenchmarkPrinting-10                         187            635198 ns/op      474097 B/op       2706 allocs/op
-BenchmarkTranspileAndPrint-10                138            868813 ns/op      802278 B/op      11299 allocs/op
-BenchmarkFullPipeline-10                     100           1225316 ns/op     1505447 B/op      15982 allocs/op
-BenchmarkGoBuild-10                            1         127322083 ns/op       13704 B/op         66 allocs/op
-BenchmarkLargeFile-10                         93           1265872 ns/op     1501629 B/op      15981 allocs/op
-BenchmarkMultiFileTranspile-10               100           1209253 ns/op          804722 B/op  11299 allocs/op
+2025-05-15 12:30 - Get rid of type name pre-registration pass in parser
+BenchmarkLexing-10                          1054            106439 ns/op           22792 B/op       1007 allocs/op
+BenchmarkParsing-10                          388            289731 ns/op          269915 B/op       5044 allocs/op
+BenchmarkTranspiling-10                      482            218178 ns/op          331333 B/op       8591 allocs/op
+BenchmarkPrinting-10                         200            581324 ns/op          458038 B/op       2704 allocs/op
+BenchmarkTranspileAndPrint-10                136            862595 ns/op          787731 B/op      11296 allocs/op
+BenchmarkFullPipeline-10                     100           1188051 ns/op         1061083 B/op      16345 allocs/op
+BenchmarkGoBuild-10                            1         129361626 ns/op           14312 B/op         68 allocs/op
+BenchmarkLargeFile-10                         84           1215238 ns/op         1061266 B/op      16345 allocs/op
+BenchmarkMultiFileTranspile-10               136            866993 ns/op          798953 B/op      11297 allocs/op
 
-2026-05-12 23:33
-BenchmarkLexing-10                          1060            108796 ns/op          284009 B/op       1015 allocs/op
-BenchmarkLexingRange-10                     1156            101232 ns/op           22120 B/op       1007 allocs/op
-BenchmarkParsing-10                          453            249351 ns/op          522021 B/op       4683 allocs/op
-BenchmarkTranspiling-10                      489            221041 ns/op          331399 B/op       8592 allocs/op
-BenchmarkPrinting-10                         189            626134 ns/op          474237 B/op       2706 allocs/op
-BenchmarkTranspileAndPrint-10                138            869579 ns/op          807977 B/op      11298 allocs/op
-BenchmarkFullPipeline-10                     100           1162368 ns/op         1321616 B/op      15985 allocs/op
-BenchmarkGoBuild-10                            1         127006457 ns/op           14056 B/op         66 allocs/op
-BenchmarkLargeFile-10                         87           1231781 ns/op         1329589 B/op      15986 allocs/op
-BenchmarkMultiFileTranspile-10               135            879303 ns/op          799967 B/op      11298 allocs/op
+2025-05-15 13:25 - SkipBody in lexer
+BenchmarkLexing-10                           987            117931 ns/op           23176 B/op           1007 allocs/op
+BenchmarkParsing-10                          379            289344 ns/op          266400 B/op           4482 allocs/op
+BenchmarkTranspiling-10                      470            231479 ns/op          331366 B/op           8591 allocs/op
+BenchmarkPrinting-10                         193            605779 ns/op          453813 B/op           2703 allocs/op
+BenchmarkTranspileAndPrint-10                130            909172 ns/op          793211 B/op          11297 allocs/op
+BenchmarkFullPipeline-10                     100           1210364 ns/op         1057624 B/op          15783 allocs/op
+BenchmarkGoBuild-10                            1         124994542 ns/op           14280 B/op             67 allocs/op
+BenchmarkLargeFile-10                         84           1268804 ns/op         1063443 B/op          15783 allocs/op
+BenchmarkMultiFileTranspile-10               132            903786 ns/op          792336 B/op          11297 allocs/op
+
+2025-05-15 18:38 - Two pass parser
+BenchmarkLexing-10                           978            116402 ns/op           23176 B/op        1007 allocs/op
+BenchmarkParsing-10                          453            241856 ns/op          248365 B/op        3799 allocs/op
+BenchmarkTranspiling-10                      498            225302 ns/op          330348 B/op        8543 allocs/op
+BenchmarkPrinting-10                         192            618425 ns/op          456991 B/op        2696 allocs/op
+BenchmarkTranspileAndPrint-10                134            883356 ns/op          798932 B/op       11241 allocs/op
+BenchmarkFullPipeline-10                     100           1147245 ns/op         1039758 B/op       15043 allocs/op
+BenchmarkGoBuild-10                            1         123376708 ns/op           14168 B/op          66 allocs/op
+BenchmarkLargeFile-10                         87           1191474 ns/op         1042715 B/op       15043 allocs/op
+BenchmarkMultiFileTranspile-10               133            894826 ns/op          795384 B/op       11240 allocs/op

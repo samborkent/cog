@@ -17,8 +17,8 @@ x := 1
 main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
-		if d.Assignment.Identifier.Name != "x" {
-			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Name)
+		if d.Assignment.Identifier.Token.Literal != "x" {
+			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Token.Literal)
 		}
 
 		if d.Assignment.Expr == ast.ZeroExprIndex {
@@ -53,9 +53,11 @@ main : proc() = {
 			t.Fatalf("expected ProcedureLiteral, got %T", d.Assignment.Expr)
 		}
 
-		varDecl, ok := f.Node(proc.Body.Statements[0]).(*ast.Declaration)
+		block := f.Node(proc.Body).(*ast.Block)
+
+		varDecl, ok := f.Node(block.Statements[0]).(*ast.Declaration)
 		if !ok {
-			t.Fatalf("expected Declaration, got %T", proc.Body.Statements[0])
+			t.Fatalf("expected Declaration, got %T", f.Node(block.Statements[0]))
 		}
 
 		if varDecl.Assignment.Identifier.Qualifier != ast.QualifierVariable {
@@ -118,8 +120,8 @@ x : int64 = 42
 main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
-		if d.Assignment.Identifier.Name != "x" {
-			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Name)
+		if d.Assignment.Identifier.Token.Literal != "x" {
+			t.Errorf("expected name 'x', got %q", d.Assignment.Identifier.Token.Literal)
 		}
 
 		if d.Assignment.Identifier.ValueType.Kind() != types.Int64 {
@@ -136,6 +138,85 @@ main : proc() = {}`)
 		d := stmtAs[*ast.Declaration](t, f, 0)
 		if d.Assignment.Identifier.ValueType.Kind() != types.UTF8 {
 			t.Errorf("expected UTF8, got %s", d.Assignment.Identifier.ValueType.Kind())
+		}
+	})
+}
+
+func TestForwardValueReference(t *testing.T) {
+	t.Parallel()
+
+	t.Run("later_declared_global", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+foo : int64 = bar
+bar : int64 = 42
+main : proc() = {}`)
+
+		d := stmtAs[*ast.Declaration](t, f, 0)
+		if d.Assignment.Identifier.Token.Literal != "foo" {
+			t.Errorf("expected name 'foo', got %q", d.Assignment.Identifier.Token.Literal)
+		}
+
+		if d.Assignment.Identifier.ValueType.Kind() != types.Int64 {
+			t.Errorf("expected Int64, got %s", d.Assignment.Identifier.ValueType.Kind())
+		}
+
+		// The expression referencing 'bar' should resolve to int64.
+		expr := f.Expr(d.Assignment.Expr)
+		ident, ok := expr.(*ast.Identifier)
+		if !ok {
+			t.Fatalf("expected *ast.Identifier, got %T", expr)
+		}
+
+		if ident.Token.Literal != "bar" {
+			t.Errorf("expected reference to 'bar', got %q", ident.Token.Literal)
+		}
+
+		if types.IsNone(ident.ValueType) {
+			t.Error("forward value reference 'bar' was not resolved")
+		}
+
+		if ident.ValueType.Kind() != types.Int64 {
+			t.Errorf("expected bar type Int64, got %s", ident.ValueType.Kind())
+		}
+	})
+
+	t.Run("undefined_identifier_errors", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+foo : int64 = nonexistent
+main : proc() = {}`)
+	})
+
+	t.Run("generic_alias_forward_reference", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+names : List<utf8> = @slice<utf8>(3)
+List<T ~ any> ~ []T
+main : proc() = {}`)
+
+		d := stmtAs[*ast.Declaration](t, f, 0)
+
+		if d.Assignment.Identifier.Token.Literal != "names" {
+			t.Fatalf("expected name 'names', got %q", d.Assignment.Identifier.Token.Literal)
+		}
+
+		vt := d.Assignment.Identifier.ValueType
+		alias, ok := vt.(*types.Alias)
+		if !ok {
+			t.Fatalf("ValueType = %T (%v), want *types.Alias", vt, vt)
+		}
+
+		if len(alias.TypeArgs) != 1 {
+			t.Fatalf("TypeArgs len = %d, want 1", len(alias.TypeArgs))
+		}
+
+		if alias.TypeArgs[0] != types.Basics[types.UTF8] {
+			t.Errorf("TypeArgs[0] = %v, want utf8", alias.TypeArgs[0])
+		}
+
+		if alias.Kind() != types.SliceKind {
+			t.Errorf("Kind() = %v, want SliceKind", alias.Kind())
 		}
 	})
 }

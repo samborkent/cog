@@ -79,9 +79,9 @@ type AST struct {
 // allocations (arena mode); otherwise regular heap allocation is used.
 // The caller manages the arena lifecycle — typically via a pool sized by
 // GOMAXPROCS, with one arena per parser worker.
-func NewAST(a *arena.Arena, fileIndex uint16, numTokens int) *AST {
-	nodeCap := max(numTokens/8, 1)
-	exprCap := max(numTokens/16, 1)
+func NewAST(a *arena.Arena, fileIndex uint16, numBytes uint32) *AST {
+	nodeCap := max(numBytes/4/8, 1)
+	exprCap := max(numBytes/4/16, 1)
 
 	return &AST{
 		arena:     a,
@@ -123,6 +123,12 @@ func (a *AST) Node(i NodeIndex) Node {
 	return a.nodes[i]
 }
 
+// SetNode replaces the node at the given index.
+// Panics if the index is out of bounds.
+func (a *AST) SetNode(i NodeIndex, n Node) {
+	a.nodes[i] = n
+}
+
 // LenNodes returns the number of nodes in the AST.
 func (a *AST) LenNodes() int {
 	return len(a.nodes) - 1
@@ -137,6 +143,12 @@ func (a *AST) AddExpr(expr Expr) ExprIndex {
 // Expr returns the expression at the given index.
 func (a *AST) Expr(i ExprIndex) Expr {
 	return a.exprs[i]
+}
+
+// SetExpr replaces the expression at the given index.
+// Panics if the index is out of bounds.
+func (a *AST) SetExpr(i ExprIndex, e Expr) {
+	a.exprs[i] = e
 }
 
 // LenExprs returns the number of expressions in the AST.

@@ -33,7 +33,7 @@ func (n *Branch) StringTo(out *strings.Builder, _ *AST) {
 
 	if n.Label != nil {
 		_ = out.WriteByte(' ')
-		_, _ = out.WriteString(n.Label.Name)
+		_, _ = out.WriteString(n.Label.Token.Literal)
 	}
 }
 

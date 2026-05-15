@@ -42,7 +42,7 @@ func (n *Declaration) StringTo(out *strings.Builder, a *AST) {
 	}
 
 	if n.Assignment.Expr == 0 {
-		_, _ = out.WriteString(n.Assignment.Identifier.Name)
+		_, _ = out.WriteString(n.Assignment.Identifier.Token.Literal)
 		_, _ = out.WriteString(" : ")
 		_, _ = out.WriteString(n.Assignment.Identifier.ValueType.String())
 
@@ -50,7 +50,7 @@ func (n *Declaration) StringTo(out *strings.Builder, a *AST) {
 	}
 
 	if n.Assignment.Identifier.ValueType == nil || n.Assignment.Identifier.ValueType == types.None {
-		_, _ = out.WriteString(n.Assignment.Identifier.Name)
+		_, _ = out.WriteString(n.Assignment.Identifier.Token.Literal)
 		_, _ = out.WriteString(" := ")
 		a.exprs[n.Assignment.Expr].StringTo(out, a)
 

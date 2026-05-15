@@ -13,10 +13,10 @@ var _ Expr = &ProcedureLiteral{}
 type ProcedureLiteral struct {
 	Token         tokens.Token
 	ProcedureType types.Type
-	Body          *Block
+	Body          NodeIndex
 }
 
-func (a *AST) NewProcedureLiteral(token tokens.Token, t *types.Procedure, body *Block) ExprIndex {
+func (a *AST) NewProcedureLiteral(token tokens.Token, t *types.Procedure, body NodeIndex) ExprIndex {
 	procLiteral := New[ProcedureLiteral](a)
 	procLiteral.Token = token
 	procLiteral.ProcedureType = t
@@ -33,9 +33,19 @@ func (e *ProcedureLiteral) Hash() uint64 {
 }
 
 func (e *ProcedureLiteral) StringTo(out *strings.Builder, a *AST) {
+	body := a.Node(e.Body)
+
+	// Handle DeferredBody placeholder.
+	if db, ok := body.(*DeferredBody); ok {
+		db.StringTo(out, a)
+		return
+	}
+
+	block := body.(*Block)
+
 	_ = out.WriteByte('{')
 
-	for i, s := range e.Body.Statements {
+	for i, s := range block.Statements {
 		if i == 0 {
 			_ = out.WriteByte('\n')
 		}

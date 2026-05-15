@@ -19,38 +19,24 @@ func (*Enum) Kind() Kind {
 }
 
 func (e *Enum) String() string {
-	// var out strings.Builder
-
-	// _, _ = out.WriteString("({")
-
-	// for i, val := range e.Values {
-	// 	if i == 0 {
-	// 		_ = out.WriteByte('\n')
-	// 	}
-
-	// 	_, _ = out.WriteString(val.Identifier.Name)
-	// 	_, _ = out.WriteString(" := ")
-	// 	_, _ = out.WriteString(val.Value.String())
-	// 	_ = out.WriteByte('\n')
-	// }
-
-	// _, _ = out.WriteString("} : ")
-	// _, _ = out.WriteString(e.Type().String())
-	// _ = out.WriteByte(')')
-
-	// return out.String()
 	var str strings.Builder
-	str.WriteString("enum<" + e.ValueType.String() + "> {")
+
+	_, _ = str.WriteString("enum<")
+	_, _ = str.WriteString(e.ValueType.String())
+	_, _ = str.WriteString("> {")
 
 	for i, val := range e.Values {
 		if i == 0 {
-			str.WriteString("\n")
+			_, _ = str.WriteString("\n")
 		}
 
-		str.WriteString(val.Name + " := " + val.Value.String + ",\n")
+		_, _ = str.WriteString(val.Name)
+		_, _ = str.WriteString(" := ")
+		_, _ = str.WriteString(val.Value.String)
+		_, _ = str.WriteString(",\n")
 	}
 
-	str.WriteString("}")
+	_, _ = str.WriteString("}")
 
 	return str.String()
 }

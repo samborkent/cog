@@ -11,48 +11,38 @@ import (
 const blockPreacclocationSize = 8
 
 func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
-	startToken := p.this()
+	startToken := p.lex.This()
 	stmts := make([]ast.NodeIndex, 0, blockPreacclocationSize)
 
 	var endToken tokens.Token
 
-	p.advance("parseBlock") // consume '{'
+	p.lex.Step() // consume '{'
 
 	// Enter scope.
 	p.symbols = NewEnclosedSymbolTable(p.symbols)
 
-	for p.this().Type != tokens.EOF {
-		if ctx.Err() != nil {
-			return nil
-		}
-
-		if p.this().Type == tokens.RBrace {
-			endToken = p.this()
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		t := p.lex.This()
+		if t.Type == tokens.RBrace {
+			endToken = t
 			break
 		}
-
-		prev := p.i
 
 		stmt := p.parseStatement(ctx)
 		if stmt != ast.ZeroNodeIndex {
 			stmts = append(stmts, stmt)
 		} else {
 			// Synchronize to recover from errors within a block.
-			p.synchronize()
-		}
-
-		// Guard against infinite loops: if no progress was made, force advance.
-		if p.i == prev {
-			p.advance("parseBlock recovery")
+			p.synchronize(ctx)
 		}
 	}
 
-	if p.this().Type != tokens.RBrace {
-		p.error(p.this(), "expected '}' to close block", "parseBlock")
+	if p.lex.This().Type != tokens.RBrace {
+		p.error(p.lex.This(), "expected '}' to close block", "parseBlock")
 		return nil
 	}
 
-	p.advance("parseBlock }") // consume '}'
+	p.lex.Step() // consume '}'
 
 	// Restore scope
 	p.symbols = p.symbols.Outer

@@ -11,12 +11,12 @@ import (
 // resolveConstraintToken looks up the current token as a constraint.
 // Keywords are matched by type name; identifiers by literal (for "int", "uint", etc.).
 func (p *Parser) resolveConstraintToken() types.Type {
-	if c, ok := types.LookupConstraint(p.this().Type.String()); ok {
+	if c, ok := types.LookupConstraint(p.lex.This().Type.String()); ok {
 		return c
 	}
 
-	if p.this().Type == tokens.Identifier {
-		if c, ok := types.LookupConstraint(p.this().Literal); ok {
+	if p.lex.This().Type == tokens.Identifier {
+		if c, ok := types.LookupConstraint(p.lex.This().Literal); ok {
 			return c
 		}
 	}
@@ -25,12 +25,12 @@ func (p *Parser) resolveConstraintToken() types.Type {
 }
 
 func (p *Parser) parseTypeArguments(ctx context.Context) []types.Type {
-	if p.this().Type != tokens.LT {
-		p.error(p.this(), "expected opening < for type arguments", "parseTypeArguments")
+	if p.lex.This().Type != tokens.LT {
+		p.error(p.lex.This(), "expected opening < for type arguments", "parseTypeArguments")
 		return nil
 	}
 
-	p.advance("parseTypeArguments <") // consume <
+	p.lex.Step() // consume <
 
 	typ := p.parseCombinedType(ctx, false, false)
 	if typ == nil {
@@ -39,8 +39,8 @@ func (p *Parser) parseTypeArguments(ctx context.Context) []types.Type {
 
 	args := []types.Type{typ}
 
-	for p.this().Type == tokens.Comma {
-		p.advance("parseTypeArguments ,") // consume ,
+	for p.lex.This().Type == tokens.Comma {
+		p.lex.Step() // consume ,
 
 		typ := p.parseCombinedType(ctx, false, false)
 		if typ == nil {
@@ -50,12 +50,12 @@ func (p *Parser) parseTypeArguments(ctx context.Context) []types.Type {
 		args = append(args, typ)
 	}
 
-	if p.this().Type != tokens.GT {
-		p.error(p.this(), "expected closing > for type arguments", "parseTypeArguments")
+	if p.lex.This().Type != tokens.GT {
+		p.error(p.lex.This(), "expected closing > for type arguments", "parseTypeArguments")
 		return nil
 	}
 
-	p.advance("parseTypeArguments >") // consume >
+	p.lex.Step() // consume >
 
 	return args
 }
@@ -69,60 +69,60 @@ func (p *Parser) parseTypeArguments(ctx context.Context) []types.Type {
 // Each parameter is an identifier, followed by ~, followed by one or more
 // constraint keywords separated by |.
 func (p *Parser) parseTypeParams(ctx context.Context) []*types.Alias {
-	if p.this().Type != tokens.LT {
-		p.error(p.this(), "expected opening < for type parameters", "parseTypeParams")
+	if p.lex.This().Type != tokens.LT {
+		p.error(p.lex.This(), "expected opening < for type parameters", "parseTypeParams")
 		return nil
 	}
 
-	p.advance("parseTypeParams <") // consume <
+	p.lex.Step() // consume <
 
 	var params []*types.Alias
 
-	for !p.match(tokens.GT, tokens.EOF) {
+	for !p.match(p.lex.This(), tokens.GT) {
 		if ctx.Err() != nil {
 			return nil
 		}
 
-		if p.this().Type != tokens.Identifier {
-			p.error(p.this(), "expected type parameter name", "parseTypeParams")
+		if p.lex.This().Type != tokens.Identifier {
+			p.error(p.lex.This(), "expected type parameter name", "parseTypeParams")
 			return nil
 		}
 
-		name := p.this().Literal
-		p.advance("parseTypeParams name") // consume parameter name
+		name := p.lex.This().Literal
+		p.lex.Step() // consume parameter name
 
-		if p.this().Type != tokens.Tilde {
-			p.error(p.this(), "expected ~ after type parameter name", "parseTypeParams")
+		if p.lex.This().Type != tokens.Tilde {
+			p.error(p.lex.This(), "expected ~ after type parameter name", "parseTypeParams")
 			return nil
 		}
 
-		p.advance("parseTypeParams ~") // consume ~
+		p.lex.Step() // consume ~
 
 		// Parse constraint(s): keyword constraints or concrete types separated by |.
 		// Try keyword constraint first, fall back to concrete type via parseType.
 		constraint := p.resolveConstraintToken()
 		if constraint != nil {
-			p.advance("parseTypeParams constraint") // consume keyword constraint
+			p.lex.Step() // consume keyword constraint
 		} else {
 			constraint = p.parseType(ctx)
 			if constraint == nil {
-				p.error(p.this(), fmt.Sprintf("expected constraint or type, got %q", p.this().Type.String()), "parseTypeParams")
+				p.error(p.lex.This(), fmt.Sprintf("expected constraint or type, got %q", p.lex.This().Type.String()), "parseTypeParams")
 				return nil
 			}
 		}
 
 		constraints := []types.Type{constraint}
 
-		for p.this().Type == tokens.Pipe {
-			p.advance("parseTypeParams |") // consume |
+		for p.lex.This().Type == tokens.Pipe {
+			p.lex.Step() // consume |
 
 			constraint := p.resolveConstraintToken()
 			if constraint != nil {
-				p.advance("parseTypeParams constraint") // consume keyword constraint
+				p.lex.Step() // consume keyword constraint
 			} else {
 				constraint = p.parseType(ctx)
 				if constraint == nil {
-					p.error(p.this(), fmt.Sprintf("expected constraint or type after |, got %q", p.this().Type.String()), "parseTypeParams")
+					p.error(p.lex.This(), fmt.Sprintf("expected constraint or type after |, got %q", p.lex.This().Type.String()), "parseTypeParams")
 					return nil
 				}
 			}
@@ -142,20 +142,20 @@ func (p *Parser) parseTypeParams(ctx context.Context) []*types.Alias {
 			Constraint: constraintType,
 		})
 
-		if p.this().Type == tokens.Comma {
-			p.advance("parseTypeParams ,") // consume ,
+		if p.lex.This().Type == tokens.Comma {
+			p.lex.Step() // consume ,
 			continue
 		}
 
 		break
 	}
 
-	if p.this().Type != tokens.GT {
-		p.error(p.this(), "expected closing > for type parameters", "parseTypeParams")
+	if p.lex.This().Type != tokens.GT {
+		p.error(p.lex.This(), "expected closing > for type parameters", "parseTypeParams")
 		return nil
 	}
 
-	p.advance("parseTypeParams >") // consume >
+	p.lex.Step() // consume >
 
 	return params
 }

@@ -8,23 +8,22 @@ import (
 
 func (p *Parser) parsePackage() *ast.Package {
 	node := &ast.Package{
-		Token: p.this(),
+		Token: p.lex.This(),
 	}
 
-	p.advance("parsePackage") // consume package
+	p.lex.Step() // consume package
 
-	if p.this().Type != tokens.Identifier {
-		p.error(p.this(), "missing package identifier", "parsePackage")
+	if p.lex.This().Type != tokens.Identifier {
+		p.error(p.lex.This(), "missing package identifier", "parsePackage")
 		return nil
 	}
 
 	node.Identifier = &ast.Identifier{
-		Token:     p.this(),
-		Name:      p.this().Literal,
+		Token:     p.lex.This(),
 		ValueType: types.None,
 	}
 
-	p.advance("parsePackage identifier") // consume identifier
+	p.lex.Step() // consume identifier
 
 	return node
 }

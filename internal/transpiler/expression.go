@@ -82,7 +82,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 					continue
 				}
 
-				defaultExpr, err := t.convertExpr(procType.Parameters[i].Default.Expr.(ast.Expr))
+				defaultExpr, err := t.convertExpr(t.Expr(ast.ExprIndex(procType.Parameters[i].Default.Index)))
 				if err != nil {
 					return nil, fmt.Errorf("parsing default value of input parameter in call expression: %w", err)
 				}
@@ -98,10 +98,10 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 
 		switch expr := t.Expr(n.Expr).(type) {
 		case *ast.Identifier:
-			usedName = component.ConvertExport(expr.Name, expr.Exported, expr.Global)
+			usedName = component.ConvertExport(expr.Token.Literal, expr.Exported, expr.Global)
 		case *ast.Selector:
 			leftMost := expr.Fields[0]
-			usedName = component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
+			usedName = component.ConvertExport(leftMost.Token.Literal, leftMost.Exported, leftMost.Global)
 			// Check if this is an import selector (pkg.Symbol) - imports aren't in symbol table
 			isImportSelector = types.IsNone(leftMost.ValueType)
 		}
@@ -237,8 +237,8 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 	case *ast.GoCallExpression:
 		expr := &goast.CallExpr{
 			Fun: &goast.SelectorExpr{
-				X:   &goast.Ident{Name: goStdLibAlias(n.Import.Name)},
-				Sel: &goast.Ident{Name: n.CallIdentifier.Name},
+				X:   &goast.Ident{Name: goStdLibAlias(n.Import.Token.Literal)},
+				Sel: &goast.Ident{Name: n.CallIdentifier.Token.Literal},
 			},
 			Args: make([]goast.Expr, 0, len(n.Arguments)),
 		}
@@ -261,11 +261,11 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 
 		return &goast.ParenExpr{X: inner}, nil
 	case *ast.Identifier:
-		name := component.ConvertExport(n.Name, n.Exported, n.Global)
+		name := component.ConvertExport(n.Token.Literal, n.Exported, n.Global)
 
 		if n.Qualifier == ast.QualifierDynamic {
 			if t.inFunc {
-				return nil, fmt.Errorf("func cannot reference dynamically scoped variable %q", n.Name)
+				return nil, fmt.Errorf("func cannot reference dynamically scoped variable %q", n.Token.Literal)
 			}
 
 			t.usesDyn = true
@@ -715,9 +715,11 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			X:  right,
 		}, nil
 	case *ast.ProcedureLiteral:
-		stmts := make([]goast.Stmt, 0, len(n.Body.Statements))
+		body := t.Node(n.Body).(*ast.Block)
 
-		if len(n.Body.Statements) > 0 {
+		stmts := make([]goast.Stmt, 0, len(body.Statements))
+
+		if len(body.Statements) > 0 {
 			// Enter body scope.
 			t.symbols = NewEnclosedSymbolTable(t.symbols)
 		}
@@ -748,7 +750,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			t.inFunc = false
 		}
 
-		for _, s := range n.Body.Statements {
+		for _, s := range body.Statements {
 			stmt, err := t.convertStmt(t.Node(s))
 			if err != nil {
 				return nil, err
@@ -757,7 +759,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			stmts = append(stmts, stmt...)
 		}
 
-		if len(n.Body.Statements) > 0 {
+		if len(body.Statements) > 0 {
 			// Leave body scope.
 			t.symbols = t.symbols.Outer
 		}
@@ -808,25 +810,25 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 		}
 
 		if isStruct && structType != nil {
-			field := structType.Field(n.Fields[len(n.Fields)-1].Name)
+			field := structType.Field(n.Fields[len(n.Fields)-1].Token.Literal)
 			var exported bool
 			if field != nil {
 				exported = field.Exported
 			}
 
 			// Mark the base identifier as used if it's in the symbol table
-			baseName := component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
+			baseName := component.ConvertExport(leftMost.Token.Literal, leftMost.Exported, leftMost.Global)
 			if _, ok := t.symbols.Resolve(baseName); ok {
 				_ = t.symbols.MarkUsed(baseName)
 			}
 
 			return &goast.SelectorExpr{
 				X:   component.Ident(leftMost),
-				Sel: component.IdentName(component.ConvertExport(n.Fields[len(n.Fields)-1].Name, exported, false)),
+				Sel: component.IdentName(component.ConvertExport(n.Fields[len(n.Fields)-1].Token.Literal, exported, false)),
 			}, nil
 		}
 
-		name := component.ConvertExport(leftMost.Name, leftMost.Exported, leftMost.Global)
+		name := component.ConvertExport(leftMost.Token.Literal, leftMost.Exported, leftMost.Global)
 
 		// For enum selectors, use the type name from the ValueType alias
 		if leftMost.ValueType.Kind() == types.EnumKind || leftMost.ValueType.Kind() == types.ErrorKind {
@@ -848,7 +850,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 		switch leftMost.ValueType.Kind() {
 		case types.EnumKind, types.ErrorKind:
 			enumName := ident
-			enumName.Name = enumName.Name + t.titleCaser.String(n.Fields[len(n.Fields)-1].Name)
+			enumName.Name = enumName.Name + t.titleCaser.String(n.Fields[len(n.Fields)-1].Token.Literal)
 
 			return enumName, nil
 		case types.GenericKind:
@@ -857,7 +859,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 				return nil, err
 			}
 
-			return component.Selector(selExpr, n.Fields[len(n.Fields)-1].Name), nil
+			return component.Selector(selExpr, n.Fields[len(n.Fields)-1].Token.Literal), nil
 		default:
 			return nil, fmt.Errorf("%q: unknown type found for selector expression %q", n, leftMost.ValueType)
 		}
@@ -1006,7 +1008,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			return nil, fmt.Errorf("suffix operator applied to non-identifier")
 		}
 
-		name := component.ConvertExport(ident.Name, ident.Exported, ident.Global)
+		name := component.ConvertExport(ident.Token.Literal, ident.Exported, ident.Global)
 
 		// Mark identifier as used.
 		symbol, ok := t.symbols.Resolve(name)

@@ -10,23 +10,23 @@ import (
 )
 
 func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.NodeIndex {
-	if p.symbols.Outer == nil {
-		// Ensure type already exists (created during find globals sweep)
-		_, ok := p.symbols.Resolve(ident.Name)
+	if !p.globalsPass && p.symbols.Outer == nil {
+		// Ensure type already exists (created during globals pass)
+		_, ok := p.symbols.Resolve(ident.Token.Literal)
 		if !ok {
-			p.error(p.this(), fmt.Sprintf("missing global type symbol %q", ident.Name), "parseTypeAlias")
+			p.error(p.lex.This(), fmt.Sprintf("missing global type symbol %q", ident.Token.Literal), "parseTypeAlias")
 			return ast.ZeroNodeIndex
 		}
 	}
 
 	ident.Qualifier = ast.QualifierType
 
-	typeToken := p.this()
+	typeToken := p.lex.This()
 
 	// Parse optional type parameters: <T ~ any, K ~ comparable>
 	var typeParams []*types.Alias
 
-	if p.this().Type == tokens.LT {
+	if p.lex.This().Type == tokens.LT {
 		tp := p.parseTypeParams(ctx)
 		if tp == nil {
 			return ast.ZeroNodeIndex
@@ -35,23 +35,29 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 		typeParams = tp
 	}
 
-	p.advance("parseTypeAlias export ident ~") // consume ~
+	p.lex.Step() // consume ~
+
+	// Save the global scope before pushing type param scope, so that
+	// DefineGlobal registers the type on the correct (outer) scope.
+	globalScope := p.symbols
 
 	// If there are type params, push them into an enclosed scope so that
 	// type parameter names (e.g. T) are resolvable in the alias body.
 	if len(typeParams) > 0 {
-		outer := p.symbols
-		p.symbols = NewEnclosedSymbolTable(outer)
+		p.symbols = NewEnclosedSymbolTable(globalScope)
 
 		for _, tp := range typeParams {
 			p.symbols.Define(&ast.Identifier{
-				Name:      tp.Name,
+				Token: tokens.Token{
+					Type:    tokens.Identifier,
+					Literal: tp.Name,
+				},
 				ValueType: tp,
 				Qualifier: ast.QualifierType,
 			})
 		}
 
-		defer func() { p.symbols = outer }()
+		defer func() { p.symbols = globalScope }()
 	}
 
 	typ := p.parseCombinedType(ctx, ident.Exported, ident.Global)
@@ -63,7 +69,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 	// findGlobalMethod attached methods to the original *Struct, but
 	// parseCombinedType just created a new *Struct that will replace it.
 	if newStruct, ok := typ.(*types.Struct); ok {
-		if existing, ok := p.symbols.Resolve(ident.Name); ok {
+		if existing, ok := globalScope.Resolve(ident.Token.Literal); ok {
 			if oldStruct, ok := existing.Identifier.ValueType.(*types.Struct); ok {
 				newStruct.Methods = oldStruct.Methods
 			}
@@ -77,31 +83,36 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 		if alias, ok := typ.(*types.Alias); ok {
 			alias.TypeParams = typeParams
 		} else {
-			// TODO: check if we need this
-			// // Wrap in an alias so type params can be carried.
-			// wrapped := &types.Alias{
-			// 	Name:       ident.Name,
-			// 	Derived:    typ,
-			// 	Exported:   ident.Exported,
-			// 	Global:     ident.Global,
-			// 	TypeParams: typeParams,
-			// }
-			// typeDecl.Alias = wrapped
-			// typeDecl.Identifier.ValueType = wrapped
+			// Wrap in an alias so type params can be carried.
+			wrapped := &types.Alias{
+				Name:       ident.Token.Literal,
+				Derived:    typ,
+				Exported:   ident.Exported,
+				Global:     ident.Global,
+				TypeParams: typeParams,
+			}
+			ident.ValueType = wrapped
 		}
 	}
 
 	// Define type if in inner scope
 	// TODO: find out why we had these restrictions.
 	// if p.symbols.Outer != nil && len(typeParams) == 0 {
-	p.symbols.Define(ident)
+	if p.globalsPass {
+		globalScope.DefineGlobal(ident)
+	} else {
+		p.symbols.Define(ident)
+	}
 	// }
 
 	if iface, ok := ident.ValueType.(*types.Interface); ok {
 		// Register interface methods as methods on the type for method call resolution.
 		for _, method := range iface.Methods {
-			p.symbols.DefineMethod(ident.Name, &ast.Identifier{
-				Name:      method.Name,
+			p.symbols.DefineMethod(ident.Token.Literal, &ast.Identifier{
+				Token: tokens.Token{
+					Type:    tokens.Identifier,
+					Literal: method.Name,
+				},
 				ValueType: method.Procedure,
 				Qualifier: ast.QualifierMethod,
 			})

@@ -1,7 +1,6 @@
 package lexer
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -11,11 +10,16 @@ import (
 func lex(t *testing.T, src string) []tokens.Token {
 	t.Helper()
 
-	l := New(strings.NewReader(src))
+	l := New(strings.NewReader(src), uint32(len(src)), false)
 
-	toks, err := l.Parse(t.Context())
-	if err != nil {
-		t.Fatalf("unexpected lex error: %v", err)
+	var toks []tokens.Token
+	for {
+		tok := l.This()
+		toks = append(toks, tok)
+		if tok.Type == tokens.EOF {
+			break
+		}
+		l.Step()
 	}
 
 	return toks
@@ -473,8 +477,8 @@ func TestEOFPositionMatchesLastToken(t *testing.T) {
 	lastTok := toks[1]
 
 	eof := toks[2]
-	if eof.Ln != lastTok.Ln || eof.Col != lastTok.Col {
-		t.Errorf("EOF position (%d:%d) should match last token (%d:%d)",
+	if eof.Ln < lastTok.Ln || (eof.Ln == lastTok.Ln && eof.Col < lastTok.Col) {
+		t.Errorf("EOF position (%d:%d) should not be before last token (%d:%d)",
 			eof.Ln, eof.Col, lastTok.Ln, lastTok.Col)
 	}
 }
@@ -543,28 +547,6 @@ func TestProcDeclarationSequence(t *testing.T) {
 	}
 }
 
-func TestContextCancellation(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	l := New(strings.NewReader("x := 42"))
-
-	toks, err := l.Parse(ctx)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(toks) == 0 {
-		t.Fatal("expected at least EOF token")
-	}
-
-	if toks[len(toks)-1].Type != tokens.EOF {
-		t.Errorf("expected last token to be EOF, got %s", toks[len(toks)-1].Type)
-	}
-}
-
 func TestLineAndColumnTracking(t *testing.T) {
 	t.Parallel()
 
@@ -615,60 +597,56 @@ main : proc() = {
 	}
 
 	if toks[len(toks)-1].Type != tokens.EOF {
-		t.Errorf("expected EOF as last token, got %s", toks[len(toks)-1].Type)
+		t.Errorf("expected last token to be EOF, got %s", toks[len(toks)-1].Type)
 	}
 }
 
-func TestNextMatchesParse(t *testing.T) {
+func TestStepMatchesParse(t *testing.T) {
 	t.Parallel()
 
 	src := "x := 42 // trailing\n@print(\"ok\")"
 
-	fromParse := lex(t, src)
+	fromLex := lex(t, src)
 
-	l := New(strings.NewReader(src))
-	fromNext := make([]tokens.Token, 0, len(fromParse))
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+	var fromStep []tokens.Token
 
 	for {
-		tok := l.Next()
-		fromNext = append(fromNext, tok)
+		tok := l.This()
+		fromStep = append(fromStep, tok)
 		if tok.Type == tokens.EOF {
 			break
 		}
+		l.Step()
 	}
 
-	if len(fromNext) != len(fromParse) {
-		t.Fatalf("expected %d tokens from Next, got %d", len(fromParse), len(fromNext))
+	if len(fromStep) != len(fromLex) {
+		t.Fatalf("expected %d tokens from Step, got %d", len(fromLex), len(fromStep))
 	}
 
-	for i := range fromParse {
-		if fromParse[i].Type == tokens.EOF {
-			if fromNext[i].Type != tokens.EOF {
-				t.Fatalf("token %d mismatch: expected EOF, got %+v", i, fromNext[i])
-			}
-
-			continue
-		}
-
-		if fromNext[i] != fromParse[i] {
-			t.Fatalf("token %d mismatch: Next=%+v Parse=%+v", i, fromNext[i], fromParse[i])
+	for i := range fromLex {
+		if fromStep[i] != fromLex[i] {
+			t.Fatalf("token %d mismatch: Step=%+v Lex=%+v", i, fromStep[i], fromLex[i])
 		}
 	}
 }
 
-func TestNextScannerErrorTracking(t *testing.T) {
+func TestStepScannerErrorTracking(t *testing.T) {
 	t.Parallel()
 
-	// Unterminated string triggers a scanner error; Next should still continue with later tokens.
-	l := New(strings.NewReader("\"unterminated\nx := 1"))
+	src := "\"unterminated\nx := 1"
+
+	// Unterminated string triggers a scanner error; Step should still continue with later tokens.
+	l := New(strings.NewReader(src), uint32(len(src)), false)
 
 	gotTypes := make([]tokens.Type, 0, 8)
 	for {
-		tok := l.Next()
+		tok := l.This()
 		gotTypes = append(gotTypes, tok.Type)
 		if tok.Type == tokens.EOF {
 			break
 		}
+		l.Step()
 	}
 
 	if len(l.errs) != 1 {
@@ -694,102 +672,315 @@ func TestNextScannerErrorTracking(t *testing.T) {
 func TestPeekDoesNotConsume(t *testing.T) {
 	t.Parallel()
 
-	l := New(strings.NewReader("x := 42"))
+	src := "x := 42"
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
 
 	peek1 := l.Peek(1)
 	peek2 := l.Peek(2)
 	peek1Again := l.Peek(1)
 
-	if peek1.Type != tokens.Identifier || peek1.Literal != "x" {
-		t.Fatalf("peek(1): expected Identifier 'x', got %s %q", peek1.Type, peek1.Literal)
+	if peek1.Type != tokens.Declaration {
+		t.Fatalf("peek(1): expected Declaration, got %s %q", peek1.Type, peek1.Literal)
 	}
 
-	if peek2.Type != tokens.Declaration {
-		t.Fatalf("peek(2): expected Declaration, got %s", peek2.Type)
+	if peek2.Type != tokens.IntLiteral {
+		t.Fatalf("peek(2): expected IntLiteral, got %s", peek2.Type)
 	}
 
 	if peek1Again != peek1 {
 		t.Fatalf("peek(1) should be stable, got %+v then %+v", peek1, peek1Again)
 	}
 
-	next := l.Next()
-	if next != peek1 {
-		t.Fatalf("next should match prior peek(1): next=%+v peek=%+v", next, peek1)
+	l.Step()
+	current := l.This()
+	if current != peek1 {
+		t.Fatalf("step should match prior peek(1): current=%+v peek=%+v", current, peek1)
 	}
 }
 
 func TestPeekBeyondEOFReturnsEOF(t *testing.T) {
 	t.Parallel()
 
-	l := New(strings.NewReader("x"))
+	src := "x"
 
-	if tok := l.Peek(1); tok.Type != tokens.Identifier {
-		t.Fatalf("peek(1): expected Identifier, got %s", tok.Type)
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	if tok := l.Peek(0); tok.Type != tokens.Identifier {
+		t.Fatalf("peek(0): expected Identifier, got %s", tok.Type)
 	}
 
-	if tok := l.Peek(2); tok.Type != tokens.EOF {
-		t.Fatalf("peek(2): expected EOF, got %s", tok.Type)
+	if tok := l.Peek(1); tok.Type != tokens.EOF {
+		t.Fatalf("peek(1): expected EOF, got %s", tok.Type)
 	}
 
-	if tok := l.Peek(3); tok != (tokens.Token{}) {
-		t.Fatalf("peek(3): expected zero token, got %+v", tok)
+	if tok := l.Peek(2); tok != (tokens.Token{}) {
+		t.Fatalf("peek(2): expected zero token, got %+v", tok)
 	}
 
-	if tok := l.Next(); tok.Type != tokens.Identifier {
-		t.Fatalf("next 1: expected Identifier, got %s", tok.Type)
+	l.Step()
+	if tok := l.This(); tok.Type != tokens.EOF {
+		t.Fatalf("next 1: expected EOF, got %s", tok.Type)
 	}
 
-	if tok := l.Next(); tok.Type != tokens.EOF {
-		t.Fatalf("next 2: expected EOF, got %s", tok.Type)
+	l.Step()
+	if tok := l.This(); tok.Type != tokens.EOF {
+		t.Fatalf("next 2: expected EOF (stay), got %s", tok.Type)
 	}
 }
 
 func TestPeekCurrentAndHistory(t *testing.T) {
 	t.Parallel()
 
-	l := New(strings.NewReader("x := 42"))
+	src := "x := 42"
 
-	if tok := l.Peek(0); tok != (tokens.Token{}) {
-		t.Fatalf("peek(0) before first next: expected zero token, got %+v", tok)
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	// After New: primed to first token
+	if tok := l.This(); tok.Type != tokens.Identifier {
+		t.Fatalf("peek(0) after New: expected Identifier, got %+v", tok)
 	}
 
 	if tok := l.Peek(-1); tok != (tokens.Token{}) {
-		t.Fatalf("peek(-1) before first next: expected zero token, got %+v", tok)
+		t.Fatalf("peek(-1) after New: expected zero token, got %+v", tok)
 	}
 
-	if tok := l.Next(); tok.Type != tokens.Identifier {
-		t.Fatalf("next 1: expected Identifier, got %s", tok.Type)
-	}
-
-	if tok := l.Peek(0); tok.Type != tokens.Identifier {
-		t.Fatalf("peek(0) after first next: expected Identifier, got %s", tok.Type)
-	}
-
-	if tok := l.Peek(-1); tok != (tokens.Token{}) {
-		t.Fatalf("peek(-1) after first next: expected zero token, got %+v", tok)
-	}
-
-	if tok := l.Next(); tok.Type != tokens.Declaration {
-		t.Fatalf("next 2: expected Declaration, got %s", tok.Type)
+	l.Step()
+	if tok := l.This(); tok.Type != tokens.Declaration {
+		t.Fatalf("after step 1: expected Declaration, got %s", tok.Type)
 	}
 
 	if tok := l.Peek(-1); tok.Type != tokens.Identifier {
-		t.Fatalf("peek(-1) after second next: expected Identifier, got %s", tok.Type)
+		t.Fatalf("peek(-1) after step 1: expected Identifier, got %s", tok.Type)
 	}
 
 	if tok := l.Peek(-2); tok != (tokens.Token{}) {
-		t.Fatalf("peek(-2) after second next: expected zero token, got %+v", tok)
+		t.Fatalf("peek(-2) after step 1: expected zero token, got %+v", tok)
 	}
 
-	if tok := l.Next(); tok.Type != tokens.IntLiteral {
-		t.Fatalf("next 3: expected IntLiteral, got %s", tok.Type)
+	l.Step()
+	if tok := l.This(); tok.Type != tokens.IntLiteral {
+		t.Fatalf("after step 2: expected IntLiteral, got %s", tok.Type)
 	}
 
 	if tok := l.Peek(-1); tok.Type != tokens.Declaration {
-		t.Fatalf("peek(-1) after third next: expected Declaration, got %s", tok.Type)
+		t.Fatalf("peek(-1) after step 2: expected Declaration, got %s", tok.Type)
 	}
 
 	if tok := l.Peek(-2); tok.Type != tokens.Identifier {
-		t.Fatalf("peek(-2) after third next: expected Identifier, got %s", tok.Type)
+		t.Fatalf("peek(-2) after step 2: expected Identifier, got %s", tok.Type)
+	}
+}
+
+func TestStepAdvancesCurrentToken(t *testing.T) {
+	t.Parallel()
+
+	src := "x := 42"
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	if tok := l.This(); tok.Type != tokens.Identifier {
+		t.Fatalf("peek(0) after New: expected Identifier, got %+v", tok)
+	}
+
+	expected := []tokens.Type{
+		tokens.Declaration,
+		tokens.IntLiteral,
+		tokens.EOF,
+		tokens.EOF,
+	}
+
+	for i, want := range expected {
+		l.Step()
+
+		if got := l.This().Type; got != want {
+			t.Fatalf("after step %d: expected %s, got %s", i+1, want, got)
+		}
+	}
+}
+
+func TestSkipBody(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		src      string
+		wantType tokens.Type
+		wantLit  string
+	}{
+		{
+			name:     "simple body",
+			src:      `{ x := 42 } after`,
+			wantType: tokens.Identifier,
+			wantLit:  "after",
+		},
+		{
+			name:     "nested braces",
+			src:      `{ if true { nested } } after`,
+			wantType: tokens.Identifier,
+			wantLit:  "after",
+		},
+		{
+			name:     "body with strings containing braces",
+			src:      `{ x := "{}}" } after`,
+			wantType: tokens.Identifier,
+			wantLit:  "after",
+		},
+		{
+			name:     "body at EOF",
+			src:      `{ x := 1 }`,
+			wantType: tokens.EOF,
+		},
+		{
+			name:     "deeply nested",
+			src:      `{ { { { } } } } done`,
+			wantType: tokens.Identifier,
+			wantLit:  "done",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			l := New(strings.NewReader(tt.src), uint32(len(tt.src)), false)
+
+			if l.This().Type != tokens.LBrace {
+				t.Fatalf("expected LBrace, got %s", l.This().Type)
+			}
+
+			l.SkipBody()
+
+			got := l.This()
+			if got.Type != tt.wantType {
+				t.Fatalf("after SkipBody: expected %s, got %s", tt.wantType, got.Type)
+			}
+
+			if tt.wantLit != "" && got.Literal != tt.wantLit {
+				t.Fatalf("after SkipBody: expected literal %q, got %q", tt.wantLit, got.Literal)
+			}
+		})
+	}
+}
+
+func TestSkipBodyWithLookahead(t *testing.T) {
+	t.Parallel()
+
+	// Simulate lookahead before SkipBody (Peek fills ring buffer ahead).
+	src := `{ a } after`
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	// Fill lookahead slots.
+	_ = l.Peek(1) // 'a'
+	_ = l.Peek(2) // '}'
+
+	l.SkipBody()
+
+	got := l.This()
+	if got.Type != tokens.Identifier || got.Literal != "after" {
+		t.Fatalf("expected Identifier 'after', got %s %q", got.Type, got.Literal)
+	}
+}
+
+func TestOffset(t *testing.T) {
+	src := `foo bar baz`
+	//       0123456789...
+	// "foo" starts at 0, "bar" at 4, "baz" at 8
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	if off := l.Offset(); off != 0 {
+		t.Fatalf("expected offset 0 for 'foo', got %d", off)
+	}
+
+	l.Step() // advance to "bar"
+	if off := l.Offset(); off != 4 {
+		t.Fatalf("expected offset 4 for 'bar', got %d", off)
+	}
+
+	l.Step() // advance to "baz"
+	if off := l.Offset(); off != 8 {
+		t.Fatalf("expected offset 8 for 'baz', got %d", off)
+	}
+}
+
+func TestOffsetWithBraces(t *testing.T) {
+	src := `fn { body } after`
+	//       0123456789012345678
+	// "fn" at 0, "{" at 3, "body" at 5, "}" at 10, "after" at 12
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	l.Step() // advance to "{"
+	if got := l.This().Type; got != tokens.LBrace {
+		t.Fatalf("expected LBrace, got %s", got)
+	}
+	braceOffset := l.Offset()
+	if braceOffset != 3 {
+		t.Fatalf("expected offset 3 for '{', got %d", braceOffset)
+	}
+}
+
+func TestSeekTo(t *testing.T) {
+	src := `fn { body } after`
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	l.Step() // advance to "{"
+	braceOffset := l.Offset()
+
+	// Skip past the body.
+	l.SkipBody()
+	if got := l.This(); got.Type != tokens.Identifier || got.Literal != "after" {
+		t.Fatalf("after SkipBody: expected 'after', got %s %q", got.Type, got.Literal)
+	}
+
+	// Seek back to the '{'.
+	l.SeekTo(braceOffset)
+	if got := l.This().Type; got != tokens.LBrace {
+		t.Fatalf("after SeekTo: expected LBrace, got %s", got)
+	}
+
+	// Continue lexing from there.
+	l.Step() // "body"
+	if got := l.This(); got.Type != tokens.Identifier || got.Literal != "body" {
+		t.Fatalf("after SeekTo+Step: expected 'body', got %s %q", got.Type, got.Literal)
+	}
+}
+
+func TestSeekToMultiple(t *testing.T) {
+	src := `a { x } b { y } c`
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	// Find first '{' and record offset.
+	l.Step() // "{"
+	off1 := l.Offset()
+	l.SkipBody() // skip to "b"
+
+	// Find second '{' and record offset.
+	l.Step() // "{"
+	off2 := l.Offset()
+	l.SkipBody() // skip to "c"
+
+	// Seek to second body.
+	l.SeekTo(off2)
+	if got := l.This().Type; got != tokens.LBrace {
+		t.Fatalf("seek to off2: expected LBrace, got %s", got)
+	}
+	l.Step()
+	if got := l.This(); got.Type != tokens.Identifier || got.Literal != "y" {
+		t.Fatalf("seek to off2+Step: expected 'y', got %s %q", got.Type, got.Literal)
+	}
+
+	// Seek to first body.
+	l.SeekTo(off1)
+	if got := l.This().Type; got != tokens.LBrace {
+		t.Fatalf("seek to off1: expected LBrace, got %s", got)
+	}
+	l.Step()
+	if got := l.This(); got.Type != tokens.Identifier || got.Literal != "x" {
+		t.Fatalf("seek to off1+Step: expected 'x', got %s %q", got.Type, got.Literal)
 	}
 }

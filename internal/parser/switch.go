@@ -13,73 +13,71 @@ const switchCasePreallocationSize = 4
 func (p *Parser) parseSwitch(ctx context.Context) ast.NodeIndex {
 	var label *ast.Identifier
 
-	if p.prev().Type == tokens.Identifier && p.this().Type == tokens.Colon {
+	if p.lex.Peek(-1).Type == tokens.Identifier && p.lex.This().Type == tokens.Colon {
 		label = &ast.Identifier{
-			Token: p.prev(),
-			Name:  p.prev().Literal,
+			Token: p.lex.Peek(-1),
 		}
 
-		p.advance("parseSwitch :") // consume colon
+		p.lex.Step() // consume colon
 	}
 
-	p.advance("parseSwitch switch") // consume switch
+	p.lex.Step() // consume switch
 
-	switch p.this().Type {
+	switch p.lex.This().Type {
 	case tokens.Identifier:
 		return p.parseIdentSwitch(ctx, label)
 	case tokens.LBrace:
 		return p.parseBoolSwitch(ctx, label)
 	default:
-		p.error(p.this(), "unexpected token after switch", "parseSwitch")
+		p.error(p.lex.This(), "unexpected token after switch", "parseSwitch")
 		return ast.ZeroNodeIndex
 	}
 }
 
 func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast.NodeIndex {
-	switchToken := p.prev()
+	switchToken := p.lex.Peek(-1)
 
-	p.advance("parseBoolSwitch {") // consume {
+	p.lex.Step() // consume {
 
 	cases := make([]*ast.Case, 0, switchCasePreallocationSize)
 
-	for p.this().Type == tokens.Case {
-		caseNode := &ast.Case{
-			Token: p.this(),
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		t := p.lex.This()
+		if t.Type != tokens.Case {
+			break
 		}
 
-		p.advance("parseBoolSwitch case") // consume case
+		caseNode := &ast.Case{
+			Token: t,
+		}
+
+		p.lex.Step() // consume case
 
 		expr := p.expression(ctx, types.None)
 		if expr == ast.ZeroExprIndex {
-			p.error(p.this(), "unable to parse case expression", "parseBoolSwitch")
+			p.error(p.lex.This(), "unable to parse case expression", "parseBoolSwitch")
 			return ast.ZeroNodeIndex
 		}
 
 		caseNode.Condition = expr
 
-		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after case condition", "parseBoolSwitch")
+		if p.lex.This().Type != tokens.Colon {
+			p.error(p.lex.This(), "expected ':' after case condition", "parseBoolSwitch")
 			return ast.ZeroNodeIndex
 		}
 
-		p.advance("parseBoolSwitch case :") // consume :
+		p.lex.Step() // consume :
 
-		for !p.match(tokens.Case, tokens.Default, tokens.RBrace, tokens.EOF) {
-			if ctx.Err() != nil {
-				return ast.ZeroNodeIndex
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.match(p.lex.This(), tokens.Case, tokens.Default, tokens.RBrace) {
+				break
 			}
-
-			prev := p.i
 
 			stmt := p.parseStatement(ctx)
 			if stmt != ast.ZeroNodeIndex {
 				caseNode.Body = append(caseNode.Body, stmt)
 			} else {
-				p.synchronize()
-			}
-
-			if p.i == prev {
-				p.advance("parseBoolSwitch case recovery")
+				p.synchronize(ctx)
 			}
 		}
 
@@ -88,110 +86,103 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 
 	var def *ast.Default
 
-	if p.this().Type == tokens.Default {
+	if p.lex.This().Type == tokens.Default {
 		defaultNode := &ast.Default{
-			Token: p.this(),
+			Token: p.lex.This(),
 		}
 
-		p.advance("parseBoolSwitch default") // consume default
+		p.lex.Step() // consume default
 
-		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after default", "parseBoolSwitch")
+		if p.lex.This().Type != tokens.Colon {
+			p.error(p.lex.This(), "expected ':' after default", "parseBoolSwitch")
 			return ast.ZeroNodeIndex
 		}
 
-		p.advance("parseBoolSwitch default :") // consume :
+		p.lex.Step() // consume :
 
-		for !p.match(tokens.RBrace, tokens.EOF) {
-			if ctx.Err() != nil {
-				return ast.ZeroNodeIndex
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.lex.This().Type == tokens.RBrace {
+				break
 			}
-
-			prev := p.i
 
 			stmt := p.parseStatement(ctx)
 			if stmt != ast.ZeroNodeIndex {
 				defaultNode.Body = append(defaultNode.Body, stmt)
 			} else {
-				p.synchronize()
-			}
-
-			if p.i == prev {
-				p.advance("parseBoolSwitch default recovery")
+				p.synchronize(ctx)
 			}
 		}
 
 		def = defaultNode
 	}
 
-	p.advance("parseBoolSwitch }") // consume }
+	p.lex.Step() // consume }
 
 	return p.ast.NewSwitch(switchToken, label, nil, cases, def)
 }
 
 func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) ast.NodeIndex {
-	switchToken := p.prev()
+	switchToken := p.lex.Peek(-1)
 
-	symbol, ok := p.symbols.Resolve(p.this().Literal)
+	symbol, ok := p.symbols.Resolve(p.lex.This().Literal)
 	if !ok {
-		p.error(p.this(), "unknown identifier in switch expression", "parseIdentSwitch")
+		p.error(p.lex.This(), "unknown identifier in switch expression", "parseIdentSwitch")
 		return ast.ZeroNodeIndex
 	}
 
-	p.advance("parseIdentSwitch") // consume identifier
+	p.lex.Step() // consume identifier
 
-	if p.this().Type != tokens.LBrace {
-		p.error(p.this(), "expected '{' after switch expression", "parseIdentSwitch")
+	if p.lex.This().Type != tokens.LBrace {
+		p.error(p.lex.This(), "expected '{' after switch expression", "parseIdentSwitch")
 		return ast.ZeroNodeIndex
 	}
 
-	p.advance("parseIdentSwitch {") // consume {
+	p.lex.Step() // consume {
 
 	cases := make([]*ast.Case, 0, switchCasePreallocationSize)
 
-	for p.this().Type == tokens.Case {
-		caseNode := &ast.Case{
-			Token: p.this(),
+	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		t := p.lex.This()
+		if t.Type != tokens.Case {
+			break
 		}
 
-		p.advance("parseIdentSwitch case") // consume case
+		caseNode := &ast.Case{
+			Token: t,
+		}
+
+		p.lex.Step() // consume case
 
 		cond := p.expression(ctx, symbol.Type())
 		if cond == ast.ZeroExprIndex {
-			p.error(p.this(), "unable to parse case expression", "parseIdentSwitch")
+			p.error(p.lex.This(), "unable to parse case expression", "parseIdentSwitch")
 			return ast.ZeroNodeIndex
 		}
 
 		if p.ast.Expr(cond).Type() != symbol.Type() {
-			p.error(p.this(), "case condition type does not match switch expression type", "parseIdentSwitch")
+			p.error(p.lex.This(), "case condition type does not match switch expression type", "parseIdentSwitch")
 			return ast.ZeroNodeIndex
 		}
 
 		caseNode.Condition = cond
 
-		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after case condition", "parseIdentSwitch")
+		if p.lex.This().Type != tokens.Colon {
+			p.error(p.lex.This(), "expected ':' after case condition", "parseIdentSwitch")
 			return ast.ZeroNodeIndex
 		}
 
-		p.advance("parseIdentSwitch case :") // consume :
+		p.lex.Step() // consume :
 
-		for !p.match(tokens.Case, tokens.Default, tokens.RBrace, tokens.EOF) {
-			if ctx.Err() != nil {
-				return ast.ZeroNodeIndex
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.match(p.lex.This(), tokens.Case, tokens.Default, tokens.RBrace) {
+				break
 			}
-
-			prev := p.i
 
 			stmt := p.parseStatement(ctx)
 			if stmt != ast.ZeroNodeIndex {
 				caseNode.Body = append(caseNode.Body, stmt)
 			} else {
-				p.synchronize()
-			}
-
-			if p.i == prev {
-				p.advance("parseIdentSwitch case recovery")
+				p.synchronize(ctx)
 			}
 		}
 
@@ -200,43 +191,37 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 
 	var def *ast.Default
 
-	if p.this().Type == tokens.Default {
+	if p.lex.This().Type == tokens.Default {
 		defaultNode := &ast.Default{
-			Token: p.this(),
+			Token: p.lex.This(),
 		}
 
-		p.advance("parseIdentSwitch default") // consume default
+		p.lex.Step() // consume default
 
-		if p.this().Type != tokens.Colon {
-			p.error(p.this(), "expected ':' after default", "parseIdentSwitch")
+		if p.lex.This().Type != tokens.Colon {
+			p.error(p.lex.This(), "expected ':' after default", "parseIdentSwitch")
 			return ast.ZeroNodeIndex
 		}
 
-		p.advance("parseIdentSwitch default :") // consume :
+		p.lex.Step() // consume :
 
-		for !p.match(tokens.RBrace, tokens.EOF) {
-			if ctx.Err() != nil {
-				return ast.ZeroNodeIndex
+		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+			if p.lex.This().Type == tokens.RBrace {
+				break
 			}
-
-			prev := p.i
 
 			stmt := p.parseStatement(ctx)
 			if stmt != ast.ZeroNodeIndex {
 				defaultNode.Body = append(defaultNode.Body, stmt)
 			} else {
-				p.synchronize()
-			}
-
-			if p.i == prev {
-				p.advance("parseIdentSwitch default recovery")
+				p.synchronize(ctx)
 			}
 		}
 
 		def = defaultNode
 	}
 
-	p.advance("parseIdentSwitch }") // consume }
+	p.lex.Step() // consume }
 
 	return p.ast.NewSwitch(switchToken, label, symbol.Identifier, cases, def)
 }
