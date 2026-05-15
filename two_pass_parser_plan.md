@@ -50,66 +50,77 @@ Enable order-independent top-level value declarations. During `globalsPass`, whe
 
 ---
 
-## Phase 4 — Merge Parser Passes + Body Resolution
+## Phase 4 — Two-Pass Body Resolution
 
-Merge `FindGlobals` + `ParseOnly` into a single pass for `Parse()`. During this pass, procedure bodies are skipped (storing `DeferredBody` placeholders with byte offsets). After the pass completes (all symbols registered), `resolveDeferredBodies` seeks the lexer to each deferred offset and parses the block in-place. Multi-file path stays unchanged.
+**TL;DR**: Replace `FindGlobals` + `ParseOnly` with `ParseGlobals` (full parse, defers bodies) + `ParseBodies` (seeks to deferred offsets, parses bodies). Eliminates the redundant re-lex. Shared symbol table constraint preserved — ParseGlobals runs for ALL files before ParseBodies starts for ANY file.
+
+---
+
+**Pipeline**
+```
+ParseGlobals (all files, shared symbol table) →
+ValidateGlobals (after all files) →
+[compile imports, wire exports] →
+ParseBodies (all files) →
+Transpile (all files)
+```
 
 ---
 
 **Steps**
 
-### A. Parser State Setup
+### A. Body Deferral
 
-1. Add `currentReceiver *ast.Identifier` to `Parser` struct
-2. In `parseMethod`: set `p.currentReceiver = receiver` before `parseTypedDeclaration`, clear after (defer)
-3. Add `Receiver *ast.Identifier` field to `DeferredBody` — needed for scope reconstruction
-4. Update `NewDeferredBody` constructor to accept receiver param
+1. In `primary.go` Procedure case: when `globalsPass == true`, capture `Offset()`, call `SkipBody()`, store `DeferredBody` node as the body. Don't push param/typeParam scopes.
 
-### B. Defer Bodies During Globals Pass
+### B. Global Registration During ParseGlobals
 
-5. In primary.go Procedure case, add early-return when `p.globalsPass`:
-   - `offset := p.lex.Offset()` (byte offset of `{`)
-   - `p.lex.SkipBody()` (lands on token after `}`)
-   - Create `DeferredBody` with token + offset + receiver
-   - Return `NewProcedureLiteral(procToken, t, deferredIdx)`
-   - No scope pushes/pops needed
+2. `parseDeclaration`: when `globalsPass`, call `DefineGlobal` instead of `Define`
+3. `parseTypeAlias`: when `globalsPass`, call `DefineGlobal` instead of `Define`. Register early for recursive types.
+4. `parseMethod`: when `globalsPass`, call `DefineMethod` + attach to receiver struct. Body defers naturally via step A.
 
-### C. Restructure Parse()
+### C. Restructure API
 
-6. Extract core parsing logic from `ParseOnly` into private `parseFile(ctx, fileName) error`
-7. Rewrite `Parse()`: `globalsPass=true` → `parseFile` (no Reset) → `globalsPass=false` → `resolveDeferredBodies(ctx)`
-8. Rewrite `ParseOnly()`: Reset + `parseFile` (with `globalsPass=false`, no deferral)
+5. Rename `ParseOnly` → `ParseGlobals` — sets `globalsPass=true`, runs full parse, returns AST with DeferredBody placeholders
+6. Extract validation into `ValidateGlobals()` — checks unresolved forward stubs. Called by orchestrator after ALL files.
+7. New `ParseBodies(ctx) error` — walks AST nodes, finds DeferredBody, SeekTo offset, reconstructs scopes (type params → receiver → params), parses block, `SetNode` to replace
+8. Remove `FindGlobals()` — subsumed by ParseGlobals
 
-### D. Implement resolveDeferredBodies (*depends on A, B, C*)
+### D. DeferredBody Metadata
 
-9. New file internal/parser/resolve.go:
-   - Iterate all exprs (`1..LenExprs()`), find `ProcedureLiteral` with `DeferredBody` body
-   - For each: `SeekTo(db.Offset)`, push receiver/typeParam/param scopes, set `currentReturnType`, call `parseBlockStatement`, pop scopes, `SetNode` to replace
+9. Add `Receiver *ast.Identifier` to `DeferredBody` — needed to reconstruct receiver scope during ParseBodies
+10. Type params + params accessible from `ProcedureLiteral.ProcedureType` (no extra storage needed)
 
-### E. Cleanup
+### E. Orchestrator (cmd/main.go)
 
-10. Remove `FindGlobals()` call from `Parse()` — single-file no longer needs it
-11. Keep `FindGlobals()` intact for multi-file external callers
+11. Replace `findGlobals()` + `ParseOnly()` with `ParseGlobals()` per file → `ValidateGlobals()` → import compilation → `ParseBodies()` per file
+12. `Parse()` convenience (tests): does ParseGlobals + ValidateGlobals + ParseBodies sequentially
+
+### F. Cleanup
+
+13. Remove `findGlobalDecl`, `findGlobalType`, `findGlobalMethod`, `findScriptImports`
+14. Remove/repurpose `globals.go` (keep only `ValidateGlobals`)
 
 ---
 
 **Relevant files**
-
-- parser.go — restructure `Parse()`/`ParseOnly()`, extract `parseFile()`
-- primary.go — globalsPass early-return in Procedure case (~line 497)
-- method.go — set/clear `currentReceiver` (line ~89)
-- deferred_body.go — add `Receiver` field, update constructor
-- New: `internal/parser/resolve.go` — `resolveDeferredBodies` implementation
+- primary.go — body deferral in `case *types.Procedure` (~line 497)
+- declaration.go — `DefineGlobal` when `globalsPass`
+- method.go — `DefineMethod` + struct attachment during `globalsPass`
+- parser.go — rename `ParseOnly`→`ParseGlobals`, new `ParseBodies`, update `Parse`
+- globals.go — extract `ValidateGlobals`, delete rest
+- deferred_body.go — add `Receiver` field
+- main.go — orchestrator restructure
 
 **Verification**
-
 1. `task vet`
-2. `task test` — existing tests cover both single-file (`Parse`) and multi-file (`FindGlobals` + `ParseOnly`) paths
+2. `task test` — covers single-file (`Parse`) and multi-file paths
+3. Manually verify forward refs across files still resolve
+4. Verify method bodies can reference other methods (forward + cross-file)
 
 **Decisions**
-
-- `DeferredBody` stores receiver (not `ProcedureLiteral`) — only needed during resolution, `DeferredBody` is transient
-- Multi-file path unchanged — `FindGlobals` + `ParseOnly` kept for external callers
-- Script mode — body deferral fires mechanically (same code path), but scripts don't benefit from it since they enforce definition order (no forward refs). Import scanning happens inline during `parseFile` — imports are parsed as encountered, same timing as current `ParseOnly`.
-- Forward alias mechanism handles type forward references during `globalsPass=true`
-- Forward value references (Phase 3) handle value forward references during `globalsPass=true` — stubs resolve when the real declaration is encountered
+- `ParseGlobals` replaces BOTH `FindGlobals` and `ParseOnly` (single lex pass per file)
+- Validation after ALL files (not per-file) — cross-file forward stubs resolve during other files' ParseGlobals
+- DeferredBody is transient — replaced by SetNode during ParseBodies
+- Script mode unchanged — bodies still deferred mechanically, definition order still enforced
+- `Parse()` kept as convenience for tests (all 3 steps on single parser)
