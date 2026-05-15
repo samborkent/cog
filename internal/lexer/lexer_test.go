@@ -798,3 +798,87 @@ func TestStepAdvancesCurrentToken(t *testing.T) {
 		}
 	}
 }
+
+func TestSkipBody(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		src      string
+		wantType tokens.Type
+		wantLit  string
+	}{
+		{
+			name:     "simple body",
+			src:      `{ x := 42 } after`,
+			wantType: tokens.Identifier,
+			wantLit:  "after",
+		},
+		{
+			name:     "nested braces",
+			src:      `{ if true { nested } } after`,
+			wantType: tokens.Identifier,
+			wantLit:  "after",
+		},
+		{
+			name:     "body with strings containing braces",
+			src:      `{ x := "{}}" } after`,
+			wantType: tokens.Identifier,
+			wantLit:  "after",
+		},
+		{
+			name:     "body at EOF",
+			src:      `{ x := 1 }`,
+			wantType: tokens.EOF,
+		},
+		{
+			name:     "deeply nested",
+			src:      `{ { { { } } } } done`,
+			wantType: tokens.Identifier,
+			wantLit:  "done",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			l := New(strings.NewReader(tt.src), uint32(len(tt.src)), false)
+
+			if l.This().Type != tokens.LBrace {
+				t.Fatalf("expected LBrace, got %s", l.This().Type)
+			}
+
+			l.SkipBody()
+
+			got := l.This()
+			if got.Type != tt.wantType {
+				t.Fatalf("after SkipBody: expected %s, got %s", tt.wantType, got.Type)
+			}
+
+			if tt.wantLit != "" && got.Literal != tt.wantLit {
+				t.Fatalf("after SkipBody: expected literal %q, got %q", tt.wantLit, got.Literal)
+			}
+		})
+	}
+}
+
+func TestSkipBodyWithLookahead(t *testing.T) {
+	t.Parallel()
+
+	// Simulate lookahead before SkipBody (Peek fills ring buffer ahead).
+	src := `{ a } after`
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	// Fill lookahead slots.
+	_ = l.Peek(1) // 'a'
+	_ = l.Peek(2) // '}'
+
+	l.SkipBody()
+
+	got := l.This()
+	if got.Type != tokens.Identifier || got.Literal != "after" {
+		t.Fatalf("expected Identifier 'after', got %s %q", got.Type, got.Literal)
+	}
+}

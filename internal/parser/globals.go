@@ -49,9 +49,6 @@ func (p *Parser) FindGlobals(ctx context.Context) {
 		return
 	}
 
-	// // Pre-register all type names so forward references can be resolved.
-	// p.preRegisterTypeNames(ctx)
-
 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 		t := p.lex.This()
 		exported := false
@@ -171,66 +168,6 @@ func (p *Parser) findScriptImports(ctx context.Context) {
 	}
 }
 
-// func (p *Parser) preRegisterTypeNames(ctx context.Context) {
-// 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
-// 		t := p.lex.This()
-// 		exported := false
-
-// 		if t.Type == tokens.Export {
-// 			if p.scriptMode {
-// 				p.lex.Step()
-// 				continue
-// 			}
-
-// 			p.lex.Step() // consume export
-
-// 			exported = true
-// 		}
-
-// 		tok := p.lex.This()
-
-// 		// Skip qualifiers (types can't have dyn/var but scan past them)
-// 		if tok.Type == tokens.Dynamic || tok.Type == tokens.Variable {
-// 			p.lex.Step() // consume qualifier
-// 		}
-
-// 		if p.lex.This().Type == tokens.Identifier &&
-// 			(p.lex.Peek(1).Type == tokens.Tilde || p.isGenericTypeDecl()) {
-// 			ident := &ast.Identifier{
-// 				Token:    p.lex.This(),
-// 				Exported: exported,
-// 				// Qualifier defaults to QualifierType (zero value)
-// 				Global: true,
-// 			}
-
-// 			p.symbols.DefineGlobal(ident)
-
-// 			p.lex.Step() // consume token
-
-// 			// Skip type parameters in procedure/function declarations during pre-registration.
-// 			if p.lex.This().Type == tokens.LT {
-// 				p.skipTypeParams(ctx)
-// 			}
-
-// 			continue
-// 		}
-
-// 		// Skip type parameters in procedure/function declarations during pre-registration.
-// 		if (p.lex.This().Type == tokens.Procedure || p.lex.This().Type == tokens.Function) &&
-// 			p.lex.Peek(1).Type == tokens.LT {
-// 			p.lex.Step() // consume token
-// 			p.skipTypeParams(ctx)
-
-// 			continue
-// 		}
-
-// 		p.lex.Step() // consume token
-// 	}
-
-// 	p.lex.Reset()
-// 	p.Errs = p.Errs[:0]
-// }
-
 func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier ast.Qualifier) {
 	if p.lex.This().Type != tokens.Identifier {
 		return
@@ -270,7 +207,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 					p.lex.Step() // consume =
 
 					if p.lex.This().Type == tokens.LBrace {
-						p.skipScope(ctx)
+						p.lex.SkipBody()
 					}
 				}
 
@@ -284,7 +221,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 			p.lex.Step() // consume =
 
 			if p.lex.This().Type == tokens.LBrace {
-				p.skipScope(ctx)
+				p.lex.SkipBody()
 			} else {
 				_ = p.expression(ctx, ident.ValueType)
 			}
@@ -296,7 +233,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 			p.lex.Step() // consume :=
 
 			if p.lex.This().Type == tokens.LBrace {
-				p.skipScope(ctx)
+				p.lex.SkipBody()
 			}
 
 			return
@@ -306,7 +243,7 @@ func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier as
 		p.symbols.DefineGlobal(ident)
 
 		if p.lex.This().Type == tokens.LBrace {
-			p.skipScope(ctx)
+			p.lex.SkipBody()
 		} else {
 			_ = p.expression(ctx, types.None)
 		}
@@ -493,25 +430,6 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 	}
 }
 
-func (p *Parser) skipScope(ctx context.Context) {
-	braceIndex := 0
-
-	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
-		switch p.lex.This().Type {
-		case tokens.LBrace:
-			braceIndex++
-		case tokens.RBrace:
-			braceIndex--
-		}
-
-		p.lex.Step()
-
-		if braceIndex == 0 {
-			return
-		}
-	}
-}
-
 func (p *Parser) skipGrouped(ctx context.Context) {
 	parenIndex := 0
 
@@ -584,7 +502,7 @@ func (p *Parser) findGlobalMethod(ctx context.Context, exported bool) {
 
 	p.lex.Step() // consume =
 
-	p.skipScope(ctx)
+	p.lex.SkipBody()
 
 	// Register the method in the symbol table so it's available for forward references.
 	if err := p.symbols.DefineMethod(receiverName, methodIdent); err != nil {

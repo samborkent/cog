@@ -76,6 +76,57 @@ func (l *Lexer) Reset() {
 	l.Step()
 }
 
+// SkipBody skips over a brace-delimited body using the raw scanner without
+// producing full Token objects. Must be called when This() is the opening '{'.
+// After return, This() is the first token after the closing '}'.
+func (l *Lexer) SkipBody() {
+	depth := 1
+	s := l.scan
+
+	// Drain any cached lookahead tokens the scanner already produced.
+	for i := 1; i <= 3; i++ {
+		idx := l.windowIndex(i)
+		tok := l.window[idx]
+		if tok == (tokens.Token{}) || tok.Type == tokens.EOF {
+			break
+		}
+
+		switch tok.Type {
+		case tokens.LBrace:
+			depth++
+		case tokens.RBrace:
+			depth--
+			if depth == 0 {
+				goto done
+			}
+		}
+	}
+
+	// Continue with raw scanner — only inspect braces.
+	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
+		if l.scanErr {
+			l.scanErr = false
+			continue
+		}
+
+		switch tok {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				goto done
+			}
+		}
+	}
+
+done:
+	// Clear ring buffer and prime with the next token after '}'.
+	l.window = [windowSize]tokens.Token{}
+	l.cursor = 0
+	l.window[0] = l.scanNext()
+}
+
 // Step advances the lexer cursor by one token.
 // The current token after stepping can be read with Peek(0).
 func (l *Lexer) Step() {
