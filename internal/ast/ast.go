@@ -123,6 +123,12 @@ func (a *AST) Node(i NodeIndex) Node {
 	return a.nodes[i]
 }
 
+// SetNode replaces the node at the given index.
+// Panics if the index is out of bounds.
+func (a *AST) SetNode(i NodeIndex, n Node) {
+	a.nodes[i] = n
+}
+
 // LenNodes returns the number of nodes in the AST.
 func (a *AST) LenNodes() int {
 	return len(a.nodes) - 1

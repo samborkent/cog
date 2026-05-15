@@ -53,9 +53,11 @@ main : proc() = {
 			t.Fatalf("expected ProcedureLiteral, got %T", d.Assignment.Expr)
 		}
 
-		varDecl, ok := f.Node(proc.Body.Statements[0]).(*ast.Declaration)
+		block := f.Node(proc.Body).(*ast.Block)
+
+		varDecl, ok := f.Node(block.Statements[0]).(*ast.Declaration)
 		if !ok {
-			t.Fatalf("expected Declaration, got %T", proc.Body.Statements[0])
+			t.Fatalf("expected Declaration, got %T", f.Node(block.Statements[0]))
 		}
 
 		if varDecl.Assignment.Identifier.Qualifier != ast.QualifierVariable {

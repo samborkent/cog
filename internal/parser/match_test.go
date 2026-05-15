@@ -28,7 +28,7 @@ main : proc() = {}`)
 		decl := stmtAs[*ast.Declaration](t, f, 0)
 
 		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
-		block := procLit.Body
+		block := f.Node(procLit.Body).(*ast.Block)
 
 		if len(block.Statements) == 0 {
 			t.Fatal("expected statements in function body")
@@ -73,7 +73,7 @@ main : proc() = {}`)
 		decl := stmtAs[*ast.Declaration](t, f, 0)
 
 		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
-		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
+		matchStmt := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Match)
 
 		if matchStmt.Binding == nil {
 			t.Fatal("expected binding")
@@ -105,7 +105,7 @@ main : proc() = {}`)
 		decl := stmtAs[*ast.Declaration](t, f, 0)
 
 		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
-		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
+		matchStmt := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Match)
 
 		if len(matchStmt.Cases) != 1 {
 			t.Fatalf("expected 1 case, got %d", len(matchStmt.Cases))
@@ -133,7 +133,7 @@ main : proc() = {}`)
 		decl := stmtAs[*ast.Declaration](t, f, 0)
 
 		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
-		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
+		matchStmt := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Match)
 
 		if !matchStmt.Cases[0].Tilde {
 			t.Error("expected tilde flag to be true")
@@ -177,7 +177,7 @@ main : proc() = {}`)
 		decl := stmtAs[*ast.Declaration](t, f, 0)
 
 		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
-		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
+		matchStmt := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Match)
 
 		if len(matchStmt.Cases[0].Body) != 2 {
 			t.Errorf("expected 2 statements in first case, got %d", len(matchStmt.Cases[0].Body))
@@ -205,7 +205,7 @@ main : proc() = {}`)
 		decl := stmtAs[*ast.Declaration](t, f, 0)
 
 		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
-		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
+		matchStmt := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Match)
 
 		if len(matchStmt.Cases) != 2 {
 			t.Fatalf("expected 2 cases, got %d", len(matchStmt.Cases))
@@ -229,7 +229,7 @@ main : proc() = {}`)
 		decl := stmtAs[*ast.Declaration](t, f, 0)
 
 		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
-		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
+		matchStmt := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Match)
 
 		if matchStmt.Token.Type != tokens.Match {
 			t.Errorf("expected token type Match, got %s", matchStmt.Token.Type)
@@ -257,7 +257,7 @@ main : proc() = {}`)
 		decl := stmtAs[*ast.Declaration](t, f, 0)
 
 		procLit := f.Expr(decl.Assignment.Expr).(*ast.ProcedureLiteral)
-		matchStmt := f.Node(procLit.Body.Statements[0]).(*ast.Match)
+		matchStmt := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Match)
 
 		matchCase := matchStmt.Cases[0]
 

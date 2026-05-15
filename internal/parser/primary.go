@@ -538,7 +538,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				return ast.ZeroExprIndex
 			}
 
-			return p.ast.NewProcedureLiteral(procToken, t, body)
+			return p.ast.NewProcedureLiteral(procToken, t, p.ast.AddNode(body))
 		case *types.Set:
 			setToken := p.lex.This()
 			values := make([]ast.ExprIndex, 0, setLiteralPreallocationSize)

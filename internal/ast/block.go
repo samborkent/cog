@@ -13,6 +13,14 @@ type Block struct {
 	Statements []NodeIndex
 }
 
+func (a *AST) NewBlock(start, end tokens.Token, stmts []NodeIndex) NodeIndex {
+	block := New[Block](a)
+	block.Start = start
+	block.End = end
+	block.Statements = stmts
+	return a.AddNode(block)
+}
+
 func (n *Block) Pos() (uint32, uint16) {
 	return n.Start.Ln, n.Start.Col
 }

@@ -173,7 +173,7 @@ main : proc() = {}`)
 			t.Fatal("expected ProcedureLiteral")
 		}
 
-		ret, ok := f.Node(procLit.Body.Statements[0]).(*ast.Return)
+		ret, ok := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Return)
 		if !ok {
 			t.Fatal("expected Return statement")
 		}
@@ -205,7 +205,7 @@ main : proc() = {}`)
 			t.Fatal("expected ProcedureLiteral")
 		}
 
-		ret, ok := f.Node(procLit.Body.Statements[0]).(*ast.Return)
+		ret, ok := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Return)
 		if !ok {
 			t.Fatal("expected Return statement")
 		}
@@ -240,7 +240,7 @@ main : proc() = {}`)
 			t.Fatal("expected ProcedureLiteral")
 		}
 
-		ret, ok := f.Node(procLit.Body.Statements[0]).(*ast.Return)
+		ret, ok := f.Node(f.Node(procLit.Body).(*ast.Block).Statements[0]).(*ast.Return)
 		if !ok {
 			t.Fatal("expected Return statement")
 		}

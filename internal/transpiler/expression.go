@@ -715,9 +715,11 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			X:  right,
 		}, nil
 	case *ast.ProcedureLiteral:
-		stmts := make([]goast.Stmt, 0, len(n.Body.Statements))
+		body := t.Node(n.Body).(*ast.Block)
 
-		if len(n.Body.Statements) > 0 {
+		stmts := make([]goast.Stmt, 0, len(body.Statements))
+
+		if len(body.Statements) > 0 {
 			// Enter body scope.
 			t.symbols = NewEnclosedSymbolTable(t.symbols)
 		}
@@ -748,7 +750,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			t.inFunc = false
 		}
 
-		for _, s := range n.Body.Statements {
+		for _, s := range body.Statements {
 			stmt, err := t.convertStmt(t.Node(s))
 			if err != nil {
 				return nil, err
@@ -757,7 +759,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			stmts = append(stmts, stmt...)
 		}
 
-		if len(n.Body.Statements) > 0 {
+		if len(body.Statements) > 0 {
 			// Leave body scope.
 			t.symbols = t.symbols.Outer
 		}
