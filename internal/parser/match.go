@@ -78,7 +78,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 
 	p.lex.Step() // consume {
 
-	cases := make([]*ast.MatchCase, 0)
+	cases := make([]*ast.MatchCase, 0, matchPreallocationSize)
 
 	for p.lex.This().Type == tokens.Case {
 		caseNode := &ast.MatchCase{

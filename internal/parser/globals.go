@@ -610,22 +610,3 @@ func (p *Parser) findGlobalMethod(ctx context.Context, exported bool) {
 		}
 	}
 }
-
-func (p *Parser) skipTypeParams(ctx context.Context) {
-	parenIndex := 0
-
-	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
-		switch p.lex.This().Type {
-		case tokens.LT:
-			parenIndex++
-		case tokens.GT:
-			parenIndex--
-		}
-
-		p.lex.Step()
-
-		if parenIndex == 0 {
-			return
-		}
-	}
-}

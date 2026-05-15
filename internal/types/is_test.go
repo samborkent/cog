@@ -2,15 +2,6 @@ package types
 
 import "testing"
 
-// mockExpr implements the unexported expression interface for testing Array.Length.
-type mockExpr struct {
-	str string
-	typ Type
-}
-
-func (m mockExpr) String() string { return m.str }
-func (m mockExpr) Type() Type     { return m.typ }
-
 func TestEqual(t *testing.T) {
 	t.Parallel()
 

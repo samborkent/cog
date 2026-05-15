@@ -572,7 +572,7 @@ func goModCacheDir(t testing.TB, module string) string {
 	}
 
 	// Extract "Dir" from the JSON output.
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, `"Dir"`) {
 			parts := strings.SplitN(line, ":", 2)
