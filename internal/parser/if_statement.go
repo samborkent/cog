@@ -55,7 +55,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 	persistsAfterIf := checkedVar != "" && !negated
 
 	// Save check state before modifying, so scoped checks can be restored.
-	prevState, hadPrevState := p.symbols.checked[checkedVar]
+	prevState, hadPrevState := p.symbols.checked.Load(checkedVar)
 
 	if checkedVar != "" && !negated {
 		// Direct check: value safe in consequence.
@@ -69,9 +69,9 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 
 	if checkedVar != "" && !persistsAfterIf {
 		if hadPrevState {
-			p.symbols.checked[checkedVar] = prevState
+			p.symbols.checked.Store(checkedVar, prevState)
 		} else {
-			delete(p.symbols.checked, checkedVar)
+			p.symbols.checked.Delete(checkedVar)
 		}
 	}
 
@@ -106,9 +106,9 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 
 		if checkedVar != "" && negated {
 			if hadPrevState {
-				p.symbols.checked[checkedVar] = prevState
+				p.symbols.checked.Store(checkedVar, prevState)
 			} else {
-				delete(p.symbols.checked, checkedVar)
+				p.symbols.checked.Delete(checkedVar)
 			}
 		}
 

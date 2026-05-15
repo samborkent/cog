@@ -253,7 +253,7 @@ func (p *Parser) findProcedureLiteralForBody(bodyIdx ast.NodeIndex) *ast.Procedu
 func (p *Parser) ValidateGlobals() error {
 	var errs []error
 
-	for name, sym := range p.symbols.table {
+	for name, sym := range p.symbols.table.All() {
 		if sym.Scope == ScanScope && sym.Identifier.Qualifier == ast.QualifierType &&
 			types.IsNone(sym.Identifier.ValueType) {
 			errs = append(errs, fmt.Errorf("%d:%d: undefined type: %s",
@@ -261,7 +261,7 @@ func (p *Parser) ValidateGlobals() error {
 		}
 	}
 
-	for name, sym := range p.symbols.table {
+	for name, sym := range p.symbols.table.All() {
 		if sym.Scope == ScanScope && sym.Identifier.Qualifier != ast.QualifierType &&
 			types.IsNone(sym.Identifier.ValueType) {
 			errs = append(errs, fmt.Errorf("%d:%d: undefined identifier: %s",

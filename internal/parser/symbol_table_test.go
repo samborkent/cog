@@ -276,15 +276,15 @@ func TestCogImports(t *testing.T) {
 	s.DefineCogImport(&CogImport{Path: "b/c", Name: "c", Exports: make(map[string]Symbol)})
 
 	imports := s.CogImports()
-	if len(imports) != 2 {
-		t.Fatalf("expected 2 imports, got %d", len(imports))
+	if imports.Len() != 2 {
+		t.Fatalf("expected 2 imports, got %d", imports.Len())
 	}
 
-	if _, ok := imports["a"]; !ok {
+	if _, ok := imports.Load("a"); !ok {
 		t.Error("missing import a")
 	}
 
-	if _, ok := imports["c"]; !ok {
+	if _, ok := imports.Load("c"); !ok {
 		t.Error("missing import c")
 	}
 }

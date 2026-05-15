@@ -200,7 +200,7 @@ func compileProject(t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
 		_, pkgSymbols := compilePackage(t, pkg)
 
 		// Find the CogImport in the entry symbol table that matches this package.
-		for _, imp := range entrySymbols.CogImports() {
+		for _, imp := range entrySymbols.CogImports().All() {
 			if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
 				populateImportExports(imp, pkgSymbols)
 			}
@@ -280,7 +280,7 @@ func BenchmarkParsing(b *testing.B) {
 		for _, pkg := range imported {
 			_, pkgSymbols := compilePackage(b, pkg)
 
-			for _, imp := range entrySymbols.CogImports() {
+			for _, imp := range entrySymbols.CogImports().All() {
 				if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
 					populateImportExports(imp, pkgSymbols)
 				}
@@ -399,7 +399,7 @@ func BenchmarkFullPipeline(b *testing.B) {
 		for _, pkg := range imported {
 			_, pkgSymbols := compilePackage(b, pkg)
 
-			for _, imp := range entrySymbols.CogImports() {
+			for _, imp := range entrySymbols.CogImports().All() {
 				if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
 					populateImportExports(imp, pkgSymbols)
 				}
@@ -600,7 +600,7 @@ func BenchmarkLargeFile(b *testing.B) {
 		for _, pkg := range imported {
 			_, pkgSymbols := compilePackage(b, pkg)
 
-			for _, imp := range entrySymbols.CogImports() {
+			for _, imp := range entrySymbols.CogImports().All() {
 				if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
 					populateImportExports(imp, pkgSymbols)
 				}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/samborkent/cog/internal/ast"
+	"github.com/samborkent/cog/internal/htm"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
@@ -44,27 +45,27 @@ const (
 type SymbolTable struct {
 	Outer *SymbolTable
 
-	table      map[string]Symbol
-	goimports  map[string]*ast.Identifier
-	cogimports map[string]*CogImport // key: package name
-	fields     map[string]map[string]Symbol
-	checked    map[string]checkState // option/result variables verified in this scope
+	table      *htm.Map[string, Symbol]
+	goimports  *htm.Map[string, *ast.Identifier] // key: package name
+	cogimports *htm.Map[string, *CogImport]      // key: package name
+	fields     *htm.Map[string, *htm.Map[string, Symbol]]
+	checked    *htm.Map[string, checkState] // option/result variables verified in this scope
 }
 
 func NewSymbolTable() *SymbolTable {
-	table := make(map[string]Symbol)
+	table := htm.NewMap[string, Symbol]()
 
-	table["_"] = Symbol{
+	table.Store("_", Symbol{
 		Identifier: None,
 		Scope:      LocalScope,
-	}
+	})
 
 	return &SymbolTable{
 		table:      table,
-		goimports:  make(map[string]*ast.Identifier),
-		cogimports: make(map[string]*CogImport),
-		fields:     make(map[string]map[string]Symbol),
-		checked:    make(map[string]checkState),
+		goimports:  htm.NewMap[string, *ast.Identifier](),
+		cogimports: htm.NewMap[string, *CogImport](),
+		fields:     htm.NewMap[string, *htm.Map[string, Symbol]](),
+		checked:    htm.NewMap[string, checkState](),
 	}
 }
 
@@ -95,7 +96,7 @@ func (s *SymbolTable) Define(ident *ast.Identifier) {
 		symbol.Scope = GlobalScope
 	}
 
-	s.table[ident.Token.Literal] = symbol
+	s.table.Store(ident.Token.Literal, symbol)
 
 	// TODO: investigate why this check was here
 	// if ident.Qualifier != ast.QualifierType {
@@ -106,15 +107,16 @@ func (s *SymbolTable) Define(ident *ast.Identifier) {
 			break
 		}
 
-		_, ok = s.fields[ident.Token.Literal]
+		_, ok = s.fields.Load(ident.Token.Literal)
 		if ok {
 			break
 		}
 
-		s.fields[ident.Token.Literal] = make(map[string]Symbol, len(structType.Fields))
+		fields := htm.NewMap[string, Symbol]()
+		s.fields.Store(ident.Token.Literal, fields)
 
 		for _, field := range structType.Fields {
-			s.fields[ident.Token.Literal][field.Name] = Symbol{
+			fields.Store(field.Name, Symbol{
 				Identifier: &ast.Identifier{
 					Token: tokens.Token{
 						Type:    tokens.Identifier,
@@ -124,7 +126,7 @@ func (s *SymbolTable) Define(ident *ast.Identifier) {
 					Exported:  field.Exported,
 				},
 				Scope: StructScope,
-			}
+			})
 		}
 	}
 	// }
@@ -135,20 +137,21 @@ func (s *SymbolTable) DefineMethod(receiver string, method *ast.Identifier) erro
 		panic("DefineMethod may only be called for method identifiers")
 	}
 
-	_, ok := s.fields[receiver]
+	fields, ok := s.fields.Load(receiver)
 	if !ok {
-		s.fields[receiver] = make(map[string]Symbol)
+		fields = htm.NewMap[string, Symbol]()
+		s.fields.Store(receiver, fields)
 	}
 
-	_, ok = s.fields[receiver][method.Token.Literal]
+	_, ok = fields.Load(method.Token.Literal)
 	if ok {
 		return fmt.Errorf("method name conflict: field with name %q already exists for type %q", method.String(), receiver)
 	}
 
-	s.fields[receiver][method.Token.Literal] = Symbol{
+	fields.Store(method.Token.Literal, Symbol{
 		Identifier: method,
 		Scope:      StructScope,
-	}
+	})
 
 	return nil
 }
@@ -158,15 +161,16 @@ func (s *SymbolTable) DefineEnumValue(selector string, field *ast.Identifier) {
 		panic("empty enum value identifier")
 	}
 
-	_, ok := s.fields[selector]
+	fields, ok := s.fields.Load(selector)
 	if !ok {
-		s.fields[selector] = make(map[string]Symbol)
+		fields = htm.NewMap[string, Symbol]()
+		s.fields.Store(selector, fields)
 	}
 
-	s.fields[selector][field.Token.Literal] = Symbol{
+	fields.Store(field.Token.Literal, Symbol{
 		Identifier: field,
 		Scope:      EnumScope,
-	}
+	})
 }
 
 func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
@@ -174,9 +178,8 @@ func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
 	// forward references), resolve it by copying the real declaration's
 	// info into the existing stub. All expression nodes referencing the
 	// stub share the same pointer, so mutating it updates all referents.
-	if existing, ok := s.table[ident.Token.Literal]; ok &&
-		existing.Scope == ScanScope &&
-		types.IsNone(existing.Identifier.ValueType) {
+	existing, ok := s.table.Load(ident.Token.Literal)
+	if ok && existing.Scope == ScanScope && types.IsNone(existing.Identifier.ValueType) {
 		existing.Identifier.ValueType = ident.ValueType
 		existing.Identifier.Qualifier = ident.Qualifier
 		existing.Identifier.Exported = ident.Exported
@@ -184,10 +187,12 @@ func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
 		// Register struct fields so selectors (e.g. val.x) resolve.
 		if ident.ValueType != nil && ident.ValueType.Kind() == types.StructKind {
 			if st, ok := ident.ValueType.Underlying().(*types.Struct); ok {
-				if _, exists := s.fields[ident.Token.Literal]; !exists {
-					s.fields[ident.Token.Literal] = make(map[string]Symbol, len(st.Fields))
+				if _, exists := s.fields.Load(ident.Token.Literal); !exists {
+					fields := htm.NewMap[string, Symbol]()
+					s.fields.Store(ident.Token.Literal, fields)
+
 					for _, field := range st.Fields {
-						s.fields[ident.Token.Literal][field.Name] = Symbol{
+						fields.Store(field.Name, Symbol{
 							Identifier: &ast.Identifier{
 								Token: tokens.Token{
 									Type:    tokens.Identifier,
@@ -197,7 +202,7 @@ func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
 								Exported:  field.Exported,
 							},
 							Scope: StructScope,
-						}
+						})
 					}
 				}
 			}
@@ -207,9 +212,14 @@ func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
 	}
 
 	s.Define(ident)
-	symbol := s.table[ident.Token.Literal]
+
+	symbol, ok := s.table.Load(ident.Token.Literal)
+	if !ok {
+		panic("symbol not found after definition")
+	}
+
 	symbol.Scope = ScanScope
-	s.table[ident.Token.Literal] = symbol
+	s.table.Store(ident.Token.Literal, symbol)
 }
 
 func (s *SymbolTable) DefineGoImport(ident *ast.Identifier) {
@@ -221,11 +231,11 @@ func (s *SymbolTable) DefineGoImport(ident *ast.Identifier) {
 		ident.ValueType = types.None
 	}
 
-	s.goimports[ident.Token.Literal] = ident
+	s.goimports.Store(ident.Token.Literal, ident)
 }
 
 func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
-	obj, ok := s.table[name]
+	obj, ok := s.table.Load(name)
 	if !ok && s.Outer != nil {
 		obj, ok = s.Outer.Resolve(name)
 		if !ok {
@@ -239,24 +249,20 @@ func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
 }
 
 func (s *SymbolTable) ResolveField(typeName, field string) (Symbol, bool) {
-	fields, ok := s.fields[typeName]
-	if !ok && s.Outer != nil {
-		symbol, ok := s.Outer.ResolveField(typeName, field)
-		if !ok {
-			return Symbol{}, false
+	fields, ok := s.fields.Load(typeName)
+	if !ok {
+		if s.Outer != nil {
+			return s.Outer.ResolveField(typeName, field)
 		}
 
-		return symbol, true
+		return Symbol{}, false
 	}
 
-	symbol, ok := fields[field]
-
-	return symbol, ok
+	return fields.Load(field)
 }
 
 func (s *SymbolTable) ResolveGoImport(name string) (*ast.Identifier, bool) {
-	ident, ok := s.goimports[name]
-	return ident, ok
+	return s.goimports.Load(name)
 }
 
 // ForEachGlobal iterates over all symbols in the root (global) table.
@@ -266,45 +272,45 @@ func (s *SymbolTable) ForEachGlobal(fn func(name string, sym Symbol)) {
 		root = root.Outer
 	}
 
-	for name, sym := range root.table {
+	for name, sym := range root.table.All() {
 		fn(name, sym)
 	}
 }
 
 func (s *SymbolTable) Update(name string, t types.Type) {
-	if symbol, ok := s.table[name]; ok {
+	if symbol, ok := s.table.Load(name); ok {
 		symbol.Identifier.ValueType = t
-		s.table[name] = symbol
+		// TODO: redundant because identifier is pointer?
+		s.table.Store(name, symbol)
 	}
 }
 
 func (s *SymbolTable) DefineCogImport(imp *CogImport) {
-	s.cogimports[imp.Name] = imp
+	s.cogimports.Store(imp.Name, imp)
 }
 
 func (s *SymbolTable) ResolveCogImport(name string) (*CogImport, bool) {
-	imp, ok := s.cogimports[name]
-	return imp, ok
+	return s.cogimports.Load(name)
 }
 
 // CogImports returns all registered cog imports.
-func (s *SymbolTable) CogImports() map[string]*CogImport {
+func (s *SymbolTable) CogImports() *htm.Map[string, *CogImport] {
 	return s.cogimports
 }
 
 // MarkChecked records that an option/result variable's value has been checked in this scope.
 func (s *SymbolTable) MarkChecked(name string, state checkState) {
-	s.checked[name] = state
+	s.checked.Store(name, state)
 }
 
 // ClearChecked removes must-check state for a name in the current scope.
 func (s *SymbolTable) ClearChecked(name string) {
-	delete(s.checked, name)
+	s.checked.Delete(name)
 }
 
 // IsValueChecked reports whether the named variable's value is safe to access.
 func (s *SymbolTable) IsValueChecked(name string) bool {
-	if s.checked[name]&checkValue != 0 {
+	if state, ok := s.checked.Load(name); ok && state&checkValue != 0 {
 		return true
 	}
 
@@ -317,7 +323,7 @@ func (s *SymbolTable) IsValueChecked(name string) bool {
 
 // IsErrorChecked reports whether the named variable's error is safe to access.
 func (s *SymbolTable) IsErrorChecked(name string) bool {
-	if s.checked[name]&checkError != 0 {
+	if state, ok := s.checked.Load(name); ok && state&checkError != 0 {
 		return true
 	}
 

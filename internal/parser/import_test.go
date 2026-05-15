@@ -86,8 +86,8 @@ main : proc() = {}
 		}
 
 		imports := symbols.CogImports()
-		if len(imports) != 1 {
-			t.Fatalf("expected 1 import, got %d", len(imports))
+		if imports.Len() != 1 {
+			t.Fatalf("expected 1 import, got %d", imports.Len())
 		}
 
 		imp, ok := symbols.ResolveCogImport("geom")
@@ -162,8 +162,8 @@ main : proc() = {}
 		}
 
 		imports := symbols.CogImports()
-		if len(imports) != 2 {
-			t.Fatalf("expected 2 imports, got %d", len(imports))
+		if imports.Len() != 2 {
+			t.Fatalf("expected 2 imports, got %d", imports.Len())
 		}
 	})
 

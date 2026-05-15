@@ -10,4 +10,9 @@ require (
 	lukechampine.com/uint128 v1.3.0
 )
 
-require github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
+require (
+	github.com/go4org/hashtriemap v0.0.0-20251130024219-545ba229f689 // indirect
+	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
+	go.uber.org/automaxprocs v1.6.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+)

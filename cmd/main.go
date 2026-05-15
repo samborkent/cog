@@ -8,13 +8,18 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/KimMachineGun/automemlimit/memlimit"
+	"go.uber.org/automaxprocs/maxprocs"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/lexer"
@@ -44,6 +49,9 @@ func main() {
 		fmt.Println("missing file or directory name")
 		return
 	}
+
+	// Set GOMAXPROCS.
+	maxprocs.Set()
 
 	// Set GOMEMLIMIT based on 90% of available memory.
 	memlimit.SetGoMemLimitWithOpts(
@@ -166,7 +174,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 	// Process imported packages.
 	importedPkgs := make(map[string]*compiledPackage)
 
-	for _, imp := range symbols.CogImports() {
+	for _, imp := range symbols.CogImports().All() {
 		pkg, err := compileImportedPackage(ctx, projectRoot, imp.Path)
 		if err != nil {
 			fmt.Printf("failed to compile imported package %q: %v\n", imp.Path, err)
@@ -270,7 +278,7 @@ type lexedFile struct {
 // runProject compiles the entry package and all its imported packages.
 func runProject(ctx context.Context, projectRoot string, entryFiles []string) error {
 	// Step 1: Lex and validate the entry package.
-	entryLexed, entryPkgName, err := lexAndValidate(entryFiles)
+	entryLexed, entryPkgName, err := lexAndValidate(ctx, entryFiles)
 	if err != nil {
 		return err
 	}
@@ -287,6 +295,8 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 	}
 
 	// Validate unresolved forward stubs.
+	// TODO: this semantics doesn't make sense. A single symbol table should be created at the start,
+	// and then this check should be done on that symbol table.
 	if err := entryParsers[0].ValidateGlobals(); err != nil {
 		return err
 	}
@@ -299,7 +309,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 	// Step 3: Process imported packages.
 	importedPkgs := make(map[string]*compiledPackage) // key: import path
 
-	for _, imp := range entrySymbols.CogImports() {
+	for _, imp := range entrySymbols.CogImports().All() {
 		pkg, err := compileImportedPackage(ctx, projectRoot, imp.Path)
 		if err != nil {
 			return fmt.Errorf("failed to compile imported package %q: %w", imp.Path, err)
@@ -365,16 +375,30 @@ func discoverScripts(dir string) []string {
 }
 
 // lexAndValidate lexes all files and validates they declare the same package.
-func lexAndValidate(files []string) ([]lexedFile, string, error) {
+func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string, error) {
 	lexed := make([]lexedFile, 0, len(files))
+	var lexedLock sync.Mutex
+
+	group, ctx := errgroup.WithContext(ctx)
+	group.SetLimit(runtime.GOMAXPROCS(-1))
 
 	for i, path := range files {
-		lex, err := lexFile(path)
-		if err != nil {
-			return nil, "", err
-		}
+		group.Go(func() error {
+			lex, err := lexFile(path)
+			if err != nil {
+				return fmt.Errorf("lexing file %q: %w", path, err)
+			}
 
-		lexed = append(lexed, lexedFile{path: path, lexer: lex, fileID: uint16(i)})
+			lexedLock.Lock()
+			lexed = append(lexed, lexedFile{path: path, lexer: lex, fileID: uint16(i)})
+			lexedLock.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, "", err
 	}
 
 	dirName := filepath.Base(filepath.Dir(files[0]))
@@ -406,21 +430,39 @@ func lexAndValidate(files []string) ([]lexedFile, string, error) {
 // Returns the parsers (for subsequent ParseBodies) and the ASTs.
 func parseGlobals(ctx context.Context, lexed []lexedFile, symbols *parser.SymbolTable) ([]*parser.Parser, []*ast.AST, error) {
 	parsers := make([]*parser.Parser, len(lexed))
+	var parserLock sync.Mutex
 	asts := make([]*ast.AST, len(lexed))
+	var astLock sync.Mutex
+
+	group, ctx := errgroup.WithContext(ctx)
+	group.SetLimit(runtime.GOMAXPROCS(-1))
 
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
-		if err != nil {
-			return nil, nil, err
-		}
+		group.Go(func() error {
+			p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
+			if err != nil {
+				return fmt.Errorf("creating parser for %q: %w", lf.path, err)
+			}
 
-		f, err := p.ParseGlobals(ctx, lf.path)
-		if err != nil {
-			return nil, nil, err
-		}
+			f, err := p.ParseGlobals(ctx, lf.path)
+			if err != nil {
+				return fmt.Errorf("parsing globals for %q: %w", lf.path, err)
+			}
 
-		parsers[i] = p
-		asts[i] = f
+			parserLock.Lock()
+			parsers[i] = p
+			parserLock.Unlock()
+
+			astLock.Lock()
+			asts[i] = f
+			astLock.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, nil, err
 	}
 
 	return parsers, asts, nil
@@ -435,7 +477,7 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		return nil, fmt.Errorf("finding .cog files: %w", err)
 	}
 
-	lexed, pkgName, err := lexAndValidate(files)
+	lexed, pkgName, err := lexAndValidate(ctx, files)
 	if err != nil {
 		return nil, fmt.Errorf("lexing files: %w", err)
 	}
