@@ -15,10 +15,16 @@ import (
 
 const windowSize = 7
 
+// tokenOffset pairs a token with the byte offset of its start in the source.
+type tokenOffset struct {
+	tokens.Token
+	offset uint32
+}
+
 type Lexer struct {
 	scan    *scanner.Scanner
 	src     io.ReadSeeker
-	window  [windowSize]tokens.Token // ring buffer: offsets [-3, -2, -1, 0, +1, +2, +3] from cursor
+	window  [windowSize]tokenOffset // ring buffer: offsets [-3, -2, -1, 0, +1, +2, +3] from cursor
 	errs    []error
 	Len     uint32 // total length of the input in bytes
 	cursor  uint8  // window slot of the current token
@@ -72,7 +78,20 @@ func (l *Lexer) Reset() {
 	l.cursor = 0
 	l.errs = l.errs[:0]
 	l.scanErr = false
-	l.window = [7]tokens.Token{}
+	l.window = [windowSize]tokenOffset{}
+	l.Step()
+}
+
+// SeekTo seeks the lexer to the given byte offset in the source, clears the
+// ring buffer, and primes with the token at that position. Used for deferred
+// body parsing — seek back to a '{' captured earlier via Offset().
+func (l *Lexer) SeekTo(offset uint32) {
+	_, _ = l.src.Seek(int64(offset), io.SeekStart)
+	l.scan.Init(l.src)
+	l.scan.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
+	l.cursor = 0
+	l.scanErr = false
+	l.window = [windowSize]tokenOffset{}
 	l.Step()
 }
 
@@ -87,7 +106,7 @@ func (l *Lexer) SkipBody() {
 	for i := 1; i <= 3; i++ {
 		idx := l.windowIndex(i)
 		tok := l.window[idx]
-		if tok == (tokens.Token{}) || tok.Type == tokens.EOF {
+		if tok == (tokenOffset{}) || tok.Type == tokens.EOF {
 			break
 		}
 
@@ -122,7 +141,7 @@ func (l *Lexer) SkipBody() {
 
 done:
 	// Clear ring buffer and prime with the next token after '}'.
-	l.window = [windowSize]tokens.Token{}
+	l.window = [windowSize]tokenOffset{}
 	l.cursor = 0
 	l.window[0] = l.scanNext()
 }
@@ -136,40 +155,45 @@ func (l *Lexer) Step() {
 
 	// Read directly from the +1 slot; call scanNext only if it's unfilled.
 	aheadIdx := l.windowIndex(1)
-	tok := l.window[aheadIdx]
-	if tok == (tokens.Token{}) {
-		tok = l.scanNext()
+	to := l.window[aheadIdx]
+	if to == (tokenOffset{}) {
+		to = l.scanNext()
 	}
 
 	l.cursor = aheadIdx
-	l.window[l.cursor] = tok
+	l.window[l.cursor] = to
 
 	// Clear the stale +3 slot exposed by the cursor rotation.
-	l.window[l.windowIndex(3)] = tokens.Token{}
+	l.window[l.windowIndex(3)] = tokenOffset{}
 
-	if l.debug && tok.Type != tokens.Comment {
-		from := tok.Type.String()
+	if l.debug && to.Type != tokens.Comment {
+		from := to.Type.String()
 		if slices.Contains([]tokens.Type{
 			tokens.Identifier, tokens.StringLiteral, tokens.IntLiteral, tokens.FloatLiteral,
-		}, tok.Type) {
-			from = tok.Literal
+		}, to.Type) {
+			from = to.Literal
 		}
 
-		to := l.Peek(1).Type.String()
+		next := l.Peek(1).Type.String()
 		if slices.Contains([]tokens.Type{
 			tokens.Identifier, tokens.StringLiteral, tokens.IntLiteral, tokens.FloatLiteral,
 		}, l.Peek(1).Type) {
-			to = l.Peek(1).Literal
+			next = l.Peek(1).Literal
 		}
 
 		_, _ = fmt.Printf("DEBUG: ln %d, col %d:\tfrom %q,\tto %q\n",
-			tok.Ln, tok.Col, from, to)
+			to.Ln, to.Col, from, next)
 	}
 }
 
 // This is shorthand for getting the current token.
 func (l *Lexer) This() tokens.Token {
-	return l.window[l.cursor]
+	return l.window[l.cursor].Token
+}
+
+// Offset returns the byte offset of the current token's start in the source.
+func (l *Lexer) Offset() uint32 {
+	return l.window[l.cursor].offset
 }
 
 // Peek returns a token at offset n from current (0 = current, ±1/±2/±3 = look-ahead/behind).
@@ -177,34 +201,32 @@ func (l *Lexer) This() tokens.Token {
 func (l *Lexer) Peek(n int) tokens.Token {
 	switch n {
 	case 0:
-		return l.window[l.cursor]
+		return l.window[l.cursor].Token
 	case -1, -2, -3:
-		return l.window[l.windowIndex(n)] // zero-value if fewer than |n| tokens consumed
+		return l.window[l.windowIndex(n)].Token // zero-value if fewer than |n| tokens consumed
 	case 1, 2, 3:
 		// Fill lookahead slots lazily.
 		for i := 1; i <= n; i++ {
 			if i > 1 {
 				prev := l.window[l.windowIndex(i-1)]
-				if prev.Type == tokens.EOF {
+				if prev == (tokenOffset{}) || prev.Type == tokens.EOF {
 					break
 				}
 			}
 
 			idx := l.windowIndex(i)
-			if l.window[idx] != (tokens.Token{}) {
+			if l.window[idx] != (tokenOffset{}) {
 				continue
 			}
 
-			tok := l.scanNext()
-			l.window[idx] = tok
+			l.window[idx] = l.scanNext()
 
-			if tok.Type == tokens.EOF {
+			if l.window[idx].Type == tokens.EOF {
 				break
 			}
 		}
 
-		tok := l.window[l.windowIndex(n)]
-		return tok // zero token if EOF arrived before offset n
+		return l.window[l.windowIndex(n)].Token // zero token if EOF arrived before offset n
 	}
 
 	return tokens.Token{}
@@ -215,7 +237,7 @@ func (l *Lexer) windowIndex(offset int) uint8 {
 	return uint8((int(l.cursor) + offset + windowSize) % windowSize)
 }
 
-func (l *Lexer) scanNext() tokens.Token {
+func (l *Lexer) scanNext() tokenOffset {
 	s := l.scan
 
 	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
@@ -323,14 +345,17 @@ func (l *Lexer) scanNext() tokens.Token {
 			}
 		}
 
-		return t
+		return tokenOffset{Token: t, offset: uint32(s.Position.Offset)}
 	}
 
-	return tokens.Token{
-		Pos: tokens.Pos{
-			Ln:  uint32(min(s.Line, math.MaxUint32)),
-			Col: uint16(min(s.Column, math.MaxUint16)),
+	return tokenOffset{
+		Token: tokens.Token{
+			Pos: tokens.Pos{
+				Ln:  uint32(min(s.Line, math.MaxUint32)),
+				Col: uint16(min(s.Column, math.MaxUint16)),
+			},
+			Type: tokens.EOF,
 		},
-		Type: tokens.EOF,
+		offset: uint32(s.Pos().Offset),
 	}
 }

@@ -882,3 +882,105 @@ func TestSkipBodyWithLookahead(t *testing.T) {
 		t.Fatalf("expected Identifier 'after', got %s %q", got.Type, got.Literal)
 	}
 }
+
+func TestOffset(t *testing.T) {
+	src := `foo bar baz`
+	//       0123456789...
+	// "foo" starts at 0, "bar" at 4, "baz" at 8
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	if off := l.Offset(); off != 0 {
+		t.Fatalf("expected offset 0 for 'foo', got %d", off)
+	}
+
+	l.Step() // advance to "bar"
+	if off := l.Offset(); off != 4 {
+		t.Fatalf("expected offset 4 for 'bar', got %d", off)
+	}
+
+	l.Step() // advance to "baz"
+	if off := l.Offset(); off != 8 {
+		t.Fatalf("expected offset 8 for 'baz', got %d", off)
+	}
+}
+
+func TestOffsetWithBraces(t *testing.T) {
+	src := `fn { body } after`
+	//       0123456789012345678
+	// "fn" at 0, "{" at 3, "body" at 5, "}" at 10, "after" at 12
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	l.Step() // advance to "{"
+	if got := l.This().Type; got != tokens.LBrace {
+		t.Fatalf("expected LBrace, got %s", got)
+	}
+	braceOffset := l.Offset()
+	if braceOffset != 3 {
+		t.Fatalf("expected offset 3 for '{', got %d", braceOffset)
+	}
+}
+
+func TestSeekTo(t *testing.T) {
+	src := `fn { body } after`
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	l.Step() // advance to "{"
+	braceOffset := l.Offset()
+
+	// Skip past the body.
+	l.SkipBody()
+	if got := l.This(); got.Type != tokens.Identifier || got.Literal != "after" {
+		t.Fatalf("after SkipBody: expected 'after', got %s %q", got.Type, got.Literal)
+	}
+
+	// Seek back to the '{'.
+	l.SeekTo(braceOffset)
+	if got := l.This().Type; got != tokens.LBrace {
+		t.Fatalf("after SeekTo: expected LBrace, got %s", got)
+	}
+
+	// Continue lexing from there.
+	l.Step() // "body"
+	if got := l.This(); got.Type != tokens.Identifier || got.Literal != "body" {
+		t.Fatalf("after SeekTo+Step: expected 'body', got %s %q", got.Type, got.Literal)
+	}
+}
+
+func TestSeekToMultiple(t *testing.T) {
+	src := `a { x } b { y } c`
+
+	l := New(strings.NewReader(src), uint32(len(src)), false)
+
+	// Find first '{' and record offset.
+	l.Step() // "{"
+	off1 := l.Offset()
+	l.SkipBody() // skip to "b"
+
+	// Find second '{' and record offset.
+	l.Step() // "{"
+	off2 := l.Offset()
+	l.SkipBody() // skip to "c"
+
+	// Seek to second body.
+	l.SeekTo(off2)
+	if got := l.This().Type; got != tokens.LBrace {
+		t.Fatalf("seek to off2: expected LBrace, got %s", got)
+	}
+	l.Step()
+	if got := l.This(); got.Type != tokens.Identifier || got.Literal != "y" {
+		t.Fatalf("seek to off2+Step: expected 'y', got %s %q", got.Type, got.Literal)
+	}
+
+	// Seek to first body.
+	l.SeekTo(off1)
+	if got := l.This().Type; got != tokens.LBrace {
+		t.Fatalf("seek to off1: expected LBrace, got %s", got)
+	}
+	l.Step()
+	if got := l.This(); got.Type != tokens.Identifier || got.Literal != "x" {
+		t.Fatalf("seek to off1+Step: expected 'x', got %s %q", got.Type, got.Literal)
+	}
+}
