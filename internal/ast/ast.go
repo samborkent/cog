@@ -145,6 +145,12 @@ func (a *AST) Expr(i ExprIndex) Expr {
 	return a.exprs[i]
 }
 
+// SetExpr replaces the expression at the given index.
+// Panics if the index is out of bounds.
+func (a *AST) SetExpr(i ExprIndex, e Expr) {
+	a.exprs[i] = e
+}
+
 // LenExprs returns the number of expressions in the AST.
 func (a *AST) LenExprs() int {
 	return len(a.exprs) - 1

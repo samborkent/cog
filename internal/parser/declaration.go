@@ -23,9 +23,17 @@ func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifie
 
 func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, ident *ast.Identifier) ast.NodeIndex {
 	symbol, ok := p.symbols.Resolve(ident.Token.Literal)
-	if ok && symbol.Scope != ScanScope && ident.Qualifier != ast.QualifierMethod {
-		p.error(ident.Token, "cannot redeclare variable", "parseDeclaration")
-		return ast.ZeroNodeIndex
+	if ok && ident.Qualifier != ast.QualifierMethod {
+		if symbol.Scope != ScanScope {
+			p.error(ident.Token, "cannot redeclare variable", "parseDeclaration")
+			return ast.ZeroNodeIndex
+		}
+
+		// During globalsPass, ScanScope with a resolved type means duplicate.
+		if p.globalsPass && !types.IsNone(symbol.Identifier.ValueType) {
+			p.error(ident.Token, "cannot redeclare variable", "parseDeclaration")
+			return ast.ZeroNodeIndex
+		}
 	}
 
 	if ident.Token.Literal == "main" {
@@ -53,7 +61,11 @@ func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, i
 		}
 
 		// Uninitialized variable
-		p.symbols.Define(ident)
+		if p.globalsPass {
+			p.symbols.DefineGlobal(ident)
+		} else {
+			p.symbols.Define(ident)
+		}
 
 		return p.ast.NewDeclaration(declToken, assignment)
 	}
@@ -74,7 +86,11 @@ func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, i
 	}
 
 	if ident.Qualifier != ast.QualifierMethod {
-		p.symbols.Define(ident)
+		if p.globalsPass {
+			p.symbols.DefineGlobal(ident)
+		} else {
+			p.symbols.Define(ident)
+		}
 	}
 
 	// Static result analysis: if the assigned expression's type matches the

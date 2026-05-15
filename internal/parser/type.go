@@ -351,47 +351,51 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 			}
 
 			p.symbols.DefineGlobal(ident) // registers with ScanScope + ValueType=None
-			p.lex.Step()
 
-			return types.NewForwardAlias(ident.Token.Literal, ident.Exported, ident.Global, func() types.Type {
+			typ = types.NewForwardAlias(ident.Token.Literal, ident.Exported, ident.Global, func() types.Type {
 				return ident.ValueType
 			})
+
+			// Don't return — fall through to consume the type name and
+			// handle generic instantiation (<...>) and optional (?) suffixes.
 		}
 
-		if !ok || typeSymbol.Identifier.Qualifier != ast.QualifierType {
+		if typ == nil && (!ok || typeSymbol.Identifier.Qualifier != ast.QualifierType) {
 			p.error(p.lex.This(), "unknown type found in type declaration", "parseType")
 			return nil
 		}
 
-		ident := typeSymbol.Identifier
+		if typ == nil {
+			ident := typeSymbol.Identifier
 
-		// If the symbol is a type parameter (inside a generic alias body),
-		// return the type parameter alias directly.
-		if alias, ok := ident.ValueType.(*types.Alias); ok && alias.IsTypeParam() {
-			p.lex.Step() // consume type param name
-			return alias
-		}
-
-		if types.IsNone(ident.ValueType) {
-			// Forward reference: type name is pre-registered but not yet resolved.
-			// Create a lazy alias that resolves when the type is accessed.
-			typ = types.NewForwardAlias(ident.Token.Literal, ident.Exported, ident.Global, func() types.Type {
-				return ident.ValueType
-			})
-		} else {
-			// Copy type parameters from the original type if it's an alias
-			var typeParams []*types.Alias
-
-			if originalAlias, ok := ident.ValueType.(*types.Alias); ok {
-				typeParams = originalAlias.TypeParams
+			// If the symbol is a type parameter (inside a generic alias body),
+			// return the type parameter alias directly.
+			if alias, ok := ident.ValueType.(*types.Alias); ok && alias.IsTypeParam() {
+				p.lex.Step() // consume type param name
+				return alias
 			}
 
-			typ = &types.Alias{
-				Name:       ident.Token.Literal,
-				Derived:    ident.ValueType,
-				Exported:   ident.Exported,
-				Global:     ident.Global,
-				TypeParams: typeParams,
+			if types.IsNone(ident.ValueType) {
+				// Forward reference: type name is pre-registered but not yet resolved.
+				// Create a lazy alias that resolves when the type is accessed.
+				typ = types.NewForwardAlias(ident.Token.Literal, ident.Exported, ident.Global, func() types.Type {
+					return ident.ValueType
+				})
+			} else {
+				// Copy type parameters from the original type if it's an alias
+				var typeParams []*types.Alias
+
+				if originalAlias, ok := ident.ValueType.(*types.Alias); ok {
+					typeParams = originalAlias.TypeParams
+				}
+
+				typ = &types.Alias{
+					Name:       ident.Token.Literal,
+					Derived:    ident.ValueType,
+					Exported:   ident.Exported,
+					Global:     ident.Global,
+					TypeParams: typeParams,
+				}
 			}
 		}
 	}
@@ -459,6 +463,21 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 	}
 
 	if genAlias == nil {
+		// During globals pass, forward references may not yet carry TypeParams.
+		// Parse and record the type arguments so that the instantiated alias
+		// preserves them for transpilation once the definition is resolved.
+		if p.globalsPass {
+			typeArgs := p.parseTypeArguments(ctx)
+
+			return &types.Alias{
+				Name:     alias.Name,
+				Derived:  alias, // chain to forward alias so Kind()/Underlying() resolve lazily
+				Exported: alias.Exported,
+				Global:   alias.Global,
+				TypeArgs: typeArgs,
+			}
+		}
+
 		p.error(p.lex.This(), fmt.Sprintf("type %q is not generic", alias.Name), "instantiateGenericAlias")
 		return nil
 	}
@@ -991,10 +1010,12 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 			}
 
 			// Typeless error: value is the variant name as a string literal.
+			idx := p.ast.AddExpr(literal)
+
 			typ.Values = append(typ.Values, &types.EnumValue{
 				Name: valName,
 				Value: types.Expression{
-					Expr:   literal,
+					Index:  types.ExprIndex(idx),
 					String: literal.String(),
 				},
 			})

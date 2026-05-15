@@ -881,25 +881,26 @@ func transpilePackage(t *testing.T, files map[string]string) map[string]string {
 	symbols := parser.NewSymbolTable()
 
 	parsers := make([]*parser.Parser, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
 	for i, lf := range lexed {
 		p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.name, uint16(i), nil)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", lf.name, err)
 		}
 
-		p.FindGlobals(t.Context())
-		parsers[i] = p
-	}
-
-	astFiles := make([]*ast.AST, len(lexed))
-
-	for i, lf := range lexed {
-		f, err := parsers[i].ParseOnly(t.Context(), lf.name)
+		f, err := p.ParseGlobals(t.Context(), lf.name)
 		if err != nil {
-			t.Fatalf("parser parse (%s): %v", lf.name, err)
+			t.Fatalf("parser globals (%s): %v", lf.name, err)
 		}
 
+		parsers[i] = p
 		astFiles[i] = f
+	}
+
+	for i, lf := range lexed {
+		if err := parsers[i].ParseBodies(t.Context()); err != nil {
+			t.Fatalf("parser bodies (%s): %v", lf.name, err)
+		}
 	}
 
 	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
@@ -954,24 +955,26 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 	symbols := parser.NewSymbolTable()
 
 	parsers := make([]*parser.Parser, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
 	for i, lf := range lexed {
 		p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.name, uint16(i), nil)
 		if err != nil {
 			return "", fmt.Errorf("parser init (%s): %w", lf.name, err)
 		}
 
-		p.FindGlobals(t.Context())
-		parsers[i] = p
-	}
-
-	astFiles := make([]*ast.AST, len(lexed))
-	for i, lf := range lexed {
-		f, err := parsers[i].ParseOnly(t.Context(), lf.name)
+		f, err := p.ParseGlobals(t.Context(), lf.name)
 		if err != nil {
-			return "", fmt.Errorf("parser parse (%s): %w", lf.name, err)
+			return "", fmt.Errorf("parser globals (%s): %w", lf.name, err)
 		}
 
+		parsers[i] = p
 		astFiles[i] = f
+	}
+
+	for i, lf := range lexed {
+		if err := parsers[i].ParseBodies(t.Context()); err != nil {
+			return "", fmt.Errorf("parser bodies (%s): %w", lf.name, err)
+		}
 	}
 
 	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
@@ -1090,7 +1093,7 @@ func TestMainInNonMainPackageShouldError(t *testing.T) {
 	t.Parallel()
 
 	// A package that declares main must be named "main".
-	// Here findGlobals should succeed, but the package name check should fail.
+	// ParseGlobals should succeed, but the package name check should fail.
 	src := `package notmain
 
 main : proc() = {
@@ -1106,7 +1109,9 @@ main : proc() = {
 		t.Fatalf("parser init error: %v", err)
 	}
 
-	p.FindGlobals(t.Context())
+	if _, err := p.ParseGlobals(t.Context(), "test.cog"); err != nil {
+		t.Fatalf("ParseGlobals error: %v", err)
+	}
 
 	// Replicate the check from runProject: main exists but package != "main".
 	if _, hasMain := symbols.Resolve("main"); !hasMain {
@@ -1160,7 +1165,7 @@ main : proc() = {
 
 	out, err := runGenerated(t, code)
 	if err != nil {
-		t.Fatalf("running generated program failed: %v\noutput:\n%s", err, out)
+		t.Fatalf("running generated program failed: %v\ngenerated code:\n%s\noutput:\n%s", err, code, out)
 	}
 
 	if !strings.Contains(out, "[") {
@@ -1256,7 +1261,7 @@ func TestImportedPackageMustNotDeclareMain(t *testing.T) {
 	t.Parallel()
 
 	// Simulate an imported package that declares a main proc.
-	// After findGlobals, the symbol table must not contain main for library packages.
+	// After ParseGlobals, the symbol table must not contain main for library packages.
 	src := `package geom
 
 main : proc() = {
@@ -1272,7 +1277,9 @@ main : proc() = {
 		t.Fatalf("parser init error: %v", err)
 	}
 
-	p.FindGlobals(t.Context())
+	if _, err := p.ParseGlobals(t.Context(), ""); err != nil {
+		t.Fatalf("ParseGlobals error: %v", err)
+	}
 
 	// Replicate the check from compileImportedPackage: imported packages must not have main.
 	if _, hasMain := symbols.Resolve("main"); !hasMain {
@@ -1398,4 +1405,293 @@ main : proc() = {
 	}
 
 	mustContain(t, out, "returned")
+}
+
+func TestIndexExpressions(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+	xs : []int64 = {10, 20, 30}
+	v := xs[1]
+	@print(v)
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "20")
+}
+
+func TestBooleanExpressions(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+	a : bool = true && false
+	b : bool = true || false
+	c : bool = !true
+	@print(a)
+	@print(b)
+	@print(c)
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "false")
+	mustContain(t, out, "true")
+}
+
+func TestArithmeticExpressions(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+	a : int64 = 2 * 3 + 1
+	b : int64 = 10 / 2 - 1
+	c : int64 = -5
+	@print(a)
+	@print(b)
+	@print(c)
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "7")
+	mustContain(t, out, "4")
+	mustContain(t, out, "-5")
+}
+
+func TestForLoopWithSlice(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+	xs : []int64 = {1, 2, 3}
+	for _, x in xs {
+		@print(x)
+	}
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "0")
+	mustContain(t, out, "1")
+	mustContain(t, out, "2")
+}
+
+func TestStringConcatenation(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+	a : utf8 = "hello"
+	b : utf8 = " world"
+	c : utf8 = a + b
+	@print(c)
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "hello world")
+}
+
+func TestMapLiteral(t *testing.T) {
+	src := `package main
+
+M ~ map<utf8, int64>
+
+main : proc() = {
+	m : M = {"a": 1, "b": 2}
+	v := m["a"]
+	@print(v)
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "1")
+}
+
+func TestStructFieldAccess(t *testing.T) {
+	src := `package main
+
+Point ~ struct {
+	export (
+		x : float64
+		y : float64
+	)
+}
+
+main : proc() = {
+	pt : Point = {
+		x = 1.5,
+		y = 2.5,
+	}
+	@print(pt.x)
+	@print(pt.y)
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "1.5")
+	mustContain(t, out, "2.5")
+}
+
+func TestVariableReassignment(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+	var x : int64 = 10
+	x = 20
+	@print(x)
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "20")
+}
+
+func TestBuiltinIf(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+	x := @if(true, "yes", "no")
+	@print(x)
+	y := @if(false, 1, 2)
+	@print(y)
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "yes")
+	mustContain(t, out, "2")
+}
+
+func TestMultipleDeclarations(t *testing.T) {
+	src := `package main
+
+A ~ int64
+B ~ float64
+
+main : proc() = {
+	a : A = 42
+	b : B = 3.14
+	@print(a)
+	@print(b)
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "42")
+	mustContain(t, out, "3.14")
+}
+
+func TestProcedureWithReturn(t *testing.T) {
+	src := `package main
+
+add : func(a : int64, b : int64) int64 = {
+	return a + b
+}
+
+main : proc() = {
+	result := add(3, 4)
+	@print(result)
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "7")
+}
+
+func TestArrayLiteral(t *testing.T) {
+	src := `package main
+
+main : proc() = {
+	a : [3]int64 = {10, 20, 30}
+	@print(a[0])
+	@print(a[2])
+}
+`
+	code := transpileSource(t, src)
+
+	t.Parallel()
+
+	out, err := runGenerated(t, code)
+	if err != nil {
+		t.Fatalf("running generated program failed: %v\ncode:\n%s\noutput:\n%s", err, code, out)
+	}
+
+	mustContain(t, out, "10")
+	mustContain(t, out, "30")
 }

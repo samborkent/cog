@@ -43,24 +43,26 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 	symbols := parser.NewSymbolTable()
 
 	parsers := make([]*parser.Parser, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
 	for i, f := range lexed {
 		p, err := parser.NewParserWithSymbols(f.lexer, symbols, f.name, uint16(i), nil)
 		if err != nil {
 			t.Fatalf("parser init (%s): %v", f.name, err)
 		}
 
-		p.FindGlobals(t.Context())
-		parsers[i] = p
-	}
-
-	astFiles := make([]*ast.AST, len(lexed))
-	for i, f := range lexed {
-		af, err := parsers[i].ParseOnly(t.Context(), f.name)
+		af, err := p.ParseGlobals(t.Context(), f.name)
 		if err != nil {
-			t.Fatalf("parse error (%s): %v", f.name, err)
+			t.Fatalf("parser globals (%s): %v", f.name, err)
 		}
 
+		parsers[i] = p
 		astFiles[i] = af
+	}
+
+	for i, f := range lexed {
+		if err := parsers[i].ParseBodies(t.Context()); err != nil {
+			t.Fatalf("parse bodies (%s): %v", f.name, err)
+		}
 	}
 
 	tr := transpiler.NewTranspilerWithModule("testmod", ast.MergeASTs(astFiles...))

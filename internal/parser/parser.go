@@ -30,6 +30,7 @@ type Parser struct {
 	scriptMode        bool
 	globalsPass       bool
 	currentReturnType types.Type // return type of the enclosing procedure (for result wrapping)
+	currentReceiver   *ast.Identifier
 	definedMethods    map[string]struct{}
 }
 
@@ -80,15 +81,203 @@ func NewScriptParserWithSymbols(lex *lexer.Lexer, symbols *SymbolTable, a *arena
 }
 
 func (p *Parser) Parse(ctx context.Context, fileName string) (*ast.AST, error) {
-	p.FindGlobals(ctx)
+	tree, err := p.ParseGlobals(ctx, fileName)
+	if err != nil {
+		return tree, err
+	}
 
-	return p.ParseOnly(ctx, fileName)
+	if !p.scriptMode {
+		if err := p.ValidateGlobals(); err != nil {
+			return tree, err
+		}
+	}
+
+	return tree, p.ParseBodies(ctx)
 }
 
-// ParseOnly runs the full parse without calling FindGlobals first.
-// Use this when FindGlobals has already been called on a shared symbol table
-// across multiple files.
-func (p *Parser) ParseOnly(ctx context.Context, fileName string) (*ast.AST, error) {
+// ParseGlobals runs a full parse with globalsPass=true. It builds the AST but
+// defers procedure bodies (storing DeferredBody nodes with byte offsets).
+// Global declarations are registered via DefineGlobal so that forward
+// references across files resolve correctly.
+func (p *Parser) ParseGlobals(ctx context.Context, fileName string) (*ast.AST, error) {
+	p.globalsPass = true
+
+	return p.parseFile(ctx, fileName)
+}
+
+// ParseBodies walks the AST looking for DeferredBody nodes, seeks the lexer to
+// each deferred offset, reconstructs scopes, parses the block, and replaces
+// the DeferredBody via SetNode.
+func (p *Parser) ParseBodies(ctx context.Context) error {
+	p.globalsPass = false
+
+	// Resolve DeferredExpr placeholders in the AST expression slice.
+	// types.Expression now stores an ExprIndex, so SetExpr propagates to all
+	// consumers (enum values, array lengths, default params) automatically.
+	for i := range p.ast.LenExprs() + 1 {
+		expr := p.ast.Expr(ast.ExprIndex(i))
+		de, ok := expr.(*ast.DeferredExpr)
+		if !ok {
+			continue
+		}
+
+		p.lex.SeekTo(de.Offset)
+
+		resolved := p.expression(ctx, de.TypeHint)
+		if resolved != ast.ZeroExprIndex {
+			p.ast.SetExpr(ast.ExprIndex(i), p.ast.Expr(resolved))
+		}
+	}
+
+	// Walk nodes: resolve DeferredBody placeholders (procedure bodies).
+	for i := range p.ast.LenNodes() + 1 {
+		node := p.ast.Node(ast.NodeIndex(i))
+		db, ok := node.(*ast.DeferredBody)
+		if !ok {
+			continue
+		}
+
+		// Find the enclosing ProcedureLiteral to get type info.
+		procLit := p.findProcedureLiteralForBody(ast.NodeIndex(i))
+		if procLit == nil {
+			continue
+		}
+
+		procType, ok := procLit.ProcedureType.(*types.Procedure)
+		if !ok {
+			continue
+		}
+
+		// Reconstruct scopes for parsing the body.
+		if len(procType.TypeParams) > 0 {
+			p.symbols = NewEnclosedSymbolTable(p.symbols)
+
+			for _, tp := range procType.TypeParams {
+				p.symbols.Define(&ast.Identifier{
+					Token: tokens.Token{
+						Type:    tokens.Identifier,
+						Literal: tp.Name,
+					},
+					ValueType: tp,
+					Qualifier: ast.QualifierType,
+				})
+
+				// Register interface methods from the constraint.
+				iface, ok := tp.Underlying().(*types.Interface)
+				if ok {
+					for _, method := range iface.Methods {
+						p.symbols.DefineMethod(tp.Name, &ast.Identifier{
+							Token: tokens.Token{
+								Type:    tokens.Identifier,
+								Literal: method.Name,
+							},
+							ValueType: method.Procedure,
+							Qualifier: ast.QualifierMethod,
+						})
+					}
+				}
+			}
+		}
+
+		if db.Receiver != nil {
+			p.symbols = NewEnclosedSymbolTable(p.symbols)
+			p.symbols.Define(db.Receiver)
+		}
+
+		if len(procType.Parameters) > 0 {
+			p.symbols = NewEnclosedSymbolTable(p.symbols)
+
+			for _, param := range procType.Parameters {
+				p.symbols.Define(&ast.Identifier{
+					Token: tokens.Token{
+						Type:    tokens.Identifier,
+						Literal: param.Name,
+					},
+					ValueType: param.Type,
+					Qualifier: ast.QualifierImmutable,
+				})
+			}
+		}
+
+		// Track the return type for result-aware return parsing.
+		prevReturnType := p.currentReturnType
+		p.currentReturnType = procType.ReturnType
+
+		// Seek to deferred offset and parse block.
+		p.lex.SeekTo(db.Offset)
+
+		body := p.parseBlockStatement(ctx)
+
+		p.currentReturnType = prevReturnType
+
+		// Pop scopes.
+		if len(procType.Parameters) > 0 {
+			p.symbols = p.symbols.Outer
+		}
+
+		if db.Receiver != nil {
+			p.symbols = p.symbols.Outer
+		}
+
+		if len(procType.TypeParams) > 0 {
+			p.symbols = p.symbols.Outer
+		}
+
+		if body != nil {
+			p.ast.SetNode(ast.NodeIndex(i), body)
+		}
+	}
+
+	if err := errors.Join(p.Errs...); err != nil {
+		return fmt.Errorf("parser error:\n%w", err)
+	}
+
+	return nil
+}
+
+// findProcedureLiteralForBody scans expressions to find the ProcedureLiteral
+// whose Body field matches the given node index.
+func (p *Parser) findProcedureLiteralForBody(bodyIdx ast.NodeIndex) *ast.ProcedureLiteral {
+	for i := range p.ast.LenExprs() + 1 {
+		expr := p.ast.Expr(ast.ExprIndex(i))
+		if pl, ok := expr.(*ast.ProcedureLiteral); ok && pl.Body == bodyIdx {
+			return pl
+		}
+	}
+
+	return nil
+}
+
+// ValidateGlobals checks for unresolved forward stubs in the symbol table.
+// This should be called after ParseGlobals has completed for ALL files in a package.
+func (p *Parser) ValidateGlobals() error {
+	var errs []error
+
+	for name, sym := range p.symbols.table {
+		if sym.Scope == ScanScope && sym.Identifier.Qualifier == ast.QualifierType &&
+			types.IsNone(sym.Identifier.ValueType) {
+			errs = append(errs, fmt.Errorf("%d:%d: undefined type: %s",
+				sym.Identifier.Token.Ln, sym.Identifier.Token.Col, name))
+		}
+	}
+
+	for name, sym := range p.symbols.table {
+		if sym.Scope == ScanScope && sym.Identifier.Qualifier != ast.QualifierType &&
+			types.IsNone(sym.Identifier.ValueType) {
+			errs = append(errs, fmt.Errorf("%d:%d: undefined identifier: %s",
+				sym.Identifier.Token.Ln, sym.Identifier.Token.Col, name))
+		}
+	}
+
+	if err := errors.Join(errs...); err != nil {
+		return fmt.Errorf("validation error:\n%w", err)
+	}
+
+	return nil
+}
+
+// parseFile is the core parse loop shared by ParseGlobals and Parse.
+func (p *Parser) parseFile(ctx context.Context, fileName string) (*ast.AST, error) {
 	// Reset position and errors for a clean parse.
 	p.Errs = p.Errs[:0]
 	p.lex.Reset()
@@ -274,13 +463,11 @@ func (p *Parser) ExprString(i ast.ExprIndex) string {
 }
 
 func (p *Parser) typeExpr(i ast.ExprIndex) types.Expression {
-	expr := p.ast.Expr(i)
-
 	var out strings.Builder
-	expr.StringTo(&out, p.ast)
+	p.ast.Expr(i).StringTo(&out, p.ast)
 
 	return types.Expression{
-		Expr:   expr,
+		Index:  types.ExprIndex(i),
 		String: out.String(),
 	}
 }

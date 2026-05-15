@@ -31,10 +31,12 @@ main : proc() = {}`
 			t.Fatalf("parser init error: %v", err)
 		}
 
-		p.FindGlobals(t.Context())
+		if _, err := p.ParseGlobals(t.Context(), "test.cog"); err != nil {
+			t.Fatalf("ParseGlobals error: %v", err)
+		}
 
-		if _, err := p.ParseOnly(t.Context(), "test.cog"); err != nil {
-			t.Fatalf("parse-only error: %v", err)
+		if err := p.ParseBodies(t.Context()); err != nil {
+			t.Fatalf("ParseBodies error: %v", err)
 		}
 	})
 

@@ -93,9 +93,13 @@ func TestInstantiate(t *testing.T) {
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Int32]})
 
-		s, ok := result.(*Slice)
+		ra, ok := result.(*Alias)
 		if !ok {
-			t.Fatalf("expected *Slice, got %T", result)
+			t.Fatalf("expected *Alias, got %T", result)
+		}
+		s, ok := ra.Derived.(*Slice)
+		if !ok {
+			t.Fatalf("expected Derived *Slice, got %T", ra.Derived)
 		}
 
 		if s.Element.Kind() != Int32 {
@@ -119,9 +123,13 @@ func TestInstantiate(t *testing.T) {
 		}
 		result := a.Instantiate(map[string]Type{"K": Basics[UTF8], "V": Basics[Int64]})
 
-		m, ok := result.(*Map)
+		ra, ok := result.(*Alias)
 		if !ok {
-			t.Fatalf("expected *Map, got %T", result)
+			t.Fatalf("expected *Alias, got %T", result)
+		}
+		m, ok := ra.Derived.(*Map)
+		if !ok {
+			t.Fatalf("expected Derived *Map, got %T", ra.Derived)
 		}
 
 		if m.Key.Kind() != UTF8 {
@@ -151,9 +159,13 @@ func TestInstantiate(t *testing.T) {
 		}
 		result := a.Instantiate(map[string]Type{"A": Basics[Int32], "B": Basics[UTF8]})
 
-		tup, ok := result.(*Tuple)
+		ra, ok := result.(*Alias)
 		if !ok {
-			t.Fatalf("expected *Tuple, got %T", result)
+			t.Fatalf("expected *Alias, got %T", result)
+		}
+		tup, ok := ra.Derived.(*Tuple)
+		if !ok {
+			t.Fatalf("expected Derived *Tuple, got %T", ra.Derived)
 		}
 
 		if len(tup.Types) != 2 {
@@ -179,9 +191,13 @@ func TestInstantiate(t *testing.T) {
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Float64]})
 
-		opt, ok := result.(*Option)
+		ra, ok := result.(*Alias)
 		if !ok {
-			t.Fatalf("expected *Option, got %T", result)
+			t.Fatalf("expected *Alias, got %T", result)
+		}
+		opt, ok := ra.Derived.(*Option)
+		if !ok {
+			t.Fatalf("expected Derived *Option, got %T", ra.Derived)
 		}
 
 		if opt.Value.Kind() != Float64 {
@@ -199,8 +215,12 @@ func TestInstantiate(t *testing.T) {
 		}
 
 		result := a.Instantiate(map[string]Type{"T": Basics[UTF8]})
-		if result.Kind() != Int32 {
-			t.Errorf("expected Int32 passthrough, got %s", result.Kind())
+		ra, ok := result.(*Alias)
+		if !ok {
+			t.Fatalf("expected *Alias, got %T", result)
+		}
+		if ra.Derived.Kind() != Int32 {
+			t.Errorf("expected Int32 passthrough, got %s", ra.Derived.Kind())
 		}
 	})
 
@@ -221,9 +241,13 @@ func TestInstantiate(t *testing.T) {
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Int64]})
 
-		rp, ok := result.(*Procedure)
+		ra, ok := result.(*Alias)
 		if !ok {
-			t.Fatalf("expected *Procedure, got %T", result)
+			t.Fatalf("expected *Alias, got %T", result)
+		}
+		rp, ok := ra.Derived.(*Procedure)
+		if !ok {
+			t.Fatalf("expected Derived *Procedure, got %T", ra.Derived)
 		}
 
 		if !Equal(rp.Parameters[0].Type, Basics[Int64]) {

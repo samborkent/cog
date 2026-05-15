@@ -10,8 +10,8 @@ import (
 )
 
 func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.NodeIndex {
-	if p.symbols.Outer == nil {
-		// Ensure type already exists (created during find globals sweep)
+	if !p.globalsPass && p.symbols.Outer == nil {
+		// Ensure type already exists (created during globals pass)
 		_, ok := p.symbols.Resolve(ident.Token.Literal)
 		if !ok {
 			p.error(p.lex.This(), fmt.Sprintf("missing global type symbol %q", ident.Token.Literal), "parseTypeAlias")
@@ -37,11 +37,14 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 
 	p.lex.Step() // consume ~
 
+	// Save the global scope before pushing type param scope, so that
+	// DefineGlobal registers the type on the correct (outer) scope.
+	globalScope := p.symbols
+
 	// If there are type params, push them into an enclosed scope so that
 	// type parameter names (e.g. T) are resolvable in the alias body.
 	if len(typeParams) > 0 {
-		outer := p.symbols
-		p.symbols = NewEnclosedSymbolTable(outer)
+		p.symbols = NewEnclosedSymbolTable(globalScope)
 
 		for _, tp := range typeParams {
 			p.symbols.Define(&ast.Identifier{
@@ -54,7 +57,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 			})
 		}
 
-		defer func() { p.symbols = outer }()
+		defer func() { p.symbols = globalScope }()
 	}
 
 	typ := p.parseCombinedType(ctx, ident.Exported, ident.Global)
@@ -66,7 +69,7 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 	// findGlobalMethod attached methods to the original *Struct, but
 	// parseCombinedType just created a new *Struct that will replace it.
 	if newStruct, ok := typ.(*types.Struct); ok {
-		if existing, ok := p.symbols.Resolve(ident.Token.Literal); ok {
+		if existing, ok := globalScope.Resolve(ident.Token.Literal); ok {
 			if oldStruct, ok := existing.Identifier.ValueType.(*types.Struct); ok {
 				newStruct.Methods = oldStruct.Methods
 			}
@@ -80,24 +83,26 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 		if alias, ok := typ.(*types.Alias); ok {
 			alias.TypeParams = typeParams
 		} else {
-			// TODO: check if we need this
-			// // Wrap in an alias so type params can be carried.
-			// wrapped := &types.Alias{
-			// 	Name:       ident.Token.Literal,
-			// 	Derived:    typ,
-			// 	Exported:   ident.Exported,
-			// 	Global:     ident.Global,
-			// 	TypeParams: typeParams,
-			// }
-			// typeDecl.Alias = wrapped
-			// typeDecl.Identifier.ValueType = wrapped
+			// Wrap in an alias so type params can be carried.
+			wrapped := &types.Alias{
+				Name:       ident.Token.Literal,
+				Derived:    typ,
+				Exported:   ident.Exported,
+				Global:     ident.Global,
+				TypeParams: typeParams,
+			}
+			ident.ValueType = wrapped
 		}
 	}
 
 	// Define type if in inner scope
 	// TODO: find out why we had these restrictions.
 	// if p.symbols.Outer != nil && len(typeParams) == 0 {
-	p.symbols.Define(ident)
+	if p.globalsPass {
+		globalScope.DefineGlobal(ident)
+	} else {
+		p.symbols.Define(ident)
+	}
 	// }
 
 	if iface, ok := ident.ValueType.(*types.Interface); ok {

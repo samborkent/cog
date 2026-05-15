@@ -129,6 +129,80 @@ func TestDefineGlobal(t *testing.T) {
 	}
 }
 
+func TestDefineGlobalResolvesForwardStub(t *testing.T) {
+	t.Parallel()
+
+	s := NewSymbolTable()
+
+	// Create a forward stub (ScanScope, ValueType=None).
+	stub := makeIdent("Point", types.None)
+	stub.Qualifier = ast.QualifierType
+	s.DefineGlobal(stub)
+
+	// Now resolve the stub with the real struct type.
+	structType := &types.Struct{
+		Fields: []*types.Field{
+			{Name: "x", Type: types.Basics[types.Float64], Exported: true},
+			{Name: "y", Type: types.Basics[types.Float64], Exported: true},
+		},
+	}
+	real := makeIdent("Point", structType)
+	real.Qualifier = ast.QualifierType
+	s.DefineGlobal(real)
+
+	// The stub pointer should have been updated in-place.
+	sym, ok := s.Resolve("Point")
+	if !ok {
+		t.Fatal("expected to resolve Point")
+	}
+
+	if sym.Identifier.ValueType.Kind() != types.StructKind {
+		t.Fatalf("expected StructKind, got %v", sym.Identifier.ValueType.Kind())
+	}
+
+	// Struct fields must be registered on the symbol table.
+	xField, ok := s.ResolveField("Point", "x")
+	if !ok {
+		t.Fatal("expected to resolve field x")
+	}
+
+	if xField.Type().Kind() != types.Float64 {
+		t.Errorf("field x type = %v, want Float64", xField.Type())
+	}
+
+	yField, ok := s.ResolveField("Point", "y")
+	if !ok {
+		t.Fatal("expected to resolve field y")
+	}
+
+	if yField.Type().Kind() != types.Float64 {
+		t.Errorf("field y type = %v, want Float64", yField.Type())
+	}
+}
+
+func TestDefineGlobalResolvesForwardStubNonStruct(t *testing.T) {
+	t.Parallel()
+
+	s := NewSymbolTable()
+
+	// Create a forward stub.
+	stub := makeIdent("count", types.None)
+	s.DefineGlobal(stub)
+
+	// Resolve with a non-struct type.
+	real := makeIdent("count", types.Basics[types.Int64])
+	s.DefineGlobal(real)
+
+	sym, ok := s.Resolve("count")
+	if !ok {
+		t.Fatal("expected to resolve count")
+	}
+
+	if sym.Identifier.ValueType.Kind() != types.Int64 {
+		t.Errorf("expected Int64, got %v", sym.Identifier.ValueType.Kind())
+	}
+}
+
 func TestDefineAndResolveGoImport(t *testing.T) {
 	t.Parallel()
 

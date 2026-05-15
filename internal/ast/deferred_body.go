@@ -13,14 +13,16 @@ var _ Node = &DeferredBody{}
 // globals pass. It records the byte offset of the opening brace so the parser
 // can seek back and parse the body in a second pass.
 type DeferredBody struct {
-	Token  tokens.Token
-	Offset uint32
+	Token    tokens.Token
+	Offset   uint32
+	Receiver *Identifier // non-nil for method bodies (needed to reconstruct receiver scope)
 }
 
-func (a *AST) NewDeferredBody(token tokens.Token, offset uint32) NodeIndex {
+func (a *AST) NewDeferredBody(token tokens.Token, offset uint32, receiver *Identifier) NodeIndex {
 	db := New[DeferredBody](a)
 	db.Token = token
 	db.Offset = offset
+	db.Receiver = receiver
 	return a.AddNode(db)
 }
 
@@ -33,5 +35,5 @@ func (n *DeferredBody) Hash() uint64 {
 }
 
 func (n *DeferredBody) StringTo(out *strings.Builder, _ *AST) {
-	fmt.Fprintf(out, "{deferred@%d}", n.Offset)
+	fmt.Fprintf(out, "{body@%d}", n.Offset)
 }

@@ -129,12 +129,13 @@ func lexPackage(t testing.TB, pkg packageFiles) []lexedFile {
 	return lexed
 }
 
-// findGlobals runs FindGlobals on all files with a shared symbol table,
-// returning the parsers for subsequent ParseOnly calls.
-func findGlobals(t testing.TB, lexed []lexedFile, symbols *parser.SymbolTable) []*parser.Parser {
+// parseGlobals runs ParseGlobals on all files with a shared symbol table,
+// returning the parsers (for subsequent ParseBodies) and the ASTs.
+func parseGlobals(t testing.TB, lexed []lexedFile, symbols *parser.SymbolTable) ([]*parser.Parser, []*ast.AST) {
 	t.Helper()
 
 	parsers := make([]*parser.Parser, len(lexed))
+	astFiles := make([]*ast.AST, len(lexed))
 
 	for i, lf := range lexed {
 		p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
@@ -142,31 +143,30 @@ func findGlobals(t testing.TB, lexed []lexedFile, symbols *parser.SymbolTable) [
 			t.Fatalf("parser init (%s): %v", lf.path, err)
 		}
 
-		p.FindGlobals(t.Context())
+		f, err := p.ParseGlobals(t.Context(), lf.path)
+		if err != nil {
+			t.Fatalf("parser globals (%s): %v", lf.path, err)
+		}
 
 		parsers[i] = p
+		astFiles[i] = f
 	}
 
-	return parsers
+	return parsers, astFiles
 }
 
-// compilePackage compiles a single package: FindGlobals + ParseOnly.
+// compilePackage compiles a single package: ParseGlobals + ParseBodies.
 func compilePackage(t testing.TB, pkg packageFiles) ([]*ast.AST, *parser.SymbolTable) {
 	t.Helper()
 
 	lexed := lexPackage(t, pkg)
 	symbols := parser.NewSymbolTable()
-	parsers := findGlobals(t, lexed, symbols)
-
-	astFiles := make([]*ast.AST, len(lexed))
+	parsers, astFiles := parseGlobals(t, lexed, symbols)
 
 	for i, lf := range lexed {
-		f, err := parsers[i].ParseOnly(t.Context(), lf.path)
-		if err != nil {
-			t.Fatalf("parser error (%s): %v", lf.path, err)
+		if err := parsers[i].ParseBodies(t.Context()); err != nil {
+			t.Fatalf("parser bodies (%s): %v", lf.path, err)
 		}
-
-		astFiles[i] = f
 	}
 
 	return astFiles, symbols
@@ -183,17 +183,17 @@ func populateImportExports(imp *parser.CogImport, symbols *parser.SymbolTable) {
 }
 
 // compileProject compiles the full example project: entry package + imports.
-// It mirrors the flow in cmd/main.go: lex all → FindGlobals → compile
-// imports → populate exports → ParseOnly entry files.
+// It mirrors the flow in cmd/main.go: lex all → ParseGlobals → compile
+// imports → populate exports → ParseBodies entry files.
 func compileProject(t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
 	t.Helper()
 
 	entry, imported := loadExamplePackages(t)
 
-	// Phase 1: Lex and FindGlobals for the entry package.
+	// Phase 1: Lex and ParseGlobals for the entry package.
 	entryLexed := lexPackage(t, entry)
 	entrySymbols := parser.NewSymbolTable()
-	entryParsers := findGlobals(t, entryLexed, entrySymbols)
+	entryParsers, astFiles := parseGlobals(t, entryLexed, entrySymbols)
 
 	// Phase 2: Compile imported packages and populate exports.
 	for _, pkg := range imported {
@@ -207,16 +207,11 @@ func compileProject(t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
 		}
 	}
 
-	// Phase 3: Full parse the entry package.
-	astFiles := make([]*ast.AST, len(entryLexed))
-
+	// Phase 3: ParseBodies for the entry package.
 	for i, lf := range entryLexed {
-		f, err := entryParsers[i].ParseOnly(t.Context(), lf.path)
-		if err != nil {
-			t.Fatalf("parser error (%s): %v", lf.path, err)
+		if err := entryParsers[i].ParseBodies(t.Context()); err != nil {
+			t.Fatalf("parser bodies (%s): %v", lf.path, err)
 		}
-
-		astFiles[i] = f
 	}
 
 	return astFiles, entrySymbols
@@ -266,7 +261,7 @@ func BenchmarkLexing(b *testing.B) {
 
 var parsingAST *ast.AST
 
-// BenchmarkParsing benchmarks the parser phase (lex + FindGlobals + ParseOnly)
+// BenchmarkParsing benchmarks the parser phase (lex + ParseGlobals + ParseBodies)
 // with proper multi-file symbol sharing and import resolution.
 func BenchmarkParsing(b *testing.B) {
 	b.ReportAllocs()
@@ -276,10 +271,10 @@ func BenchmarkParsing(b *testing.B) {
 		entry, imported := loadExamplePackages(b)
 		b.StartTimer()
 
-		// Lex + FindGlobals for the entry package.
+		// Lex + ParseGlobals for the entry package.
 		entryLexed := lexPackage(b, entry)
 		entrySymbols := parser.NewSymbolTable()
-		entryParsers := findGlobals(b, entryLexed, entrySymbols)
+		entryParsers, astFiles := parseGlobals(b, entryLexed, entrySymbols)
 
 		// Compile imported packages and populate exports.
 		for _, pkg := range imported {
@@ -292,14 +287,13 @@ func BenchmarkParsing(b *testing.B) {
 			}
 		}
 
-		// ParseOnly entry files.
+		// ParseBodies for entry files.
 		for i, lf := range entryLexed {
-			f, err := entryParsers[i].ParseOnly(b.Context(), lf.path)
-			if err != nil {
-				b.Fatalf("parser error (%s): %v", lf.path, err)
+			if err := entryParsers[i].ParseBodies(b.Context()); err != nil {
+				b.Fatalf("parser bodies (%s): %v", lf.path, err)
 			}
 
-			parsingAST = f
+			parsingAST = astFiles[i]
 		}
 	}
 }
@@ -396,10 +390,10 @@ func BenchmarkFullPipeline(b *testing.B) {
 		entry, imported := loadExamplePackages(b)
 		b.StartTimer()
 
-		// Lex + FindGlobals for the entry package.
+		// Lex + ParseGlobals for the entry package.
 		entryLexed := lexPackage(b, entry)
 		entrySymbols := parser.NewSymbolTable()
-		entryParsers := findGlobals(b, entryLexed, entrySymbols)
+		entryParsers, astFiles := parseGlobals(b, entryLexed, entrySymbols)
 
 		// Compile imported packages and populate exports.
 		for _, pkg := range imported {
@@ -412,16 +406,13 @@ func BenchmarkFullPipeline(b *testing.B) {
 			}
 		}
 
-		// ParseOnly entry files.
-		astFiles := make([]*ast.AST, len(entryLexed))
-
+		// ParseBodies for entry files.
 		for i, lf := range entryLexed {
-			f, err := entryParsers[i].ParseOnly(b.Context(), lf.path)
-			if err != nil {
-				b.Fatalf("parser error (%s): %v", lf.path, err)
+			if err := entryParsers[i].ParseBodies(b.Context()); err != nil {
+				b.Fatalf("parser bodies (%s): %v", lf.path, err)
 			}
 
-			astFiles[i] = f
+			_ = astFiles[i]
 		}
 
 		// Transpile + print.
@@ -604,7 +595,7 @@ func BenchmarkLargeFile(b *testing.B) {
 		// Full project compile — the pipeline cost is dominated by example.cog.
 		entryLexed := lexPackage(b, entry)
 		entrySymbols := parser.NewSymbolTable()
-		entryParsers := findGlobals(b, entryLexed, entrySymbols)
+		entryParsers, astFiles := parseGlobals(b, entryLexed, entrySymbols)
 
 		for _, pkg := range imported {
 			_, pkgSymbols := compilePackage(b, pkg)
@@ -616,15 +607,12 @@ func BenchmarkLargeFile(b *testing.B) {
 			}
 		}
 
-		astFiles := make([]*ast.AST, len(entryLexed))
-
 		for i, lf := range entryLexed {
-			f, err := entryParsers[i].ParseOnly(b.Context(), lf.path)
-			if err != nil {
-				b.Fatalf("parser error (%s): %v", lf.path, err)
+			if err := entryParsers[i].ParseBodies(b.Context()); err != nil {
+				b.Fatalf("parser bodies (%s): %v", lf.path, err)
 			}
 
-			astFiles[i] = f
+			_ = astFiles[i]
 		}
 
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))

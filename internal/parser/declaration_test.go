@@ -187,4 +187,36 @@ main : proc() = {}`)
 foo : int64 = nonexistent
 main : proc() = {}`)
 	})
+
+	t.Run("generic_alias_forward_reference", func(t *testing.T) {
+		t.Parallel()
+		f := parse(t, `package p
+names : List<utf8> = @slice<utf8>(3)
+List<T ~ any> ~ []T
+main : proc() = {}`)
+
+		d := stmtAs[*ast.Declaration](t, f, 0)
+
+		if d.Assignment.Identifier.Token.Literal != "names" {
+			t.Fatalf("expected name 'names', got %q", d.Assignment.Identifier.Token.Literal)
+		}
+
+		vt := d.Assignment.Identifier.ValueType
+		alias, ok := vt.(*types.Alias)
+		if !ok {
+			t.Fatalf("ValueType = %T (%v), want *types.Alias", vt, vt)
+		}
+
+		if len(alias.TypeArgs) != 1 {
+			t.Fatalf("TypeArgs len = %d, want 1", len(alias.TypeArgs))
+		}
+
+		if alias.TypeArgs[0] != types.Basics[types.UTF8] {
+			t.Errorf("TypeArgs[0] = %v, want utf8", alias.TypeArgs[0])
+		}
+
+		if alias.Kind() != types.SliceKind {
+			t.Errorf("Kind() = %v, want SliceKind", alias.Kind())
+		}
+	})
 }

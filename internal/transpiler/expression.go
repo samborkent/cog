@@ -82,7 +82,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 					continue
 				}
 
-				defaultExpr, err := t.convertExpr(procType.Parameters[i].Default.Expr.(ast.Expr))
+				defaultExpr, err := t.convertExpr(t.Expr(ast.ExprIndex(procType.Parameters[i].Default.Index)))
 				if err != nil {
 					return nil, fmt.Errorf("parsing default value of input parameter in call expression: %w", err)
 				}

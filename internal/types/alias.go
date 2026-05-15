@@ -7,6 +7,7 @@ type Alias struct {
 	Exported   bool
 	Global     bool
 	TypeParams []*Alias
+	TypeArgs   []Type // concrete type arguments for an instantiated generic alias
 	lazy       func() Type
 }
 
@@ -24,8 +25,11 @@ func NewForwardAlias(name string, exported, global bool, resolver func() Type) *
 
 func (a *Alias) ensureResolved() {
 	if a.lazy != nil && IsNone(a.Derived) {
-		a.Derived = a.lazy()
-		a.lazy = nil
+		result := a.lazy()
+		if !IsNone(result) {
+			a.Derived = result
+			a.lazy = nil
+		}
 	}
 }
 
@@ -101,9 +105,25 @@ func (a *Alias) SatisfiedBy(concrete Type) bool {
 
 // Instantiate substitutes TypeParam references in derived with concrete types.
 // typeArgs maps type parameter names to their concrete replacements.
+// Returns a new *Alias with the same name, the substituted Derived, and the
+// concrete TypeArgs recorded for transpilation.
 func (a *Alias) Instantiate(typeArgs map[string]Type) Type {
 	a.ensureResolved()
-	return SubstituteType(a.Derived, typeArgs)
+
+	args := make([]Type, 0, len(a.TypeParams))
+	for _, tp := range a.TypeParams {
+		if concrete, ok := typeArgs[tp.Name]; ok {
+			args = append(args, concrete)
+		}
+	}
+
+	return &Alias{
+		Name:     a.Name,
+		Derived:  SubstituteType(a.Derived, typeArgs),
+		Exported: a.Exported,
+		Global:   a.Global,
+		TypeArgs: args,
+	}
 }
 
 // SubstituteType recursively replaces type parameter references with concrete types.

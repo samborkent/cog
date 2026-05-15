@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -158,7 +157,11 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 		return
 	}
 
-	p.FindGlobals(ctx)
+	f, err := p.ParseGlobals(ctx, scriptPath)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
 
 	// Process imported packages.
 	importedPkgs := make(map[string]*compiledPackage)
@@ -174,8 +177,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 		populateImportExports(imp, pkg.symbols)
 	}
 
-	f, err := p.ParseOnly(ctx, scriptPath)
-	if err != nil {
+	if err := p.ParseBodies(ctx); err != nil {
 		fmt.Println(err.Error())
 		return
 	}
@@ -276,12 +278,17 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 	// The Go module name for the transpiled project matches the entry package name.
 	goModuleName := entryPkgName
 
-	// Step 2: FindGlobals on the entry package (discovers globals + import paths).
+	// Step 2: ParseGlobals on the entry package (full parse with deferred bodies).
 	entrySymbols := parser.NewSymbolTable()
 
-	entryParsers := findGlobals(ctx, entryLexed, entrySymbols)
-	if entryParsers == nil {
-		return fmt.Errorf("failed to find globals")
+	entryParsers, entryASTs, err := parseGlobals(ctx, entryLexed, entrySymbols)
+	if err != nil {
+		return err
+	}
+
+	// Validate unresolved forward stubs.
+	if err := entryParsers[0].ValidateGlobals(); err != nil {
+		return err
 	}
 
 	// A package that declares a main proc must be named "main".
@@ -304,23 +311,15 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 		populateImportExports(imp, pkg.symbols)
 	}
 
-	// Step 4: Full parse the entry package (now with import exports available).
-	entryASTs := make([]*ast.AST, len(entryLexed))
-
+	// Step 4: ParseBodies (now with import exports available).
 	for i, lf := range entryLexed {
-		f, err := entryParsers[i].ParseOnly(ctx, lf.path)
-		if err != nil {
+		if err := entryParsers[i].ParseBodies(ctx); err != nil {
 			fmt.Println(err.Error())
+			return err
 		}
 
-		entryASTs[i] = f
-
 		if !write {
-			fmt.Printf("--- %s ---\n%s\n\n", lf.path, f.Node(1))
-
-			if err != nil {
-				return err
-			}
+			fmt.Printf("--- %s ---\n%s\n\n", lf.path, entryASTs[i].Node(1))
 		}
 	}
 
@@ -403,22 +402,28 @@ func lexAndValidate(files []string) ([]lexedFile, string, error) {
 	return lexed, pkgName, nil
 }
 
-// findGlobals runs FindGlobals on all files with a shared symbol table.
-func findGlobals(ctx context.Context, lexed []lexedFile, symbols *parser.SymbolTable) []*parser.Parser {
+// parseGlobals runs ParseGlobals on all files with a shared symbol table.
+// Returns the parsers (for subsequent ParseBodies) and the ASTs.
+func parseGlobals(ctx context.Context, lexed []lexedFile, symbols *parser.SymbolTable) ([]*parser.Parser, []*ast.AST, error) {
 	parsers := make([]*parser.Parser, len(lexed))
+	asts := make([]*ast.AST, len(lexed))
 
 	for i, lf := range lexed {
 		p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
 		if err != nil {
-			fmt.Println(err.Error())
-			return nil
+			return nil, nil, err
 		}
 
-		p.FindGlobals(ctx)
+		f, err := p.ParseGlobals(ctx, lf.path)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		parsers[i] = p
+		asts[i] = f
 	}
 
-	return parsers
+	return parsers, asts, nil
 }
 
 // compileImportedPackage discovers, lexes, parses, and validates an imported package.
@@ -437,9 +442,14 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 
 	symbols := parser.NewSymbolTable()
 
-	parsers := findGlobals(ctx, lexed, symbols)
-	if parsers == nil {
-		return nil, errors.New("finding globals failed")
+	parsers, astFiles, err := parseGlobals(ctx, lexed, symbols)
+	if err != nil {
+		return nil, fmt.Errorf("parsing globals: %w", err)
+	}
+
+	// Validate unresolved forward stubs.
+	if err := parsers[0].ValidateGlobals(); err != nil {
+		return nil, err
 	}
 
 	// Imported packages must not declare a main proc.
@@ -450,16 +460,11 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 			files[0], ln, col, pkgName)
 	}
 
-	astFiles := make([]*ast.AST, len(lexed))
-
+	// ParseBodies to fill in deferred procedure bodies.
 	for i, lf := range lexed {
-		f, err := parsers[i].ParseOnly(ctx, lf.path)
-		if err != nil {
-			fmt.Println(err.Error())
-			return nil, fmt.Errorf("parsing file %q: %w", lf.path, err)
+		if err := parsers[i].ParseBodies(ctx); err != nil {
+			return nil, fmt.Errorf("parsing bodies in %q: %w", lf.path, err)
 		}
-
-		astFiles[i] = f
 	}
 
 	return &compiledPackage{

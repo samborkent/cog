@@ -6,11 +6,13 @@ type Type interface {
 	Underlying() Type
 }
 
-type Expression struct {
-	Expr   expression
-	String string
-}
+// ExprIndex is an index into the AST expression slice.
+// Defined here so types can reference expressions without importing ast.
+type ExprIndex uint32
 
-type expression interface {
-	Type() Type
+// Expression references an AST expression by index. The String field caches the
+// textual representation for use in type String() methods and equality checks.
+type Expression struct {
+	Index  ExprIndex
+	String string
 }

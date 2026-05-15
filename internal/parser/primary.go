@@ -19,6 +19,17 @@ const (
 )
 
 func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprIndex {
+	// During globals pass, if the expected type is an unresolved forward alias
+	// and we're about to parse a {}-expression, defer immediately before the
+	// alias unwrapping below would lose the type info.
+	if p.globalsPass && p.lex.This().Type == tokens.LBrace && typeToken != nil {
+		if alias, ok := typeToken.(*types.Alias); ok && !alias.IsTypeParam() && types.IsNone(alias.Derived) {
+			offset := p.lex.Offset()
+			p.lex.SkipBody()
+			return p.ast.NewDeferredExpr(p.lex.Peek(-1), offset, typeToken)
+		}
+	}
+
 	if typeToken != nil {
 		aliasType, ok := typeToken.(*types.Alias)
 		if ok && !aliasType.IsTypeParam() {
@@ -484,6 +495,14 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			return p.ast.NewMapLiteral(mapToken, t, pairs)
 		case *types.Procedure:
 			procToken := p.lex.This()
+
+			// During globals pass, defer the body: capture offset, skip the block.
+			if p.globalsPass {
+				offset := p.lex.Offset()
+				p.lex.SkipBody()
+				bodyIdx := p.ast.NewDeferredBody(procToken, offset, p.currentReceiver)
+				return p.ast.NewProcedureLiteral(procToken, t, bodyIdx)
+			}
 
 			// Re-enter type parameter scope so methods are visible in the body.
 			if len(t.TypeParams) > 0 {

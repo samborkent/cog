@@ -52,3 +52,14 @@ BenchmarkFullPipeline-10                     100           1210364 ns/op        
 BenchmarkGoBuild-10                            1         124994542 ns/op           14280 B/op             67 allocs/op
 BenchmarkLargeFile-10                         84           1268804 ns/op         1063443 B/op          15783 allocs/op
 BenchmarkMultiFileTranspile-10               132            903786 ns/op          792336 B/op          11297 allocs/op
+
+2025-05-15 18:38 - Two pass parser
+BenchmarkLexing-10                           978            116402 ns/op           23176 B/op        1007 allocs/op
+BenchmarkParsing-10                          453            241856 ns/op          248365 B/op        3799 allocs/op
+BenchmarkTranspiling-10                      498            225302 ns/op          330348 B/op        8543 allocs/op
+BenchmarkPrinting-10                         192            618425 ns/op          456991 B/op        2696 allocs/op
+BenchmarkTranspileAndPrint-10                134            883356 ns/op          798932 B/op       11241 allocs/op
+BenchmarkFullPipeline-10                     100           1147245 ns/op         1039758 B/op       15043 allocs/op
+BenchmarkGoBuild-10                            1         123376708 ns/op           14168 B/op          66 allocs/op
+BenchmarkLargeFile-10                         87           1191474 ns/op         1042715 B/op       15043 allocs/op
+BenchmarkMultiFileTranspile-10               133            894826 ns/op          795384 B/op       11240 allocs/op

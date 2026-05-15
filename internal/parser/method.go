@@ -13,7 +13,20 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 	methodToken := p.lex.This()
 
 	storedReceiver, ok := p.symbols.Resolve(typeName)
-	if !ok {
+	if !ok && p.globalsPass {
+		// Forward type reference for receiver — register stub.
+		ident := &ast.Identifier{
+			Token: tokens.Token{
+				Type:    tokens.Identifier,
+				Literal: typeName,
+			},
+			Qualifier: ast.QualifierType,
+			Global:    true,
+		}
+
+		p.symbols.DefineGlobal(ident)
+		storedReceiver = Symbol{Identifier: ident, Scope: ScanScope}
+	} else if !ok {
 		p.error(p.lex.This(), fmt.Sprintf("undefined receiver type %q", typeName), "parseMethod")
 		return ast.ZeroNodeIndex
 	}
@@ -23,7 +36,7 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 		return ast.ZeroNodeIndex
 	}
 
-	if exported && !storedReceiver.Identifier.Exported {
+	if exported && !storedReceiver.Identifier.Exported && !types.IsNone(storedReceiver.Identifier.ValueType) {
 		p.error(p.lex.This(), "exported method not allowed on unexported type", "parseMethod")
 		return ast.ZeroNodeIndex
 	}
@@ -62,7 +75,19 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 
 	methodName := p.lex.This().Literal
 	methodSymbol, ok := p.symbols.ResolveField(typeName, methodName)
-	if !ok {
+
+	if !ok && p.globalsPass {
+		// During globals pass, register the method (replaces findGlobalMethod).
+		methodSymbol = Symbol{
+			Identifier: &ast.Identifier{
+				Token:     p.lex.This(),
+				Exported:  exported,
+				Qualifier: ast.QualifierMethod,
+				Global:    true,
+			},
+			Scope: ScanScope,
+		}
+	} else if !ok {
 		p.error(p.lex.This(), "method is undefined", "parseMethod")
 		return ast.ZeroNodeIndex
 	}
@@ -83,12 +108,46 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 		p.symbols.Define(receiver)
 
-		defer func() { p.symbols = p.symbols.Outer }()
+		prevReceiver := p.currentReceiver
+		p.currentReceiver = receiver
+
+		defer func() {
+			p.symbols = p.symbols.Outer
+			p.currentReceiver = prevReceiver
+		}()
 	}
 
 	decl := p.parseTypedDeclaration(ctx, methodSymbol.Identifier)
 	if decl == ast.ZeroNodeIndex {
 		return ast.ZeroNodeIndex
+	}
+
+	// During globals pass, register method in symbol table and attach to struct.
+	if p.globalsPass {
+		if err := p.symbols.DefineMethod(typeName, methodSymbol.Identifier); err != nil {
+			p.error(p.lex.This(), err.Error(), "parseMethod")
+			return ast.ZeroNodeIndex
+		}
+
+		// Attach method to receiver's underlying struct for interface satisfaction.
+		if sym, ok := p.symbols.Resolve(typeName); ok && sym.Identifier.ValueType != nil {
+			procType, _ := methodSymbol.Identifier.ValueType.(*types.Procedure)
+			if procType != nil {
+				method := &types.Method{
+					Name:      methodName,
+					Procedure: procType,
+				}
+
+				switch v := sym.Identifier.ValueType.(type) {
+				case *types.Struct:
+					v.Methods = append(v.Methods, method)
+				case *types.Alias:
+					if s, ok := v.Underlying().(*types.Struct); ok {
+						s.Methods = append(s.Methods, method)
+					}
+				}
+			}
+		}
 	}
 
 	// Reject variable receiver on func (pure functions cannot mutate).

@@ -180,6 +180,29 @@ func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
 		existing.Identifier.ValueType = ident.ValueType
 		existing.Identifier.Qualifier = ident.Qualifier
 		existing.Identifier.Exported = ident.Exported
+
+		// Register struct fields so selectors (e.g. val.x) resolve.
+		if ident.ValueType != nil && ident.ValueType.Kind() == types.StructKind {
+			if st, ok := ident.ValueType.Underlying().(*types.Struct); ok {
+				if _, exists := s.fields[ident.Token.Literal]; !exists {
+					s.fields[ident.Token.Literal] = make(map[string]Symbol, len(st.Fields))
+					for _, field := range st.Fields {
+						s.fields[ident.Token.Literal][field.Name] = Symbol{
+							Identifier: &ast.Identifier{
+								Token: tokens.Token{
+									Type:    tokens.Identifier,
+									Literal: field.Name,
+								},
+								ValueType: field.Type,
+								Exported:  field.Exported,
+							},
+							Scope: StructScope,
+						}
+					}
+				}
+			}
+		}
+
 		return
 	}
 
