@@ -286,6 +286,12 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 	typ, ok := types.Lookup[p.lex.This().Type]
 	if !ok {
+		// Reject constraint-only keywords in type position.
+		if _, isConstraint := types.ConstraintLookup[p.lex.This().Type]; isConstraint {
+			p.error(p.lex.This(), fmt.Sprintf("%q is a constraint, not a concrete type", p.lex.This().Type), "parseType")
+			return nil
+		}
+
 		// Check for imported package type: pkg.Type
 		if p.lex.This().Type == tokens.Identifier && p.lex.Peek(1).Type == tokens.Dot {
 			if imp, isImport := p.symbols.ResolveCogImport(p.lex.This().Literal); isImport {
@@ -336,6 +342,22 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 		// Non-basic type, try to find in symbol table.
 		typeSymbol, ok := p.symbols.Resolve(p.lex.This().Literal)
+		if !ok && p.globalsPass && p.lex.This().Type == tokens.Identifier {
+			// Forward type reference. Register stub, resolve lazily.
+			ident := &ast.Identifier{
+				Token:     p.lex.This(),
+				Qualifier: ast.QualifierType,
+				Global:    true,
+			}
+
+			p.symbols.DefineGlobal(ident) // registers with ScanScope + ValueType=None
+			p.lex.Step()
+
+			return types.NewForwardAlias(ident.Token.Literal, ident.Exported, ident.Global, func() types.Type {
+				return ident.ValueType
+			})
+		}
+
 		if !ok || typeSymbol.Identifier.Qualifier != ast.QualifierType {
 			p.error(p.lex.This(), "unknown type found in type declaration", "parseType")
 			return nil

@@ -17,7 +17,7 @@ const windowSize = 7
 
 type Lexer struct {
 	scan    *scanner.Scanner
-	src     io.Reader                // TODO: remove this
+	src     io.ReadSeeker
 	window  [windowSize]tokens.Token // ring buffer: offsets [-3, -2, -1, 0, +1, +2, +3] from cursor
 	errs    []error
 	Len     uint32 // total length of the input in bytes
@@ -26,7 +26,7 @@ type Lexer struct {
 	debug   bool
 }
 
-func New(r io.Reader, len uint32, debug bool) *Lexer {
+func New(r io.ReadSeeker, len uint32, debug bool) *Lexer {
 	s := new(scanner.Scanner)
 	s.Init(r)
 	s.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
@@ -66,9 +66,7 @@ func (l *Lexer) Err() error {
 }
 
 func (l *Lexer) Reset() {
-	if seeker, ok := l.src.(io.Seeker); ok {
-		_, _ = seeker.Seek(0, io.SeekStart)
-	}
+	_, _ = l.src.Seek(0, io.SeekStart)
 	l.scan.Init(l.src)
 	l.scan.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
 	l.cursor = 0
@@ -179,8 +177,10 @@ func (l *Lexer) scanNext() tokens.Token {
 		txt := s.TokenText()
 
 		t := tokens.Token{
-			Ln:  uint32(min(s.Line, math.MaxUint32)),
-			Col: uint16(min(s.Column, math.MaxUint16)),
+			Pos: tokens.Pos{
+				Ln:  uint32(min(s.Line, math.MaxUint32)),
+				Col: uint16(min(s.Column, math.MaxUint16)),
+			},
 		}
 
 		switch tok {
@@ -276,8 +276,10 @@ func (l *Lexer) scanNext() tokens.Token {
 	}
 
 	return tokens.Token{
+		Pos: tokens.Pos{
+			Ln:  uint32(min(s.Line, math.MaxUint32)),
+			Col: uint16(min(s.Column, math.MaxUint16)),
+		},
 		Type: tokens.EOF,
-		Ln:   uint32(min(s.Line, math.MaxUint32)),
-		Col:  uint16(min(s.Column, math.MaxUint16)),
 	}
 }

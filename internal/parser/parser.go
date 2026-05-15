@@ -28,6 +28,7 @@ type Parser struct {
 	ast               *ast.AST
 	Errs              []error
 	scriptMode        bool
+	globalsPass       bool
 	currentReturnType types.Type // return type of the enclosing procedure (for result wrapping)
 	definedMethods    map[string]struct{}
 }

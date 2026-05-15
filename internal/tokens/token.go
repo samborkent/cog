@@ -5,11 +5,15 @@ import (
 	"strings"
 )
 
+type Pos struct {
+	Ln  uint32
+	Col uint16
+}
+
 type Token struct {
 	Literal string
-	Ln      uint32
-	Col     uint16
-	Type    Type
+	Pos
+	Type Type
 }
 
 func (t Token) String() string {

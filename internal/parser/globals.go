@@ -33,6 +33,14 @@ func (p *Parser) isGenericTypeDecl() bool {
 // called externally when multiple parsers share one symbol table, so that
 // all files' globals are visible before any file is fully parsed.
 func (p *Parser) FindGlobals(ctx context.Context) {
+	p.globalsPass = true
+
+	defer func() {
+		p.globalsPass = false
+		p.lex.Reset()
+		p.Errs = p.Errs[:0]
+	}()
+
 	if p.scriptMode {
 		// Script files have definition scope (no forward references).
 		// Only scan for import statements so that imported packages can be
@@ -41,8 +49,8 @@ func (p *Parser) FindGlobals(ctx context.Context) {
 		return
 	}
 
-	// Pre-register all type names so forward references can be resolved.
-	p.preRegisterTypeNames(ctx)
+	// // Pre-register all type names so forward references can be resolved.
+	// p.preRegisterTypeNames(ctx)
 
 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 		t := p.lex.This()
@@ -125,14 +133,16 @@ func (p *Parser) FindGlobals(ctx context.Context) {
 		}
 	}
 
-	p.lex.Reset()
-	p.Errs = p.Errs[:0]
+	// Check for undefined types after the scan.
+	for name, sym := range p.symbols.table {
+		if sym.Scope == ScanScope && sym.Identifier.Qualifier == ast.QualifierType &&
+			types.IsNone(sym.Identifier.ValueType) {
+			p.error(sym.Identifier.Token, "undefined type: "+name, "FindGlobals")
+		}
+	}
 }
 
 func (p *Parser) findScriptImports(ctx context.Context) {
-	// Pre-register type names so that type aliases can be resolved during parsing.
-	p.preRegisterTypeNames(ctx)
-
 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 		switch p.lex.This().Type {
 		case tokens.Import:
@@ -143,74 +153,83 @@ func (p *Parser) findScriptImports(ctx context.Context) {
 			if p.lex.This().Type == tokens.LParen {
 				p.skipGrouped(ctx)
 			}
+		case tokens.Identifier:
+			// Register type aliases so they're visible during parsing.
+			if p.lex.Peek(1).Type == tokens.Tilde {
+				ident := &ast.Identifier{
+					Token:  p.lex.This(),
+					Global: true,
+				}
+
+				p.symbols.DefineGlobal(ident)
+			}
+
+			p.lex.Step()
 		default:
 			p.lex.Step()
 		}
 	}
-
-	p.lex.Reset()
-	p.Errs = p.Errs[:0]
 }
 
-func (p *Parser) preRegisterTypeNames(ctx context.Context) {
-	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
-		t := p.lex.This()
-		exported := false
+// func (p *Parser) preRegisterTypeNames(ctx context.Context) {
+// 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+// 		t := p.lex.This()
+// 		exported := false
 
-		if t.Type == tokens.Export {
-			if p.scriptMode {
-				p.lex.Step()
-				continue
-			}
+// 		if t.Type == tokens.Export {
+// 			if p.scriptMode {
+// 				p.lex.Step()
+// 				continue
+// 			}
 
-			p.lex.Step() // consume export
+// 			p.lex.Step() // consume export
 
-			exported = true
-		}
+// 			exported = true
+// 		}
 
-		tok := p.lex.This()
+// 		tok := p.lex.This()
 
-		// Skip qualifiers (types can't have dyn/var but scan past them)
-		if tok.Type == tokens.Dynamic || tok.Type == tokens.Variable {
-			p.lex.Step() // consume qualifier
-		}
+// 		// Skip qualifiers (types can't have dyn/var but scan past them)
+// 		if tok.Type == tokens.Dynamic || tok.Type == tokens.Variable {
+// 			p.lex.Step() // consume qualifier
+// 		}
 
-		if p.lex.This().Type == tokens.Identifier &&
-			(p.lex.Peek(1).Type == tokens.Tilde || p.isGenericTypeDecl()) {
-			ident := &ast.Identifier{
-				Token:    p.lex.This(),
-				Exported: exported,
-				// Qualifier defaults to QualifierType (zero value)
-				Global: true,
-			}
+// 		if p.lex.This().Type == tokens.Identifier &&
+// 			(p.lex.Peek(1).Type == tokens.Tilde || p.isGenericTypeDecl()) {
+// 			ident := &ast.Identifier{
+// 				Token:    p.lex.This(),
+// 				Exported: exported,
+// 				// Qualifier defaults to QualifierType (zero value)
+// 				Global: true,
+// 			}
 
-			p.symbols.DefineGlobal(ident)
+// 			p.symbols.DefineGlobal(ident)
 
-			p.lex.Step() // consume token
+// 			p.lex.Step() // consume token
 
-			// Skip type parameters in procedure/function declarations during pre-registration.
-			if p.lex.This().Type == tokens.LT {
-				p.skipTypeParams(ctx)
-			}
+// 			// Skip type parameters in procedure/function declarations during pre-registration.
+// 			if p.lex.This().Type == tokens.LT {
+// 				p.skipTypeParams(ctx)
+// 			}
 
-			continue
-		}
+// 			continue
+// 		}
 
-		// Skip type parameters in procedure/function declarations during pre-registration.
-		if (p.lex.This().Type == tokens.Procedure || p.lex.This().Type == tokens.Function) &&
-			p.lex.Peek(1).Type == tokens.LT {
-			p.lex.Step() // consume token
-			p.skipTypeParams(ctx)
+// 		// Skip type parameters in procedure/function declarations during pre-registration.
+// 		if (p.lex.This().Type == tokens.Procedure || p.lex.This().Type == tokens.Function) &&
+// 			p.lex.Peek(1).Type == tokens.LT {
+// 			p.lex.Step() // consume token
+// 			p.skipTypeParams(ctx)
 
-			continue
-		}
+// 			continue
+// 		}
 
-		p.lex.Step() // consume token
-	}
+// 		p.lex.Step() // consume token
+// 	}
 
-	p.lex.Reset()
-	p.Errs = p.Errs[:0]
-}
+// 	p.lex.Reset()
+// 	p.Errs = p.Errs[:0]
+// }
 
 func (p *Parser) findGlobalDecl(ctx context.Context, exported bool, qualifier ast.Qualifier) {
 	if p.lex.This().Type != tokens.Identifier {
@@ -305,20 +324,21 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 	p.lex.Step() // consume identifier
 
-	preRegistered := false
-
 	existing, ok := p.symbols.Resolve(ident.Token.Literal)
 	if ok {
-		// Allow pre-registered forward-declared types to be resolved.
+		// Allow forward-declared type stubs to be resolved.
 		if existing.Scope == ScanScope &&
 			existing.Identifier.Qualifier == ast.QualifierType &&
 			types.IsNone(existing.Identifier.ValueType) {
-			preRegistered = true
 			ident = existing.Identifier
 		} else {
 			p.error(p.lex.This(), "cannot redeclare type", "findGlobalType")
 			return
 		}
+	} else {
+		// Register type name immediately so it's visible for forward references
+		// and survives early returns from parsing errors.
+		p.symbols.DefineGlobal(ident)
 	}
 
 	// Parse optional type parameters: <T ~ any, K ~ comparable>
@@ -410,10 +430,6 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 		ident.ValueType = enumType
 
-		if !preRegistered {
-			p.symbols.DefineGlobal(ident)
-		}
-
 		return
 	}
 
@@ -424,10 +440,6 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 		}
 
 		ident.ValueType = errorType
-
-		if !preRegistered {
-			p.symbols.DefineGlobal(ident)
-		}
 
 		return
 	}
@@ -475,14 +487,9 @@ func (p *Parser) findGlobalType(ctx context.Context, exported bool) {
 
 	ident.ValueType = alias
 
-	if !preRegistered {
-		p.symbols.DefineGlobal(ident)
-	} else {
-		// For pre-registered types, we still need to register struct fields
-		// since they weren't available during pre-registration.
-		if alias.Kind() == types.StructKind {
-			p.symbols.Define(ident)
-		}
+	// For struct types, register fields in the symbol table.
+	if alias != nil && alias.Kind() == types.StructKind {
+		p.symbols.Define(ident)
 	}
 }
 

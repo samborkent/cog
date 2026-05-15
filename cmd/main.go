@@ -125,7 +125,7 @@ func discoverFiles(input string) ([]string, error) {
 }
 
 // lexFile lexes a single .cog file and returns its token stream.
-func lexFile(ctx context.Context, path string) (*lexer.Lexer, error) {
+func lexFile(path string) (*lexer.Lexer, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("opening %q: %w", path, err)
@@ -144,7 +144,7 @@ func lexFile(ctx context.Context, path string) (*lexer.Lexer, error) {
 // in cmd/{scriptName}/ with package main and a func main() wrapping the body.
 // If goModuleName is empty, the script name is used and go.mod is written.
 func runScript(ctx context.Context, projectRoot string, scriptPath string, goModuleName string) {
-	toks, err := lexFile(ctx, scriptPath)
+	toks, err := lexFile(scriptPath)
 	if err != nil {
 		fmt.Println(err.Error())
 		return
@@ -248,14 +248,6 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 			}
 		}
 	}
-
-	// fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
-
-	// if err := t.Print(os.Stdout, gofile); err != nil {
-	// 	panic(fmt.Errorf("printing output: %w", err))
-	// }
-
-	// fmt.Println()
 }
 
 // compiledPackage holds the output of compiling a single cog package.
@@ -276,7 +268,7 @@ type lexedFile struct {
 // runProject compiles the entry package and all its imported packages.
 func runProject(ctx context.Context, projectRoot string, entryFiles []string) error {
 	// Step 1: Lex and validate the entry package.
-	entryLexed, entryPkgName, err := lexAndValidate(ctx, entryFiles)
+	entryLexed, entryPkgName, err := lexAndValidate(entryFiles)
 	if err != nil {
 		return err
 	}
@@ -374,11 +366,11 @@ func discoverScripts(dir string) []string {
 }
 
 // lexAndValidate lexes all files and validates they declare the same package.
-func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string, error) {
+func lexAndValidate(files []string) ([]lexedFile, string, error) {
 	lexed := make([]lexedFile, 0, len(files))
 
 	for i, path := range files {
-		lex, err := lexFile(ctx, path)
+		lex, err := lexFile(path)
 		if err != nil {
 			return nil, "", err
 		}
@@ -438,7 +430,7 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		return nil, fmt.Errorf("finding .cog files: %w", err)
 	}
 
-	lexed, pkgName, err := lexAndValidate(ctx, files)
+	lexed, pkgName, err := lexAndValidate(files)
 	if err != nil {
 		return nil, fmt.Errorf("lexing files: %w", err)
 	}
@@ -566,14 +558,6 @@ func transpileAndOutput(goModuleName string, pkg *compiledPackage) {
 			}
 
 			_ = outFile.Close()
-		} else {
-			// fmt.Printf("--- %s ---\n", filepath.Join(outDir, outName))
-
-			// if err := t.Print(os.Stdout, gofiles[i]); err != nil {
-			// 	panic(fmt.Errorf("printing output: %w", err))
-			// }
-
-			// fmt.Println()
 		}
 	}
 }
