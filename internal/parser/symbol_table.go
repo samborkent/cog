@@ -2,9 +2,10 @@ package parser
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/samborkent/cog/internal/ast"
-	"github.com/samborkent/cog/internal/htm"
+	isync "github.com/samborkent/cog/internal/sync"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
@@ -45,15 +46,26 @@ const (
 type SymbolTable struct {
 	Outer *SymbolTable
 
-	table      *htm.Map[string, Symbol]
-	goimports  *htm.Map[string, *ast.Identifier] // key: package name
-	cogimports *htm.Map[string, *CogImport]      // key: package name
-	fields     *htm.Map[string, *htm.Map[string, Symbol]]
-	checked    *htm.Map[string, checkState] // option/result variables verified in this scope
+	concurrent bool
+
+	table      *isync.Map[string, Symbol]
+	goimports  *isync.Map[string, *ast.Identifier] // key: package name
+	cogimports *isync.Map[string, *CogImport]      // key: package name
+	fields     *isync.Map[string, *isync.Map[string, Symbol]]
+	checked    *isync.Map[string, checkState] // option/result variables verified in this scope
 }
 
 func NewSymbolTable() *SymbolTable {
-	table := htm.NewMap[string, Symbol]()
+	return NewSymbolTableWithConcurrency(false)
+}
+
+func NewSymbolTableWithConcurrency(concurrent bool) *SymbolTable {
+	var opts []isync.Option
+	if concurrent {
+		opts = []isync.Option{isync.WithConcurrency()}
+	}
+
+	table := isync.NewMap[string, Symbol](opts...)
 
 	table.Store("_", Symbol{
 		Identifier: None,
@@ -61,16 +73,32 @@ func NewSymbolTable() *SymbolTable {
 	})
 
 	return &SymbolTable{
+		concurrent: concurrent,
 		table:      table,
-		goimports:  htm.NewMap[string, *ast.Identifier](),
-		cogimports: htm.NewMap[string, *CogImport](),
-		fields:     htm.NewMap[string, *htm.Map[string, Symbol]](),
-		checked:    htm.NewMap[string, checkState](),
+		goimports:  isync.NewMap[string, *ast.Identifier](opts...),
+		cogimports: isync.NewMap[string, *CogImport](opts...),
+		fields:     isync.NewMap[string, *isync.Map[string, Symbol]](opts...),
+		checked:    isync.NewMap[string, checkState](opts...),
 	}
 }
 
+// opts returns the construction options matching the table's concurrency mode.
+func (s *SymbolTable) opts() []isync.Option {
+	if s.concurrent {
+		return []isync.Option{isync.WithConcurrency()}
+	}
+
+	return nil
+}
+
+func NewSymbolTableAuto(fileCount, cutoff int) *SymbolTable {
+	concurrent := fileCount >= cutoff && runtime.GOMAXPROCS(-1) > 1
+
+	return NewSymbolTableWithConcurrency(concurrent)
+}
+
 func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
-	s := NewSymbolTable()
+	s := NewSymbolTableWithConcurrency(outer.concurrent)
 	s.Outer = outer
 	s.goimports = outer.goimports
 	s.cogimports = outer.cogimports
@@ -112,7 +140,8 @@ func (s *SymbolTable) Define(ident *ast.Identifier) {
 			break
 		}
 
-		fields := htm.NewMap[string, Symbol]()
+		var fields *isync.Map[string, Symbol]
+		fields = isync.NewMap[string, Symbol](s.opts()...)
 		s.fields.Store(ident.Token.Literal, fields)
 
 		for _, field := range structType.Fields {
@@ -139,7 +168,7 @@ func (s *SymbolTable) DefineMethod(receiver string, method *ast.Identifier) erro
 
 	fields, ok := s.fields.Load(receiver)
 	if !ok {
-		fields = htm.NewMap[string, Symbol]()
+		fields = isync.NewMap[string, Symbol](s.opts()...)
 		s.fields.Store(receiver, fields)
 	}
 
@@ -163,7 +192,7 @@ func (s *SymbolTable) DefineEnumValue(selector string, field *ast.Identifier) {
 
 	fields, ok := s.fields.Load(selector)
 	if !ok {
-		fields = htm.NewMap[string, Symbol]()
+		fields = isync.NewMap[string, Symbol](s.opts()...)
 		s.fields.Store(selector, fields)
 	}
 
@@ -188,7 +217,7 @@ func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
 		if ident.ValueType != nil && ident.ValueType.Kind() == types.StructKind {
 			if st, ok := ident.ValueType.Underlying().(*types.Struct); ok {
 				if _, exists := s.fields.Load(ident.Token.Literal); !exists {
-					fields := htm.NewMap[string, Symbol]()
+					fields := isync.NewMap[string, Symbol](s.opts()...)
 					s.fields.Store(ident.Token.Literal, fields)
 
 					for _, field := range st.Fields {
@@ -294,7 +323,7 @@ func (s *SymbolTable) ResolveCogImport(name string) (*CogImport, bool) {
 }
 
 // CogImports returns all registered cog imports.
-func (s *SymbolTable) CogImports() *htm.Map[string, *CogImport] {
+func (s *SymbolTable) CogImports() *isync.Map[string, *CogImport] {
 	return s.cogimports
 }
 

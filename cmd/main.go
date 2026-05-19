@@ -35,6 +35,10 @@ var (
 	replaceLocalCog bool
 )
 
+// minParallelFiles is the minimum number of files needed to justify
+// errgroup overhead. Below this threshold, sequential execution is faster.
+const minParallelFiles = 4
+
 func main() {
 	flag.StringVar(&fileName, "file", "", "Name of .cog/.cogs file or directory containing .cog files.")
 	flag.BoolVar(&debugMode, "debug", false, "Enable debug parser mode.")
@@ -150,44 +154,54 @@ func lexFile(path string) (*lexer.Lexer, error) {
 // Script files have no package declaration; the transpiled output is placed
 // in cmd/{scriptName}/ with package main and a func main() wrapping the body.
 // If goModuleName is empty, the script name is used and go.mod is written.
-func runScript(ctx context.Context, projectRoot string, scriptPath string, goModuleName string) {
+func runScript(ctx context.Context, projectRoot string, scriptPath string, goModuleName string) error {
 	toks, err := lexFile(scriptPath)
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return err
 	}
 
-	symbols := parser.NewSymbolTable()
+	symbols := parser.NewSymbolTableAuto(1, minParallelFiles)
 
 	p, err := parser.NewScriptParserWithSymbols(toks, symbols, nil)
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return err
 	}
 
 	f, err := p.ParseGlobals(ctx, scriptPath)
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return err
 	}
 
 	// Process imported packages.
 	importedPkgs := make(map[string]*compiledPackage)
+	var importLock sync.Mutex
+
+	group, errCtx := errgroup.WithContext(ctx)
+	group.SetLimit(runtime.GOMAXPROCS(-1))
 
 	for _, imp := range symbols.CogImports().All() {
-		pkg, err := compileImportedPackage(ctx, projectRoot, imp.Path)
-		if err != nil {
-			fmt.Printf("failed to compile imported package %q: %v\n", imp.Path, err)
-			return
-		}
+		group.Go(func() error {
+			pkg, err := compileImportedPackage(errCtx, projectRoot, imp.Path)
+			if err != nil {
+				return fmt.Errorf("failed to compile imported package %q: %w", imp.Path, err)
+			}
 
-		importedPkgs[imp.Path] = pkg
-		populateImportExports(imp, pkg.symbols)
+			importLock.Lock()
+			importedPkgs[imp.Path] = pkg
+			importLock.Unlock()
+
+			populateImportExports(imp, pkg.symbols)
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return err
 	}
 
 	if err := p.ParseBodies(ctx); err != nil {
-		fmt.Println(err.Error())
-		return
+		return err
 	}
 
 	// Determine script name from file name (without extension).
@@ -201,7 +215,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 	// Transpile imported packages first.
 	if write {
 		if err := os.MkdirAll("tmp", 0o700); err != nil {
-			panic(fmt.Errorf("creating temp dir: %w", err))
+			return fmt.Errorf("creating temp dir: %w", err)
 		}
 	}
 
@@ -214,8 +228,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 	gofile, err := t.TranspileScript()
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return err
 	}
 
 	outDir := filepath.Join("tmp", "cmd", scriptName)
@@ -223,18 +236,18 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 	if write {
 		if err := os.MkdirAll(outDir, 0o700); err != nil {
-			panic(fmt.Errorf("creating output dir: %w", err))
+			return fmt.Errorf("creating output dir: %w", err)
 		}
 
 		outFile, err := os.Create(filepath.Join(outDir, outName))
 		if err != nil {
-			panic(fmt.Errorf("creating output file: %w", err))
+			return fmt.Errorf("creating output file: %w", err)
 		}
 
 		if err := t.Print(outFile, gofile); err != nil {
 			_ = outFile.Close()
 
-			panic(fmt.Errorf("printing output: %w", err))
+			return fmt.Errorf("printing output: %w", err)
 		}
 
 		_ = outFile.Close()
@@ -247,17 +260,19 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 			}
 
 			if err := os.WriteFile(filepath.Join("tmp", "go.mod"), []byte(gomod), 0o600); err != nil {
-				panic(fmt.Errorf("writing go.mod: %w", err))
+				return fmt.Errorf("writing go.mod: %w", err)
 			}
 
 			tidy := exec.Command("go", "mod", "tidy")
 
 			tidy.Dir = "tmp"
 			if out, err := tidy.CombinedOutput(); err != nil {
-				panic(fmt.Errorf("go mod tidy: %s\n%w", out, err))
+				return fmt.Errorf("go mod tidy: %s\n%w", out, err)
 			}
 		}
 	}
+
+	return nil
 }
 
 // compiledPackage holds the output of compiling a single cog package.
@@ -287,7 +302,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 	goModuleName := entryPkgName
 
 	// Step 2: ParseGlobals on the entry package (full parse with deferred bodies).
-	entrySymbols := parser.NewSymbolTable()
+	entrySymbols := parser.NewSymbolTableAuto(len(entryLexed), minParallelFiles)
 
 	entryParsers, entryASTs, err := parseGlobals(ctx, entryLexed, entrySymbols)
 	if err != nil {
@@ -308,28 +323,66 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 
 	// Step 3: Process imported packages.
 	importedPkgs := make(map[string]*compiledPackage) // key: import path
+	var importedLock sync.Mutex
+
+	group, errCtx := errgroup.WithContext(ctx)
+	group.SetLimit(runtime.GOMAXPROCS(-1))
 
 	for _, imp := range entrySymbols.CogImports().All() {
-		pkg, err := compileImportedPackage(ctx, projectRoot, imp.Path)
-		if err != nil {
-			return fmt.Errorf("failed to compile imported package %q: %w", imp.Path, err)
-		}
+		group.Go(func() error {
+			pkg, err := compileImportedPackage(errCtx, projectRoot, imp.Path)
+			if err != nil {
+				return fmt.Errorf("failed to compile imported package %q: %w", imp.Path, err)
+			}
 
-		importedPkgs[imp.Path] = pkg
+			importedLock.Lock()
+			importedPkgs[imp.Path] = pkg
+			importedLock.Unlock()
 
-		// Populate the entry package's import exports from the imported package.
-		populateImportExports(imp, pkg.symbols)
+			// Populate the entry package's import exports from the imported package.
+			populateImportExports(imp, pkg.symbols)
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return err
 	}
 
 	// Step 4: ParseBodies (now with import exports available).
-	for i, lf := range entryLexed {
-		if err := entryParsers[i].ParseBodies(ctx); err != nil {
-			fmt.Println(err.Error())
-			return err
+	if len(entryLexed) < minParallelFiles {
+		for i, lf := range entryLexed {
+			if err := entryParsers[i].ParseBodies(ctx); err != nil {
+				fmt.Println(err.Error())
+				return err
+			}
+
+			if !write {
+				fmt.Printf("--- %s ---\n%s\n\n", lf.path, entryASTs[i].Node(1))
+			}
+		}
+	} else {
+		group, _ = errgroup.WithContext(ctx)
+		group.SetLimit(runtime.GOMAXPROCS(-1))
+
+		for i, lf := range entryLexed {
+			group.Go(func() error {
+				if err := entryParsers[i].ParseBodies(ctx); err != nil {
+					fmt.Println(err.Error())
+					return err
+				}
+
+				if !write {
+					fmt.Printf("--- %s ---\n%s\n\n", lf.path, entryASTs[i].Node(1))
+				}
+
+				return nil
+			})
 		}
 
-		if !write {
-			fmt.Printf("--- %s ---\n%s\n\n", lf.path, entryASTs[i].Node(1))
+		if err := group.Wait(); err != nil {
+			return err
 		}
 	}
 
@@ -377,28 +430,40 @@ func discoverScripts(dir string) []string {
 // lexAndValidate lexes all files and validates they declare the same package.
 func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string, error) {
 	lexed := make([]lexedFile, 0, len(files))
-	var lexedLock sync.Mutex
 
-	group, ctx := errgroup.WithContext(ctx)
-	group.SetLimit(runtime.GOMAXPROCS(-1))
-
-	for i, path := range files {
-		group.Go(func() error {
+	if len(files) < minParallelFiles {
+		for i, path := range files {
 			lex, err := lexFile(path)
 			if err != nil {
-				return fmt.Errorf("lexing file %q: %w", path, err)
+				return nil, "", fmt.Errorf("lexing file %q: %w", path, err)
 			}
 
-			lexedLock.Lock()
 			lexed = append(lexed, lexedFile{path: path, lexer: lex, fileID: uint16(i)})
-			lexedLock.Unlock()
+		}
+	} else {
+		var lexedLock sync.Mutex
 
-			return nil
-		})
-	}
+		group, _ := errgroup.WithContext(ctx)
+		group.SetLimit(runtime.GOMAXPROCS(-1))
 
-	if err := group.Wait(); err != nil {
-		return nil, "", err
+		for i, path := range files {
+			group.Go(func() error {
+				lex, err := lexFile(path)
+				if err != nil {
+					return fmt.Errorf("lexing file %q: %w", path, err)
+				}
+
+				lexedLock.Lock()
+				lexed = append(lexed, lexedFile{path: path, lexer: lex, fileID: uint16(i)})
+				lexedLock.Unlock()
+
+				return nil
+			})
+		}
+
+		if err := group.Wait(); err != nil {
+			return nil, "", err
+		}
 	}
 
 	dirName := filepath.Base(filepath.Dir(files[0]))
@@ -430,39 +495,49 @@ func lexAndValidate(ctx context.Context, files []string) ([]lexedFile, string, e
 // Returns the parsers (for subsequent ParseBodies) and the ASTs.
 func parseGlobals(ctx context.Context, lexed []lexedFile, symbols *parser.SymbolTable) ([]*parser.Parser, []*ast.AST, error) {
 	parsers := make([]*parser.Parser, len(lexed))
-	var parserLock sync.Mutex
 	asts := make([]*ast.AST, len(lexed))
-	var astLock sync.Mutex
 
-	group, ctx := errgroup.WithContext(ctx)
-	group.SetLimit(runtime.GOMAXPROCS(-1))
-
-	for i, lf := range lexed {
-		group.Go(func() error {
+	if len(lexed) < minParallelFiles {
+		for i, lf := range lexed {
 			p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
 			if err != nil {
-				return fmt.Errorf("creating parser for %q: %w", lf.path, err)
+				return nil, nil, fmt.Errorf("creating parser for %q: %w", lf.path, err)
 			}
 
 			f, err := p.ParseGlobals(ctx, lf.path)
 			if err != nil {
-				return fmt.Errorf("parsing globals for %q: %w", lf.path, err)
+				return nil, nil, fmt.Errorf("parsing globals for %q: %w", lf.path, err)
 			}
 
-			parserLock.Lock()
 			parsers[i] = p
-			parserLock.Unlock()
-
-			astLock.Lock()
 			asts[i] = f
-			astLock.Unlock()
+		}
+	} else {
+		group, errCtx := errgroup.WithContext(ctx)
+		group.SetLimit(runtime.GOMAXPROCS(-1))
 
-			return nil
-		})
-	}
+		for i, lf := range lexed {
+			group.Go(func() error {
+				p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
+				if err != nil {
+					return fmt.Errorf("creating parser for %q: %w", lf.path, err)
+				}
 
-	if err := group.Wait(); err != nil {
-		return nil, nil, err
+				f, err := p.ParseGlobals(errCtx, lf.path)
+				if err != nil {
+					return fmt.Errorf("parsing globals for %q: %w", lf.path, err)
+				}
+
+				parsers[i] = p
+				asts[i] = f
+
+				return nil
+			})
+		}
+
+		if err := group.Wait(); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return parsers, asts, nil
@@ -482,7 +557,7 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		return nil, fmt.Errorf("lexing files: %w", err)
 	}
 
-	symbols := parser.NewSymbolTable()
+	symbols := parser.NewSymbolTableAuto(len(lexed), minParallelFiles)
 
 	parsers, astFiles, err := parseGlobals(ctx, lexed, symbols)
 	if err != nil {

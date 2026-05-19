@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/samborkent/cog/internal/ast"
@@ -27,6 +28,21 @@ func TestNewSymbolTable(t *testing.T) {
 
 	if sym.Scope != LocalScope {
 		t.Errorf("blank scope = %v, want LocalScope", sym.Scope)
+	}
+}
+
+func TestNewSymbolTableAuto(t *testing.T) {
+	// Below cutoff should always be single-thread mode.
+	small := NewSymbolTableAuto(2, 4)
+	if small.concurrent {
+		t.Fatal("expected small table to be non-concurrent")
+	}
+
+	// At/above cutoff uses concurrent mode only when GOMAXPROCS > 1.
+	big := NewSymbolTableAuto(4, 4)
+	wantConcurrent := runtime.GOMAXPROCS(-1) > 1
+	if big.concurrent != wantConcurrent {
+		t.Fatalf("concurrent = %v, want %v", big.concurrent, wantConcurrent)
 	}
 }
 

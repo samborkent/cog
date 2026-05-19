@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/samborkent/cog/internal/parser"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/transpiler"
+	"golang.org/x/sync/errgroup"
 )
 
 // lexedFile holds lexer output for a single .cog file.
@@ -112,44 +114,98 @@ func sortedKeys(m map[string]string) []string {
 	return keys
 }
 
-// lexPackage lexes all files in a package and returns tokens in sorted order.
+// minParallelFiles is the minimum number of files needed to justify
+// errgroup overhead. Below this threshold, sequential execution is faster.
+const minParallelFiles = 4
+
+// lexPackage lexes all files in a package, parallelizing when beneficial.
 func lexPackage(t testing.TB, pkg packageFiles) []lexedFile {
 	t.Helper()
 
 	names := sortedKeys(pkg.files)
 	lexed := make([]lexedFile, len(names))
 
-	for i, name := range names {
-		file := pkg.files[name]
-		l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
+	if len(names) < minParallelFiles {
+		for i, name := range names {
+			file := pkg.files[name]
+			l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
+			lexed[i] = lexedFile{path: name, lexer: l}
+		}
 
-		lexed[i] = lexedFile{path: name, lexer: l}
+		return lexed
+	}
+
+	group, _ := errgroup.WithContext(t.Context())
+	group.SetLimit(runtime.GOMAXPROCS(-1))
+
+	for i, name := range names {
+		group.Go(func() error {
+			file := pkg.files[name]
+			l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
+			lexed[i] = lexedFile{path: name, lexer: l}
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		t.Fatalf("lexing package: %v", err)
 	}
 
 	return lexed
 }
 
 // parseGlobals runs ParseGlobals on all files with a shared symbol table,
-// returning the parsers (for subsequent ParseBodies) and the ASTs.
+// parallelizing when beneficial.
 func parseGlobals(t testing.TB, lexed []lexedFile, symbols *parser.SymbolTable) ([]*parser.Parser, []*ast.AST) {
 	t.Helper()
 
 	parsers := make([]*parser.Parser, len(lexed))
 	astFiles := make([]*ast.AST, len(lexed))
 
+	if len(lexed) < minParallelFiles {
+		for i, lf := range lexed {
+			p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
+			if err != nil {
+				t.Fatalf("parser init (%s): %v", lf.path, err)
+			}
+
+			f, err := p.ParseGlobals(t.Context(), lf.path)
+			if err != nil {
+				t.Fatalf("parser globals (%s): %v", lf.path, err)
+			}
+
+			parsers[i] = p
+			astFiles[i] = f
+		}
+
+		return parsers, astFiles
+	}
+
+	group, ctx := errgroup.WithContext(t.Context())
+	group.SetLimit(runtime.GOMAXPROCS(-1))
+
 	for i, lf := range lexed {
-		p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
-		if err != nil {
-			t.Fatalf("parser init (%s): %v", lf.path, err)
-		}
+		group.Go(func() error {
+			p, err := parser.NewParserWithSymbols(lf.lexer, symbols, lf.path, uint16(i), nil)
+			if err != nil {
+				return fmt.Errorf("parser init (%s): %w", lf.path, err)
+			}
 
-		f, err := p.ParseGlobals(t.Context(), lf.path)
-		if err != nil {
-			t.Fatalf("parser globals (%s): %v", lf.path, err)
-		}
+			f, err := p.ParseGlobals(ctx, lf.path)
+			if err != nil {
+				return fmt.Errorf("parser globals (%s): %w", lf.path, err)
+			}
 
-		parsers[i] = p
-		astFiles[i] = f
+			parsers[i] = p
+			astFiles[i] = f
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		t.Fatalf("parsing globals: %v", err)
 	}
 
 	return parsers, astFiles
@@ -160,7 +216,7 @@ func compilePackage(t testing.TB, pkg packageFiles) ([]*ast.AST, *parser.SymbolT
 	t.Helper()
 
 	lexed := lexPackage(t, pkg)
-	symbols := parser.NewSymbolTable()
+	symbols := parser.NewSymbolTableAuto(len(lexed), minParallelFiles)
 	parsers, astFiles := parseGlobals(t, lexed, symbols)
 
 	for i, lf := range lexed {
@@ -182,6 +238,82 @@ func populateImportExports(imp *parser.CogImport, symbols *parser.SymbolTable) {
 	})
 }
 
+// compileImports compiles imported packages in parallel and populates exports
+// in the entry symbol table, mirroring runProject step 3.
+func compileImports(t testing.TB, imported []packageFiles, entrySymbols *parser.SymbolTable) {
+	t.Helper()
+
+	type compiledImport struct {
+		pkg     packageFiles
+		symbols *parser.SymbolTable
+	}
+
+	results := make([]compiledImport, len(imported))
+
+	if len(imported) < minParallelFiles {
+		for i, pkg := range imported {
+			_, pkgSymbols := compilePackage(t, pkg)
+			results[i] = compiledImport{pkg: pkg, symbols: pkgSymbols}
+		}
+	} else {
+		group, _ := errgroup.WithContext(t.Context())
+		group.SetLimit(runtime.GOMAXPROCS(-1))
+
+		for i, pkg := range imported {
+			group.Go(func() error {
+				_, pkgSymbols := compilePackage(t, pkg)
+				results[i] = compiledImport{pkg: pkg, symbols: pkgSymbols}
+
+				return nil
+			})
+		}
+
+		if err := group.Wait(); err != nil {
+			t.Fatalf("compiling imports: %v", err)
+		}
+	}
+
+	for _, ci := range results {
+		for _, imp := range entrySymbols.CogImports().All() {
+			if imp.Path == ci.pkg.dir || imp.Name == filepath.Base(ci.pkg.dir) {
+				populateImportExports(imp, ci.symbols)
+			}
+		}
+	}
+}
+
+// parseBodies runs ParseBodies for all entry files, parallelizing when beneficial.
+func parseBodies(t testing.TB, lexed []lexedFile, parsers []*parser.Parser) {
+	t.Helper()
+
+	if len(lexed) < minParallelFiles {
+		for i, lf := range lexed {
+			if err := parsers[i].ParseBodies(t.Context()); err != nil {
+				t.Fatalf("parser bodies (%s): %v", lf.path, err)
+			}
+		}
+
+		return
+	}
+
+	group, _ := errgroup.WithContext(t.Context())
+	group.SetLimit(runtime.GOMAXPROCS(-1))
+
+	for i, lf := range lexed {
+		group.Go(func() error {
+			if err := parsers[i].ParseBodies(t.Context()); err != nil {
+				return fmt.Errorf("parser bodies (%s): %w", lf.path, err)
+			}
+
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		t.Fatalf("parsing bodies: %v", err)
+	}
+}
+
 // compileProject compiles the full example project: entry package + imports.
 // It mirrors the flow in cmd/main.go: lex all → ParseGlobals → compile
 // imports → populate exports → ParseBodies entry files.
@@ -192,27 +324,14 @@ func compileProject(t testing.TB) ([]*ast.AST, *parser.SymbolTable) {
 
 	// Phase 1: Lex and ParseGlobals for the entry package.
 	entryLexed := lexPackage(t, entry)
-	entrySymbols := parser.NewSymbolTable()
+	entrySymbols := parser.NewSymbolTableAuto(len(entryLexed), minParallelFiles)
 	entryParsers, astFiles := parseGlobals(t, entryLexed, entrySymbols)
 
-	// Phase 2: Compile imported packages and populate exports.
-	for _, pkg := range imported {
-		_, pkgSymbols := compilePackage(t, pkg)
+	// Phase 2: Compile imported packages in parallel and populate exports.
+	compileImports(t, imported, entrySymbols)
 
-		// Find the CogImport in the entry symbol table that matches this package.
-		for _, imp := range entrySymbols.CogImports().All() {
-			if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
-				populateImportExports(imp, pkgSymbols)
-			}
-		}
-	}
-
-	// Phase 3: ParseBodies for the entry package.
-	for i, lf := range entryLexed {
-		if err := entryParsers[i].ParseBodies(t.Context()); err != nil {
-			t.Fatalf("parser bodies (%s): %v", lf.path, err)
-		}
-	}
+	// Phase 3: ParseBodies for the entry package in parallel.
+	parseBodies(t, entryLexed, entryParsers)
 
 	return astFiles, entrySymbols
 }
@@ -236,26 +355,35 @@ func BenchmarkLexing(b *testing.B) {
 		names := sortedKeys(allFiles)
 		b.StartTimer()
 
+		group, _ := errgroup.WithContext(b.Context())
+		group.SetLimit(runtime.GOMAXPROCS(-1))
+
 		for _, name := range names {
-			file := allFiles[name]
-			l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
+			group.Go(func() error {
+				file := allFiles[name]
+				l := lexer.New(strings.NewReader(file), uint32(len(file)), false)
 
-			for {
-				if b.Context().Err() != nil {
-					return
+				for {
+					if b.Context().Err() != nil {
+						return b.Context().Err()
+					}
+
+					tok := l.Peek(0)
+
+					lexingRangeTok = tok
+
+					if tok.Type == tokens.EOF {
+						break
+					}
+
+					l.Step()
 				}
 
-				tok := l.Peek(0)
-
-				lexingRangeTok = tok
-
-				if tok.Type == tokens.EOF {
-					break
-				}
-
-				l.Step()
-			}
+				return nil
+			})
 		}
+
+		_ = group.Wait()
 	}
 }
 
@@ -273,28 +401,16 @@ func BenchmarkParsing(b *testing.B) {
 
 		// Lex + ParseGlobals for the entry package.
 		entryLexed := lexPackage(b, entry)
-		entrySymbols := parser.NewSymbolTable()
+		entrySymbols := parser.NewSymbolTableAuto(len(entryLexed), minParallelFiles)
 		entryParsers, astFiles := parseGlobals(b, entryLexed, entrySymbols)
 
-		// Compile imported packages and populate exports.
-		for _, pkg := range imported {
-			_, pkgSymbols := compilePackage(b, pkg)
+		// Compile imported packages in parallel and populate exports.
+		compileImports(b, imported, entrySymbols)
 
-			for _, imp := range entrySymbols.CogImports().All() {
-				if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
-					populateImportExports(imp, pkgSymbols)
-				}
-			}
-		}
+		// ParseBodies for entry files in parallel.
+		parseBodies(b, entryLexed, entryParsers)
 
-		// ParseBodies for entry files.
-		for i, lf := range entryLexed {
-			if err := entryParsers[i].ParseBodies(b.Context()); err != nil {
-				b.Fatalf("parser bodies (%s): %v", lf.path, err)
-			}
-
-			parsingAST = astFiles[i]
-		}
+		parsingAST = astFiles[len(astFiles)-1]
 	}
 }
 
@@ -392,28 +508,14 @@ func BenchmarkFullPipeline(b *testing.B) {
 
 		// Lex + ParseGlobals for the entry package.
 		entryLexed := lexPackage(b, entry)
-		entrySymbols := parser.NewSymbolTable()
+		entrySymbols := parser.NewSymbolTableAuto(len(entryLexed), minParallelFiles)
 		entryParsers, astFiles := parseGlobals(b, entryLexed, entrySymbols)
 
-		// Compile imported packages and populate exports.
-		for _, pkg := range imported {
-			_, pkgSymbols := compilePackage(b, pkg)
+		// Compile imported packages in parallel and populate exports.
+		compileImports(b, imported, entrySymbols)
 
-			for _, imp := range entrySymbols.CogImports().All() {
-				if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
-					populateImportExports(imp, pkgSymbols)
-				}
-			}
-		}
-
-		// ParseBodies for entry files.
-		for i, lf := range entryLexed {
-			if err := entryParsers[i].ParseBodies(b.Context()); err != nil {
-				b.Fatalf("parser bodies (%s): %v", lf.path, err)
-			}
-
-			_ = astFiles[i]
-		}
+		// ParseBodies for entry files in parallel.
+		parseBodies(b, entryLexed, entryParsers)
 
 		// Transpile + print.
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
@@ -594,26 +696,11 @@ func BenchmarkLargeFile(b *testing.B) {
 
 		// Full project compile — the pipeline cost is dominated by example.cog.
 		entryLexed := lexPackage(b, entry)
-		entrySymbols := parser.NewSymbolTable()
+		entrySymbols := parser.NewSymbolTableAuto(len(entryLexed), minParallelFiles)
 		entryParsers, astFiles := parseGlobals(b, entryLexed, entrySymbols)
 
-		for _, pkg := range imported {
-			_, pkgSymbols := compilePackage(b, pkg)
-
-			for _, imp := range entrySymbols.CogImports().All() {
-				if imp.Path == pkg.dir || imp.Name == filepath.Base(pkg.dir) {
-					populateImportExports(imp, pkgSymbols)
-				}
-			}
-		}
-
-		for i, lf := range entryLexed {
-			if err := entryParsers[i].ParseBodies(b.Context()); err != nil {
-				b.Fatalf("parser bodies (%s): %v", lf.path, err)
-			}
-
-			_ = astFiles[i]
-		}
+		compileImports(b, imported, entrySymbols)
+		parseBodies(b, entryLexed, entryParsers)
 
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
