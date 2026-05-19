@@ -220,7 +220,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 	}
 
 	for _, pkg := range importedPkgs {
-		transpileAndOutput(goModuleName, pkg)
+		transpileAndOutput(ctx, goModuleName, pkg)
 	}
 
 	// Transpile the script file.
@@ -394,7 +394,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 		symbols:  entrySymbols,
 	}
 
-	outputProject(goModuleName, entryPkg, importedPkgs)
+	outputProject(ctx, goModuleName, entryPkg, importedPkgs)
 
 	// Step 6: Discover and compile any .cogs script files in the project root.
 	scriptFiles := discoverScripts(projectRoot)
@@ -603,7 +603,7 @@ func populateImportExports(imp *parser.CogImport, symbols *parser.SymbolTable) {
 }
 
 // outputProject transpiles and writes all packages.
-func outputProject(goModuleName string, entry *compiledPackage, imported map[string]*compiledPackage) {
+func outputProject(ctx context.Context, goModuleName string, entry *compiledPackage, imported map[string]*compiledPackage) {
 	if write {
 		if err := os.MkdirAll("tmp", 0o700); err != nil {
 			panic(fmt.Errorf("creating temp dir: %w", err))
@@ -612,11 +612,11 @@ func outputProject(goModuleName string, entry *compiledPackage, imported map[str
 
 	// Transpile and output imported packages first.
 	for _, pkg := range imported {
-		transpileAndOutput(goModuleName, pkg)
+		transpileAndOutput(ctx, goModuleName, pkg)
 	}
 
 	// Transpile and output the entry package.
-	transpileAndOutput(goModuleName, entry)
+	transpileAndOutput(ctx, goModuleName, entry)
 
 	if write {
 		// Write go.mod so `go run .` works from tmp/.
@@ -642,10 +642,10 @@ func outputProject(goModuleName string, entry *compiledPackage, imported map[str
 }
 
 // transpileAndOutput transpiles a single package and writes/prints its Go files.
-func transpileAndOutput(goModuleName string, pkg *compiledPackage) {
+func transpileAndOutput(ctx context.Context, goModuleName string, pkg *compiledPackage) {
 	t := transpiler.NewTranspilerWithModule(goModuleName, pkg.astFiles)
 
-	gofiles, err := t.TranspileFiles()
+	gofiles, err := t.TranspileFiles(ctx)
 	if err != nil {
 		fmt.Println(err.Error())
 		return

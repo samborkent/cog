@@ -76,12 +76,23 @@ BenchmarkLargeFile-10                         88           1194592 ns/op        
 BenchmarkMultiFileTranspile-10               134            885751 ns/op          790633 B/op    11240 allocs/op
 
 2025-05-19 21:32 - Parallel imports
-BenchmarkLexing-10                           990            114435 ns/op           23988 B/op       1023 allocs/op
-BenchmarkParsing-10                          362            305234 ns/op          275042 B/op       4317 allocs/op
-BenchmarkTranspiling-10                      579            199712 ns/op          330190 B/op       8543 allocs/op
-BenchmarkPrinting-10                         206            574453 ns/op          470386 B/op       2697 allocs/op
-BenchmarkTranspileAndPrint-10                145            818109 ns/op          810181 B/op      11243 allocs/op
-BenchmarkFullPipeline-10                     100           1272306 ns/op         1099500 B/op      15567 allocs/op
-BenchmarkGoBuild-10                            1         127779209 ns/op           12984 B/op         62 allocs/op
-BenchmarkLargeFile-10                         82           1309384 ns/op         1086843 B/op      15566 allocs/op
-BenchmarkMultiFileTranspile-10               147            813083 ns/op          809701 B/op      11243 allocs/op
+BenchmarkLexing-10                           990            114435 ns/op           23988 B/op     1023 allocs/op
+BenchmarkParsing-10                          362            305234 ns/op          275042 B/op     4317 allocs/op
+BenchmarkTranspiling-10                      579            199712 ns/op          330190 B/op     8543 allocs/op
+BenchmarkPrinting-10                         206            574453 ns/op          470386 B/op     2697 allocs/op
+BenchmarkTranspileAndPrint-10                145            818109 ns/op          810181 B/op    11243 allocs/op
+BenchmarkFullPipeline-10                     100           1272306 ns/op         1099500 B/op    15567 allocs/op
+BenchmarkGoBuild-10                            1         127779209 ns/op           12984 B/op       62 allocs/op
+BenchmarkLargeFile-10                         82           1309384 ns/op         1086843 B/op    15566 allocs/op
+BenchmarkMultiFileTranspile-10               147            813083 ns/op          809701 B/op    11243 allocs/op
+
+2025-05-19 22:19 - Parallel transpilation
+BenchmarkLexing-10                           990            115002 ns/op           24010 B/op    1023 allocs/op
+BenchmarkParsing-10                          385            295344 ns/op          274973 B/op    4317 allocs/op
+BenchmarkTranspiling-10                      550            207883 ns/op          333751 B/op    8586 allocs/op
+BenchmarkPrinting-10                         196            592249 ns/op          468836 B/op    2698 allocs/op
+BenchmarkTranspileAndPrint-10                146            815097 ns/op          807934 B/op   11287 allocs/op
+BenchmarkFullPipeline-10                     100           1712293 ns/op         1092714 B/op   15610 allocs/op
+BenchmarkGoBuild-10                            1         128480250 ns/op           13208 B/op      61 allocs/op
+BenchmarkLargeFile-10                         80           1301401 ns/op         1086733 B/op   15609 allocs/op
+BenchmarkMultiFileTranspile-10               145            827818 ns/op          816679 B/op   11287 allocs/op

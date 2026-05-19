@@ -1,21 +1,27 @@
 package transpiler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
 	"maps"
 	"path"
+	"runtime"
 	"slices"
 	"strings"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/transpiler/component"
 	"github.com/samborkent/cog/internal/types"
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
+
+// minParallelFiles is the minimum number of files needed to justify errgroup overhead.
+const minParallelFiles = 8
 
 type Transpiler struct {
 	files  ast.MergedAST
@@ -148,72 +154,143 @@ func (t *Transpiler) currentFileNeedsContext() bool {
 	return t.needsContext[t.fileID]
 }
 
-func (t *Transpiler) TranspileFiles() ([]*goast.File, error) {
+func (t *Transpiler) fileWorker(packageSymbols *SymbolTable) *Transpiler {
+	return &Transpiler{
+		files:        t.files,
+		goModulePath: t.goModulePath,
+		symbols:      NewEnclosedSymbolTable(packageSymbols),
+		dynDefaults:  t.dynDefaults,
+		needsContext: t.needsContext,
+		dynComments:  t.dynComments,
+		skipComments: t.skipComments,
+		titleCaser:   t.titleCaser,
+		typeCache:    make(map[types.Type]goast.Expr),
+	}
+}
+
+func (t *Transpiler) resetFileState(packageSymbols *SymbolTable, fileIndex int) {
+	t.file = t.files.Node(uint16(fileIndex), t.files[fileIndex].FileIndex).(*ast.File)
+	t.fileID = uint16(fileIndex)
+	t.imports = make(map[string]*goast.ImportSpec)
+	t.lastSourceLine = 0
+	t.inFunc = false
+	t.inMethod = false
+	t.usesDyn = false
+	t.ifLabelCounter = 0
+	t.symbols = NewEnclosedSymbolTable(packageSymbols)
+}
+
+func (t *Transpiler) transpileFile(packageSymbols *SymbolTable, fileIndex int) (*goast.File, error) {
+	t.resetFileState(packageSymbols, fileIndex)
+
+	gofile := &goast.File{
+		Name:  goast.NewIdent(t.file.Package.Identifier.Token.Literal),
+		Decls: make([]goast.Decl, 0, len(t.file.Statements)),
+	}
+
+	if t.file.ContainsMain {
+		gofile.Decls = append(gofile.Decls, t.setMemoryLimit())
+	}
+
+	// Emit dyn struct types in the first file only.
+	if fileIndex == 0 {
+		gofile.Decls = append(gofile.Decls, t.buildDynDecls()...)
+	}
+
+	errs := make([]error, 0)
+
+	for _, stmt := range t.file.Statements {
+		if comment, ok := t.files.Node(uint16(fileIndex), stmt).(*ast.Comment); ok {
+			if _, skip := t.skipComments[comment.Hash()]; skip {
+				continue
+			}
+		}
+
+		switch s := t.files.Node(uint16(fileIndex), stmt).(type) {
+		case *ast.GoImport:
+			for _, imprt := range s.Imports {
+				t.addStdLibImport(imprt.Token.Literal)
+			}
+		case *ast.Import:
+			t.addCogImports(s)
+		default:
+			gonodes, err := t.convertDecl(s)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("\t%s: %w", t.NodeString(stmt), err))
+				continue
+			}
+
+			if _, isComment := s.(*ast.Comment); !isComment {
+				t.attachLineDecl(gonodes, s)
+			}
+
+			ln, _ := s.Pos()
+			t.lastSourceLine = ln
+
+			gofile.Decls = append(gofile.Decls, gonodes...)
+		}
+	}
+
+	t.finalizeImports(gofile)
+
+	if err := errors.Join(errs...); err != nil {
+		return nil, fmt.Errorf("transpiler errors:\n%w", err)
+	}
+
+	return gofile, nil
+}
+
+func (t *Transpiler) TranspileFiles(ctx context.Context) ([]*goast.File, error) {
 	if err := t.predeclareGlobals(); err != nil {
 		return nil, err
 	}
 
-	errs := make([]error, 0)
 	gofiles := make([]*goast.File, len(t.files))
+	errs := make([]error, len(t.files))
+	packageSymbols := t.symbols
 
-	for i := range t.files.AllNodes() {
-		t.file = t.files.Node(uint16(i), t.files[i].FileIndex).(*ast.File)
-		t.fileID = uint16(i)
-		t.imports = make(map[string]*goast.ImportSpec)
-		t.lastSourceLine = 0
+	if len(t.files) < minParallelFiles || runtime.GOMAXPROCS(-1) <= 1 {
+		worker := t.fileWorker(packageSymbols)
 
-		gofile := &goast.File{
-			Name:  goast.NewIdent(t.file.Package.Identifier.Token.Literal),
-			Decls: make([]goast.Decl, 0, len(t.file.Statements)),
-		}
-
-		if t.file.ContainsMain {
-			gofile.Decls = append(gofile.Decls, t.setMemoryLimit())
-		}
-
-		// Emit dyn struct types in the first file only.
-		if i == 0 {
-			gofile.Decls = append(gofile.Decls, t.buildDynDecls()...)
-		}
-
-		for _, stmt := range t.file.Statements {
-			if comment, ok := t.files.Node(uint16(i), stmt).(*ast.Comment); ok {
-				if _, skip := t.skipComments[comment.Hash()]; skip {
-					continue
-				}
+		for i := range t.files {
+			gofile, err := worker.transpileFile(packageSymbols, i)
+			if err != nil {
+				errs[i] = err
+				continue
 			}
 
-			switch s := t.files.Node(uint16(i), stmt).(type) {
-			case *ast.GoImport:
-				for _, imprt := range s.Imports {
-					t.addStdLibImport(imprt.Token.Literal)
-				}
-			case *ast.Import:
-				t.addCogImports(s)
-			default:
-				gonodes, err := t.convertDecl(s)
-				if err != nil {
-					errs = append(errs, fmt.Errorf("\t%s: %w", t.NodeString(stmt), err))
-					continue
-				}
-
-				if _, isComment := s.(*ast.Comment); !isComment {
-					t.attachLineDecl(gonodes, s)
-				}
-
-				ln, _ := s.Pos()
-				t.lastSourceLine = ln
-
-				gofile.Decls = append(gofile.Decls, gonodes...)
-			}
+			gofiles[i] = gofile
+		}
+		if err := errors.Join(errs...); err != nil {
+			return nil, err
 		}
 
-		t.finalizeImports(gofile)
-		gofiles[i] = gofile
+		return gofiles, nil
 	}
 
+	// Parallel path: each worker gets a fresh local scope over shared package symbols.
+	group, _ := errgroup.WithContext(ctx)
+	group.SetLimit(runtime.GOMAXPROCS(-1))
+
+	for i := range t.files {
+		i := i
+
+		group.Go(func() error {
+			gofile, err := t.fileWorker(packageSymbols).transpileFile(packageSymbols, i)
+			if err != nil {
+				errs[i] = err
+				return err
+			}
+
+			gofiles[i] = gofile
+			return nil
+		})
+	}
+
+	_ = group.Wait()
+
 	if err := errors.Join(errs...); err != nil {
-		return nil, fmt.Errorf("transpiler errors:\n%w", err)
+		return nil, err
 	}
 
 	return gofiles, nil

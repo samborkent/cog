@@ -67,7 +67,7 @@ func transpileMultiFile(t *testing.T, files map[string]string) map[string]string
 
 	tr := transpiler.NewTranspilerWithModule("testmod", ast.MergeASTs(astFiles...))
 
-	gofiles, err := tr.TranspileFiles()
+	gofiles, err := tr.TranspileFiles(t.Context())
 	if err != nil {
 		t.Fatalf("TranspileFiles error: %v", err)
 	}
@@ -216,6 +216,44 @@ main : proc() = {
 		mustContain(t, main, "earth")
 		mustContain(t, main, "radius")
 	})
+}
+
+func TestTranspileFilesDoesNotLeakLocalSymbolsAcrossFiles(t *testing.T) {
+	t.Parallel()
+
+	result := transpileMultiFile(t, map[string]string{
+		"a.cog": `package main
+
+main : proc() = {
+	shared := 1
+}
+`,
+		"b.cog": `package main
+
+other : proc() = {
+	shared := 2
+	@print(shared)
+}
+`,
+		"c.cog": `package main
+
+third : proc() = {
+	@print("ok")
+}
+`,
+		"d.cog": `package main
+
+fourth : proc() = {
+	@print("ok")
+}
+`,
+	})
+
+	a := result["a.cog"]
+	mustContain(t, a, "var _")
+	if strings.Contains(a, "shared") {
+		t.Fatalf("expected a.cog to keep its unused local variable unnamed, got:\n%s", a)
+	}
 }
 
 func TestTranspileFilesWithModule(t *testing.T) {

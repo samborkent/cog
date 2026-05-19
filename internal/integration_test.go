@@ -905,7 +905,7 @@ func transpilePackage(t *testing.T, files map[string]string) map[string]string {
 
 	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
-	gofiles, err := tr.TranspileFiles()
+	gofiles, err := tr.TranspileFiles(t.Context())
 	if err != nil {
 		t.Fatalf("transpile error: %v", err)
 	}
@@ -979,7 +979,7 @@ func tryTranspilePackage(t *testing.T, files map[string]string) (string, error) 
 
 	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
-	gofiles, err := tr.TranspileFiles()
+	gofiles, err := tr.TranspileFiles(t.Context())
 	if err != nil {
 		return "", fmt.Errorf("transpile: %w", err)
 	}

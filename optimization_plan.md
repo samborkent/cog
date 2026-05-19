@@ -9,10 +9,6 @@ Nodes don't store pointers to other nodes, but instead store a `type NodeIndex u
 
 Allocate all AST nodes on an arena, and deallocate once parsing is done. Need an arena per file.
 
-## 3. Store kinds in index
-
-Store `NodeKind` in `NodeIndex` & `ExprIndex`, and store `TypeKind` in `ExprIndex`.
-
 ## 4. Text-based transpiler
 
 Instead of transpiling Cog AST to `go/ast`, node will implement `PrintGo(*string.Builder)`.
@@ -54,3 +50,11 @@ After merging passes into single scan, parallelize per-file:
 - Use Go routine pool limited by GOMAXPROCS
 
 Note: Must complete globals pass for ALL files before starting AST creation pass, since imports need resolved symbol tables.
+
+## 9. Incremental builds
+
+On recompile, we should only recompile changed files. To track changes, we need to keep track of file hash, these can be stored in a `cog.hsh` file in the output directory of the transpiled files. A format like `path:hash` should work. We need to select a hash that is performant even for large files, for example https://github.com/zeebo/xxh3.
+
+We also need to know if any dependencies changed. This can be done by also keeping a dependency hash, which is a hash of the combined imports file hashes. However, this can get complicated, and needs to be safe-guarded for infinite loops upon cicular dependencies.
+
+The Go build also needs to support incremental builds. So, for `task run` we should not call `go run`, but instead call `go build`, output in `<tmp output dir>/bin`, and then run that executable.

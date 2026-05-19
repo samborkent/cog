@@ -427,7 +427,7 @@ func BenchmarkTranspiling(b *testing.B) {
 
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
-		gofiles, err := tr.TranspileFiles()
+		gofiles, err := tr.TranspileFiles(b.Context())
 		if err != nil {
 			b.Fatalf("transpile error: %v", err)
 		}
@@ -448,7 +448,7 @@ func BenchmarkPrinting(b *testing.B) {
 
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
-		gofiles, err := tr.TranspileFiles()
+		gofiles, err := tr.TranspileFiles(b.Context())
 		if err != nil {
 			b.Fatalf("transpile error: %v", err)
 		}
@@ -479,7 +479,7 @@ func BenchmarkTranspileAndPrint(b *testing.B) {
 
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
-		gofiles, err := tr.TranspileFiles()
+		gofiles, err := tr.TranspileFiles(b.Context())
 		if err != nil {
 			b.Fatalf("transpile error: %v", err)
 		}
@@ -520,7 +520,7 @@ func BenchmarkFullPipeline(b *testing.B) {
 		// Transpile + print.
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
-		gofiles, err := tr.TranspileFiles()
+		gofiles, err := tr.TranspileFiles(b.Context())
 		if err != nil {
 			b.Fatalf("transpile error: %v", err)
 		}
@@ -553,7 +553,7 @@ func BenchmarkGoBuild(b *testing.B) {
 			pkgASTs, _ := compilePackage(b, pkg)
 			pkgTr := transpiler.NewTranspilerWithModule("main", ast.MergeASTs(pkgASTs...))
 
-			pkgGoFiles, err := pkgTr.TranspileFiles()
+			pkgGoFiles, err := pkgTr.TranspileFiles(b.Context())
 			if err != nil {
 				b.Fatalf("transpile import %s: %v", pkg.dir, err)
 			}
@@ -579,7 +579,7 @@ func BenchmarkGoBuild(b *testing.B) {
 		astFiles, _ := compileProject(b)
 		tr := transpiler.NewTranspilerWithModule("main", ast.MergeASTs(astFiles...))
 
-		gofiles, err := tr.TranspileFiles()
+		gofiles, err := tr.TranspileFiles(b.Context())
 		if err != nil {
 			b.Fatalf("transpile error: %v", err)
 		}
@@ -704,7 +704,7 @@ func BenchmarkLargeFile(b *testing.B) {
 
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
-		gofiles, err := tr.TranspileFiles()
+		gofiles, err := tr.TranspileFiles(b.Context())
 		if err != nil {
 			b.Fatalf("transpile error: %v", err)
 		}
@@ -735,7 +735,7 @@ func BenchmarkMultiFileTranspile(b *testing.B) {
 
 		tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
 
-		gofiles, err := tr.TranspileFiles()
+		gofiles, err := tr.TranspileFiles(b.Context())
 		if err != nil {
 			b.Fatalf("transpile error: %v", err)
 		}

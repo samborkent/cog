@@ -27,6 +27,9 @@ func NewSymbolTable() *SymbolTable {
 func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
 	s := NewSymbolTable()
 	s.Outer = outer
+	if outer != nil {
+		s.dynamics = outer.dynamics
+	}
 
 	return s
 }
