@@ -750,3 +750,48 @@ func BenchmarkMultiFileTranspile(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkWriteOutput compares writing transpiled Go source to disk vs. memory.
+func BenchmarkWriteOutput(b *testing.B) {
+	// Pre-compute all printed output once (not part of the benchmark).
+	astFiles, _ := compileProject(b)
+	tr := transpiler.NewTranspiler(ast.MergeASTs(astFiles...))
+
+	gofiles, err := tr.TranspileFiles(b.Context())
+	if err != nil {
+		b.Fatalf("transpile error: %v", err)
+	}
+
+	printed := make([][]byte, len(gofiles))
+	for i, gofile := range gofiles {
+		var buf bytes.Buffer
+		if err := tr.Print(&buf, gofile); err != nil {
+			b.Fatalf("print error: %v", err)
+		}
+		printed[i] = buf.Bytes()
+	}
+
+	b.Run("Disk", func(b *testing.B) {
+		b.ReportAllocs()
+		dir := b.TempDir()
+
+		for b.Loop() {
+			for i, data := range printed {
+				if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("file%d.go", i)), data, 0o600); err != nil {
+					b.Fatalf("write file: %v", err)
+				}
+			}
+		}
+	})
+
+	b.Run("Memory", func(b *testing.B) {
+		b.ReportAllocs()
+
+		for b.Loop() {
+			for _, data := range printed {
+				var buf bytes.Buffer
+				buf.Write(data)
+			}
+		}
+	})
+}

@@ -53,8 +53,29 @@ Note: Must complete globals pass for ALL files before starting AST creation pass
 
 ## 9. Incremental builds
 
-On recompile, we should only recompile changed files. To track changes, we need to keep track of file hash, these can be stored in a `cog.hsh` file in the output directory of the transpiled files. A format like `path:hash` should work. We need to select a hash that is performant even for large files, for example https://github.com/zeebo/xxh3.
+On recompile, only recompile changed files. Hash the `.cog` source file contents (not the transpiled output) to detect changes early and skip the entire pipeline (lex, parse, transpile, print, write) for unchanged files.
 
-We also need to know if any dependencies changed. This can be done by also keeping a dependency hash, which is a hash of the combined imports file hashes. However, this can get complicated, and needs to be safe-guarded for infinite loops upon cicular dependencies.
+**Hash storage:** A `cog.hsh` file in the output directory (`tmp/`). Format: `path:own_hash:dep_hash` per line, using [zeebo/xxh3](https://github.com/zeebo/xxh3) for speed (~30 GB/s on ARM64).
 
-The Go build also needs to support incremental builds. So, for `task run` we should not call `go run`, but instead call `go build`, output in `<tmp output dir>/bin`, and then run that executable.
+```
+example.cog:a1b2c3d4e5f6:ff00aa11bb22
+interfaces.cog:b2c3d4e5f6a1:ff00aa11bb22
+geom/geom.cog:c3d4e5f6a1b2:000000000000
+```
+
+**Two hashes per file:**
+1. `own_hash` — xxh3 of the `.cog` source bytes
+2. `dep_hash` — xxh3 of the concatenated own hashes of all imported packages (leaf packages with no cog imports use zero)
+
+A file is skippable only if both its own hash AND dep hash are unchanged.
+
+**Rebuild logic:**
+1. Read all `.cog` files, compute own hashes
+2. Load stored hashes from `tmp/cog.hsh`
+3. For each imported package: if any file's own hash changed → recompile that package, recompute its dep hash
+4. For the entry package: recompute dep hash from imported package hashes
+5. Per file: if own hash AND dep hash unchanged → skip entirely (reuse existing `.go` on disk)
+6. Otherwise → lex + parse + transpile + print + write
+7. Update `tmp/cog.hsh`
+
+**Go build integration:** Use `go build` (not `go run`) outputting to `tmp/bin`, then execute the binary. The Go build cache (`GOCACHE`) already skips recompilation of unchanged packages based on file mtimes — by not rewriting unchanged `.go` files, their mtimes stay stable and the Go toolchain benefits automatically.
