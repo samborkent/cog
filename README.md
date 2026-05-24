@@ -13,26 +13,9 @@ The following basic features are missing that need to be implemented before Cog 
     This is required for method declaration, so we need to manually disallow using a type which is only defined later in the file in script mode.
 
 ### Features
-- Set `GOMEMLIMIT` using `https://github.com/KimMachineGun/automemlimit`:
-
-```go
-func init() {
-    memlimit.SetGoMemLimitWithOpts(
-        memlimit.WithRatio(0.9),
-        memlimit.WithProvider(
-            memlimit.ApplyFallback(
-                memlimit.FromCgroup,
-                memlimit.FromSystem,
-            ),
-        ),
-        memlimit.WithRefreshInterval(time.Minute),
-    )
-}
-```
-
 - Remove `@ref` allocator.
 - Change `@cast` signature to `@cast<B, A any>(x A) B?`. Return type will only be set if lossless cast is possible.
-- Implement `@as<B, A any>(x A) B`.
+- Implement `@as<B, A any>(x A) B`, will perform best effort type conversion. Will return zero value of `B` if conversion if not possible.
 - Define builtin functions as `cog` functions.
 - Design how iterators should work.
     - Range over int (or other literal) should not be possible.

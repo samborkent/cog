@@ -133,6 +133,10 @@ func (t *Transpiler) Transpile() (*goast.File, error) {
 		}
 	}
 
+	if t.file.ContainsMain {
+		t.addGCImports()
+	}
+
 	t.finalizeImports(gofile)
 
 	if err := errors.Join(errs...); err != nil {
@@ -189,7 +193,7 @@ func (t *Transpiler) transpileFile(packageSymbols *SymbolTable, fileIndex int) (
 	}
 
 	if t.file.ContainsMain {
-		gofile.Decls = append(gofile.Decls, t.setMemoryLimit())
+		t.addGCImports()
 	}
 
 	// Emit dyn struct types in the first file only.
@@ -357,7 +361,11 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 	}
 
 	// Wrap everything in func main().
-	adjustedBody := append([]goast.Stmt{component.AdaptiveGC(ctxIdent)}, mainBody...)
+	adjustedBody := append([]goast.Stmt{
+		component.SetMaxProcs(),
+		component.SetMemLimit(),
+		component.AdaptiveGC(ctxIdent),
+	}, mainBody...)
 
 	mainFunc := &goast.FuncDecl{
 		Name: &goast.Ident{Name: "main"},
@@ -369,7 +377,8 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 
 	t.injectArena(mainFunc.Body)
 
-	gofile.Decls = append(gofile.Decls, t.setMemoryLimit(), mainFunc)
+	t.addGCImports()
+	gofile.Decls = append(gofile.Decls, mainFunc)
 
 	t.finalizeImports(gofile)
 
@@ -642,12 +651,10 @@ func (t *Transpiler) attachLineDecl(decls []goast.Decl, node ast.Node) {
 	}
 }
 
-func (t *Transpiler) setMemoryLimit() *goast.FuncDecl {
-	t.addStdLibImport("runtime/debug")
-	t.addGoImport("github.com/pbnjay/memory")
+func (t *Transpiler) addGCImports() {
+	t.addGoImport("github.com/KimMachineGun/automemlimit/memlimit")
+	t.addGoImport("go.uber.org/automaxprocs/maxprocs")
 	t.addGoImport("github.com/samborkent/adaptive-gc")
-
-	return component.SetMemoryLimit()
 }
 
 func (t *Transpiler) Node(i ast.NodeIndex) ast.Node {

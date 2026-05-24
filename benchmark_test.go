@@ -605,15 +605,17 @@ go 1.26.3
 require (
 	github.com/samborkent/cog v0.0.0
 	github.com/samborkent/adaptive-gc v0.0.0
-	github.com/pbnjay/memory v0.0.0
+	go.uber.org/automaxprocs v0.0.0
+	github.com/KimMachineGun/automemlimit v0.0.0
 )
 
 replace (
 	github.com/samborkent/cog => %s
 	github.com/samborkent/adaptive-gc => %s
-	github.com/pbnjay/memory => %s
+	go.uber.org/automaxprocs => %s
+	github.com/KimMachineGun/automemlimit => %s
 )
-`, root, filepath.Join(root, "..", "adaptive-gc"), goModCacheDir(b, "github.com/pbnjay/memory"))
+`, root, filepath.Join(root, "..", "adaptive-gc"), goModCacheDir(b, "go.uber.org/automaxprocs"), goModCacheDir(b, "github.com/KimMachineGun/automemlimit"))
 
 		if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0o600); err != nil {
 			b.Fatalf("writing go.mod: %v", err)

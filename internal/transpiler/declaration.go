@@ -121,7 +121,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 				// Add signal notify context and adaptive GC.
 				body := component.Signal(ctxIdent, passCtx)
-				body = append(body, component.AdaptiveGC(ctxIdent))
+				body = append(body, component.SetMaxProcs(), component.SetMemLimit(), component.AdaptiveGC(ctxIdent))
 				funcDecl.Body.List = append(body, funcDecl.Body.List...)
 
 				if hasDynVars || needsContext {
@@ -179,7 +179,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 				t.injectArena(funcDecl.Body)
 
-				return []goast.Decl{t.setMemoryLimit(), funcDecl}, nil
+				return []goast.Decl{funcDecl}, nil
 			}
 
 			// Non-main proc: inject dyn preamble only when body uses dyn.

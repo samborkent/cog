@@ -55,11 +55,10 @@ func main() {
 	}
 
 	// Set GOMAXPROCS.
-	maxprocs.Set()
+	_, _ = maxprocs.Set()
 
 	// Set GOMEMLIMIT based on 90% of available memory.
-	memlimit.SetGoMemLimitWithOpts(
-		memlimit.WithRatio(0.9),
+	_, _ = memlimit.SetGoMemLimitWithOpts(
 		memlimit.WithProvider(memlimit.ApplyFallback(
 			memlimit.FromCgroup,
 			memlimit.FromSystem,

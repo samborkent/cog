@@ -2,18 +2,46 @@ package component
 
 import (
 	goast "go/ast"
-	"go/token"
 )
 
 var (
-	int64Ident     = &goast.Ident{Name: "int64"}
-	setMemoryLimit = &goast.SelectorExpr{
-		X:   &goast.Ident{Name: "go_debug"},
-		Sel: &goast.Ident{Name: "SetMemoryLimit"},
+	maxprocsSet = &goast.CallExpr{
+		Fun: &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "_maxprocs"},
+			Sel: &goast.Ident{Name: "Set"},
+		},
 	}
-	freeMemory = &goast.SelectorExpr{
-		X:   &goast.Ident{Name: "_memory"},
-		Sel: &goast.Ident{Name: "FreeMemory"},
+	memlimitSet = &goast.CallExpr{
+		Fun: &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "_memlimit"},
+			Sel: &goast.Ident{Name: "SetGoMemLimitWithOpts"},
+		},
+		Args: []goast.Expr{
+			&goast.CallExpr{
+				Fun: &goast.SelectorExpr{
+					X:   &goast.Ident{Name: "_memlimit"},
+					Sel: &goast.Ident{Name: "WithProvider"},
+				},
+				Args: []goast.Expr{
+					&goast.CallExpr{
+						Fun: &goast.SelectorExpr{
+							X:   &goast.Ident{Name: "_memlimit"},
+							Sel: &goast.Ident{Name: "ApplyFallback"},
+						},
+						Args: []goast.Expr{
+							&goast.SelectorExpr{
+								X:   &goast.Ident{Name: "_memlimit"},
+								Sel: &goast.Ident{Name: "FromCgroup"},
+							},
+							&goast.SelectorExpr{
+								X:   &goast.Ident{Name: "_memlimit"},
+								Sel: &goast.Ident{Name: "FromSystem"},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	autoAdapt = &goast.SelectorExpr{
 		X:   &goast.Ident{Name: "_adaptivegc"},
@@ -21,47 +49,15 @@ var (
 	}
 )
 
-var freeMemoryIdent = &goast.Ident{Name: "freeMemory"}
+func SetMaxProcs() *goast.ExprStmt {
+	return &goast.ExprStmt{
+		X: maxprocsSet,
+	}
+}
 
-func SetMemoryLimit() *goast.FuncDecl {
-	return &goast.FuncDecl{
-		Name: &goast.Ident{Name: "init"},
-		Type: &goast.FuncType{Params: &goast.FieldList{}},
-		Body: &goast.BlockStmt{
-			List: []goast.Stmt{
-				&goast.AssignStmt{
-					Lhs: []goast.Expr{freeMemoryIdent},
-					Tok: token.DEFINE,
-					Rhs: []goast.Expr{&goast.CallExpr{Fun: freeMemory}},
-				},
-				&goast.IfStmt{
-					Cond: &goast.BinaryExpr{
-						X:  freeMemoryIdent,
-						Op: token.GTR,
-						Y:  &goast.BasicLit{Kind: token.INT, Value: "0"},
-					},
-					Body: &goast.BlockStmt{
-						List: []goast.Stmt{
-							&goast.ExprStmt{
-								X: &goast.CallExpr{
-									Fun: setMemoryLimit,
-									Args: []goast.Expr{
-										&goast.CallExpr{
-											Fun: int64Ident,
-											Args: []goast.Expr{
-												&goast.CallExpr{
-													Fun: freeMemory,
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+func SetMemLimit() *goast.ExprStmt {
+	return &goast.ExprStmt{
+		X: memlimitSet,
 	}
 }
 

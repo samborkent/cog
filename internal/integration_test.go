@@ -68,28 +68,53 @@ func projectRoot(t *testing.T) string {
 func goModCacheDir(t *testing.T, module string) string {
 	t.Helper()
 
+	return goModDownloadJSON(t, module).Dir
+}
+
+// modInfo represents the JSON output from "go mod download -json".
+type modInfo struct {
+	Path    string
+	Version string
+	Dir     string
+}
+
+// goModDownloadJSON runs "go mod download -json" and returns the module info.
+func goModDownloadJSON(t *testing.T, module string) modInfo {
+	t.Helper()
+
 	out, err := exec.Command("go", "mod", "download", "-json", module+"@latest").CombinedOutput()
 	if err != nil {
 		t.Fatalf("go mod download %s: %v\n%s", module, err, out)
 	}
 
-	// Parse "Dir" field from JSON output.
+	var info modInfo
+
+	// Parse JSON output line by line.
 	for line := range strings.SplitSeq(string(out), "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, `"Dir"`) {
+		if strings.HasPrefix(line, `"Path"`) {
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) == 2 {
-				dir := strings.TrimSpace(parts[1])
-				dir = strings.Trim(dir, `",`)
-
-				return dir
+				info.Path = strings.Trim(strings.TrimSpace(parts[1]), `",`)
+			}
+		} else if strings.HasPrefix(line, `"Version"`) {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				info.Version = strings.Trim(strings.TrimSpace(parts[1]), `",`)
+			}
+		} else if strings.HasPrefix(line, `"Dir"`) {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				info.Dir = strings.Trim(strings.TrimSpace(parts[1]), `",`)
 			}
 		}
 	}
 
-	t.Fatalf("could not find Dir in go mod download output for %s:\n%s", module, out)
+	if info.Dir == "" {
+		t.Fatalf("could not find Dir in go mod download output for %s:\n%s", module, out)
+	}
 
-	return ""
+	return info
 }
 
 // runGeneratedMulti compiles and runs multiple generated Go files, returning output.
@@ -110,25 +135,38 @@ func runGeneratedMulti(t *testing.T, files map[string]string) (string, error) {
 	root := projectRoot(t)
 
 	// Write a go.mod so the generated code can resolve its imports.
+	// Get actual versions for dependencies to avoid "go mod tidy" requirement
+	automemlimitMod := goModDownloadJSON(t, "github.com/KimMachineGun/automemlimit")
+	automaxprocsMod := goModDownloadJSON(t, "go.uber.org/automaxprocs")
+
 	goMod := fmt.Sprintf(`module main
 
 go 1.26.3
 
 require (
-	github.com/samborkent/cog v0.0.0
+	github.com/KimMachineGun/automemlimit %s
 	github.com/samborkent/adaptive-gc v0.0.0
-	github.com/pbnjay/memory v0.0.0
+	github.com/samborkent/cog v0.0.0
+	go.uber.org/automaxprocs %s
 )
 
 replace (
-	github.com/samborkent/cog => %s
+	github.com/KimMachineGun/automemlimit => %s
 	github.com/samborkent/adaptive-gc => %s
-	github.com/pbnjay/memory => %s
+	github.com/samborkent/cog => %s
+	go.uber.org/automaxprocs => %s
 )
-`, root, filepath.Join(root, "..", "adaptive-gc"), goModCacheDir(t, "github.com/pbnjay/memory"))
+`, automemlimitMod.Version, automaxprocsMod.Version, automemlimitMod.Dir, filepath.Join(root, "..", "adaptive-gc"), root, automaxprocsMod.Dir)
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0o600); err != nil {
 		t.Fatalf("write go.mod: %v", err)
+	}
+
+	// Run go mod tidy to resolve indirect dependencies
+	tidy := exec.Command("go", "mod", "tidy")
+	tidy.Dir = tmpDir
+	if out, err := tidy.CombinedOutput(); err != nil {
+		t.Fatalf("go mod tidy failed: %v\n%s", err, out)
 	}
 
 	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)

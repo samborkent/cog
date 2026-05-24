@@ -15,10 +15,19 @@ func Print(msg any) {
 	case reflect.String:
 		fmt.Println(val.String())
 	case reflect.Slice:
-		if val.Index(0).Kind() == reflect.Uint8 {
+		switch val.Index(0).Kind() {
+		case reflect.Uint8:
 			b := val.Bytes()
 			fmt.Println(unsafe.String(&b[0], len(b)))
-		} else {
+		case reflect.Int32:
+			runes, ok := val.Interface().([]rune)
+			if ok {
+				fmt.Println(string(runes))
+				return
+			}
+
+			fallthrough
+		default:
 			fmt.Printf("%v\n", msg)
 		}
 	case reflect.Struct:
