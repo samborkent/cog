@@ -45,7 +45,7 @@ func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
 	p.lex.Step() // consume '}'
 
 	// Check for unused variables in this scope.
-	p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
+	p.checkUnused()
 
 	// Restore scope
 	p.symbols = p.symbols.Outer

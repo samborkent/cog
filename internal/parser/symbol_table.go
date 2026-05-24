@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"iter"
 	"runtime"
 
 	"github.com/samborkent/cog/internal/ast"
@@ -292,48 +293,41 @@ func (s *SymbolTable) MarkUsed(name string) {
 	}
 }
 
-// CheckUnused returns errors for any local variables that are defined but never used.
+// CheckUnused returns symbols that are defined but never used.
 // Global/package-scope symbols, exported variables, type declarations, blank
 // identifiers, and dynamic variables are exempt from this check.
-func (s *SymbolTable) CheckUnused(filePath string) []error {
-	var errs []error
+func (s *SymbolTable) CheckUnused() iter.Seq2[string, Symbol] {
+	return func(yield func(string, Symbol) bool) {
+		for name, sym := range s.table.All() {
+			if sym.Used {
+				continue
+			}
 
-	for name, sym := range s.table.All() {
-		if sym.Used {
-			continue
+			if name == "_" {
+				continue
+			}
+
+			if sym.Scope == GlobalScope || sym.Scope == ScanScope {
+				continue
+			}
+
+			if sym.Identifier.Exported {
+				continue
+			}
+
+			if sym.Identifier.Qualifier == ast.QualifierType {
+				continue
+			}
+
+			if sym.Identifier.Qualifier == ast.QualifierDynamic {
+				continue
+			}
+
+			if !yield(name, sym) {
+				return
+			}
 		}
-
-		// Skip blank identifier.
-		if name == "_" {
-			continue
-		}
-
-		// Global and package-scope symbols are exempt.
-		if sym.Scope == GlobalScope || sym.Scope == ScanScope {
-			continue
-		}
-
-		// Exported variables may be used by importing packages.
-		if sym.Identifier.Exported {
-			continue
-		}
-
-		// Type declarations don't need to be "used" in the same way.
-		if sym.Identifier.Qualifier == ast.QualifierType {
-			continue
-		}
-
-		// Dynamic variables are accessed implicitly via context.
-		if sym.Identifier.Qualifier == ast.QualifierDynamic {
-			continue
-		}
-
-		errs = append(errs, fmt.Errorf("\t%s:\tln %d, col %d: %s: %s declared and not used",
-			filePath, sym.Identifier.Token.Ln, sym.Identifier.Token.Col,
-			sym.Identifier.Token.Type, name))
 	}
-
-	return errs
 }
 
 func (s *SymbolTable) ResolveField(typeName, field string) (Symbol, bool) {

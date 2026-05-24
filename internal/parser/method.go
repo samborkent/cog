@@ -113,7 +113,7 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 		p.currentReceiver = receiver
 
 		defer func() {
-			p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
+			p.checkUnused()
 			p.symbols = p.symbols.Outer
 			p.currentReceiver = prevReceiver
 		}()

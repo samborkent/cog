@@ -135,7 +135,7 @@ func (p *Parser) parseForStatement(ctx context.Context) ast.NodeIndex {
 
 	if valueVar != nil || indexVar != nil {
 		// Check for unused variables in the for scope.
-		p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
+		p.checkUnused()
 		// Restore scope.
 		p.symbols = p.symbols.Outer
 	}

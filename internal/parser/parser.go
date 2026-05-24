@@ -215,12 +215,10 @@ func (p *Parser) ParseBodies(ctx context.Context) error {
 
 		// Pop scopes.
 		if len(procType.Parameters) > 0 {
-			p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
 			p.symbols = p.symbols.Outer
 		}
 
 		if db.Receiver != nil {
-			p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
 			p.symbols = p.symbols.Outer
 		}
 
@@ -233,8 +231,8 @@ func (p *Parser) ParseBodies(ctx context.Context) error {
 		}
 	}
 
-	// Check for unused variables in the global scope.
-	p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
+	// Check for unused variables.
+	p.checkUnused()
 
 	if err := errors.Join(p.Errs...); err != nil {
 		return fmt.Errorf("parser error:\n%w", err)
@@ -437,6 +435,13 @@ func (p *Parser) error(t tokens.Token, msg string, scope ...string) {
 		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %v: %s", p.stringToken(t), scope, msg))
 	} else {
 		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %s", p.stringToken(t), msg))
+	}
+}
+
+func (p *Parser) checkUnused() {
+	for name, sym := range p.symbols.CheckUnused() {
+		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %s declared and not used",
+			p.stringToken(sym.Identifier.Token), name))
 	}
 }
 

@@ -129,7 +129,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 			}
 		}
 
-		p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
+		p.checkUnused()
 		p.symbols = p.symbols.Outer
 
 		cases = append(cases, caseNode)
@@ -173,7 +173,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 			}
 		}
 
-		p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
+		p.checkUnused()
 		p.symbols = p.symbols.Outer
 	}
 
