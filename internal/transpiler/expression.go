@@ -50,10 +50,6 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 		args := make([]goast.Expr, 0, len(procType.Parameters))
 
 		if !procType.Function && t.currentFileNeedsContext() {
-			if err := t.symbols.MarkUsed("ctx"); err != nil {
-				return nil, err
-			}
-
 			// Pass context variable to all procedures.
 			args = append(args, component.ContextVar)
 		}
@@ -93,26 +89,6 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 
 		// TODO: check if still required.
 		// if n.Package == "" {
-		var usedName string
-		isImportSelector := false
-
-		switch expr := t.Expr(n.Expr).(type) {
-		case *ast.Identifier:
-			usedName = component.ConvertExport(expr.Token.Literal, expr.Exported, expr.Global)
-		case *ast.Selector:
-			leftMost := expr.Fields[0]
-			usedName = component.ConvertExport(leftMost.Token.Literal, leftMost.Exported, leftMost.Global)
-			// Check if this is an import selector (pkg.Symbol) - imports aren't in symbol table
-			isImportSelector = types.IsNone(leftMost.ValueType)
-		}
-
-		// Only mark as used if it's not an import selector
-		if !isImportSelector {
-			if err := t.symbols.MarkUsed(usedName); err != nil {
-				return nil, fmt.Errorf("marking call identifier used: %w", err)
-			}
-		}
-		// }
 
 		var fun goast.Expr
 
@@ -273,28 +249,20 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			return component.DynRead(name), nil
 		}
 
-		ident, ok := t.symbols.Resolve(name)
-		if !ok {
-			// New identifier
-			return component.Ident(n), nil
-		}
-
-		if err := t.symbols.MarkUsed(name); err != nil {
-			return nil, fmt.Errorf("marking identifier used: %w", err)
-		}
+		goIdent := component.Ident(n)
 
 		// Auto-unwrap checked option/result identifiers to .Value
 		if n.ValueType != nil {
 			switch n.ValueType.Kind() {
 			case types.OptionKind, types.ResultKind:
 				return &goast.SelectorExpr{
-					X:   ident,
+					X:   goIdent,
 					Sel: &goast.Ident{Name: "Value"},
 				}, nil
 			}
 		}
 
-		return ident, nil
+		return goIdent, nil
 	case *ast.Index:
 		ex, err := t.convertExpr(t.Expr(n.Expr))
 		if err != nil {
@@ -719,26 +687,6 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 
 		stmts := make([]goast.Stmt, 0, len(body.Statements))
 
-		if len(body.Statements) > 0 {
-			// Enter body scope.
-			t.symbols = NewEnclosedSymbolTable(t.symbols)
-		}
-
-		// Register function parameters in the transpiler symbol table so that
-		// selector expressions (e.g. param.field) can resolve them.
-		if procType, ok := n.ProcedureType.(*types.Procedure); ok {
-			for _, param := range procType.Parameters {
-				t.symbols.Define(param.Name)
-				_ = t.symbols.MarkUsed(param.Name)
-			}
-		}
-
-		// Register 'this' for method bodies.
-		if t.inMethod {
-			t.symbols.Define("this")
-			_ = t.symbols.MarkUsed("this")
-		}
-
 		// Track whether we're inside a func and reset usesDyn for this body.
 		prevInFunc := t.inFunc
 		prevUsesDyn := t.usesDyn
@@ -757,11 +705,6 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			}
 
 			stmts = append(stmts, stmt...)
-		}
-
-		if len(body.Statements) > 0 {
-			// Leave body scope.
-			t.symbols = t.symbols.Outer
 		}
 
 		// Capture whether this body used dyn vars, then restore outer state.
@@ -816,12 +759,6 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 				exported = field.Exported
 			}
 
-			// Mark the base identifier as used if it's in the symbol table
-			baseName := component.ConvertExport(leftMost.Token.Literal, leftMost.Exported, leftMost.Global)
-			if _, ok := t.symbols.Resolve(baseName); ok {
-				_ = t.symbols.MarkUsed(baseName)
-			}
-
 			return &goast.SelectorExpr{
 				X:   component.Ident(leftMost),
 				Sel: component.IdentName(component.ConvertExport(n.Fields[len(n.Fields)-1].Token.Literal, exported, false)),
@@ -838,21 +775,10 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			}
 		}
 
-		ident, ok := t.symbols.Resolve(name)
-		if !ok {
-			return nil, fmt.Errorf("%s: unknown selector identifier", leftMost.Token)
-		}
-
-		if err := t.symbols.MarkUsed(name); err != nil {
-			return nil, fmt.Errorf("marking selector identifier used: %w", err)
-		}
-
 		switch leftMost.ValueType.Kind() {
 		case types.EnumKind, types.ErrorKind:
-			enumName := ident
-			enumName.Name = enumName.Name + t.titleCaser.String(n.Fields[len(n.Fields)-1].Token.Literal)
-
-			return enumName, nil
+			enumIdent := &goast.Ident{Name: name + t.titleCaser.String(n.Fields[len(n.Fields)-1].Token.Literal)}
+			return enumIdent, nil
 		case types.GenericKind:
 			selExpr, err := t.convertExpr(n.Fields[0])
 			if err != nil {
@@ -1009,16 +935,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 		}
 
 		name := component.ConvertExport(ident.Token.Literal, ident.Exported, ident.Global)
-
-		// Mark identifier as used.
-		symbol, ok := t.symbols.Resolve(name)
-		if !ok {
-			return nil, fmt.Errorf("identifier %q not found", name)
-		}
-
-		if err := t.symbols.MarkUsed(name); err != nil {
-			return nil, fmt.Errorf("marking suffix identifier used: %w", err)
-		}
+		goIdent := &goast.Ident{Name: name}
 
 		leftType := ident.ValueType
 		if leftType == nil {
@@ -1030,14 +947,14 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			switch leftType.Kind() {
 			case types.OptionKind:
 				return &goast.SelectorExpr{
-					X:   symbol,
+					X:   goIdent,
 					Sel: &goast.Ident{Name: "Set"},
 				}, nil
 			case types.ResultKind:
 				return &goast.UnaryExpr{
 					Op: gotoken.NOT,
 					X: &goast.SelectorExpr{
-						X:   symbol,
+						X:   goIdent,
 						Sel: &goast.Ident{Name: "IsError"},
 					},
 				}, nil
@@ -1050,7 +967,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			}
 
 			return &goast.SelectorExpr{
-				X:   symbol,
+				X:   goIdent,
 				Sel: &goast.Ident{Name: "Error"},
 			}, nil
 		}

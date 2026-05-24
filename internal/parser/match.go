@@ -113,6 +113,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 		if binding != nil {
 			binding.ValueType = caseType
 			p.symbols.Define(binding)
+			p.symbols.MarkUsed(binding.Token.Literal)
 		}
 
 		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
@@ -128,6 +129,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 			}
 		}
 
+		p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
 		p.symbols = p.symbols.Outer
 
 		cases = append(cases, caseNode)
@@ -155,6 +157,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 			// In default case, binding variable takes the original subject type
 			binding.ValueType = subjectType
 			p.symbols.Define(binding)
+			p.symbols.MarkUsed(binding.Token.Literal)
 		}
 
 		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
@@ -170,6 +173,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 			}
 		}
 
+		p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
 		p.symbols = p.symbols.Outer
 	}
 

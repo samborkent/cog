@@ -22,14 +22,18 @@ main : proc() = {
     _ = 10 // inline comment stays inline
 
     str := @go.strings.ToUpper("str")
+    _ = str
 
     b : float32 = 0.0
+    _ = b
 
     var language := "cog" // utf8
     var lang : utf8 = "cog"
+    _ = lang
     var lng : ascii = "cog"
 
     leeng := lng
+    _ = leeng
     c1 := `hello
     
         world`
@@ -53,10 +57,13 @@ main : proc() = {
     if !true {}
 
     fl := -0.6e-7
+    _ = fl
 
     collection : set<utf8> = { "hello1", "hello2" }
+    _ = collection
 
     maths := 5 * 6 / (2 + 3)
+    _ = maths
 
 ifLabel:
     if true {
@@ -66,8 +73,10 @@ ifLabel:
     }
 
     newString := definedHere
+    _ = newString
 
     newLang := @if(language == "cog", 25 + 10 - 6, 5)
+    _ = newLang
 
     earth : planet = {
         radius = 10,
@@ -221,24 +230,30 @@ caseSwitch:
     var localSlice : []utf8
     localSlice = {"hello", "world"}
     localCopy := localSlice[0]
+    _ = localCopy
     mapVal := otherMap[10]
     @print(mapVal)
 
     typedLiteralA := []int8{
 		5, 4, 3, 2, 1,
 	}
+	_ = typedLiteralA
 	typedLiteralB := [5]int8{
 		5, 4, 3, 2, 1,
 	}
+	_ = typedLiteralB
 	typedLiteralC := map<ascii, int8>{
 		"hello": 5,
 	}
+	_ = typedLiteralC
 	typedLiteralD := set<ascii>{
 		"hello",
 	}
+	_ = typedLiteralD
 	typedLiteralE := set<ASC>{
 		"hello",
 	}
+	_ = typedLiteralE
 
     var index := 0
 
@@ -286,8 +301,10 @@ outerLoop:
 	_ = @map<utf8, ascii, uint32>(1)
 
 	settie := @set<utf8, uint16>(1000)
+	_ = settie
 
 	what := @if<uint64, bool>(5 != 6, 10, 6)
+	_ = what
 
 	ref := @ref<utf8>()
 	_ = ref
@@ -314,30 +331,47 @@ outerLoop:
     withLiteral := @cast<int16, int8>(1)     // literal inferred as int8 from type arg
     lng2 : ascii = "hello"
     asUtf := @cast<utf8>(lng2)              // ascii -> utf8
+    _ = asFloat
+    _ = asBigFloat
+    _ = asUnsigned
+    _ = flagByte
+    _ = hWide
+    _ = wide
+    _ = withSource
+    _ = withLiteral
+    _ = asUtf
 
     // float16: backed by x448/float16 package, arithmetic promotes to float32.
     half : float16 = 1.5
     halfNeg := -half
     halfSum := half + half
     halfCmp := half < halfNeg
+    _ = halfSum
+    _ = halfCmp
 
     // complex32: two float16 parts, arithmetic promotes to complex64.
     comp : complex32 = {1.0, 2.0}
     compNeg := -comp
     compSum := comp + comp
     compEq := comp == compNeg
+    _ = compSum
+    _ = compEq
 
     // uint128: backed by lukechampine.com/uint128, ops via methods.
     big : uint128 = 42
     bigSum := big + big
     bigMul := big * big
     bigCmp := big < bigSum
+    _ = bigMul
+    _ = bigCmp
 
     // int128: backed by ryanavella/wide, ops via methods.
     big128 : int128 = 42
     big128Neg := -big128
     big128Sum := big128 + big128
     big128Cmp := big128 < big128Neg
+    _ = big128Sum
+    _ = big128Cmp
 
     // cross-file: Coordinate type and formatCoord function defined in other.cog.
     loc : Coordinate = {
@@ -400,8 +434,8 @@ outerLoop:
     _ = barRef
 
     FooRef : &utf8 = &fooVal
-    BarRef : &ascii = &"hello"
-
+    BarRef : &ascii = &"hello"    _ = FooRef
+    _ = BarRef
     BazRefType ~ &complex128
 
     var methodCaller : Exported = {

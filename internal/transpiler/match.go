@@ -40,9 +40,8 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 
 		if leftCase != nil {
 			if len(leftCase.Body) > 0 {
-				t.symbols = NewEnclosedSymbolTable(t.symbols)
 				if n.Binding != nil {
-					ident := t.symbols.Define(n.Binding.Token.Literal)
+					ident := &goast.Ident{Name: n.Binding.Token.Literal}
 					leftBody = append(leftBody, component.AssignDef(ident, component.Selector(expr, "Left")))
 				}
 
@@ -54,16 +53,13 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 
 					leftBody = append(leftBody, convStmt...)
 				}
-
-				t.symbols = t.symbols.Outer
 			}
 		}
 
 		if rightCase != nil {
 			if len(rightCase.Body) > 0 {
-				t.symbols = NewEnclosedSymbolTable(t.symbols)
 				if n.Binding != nil {
-					ident := t.symbols.Define(n.Binding.Token.Literal)
+					ident := &goast.Ident{Name: n.Binding.Token.Literal}
 					rightBody = append(rightBody, component.AssignDef(ident, component.Selector(expr, "Right")))
 				}
 
@@ -75,8 +71,6 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 
 					rightBody = append(rightBody, convStmt...)
 				}
-
-				t.symbols = t.symbols.Outer
 			}
 		}
 
@@ -102,7 +96,7 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 	tagExpr := component.Call(component.IdentName("any"), expr)
 
 	if n.Binding != nil {
-		ident := t.symbols.Define(n.Binding.Token.Literal)
+		ident := &goast.Ident{Name: n.Binding.Token.Literal}
 		assignStmt = component.AssignDef(ident, component.TypeAssert(tagExpr, nil))
 	} else {
 		assignStmt = &goast.ExprStmt{X: component.TypeAssert(tagExpr, nil)}
@@ -123,8 +117,6 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 
 		stmts := make([]goast.Stmt, 0, len(c.Body))
 
-		t.symbols = NewEnclosedSymbolTable(t.symbols)
-
 		for _, stmt := range c.Body {
 			convStmt, err := t.convertStmt(t.Node(stmt))
 			if err != nil {
@@ -133,8 +125,6 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 
 			stmts = append(stmts, convStmt...)
 		}
-
-		t.symbols = t.symbols.Outer
 
 		cases = append(cases, &goast.CaseClause{
 			List: []goast.Expr{caseType},
@@ -145,8 +135,6 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 	if n.Default != nil {
 		stmts := make([]goast.Stmt, 0, len(n.Default.Body))
 
-		t.symbols = NewEnclosedSymbolTable(t.symbols)
-
 		for _, stmt := range n.Default.Body {
 			convStmt, err := t.convertStmt(t.Node(stmt))
 			if err != nil {
@@ -155,8 +143,6 @@ func (t *Transpiler) convertMatch(n *ast.Match) ([]goast.Stmt, error) {
 
 			stmts = append(stmts, convStmt...)
 		}
-
-		t.symbols = t.symbols.Outer
 
 		cases = append(cases, &goast.CaseClause{
 			List: nil,

@@ -13,6 +13,7 @@ main : proc() = {
 	if true {
 		var x := 1
 		x = 2
+		_ = x
 	}
 }`)
 		if f.LenNodes() == 0 {

@@ -32,8 +32,8 @@ type Transpiler struct {
 	imports      map[string]*goast.ImportSpec // Key: import name
 	goModulePath string                       // Go module path for resolving cog import paths
 
-	symbols        *SymbolTable
-	dynDefaults    map[string]ast.Expr // Default expressions for dynamic variables
+	dynamics       map[string]*ast.Identifier // dynamically scoped variable declarations
+	dynDefaults    map[string]ast.Expr        // Default expressions for dynamic variables
 	inFunc         bool
 	inMethod       bool            // set when transpiling a method body
 	usesDyn        bool            // set during body conversion when a dyn var is read or written
@@ -63,7 +63,7 @@ func newTranspilerWithOptions(goModulePath string, files ast.MergedAST, opts ...
 		files:        files,
 		fset:         gotoken.NewFileSet(),
 		goModulePath: goModulePath,
-		symbols:      NewSymbolTable(),
+		dynamics:     make(map[string]*ast.Identifier),
 		dynDefaults:  make(map[string]ast.Expr),
 		needsContext: make(map[uint16]bool),
 		typeCache:    make(map[types.Type]goast.Expr),
@@ -158,11 +158,11 @@ func (t *Transpiler) currentFileNeedsContext() bool {
 	return t.needsContext[t.fileID]
 }
 
-func (t *Transpiler) fileWorker(packageSymbols *SymbolTable) *Transpiler {
+func (t *Transpiler) fileWorker() *Transpiler {
 	return &Transpiler{
 		files:        t.files,
 		goModulePath: t.goModulePath,
-		symbols:      NewEnclosedSymbolTable(packageSymbols),
+		dynamics:     t.dynamics,
 		dynDefaults:  t.dynDefaults,
 		needsContext: t.needsContext,
 		dynComments:  t.dynComments,
@@ -172,7 +172,7 @@ func (t *Transpiler) fileWorker(packageSymbols *SymbolTable) *Transpiler {
 	}
 }
 
-func (t *Transpiler) resetFileState(packageSymbols *SymbolTable, fileIndex int) {
+func (t *Transpiler) resetFileState(fileIndex int) {
 	t.file = t.files.Node(uint16(fileIndex), t.files[fileIndex].FileIndex).(*ast.File)
 	t.fileID = uint16(fileIndex)
 	t.imports = make(map[string]*goast.ImportSpec)
@@ -181,11 +181,10 @@ func (t *Transpiler) resetFileState(packageSymbols *SymbolTable, fileIndex int) 
 	t.inMethod = false
 	t.usesDyn = false
 	t.ifLabelCounter = 0
-	t.symbols = NewEnclosedSymbolTable(packageSymbols)
 }
 
-func (t *Transpiler) transpileFile(packageSymbols *SymbolTable, fileIndex int) (*goast.File, error) {
-	t.resetFileState(packageSymbols, fileIndex)
+func (t *Transpiler) transpileFile(fileIndex int) (*goast.File, error) {
+	t.resetFileState(fileIndex)
 
 	gofile := &goast.File{
 		Name:  goast.NewIdent(t.file.Package.Identifier.Token.Literal),
@@ -251,13 +250,12 @@ func (t *Transpiler) TranspileFiles(ctx context.Context) ([]*goast.File, error) 
 
 	gofiles := make([]*goast.File, len(t.files))
 	errs := make([]error, len(t.files))
-	packageSymbols := t.symbols
 
 	if len(t.files) < minParallelFiles || runtime.GOMAXPROCS(-1) <= 1 {
-		worker := t.fileWorker(packageSymbols)
+		worker := t.fileWorker()
 
 		for i := range t.files {
-			gofile, err := worker.transpileFile(packageSymbols, i)
+			gofile, err := worker.transpileFile(i)
 			if err != nil {
 				errs[i] = err
 				continue
@@ -272,7 +270,7 @@ func (t *Transpiler) TranspileFiles(ctx context.Context) ([]*goast.File, error) 
 		return gofiles, nil
 	}
 
-	// Parallel path: each worker gets a fresh local scope over shared package symbols.
+	// Parallel path: each worker gets its own state.
 	group, _ := errgroup.WithContext(ctx)
 	group.SetLimit(runtime.GOMAXPROCS(-1))
 
@@ -280,7 +278,7 @@ func (t *Transpiler) TranspileFiles(ctx context.Context) ([]*goast.File, error) 
 		i := i
 
 		group.Go(func() error {
-			gofile, err := t.fileWorker(packageSymbols).transpileFile(packageSymbols, i)
+			gofile, err := t.fileWorker().transpileFile(i)
 			if err != nil {
 				errs[i] = err
 				return err
@@ -354,11 +352,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 	// Only pass existing ctx to Signal when dyn init creates one for proc propagation.
 	passCtx := t.usesDyn && t.currentFileNeedsContext()
 
-	ctxIdent := t.symbols.Define("ctx")
-
-	if err := t.symbols.MarkUsed("ctx"); err != nil {
-		return nil, fmt.Errorf("marking ctx used: %w", err)
-	}
+	ctxIdent := &goast.Ident{Name: "ctx"}
 
 	// Wrap everything in func main().
 	adjustedBody := append([]goast.Stmt{
@@ -389,7 +383,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 	return gofile, nil
 }
 
-// predeclareGlobals scans all files to populate symbols, dynDefaults, and needsContext.
+// predeclareGlobals scans all files to populate dynamics, dynDefaults, and needsContext.
 func (t *Transpiler) predeclareGlobals() error {
 	errs := make([]error, 0)
 
@@ -402,10 +396,7 @@ func (t *Transpiler) predeclareGlobals() error {
 				name := component.ConvertExport(s.Assignment.Identifier.Token.Literal, s.Assignment.Identifier.Exported, s.Assignment.Identifier.Global)
 
 				if s.Assignment.Identifier.Qualifier == ast.QualifierDynamic {
-					if err := t.symbols.DefineDynamic(s.Assignment.Identifier); err != nil {
-						errs = append(errs, fmt.Errorf("defining dynamic variable %q: %w", name, err))
-						continue
-					}
+					t.dynamics[name] = s.Assignment.Identifier
 
 					if s.Assignment.Expr != ast.ZeroExprIndex {
 						t.dynDefaults[name] = t.files.Expr(uint16(id), s.Assignment.Expr)
@@ -422,14 +413,6 @@ func (t *Transpiler) predeclareGlobals() error {
 							}
 						}
 					}
-				} else {
-					t.symbols.Define(name)
-
-					// Exported symbols must keep their Go name even when unused
-					// within the package, since other packages may reference them.
-					if s.Assignment.Identifier.Exported {
-						_ = t.symbols.MarkUsed(name)
-					}
 				}
 
 				if s.Assignment.Identifier.Token.Literal != "main" && s.Assignment.Expr != ast.ZeroExprIndex {
@@ -445,8 +428,6 @@ func (t *Transpiler) predeclareGlobals() error {
 				if ok && !procType.Function {
 					t.needsContext[uint16(id)] = true
 				}
-			case *ast.Type:
-				t.symbols.Define(component.ConvertExport(s.Identifier.Token.Literal, s.Identifier.Exported, s.Identifier.Global))
 			}
 		}
 	}
@@ -488,13 +469,13 @@ func (t *Transpiler) addCogImports(node *ast.Import) {
 
 // buildDynDecls generates the cogDynKey and cogDyn struct type declarations.
 func (t *Transpiler) buildDynDecls() []goast.Decl {
-	if len(t.symbols.dynamics) == 0 {
+	if len(t.dynamics) == 0 {
 		return nil
 	}
 
-	fields := make([]*goast.Field, 0, len(t.symbols.dynamics))
+	fields := make([]*goast.Field, 0, len(t.dynamics))
 
-	for name, ident := range t.symbols.dynamics {
+	for name, ident := range t.dynamics {
 		fieldType, err := t.convertType(ident.ValueType)
 		if err != nil {
 			panic(fmt.Sprintf("buildDynDecls: converting type for %q: %v", name, err))

@@ -13,6 +13,7 @@ import (
 type Symbol struct {
 	Identifier *ast.Identifier
 	Scope      Scope
+	Used       bool
 }
 
 func (s Symbol) Type() types.Type {
@@ -275,6 +276,64 @@ func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
 	}
 
 	return obj, ok
+}
+
+// MarkUsed marks a symbol as used. It walks up scope chains to find the symbol.
+func (s *SymbolTable) MarkUsed(name string) {
+	sym, ok := s.table.Load(name)
+	if ok {
+		sym.Used = true
+		s.table.Store(name, sym)
+		return
+	}
+
+	if s.Outer != nil {
+		s.Outer.MarkUsed(name)
+	}
+}
+
+// CheckUnused returns errors for any local variables that are defined but never used.
+// Global/package-scope symbols, exported variables, type declarations, blank
+// identifiers, and dynamic variables are exempt from this check.
+func (s *SymbolTable) CheckUnused(filePath string) []error {
+	var errs []error
+
+	for name, sym := range s.table.All() {
+		if sym.Used {
+			continue
+		}
+
+		// Skip blank identifier.
+		if name == "_" {
+			continue
+		}
+
+		// Global and package-scope symbols are exempt.
+		if sym.Scope == GlobalScope || sym.Scope == ScanScope {
+			continue
+		}
+
+		// Exported variables may be used by importing packages.
+		if sym.Identifier.Exported {
+			continue
+		}
+
+		// Type declarations don't need to be "used" in the same way.
+		if sym.Identifier.Qualifier == ast.QualifierType {
+			continue
+		}
+
+		// Dynamic variables are accessed implicitly via context.
+		if sym.Identifier.Qualifier == ast.QualifierDynamic {
+			continue
+		}
+
+		errs = append(errs, fmt.Errorf("\t%s:\tln %d, col %d: %s: %s declared and not used",
+			filePath, sym.Identifier.Token.Ln, sym.Identifier.Token.Col,
+			sym.Identifier.Token.Type, name))
+	}
+
+	return errs
 }
 
 func (s *SymbolTable) ResolveField(typeName, field string) (Symbol, bool) {

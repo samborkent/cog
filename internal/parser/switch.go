@@ -130,6 +130,7 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 		return ast.ZeroNodeIndex
 	}
 
+	p.symbols.MarkUsed(p.lex.This().Literal)
 	p.lex.Step() // consume identifier
 
 	if p.lex.This().Type != tokens.LBrace {

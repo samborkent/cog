@@ -107,11 +107,13 @@ func (p *Parser) parseMethod(ctx context.Context, receiver *ast.Identifier, type
 	if receiver != nil {
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 		p.symbols.Define(receiver)
+		p.symbols.MarkUsed(receiver.Token.Literal)
 
 		prevReceiver := p.currentReceiver
 		p.currentReceiver = receiver
 
 		defer func() {
+			p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
 			p.symbols = p.symbols.Outer
 			p.currentReceiver = prevReceiver
 		}()

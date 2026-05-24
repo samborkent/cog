@@ -226,6 +226,7 @@ func TestTranspileFilesDoesNotLeakLocalSymbolsAcrossFiles(t *testing.T) {
 
 main : proc() = {
 	shared := 1
+	_ = shared
 }
 `,
 		"b.cog": `package main
@@ -250,10 +251,7 @@ fourth : proc() = {
 	})
 
 	a := result["a.cog"]
-	mustContain(t, a, "var _")
-	if strings.Contains(a, "shared") {
-		t.Fatalf("expected a.cog to keep its unused local variable unnamed, got:\n%s", a)
-	}
+	mustContain(t, a, "shared")
 }
 
 func TestTranspileFilesWithModule(t *testing.T) {

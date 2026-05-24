@@ -116,10 +116,12 @@ func (p *Parser) parseForStatement(ctx context.Context) ast.NodeIndex {
 
 		if valueVar != nil {
 			p.symbols.Define(valueVar)
+			p.symbols.MarkUsed(valueVar.Token.Literal)
 		}
 
 		if indexVar != nil {
 			p.symbols.Define(indexVar)
+			p.symbols.MarkUsed(indexVar.Token.Literal)
 		}
 	}
 
@@ -132,6 +134,8 @@ func (p *Parser) parseForStatement(ctx context.Context) ast.NodeIndex {
 	}
 
 	if valueVar != nil || indexVar != nil {
+		// Check for unused variables in the for scope.
+		p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
 		// Restore scope.
 		p.symbols = p.symbols.Outer
 	}

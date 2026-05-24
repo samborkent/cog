@@ -12,6 +12,7 @@ func TestParseAssignment(t *testing.T) {
 main : proc() = {
 	var x := 1
 	x = 2
+	_ = x
 }`)
 		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")

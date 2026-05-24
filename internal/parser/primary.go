@@ -174,6 +174,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			return ast.ZeroExprIndex
 		}
 
+		p.symbols.MarkUsed(p.lex.This().Literal)
 		p.lex.Step() // consume identifier
 
 		if symbol.Identifier.Qualifier == ast.QualifierType && p.lex.This().Type == tokens.LBrace {
@@ -548,6 +549,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 						ValueType: param.Type,
 						Qualifier: ast.QualifierImmutable,
 					})
+					p.symbols.MarkUsed(param.Name)
 				}
 			}
 

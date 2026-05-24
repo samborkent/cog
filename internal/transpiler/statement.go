@@ -32,13 +32,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		if n.Identifier.Token.Literal != "_" {
 			name := component.ConvertExport(n.Identifier.Token.Literal, n.Identifier.Exported, n.Identifier.Global)
 
-			id, ok := t.symbols.Resolve(name)
-			if !ok {
-				_, ok := t.symbols.ResolveDynamic(name)
-				if !ok {
-					return nil, fmt.Errorf("undefined dynamic variable '%s'", n.Identifier.Token.Literal)
-				}
-
+			if n.Identifier.Qualifier == ast.QualifierDynamic {
 				if t.inFunc {
 					return nil, fmt.Errorf("func cannot assign dynamically scoped variable %q", n.Identifier.Token.Literal)
 				}
@@ -56,7 +50,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 				}, nil
 			}
 
-			ident = id
+			ident = &goast.Ident{Name: name}
 		}
 
 		expr, err := t.convertExpr(assignmentExpr)
@@ -102,8 +96,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 			Label: component.Ident(n.Label),
 		}}
 	case *ast.Declaration:
-		// Define as unused variable.
-		ident := t.symbols.Define(n.Assignment.Identifier.Token.Literal)
+		ident := &goast.Ident{Name: n.Assignment.Identifier.Token.Literal}
 		typ := n.Assignment.Identifier.ValueType
 
 		ln, _ := node.Pos()
@@ -332,11 +325,6 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 
 			stmts := make([]goast.Stmt, 0, len(c.Body))
 
-			if len(c.Body) > 0 {
-				// Enter case block scope.
-				t.symbols = NewEnclosedSymbolTable(t.symbols)
-			}
-
 			for _, stmt := range c.Body {
 				caseStmt, err := t.convertStmt(t.Node(stmt))
 				if err != nil {
@@ -344,11 +332,6 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 				}
 
 				stmts = append(stmts, caseStmt...)
-			}
-
-			if len(c.Body) > 0 {
-				// Leave case block scope.
-				t.symbols = t.symbols.Outer
 			}
 
 			cases = append(cases, &goast.CaseClause{
@@ -360,11 +343,6 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		if n.Default != nil {
 			stmts := make([]goast.Stmt, 0, len(n.Default.Body))
 
-			if len(n.Default.Body) > 0 {
-				// Enter default block scope.
-				t.symbols = NewEnclosedSymbolTable(t.symbols)
-			}
-
 			for _, stmt := range n.Default.Body {
 				defaultStmt, err := t.convertStmt(t.Node(stmt))
 				if err != nil {
@@ -372,11 +350,6 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 				}
 
 				stmts = append(stmts, defaultStmt...)
-			}
-
-			if len(n.Default.Body) > 0 {
-				// Leave default block scope.
-				t.symbols = t.symbols.Outer
 			}
 
 			cases = append(cases, &goast.CaseClause{
@@ -391,16 +364,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		}
 
 		if n.Identifier != nil {
-			ident, ok := t.symbols.Resolve(n.Identifier.Token.Literal)
-			if !ok {
-				return nil, fmt.Errorf("unknown identifier %q", n.Identifier.Token.Literal)
-			}
-
-			if err := t.symbols.MarkUsed(n.Identifier.Token.Literal); err != nil {
-				return nil, fmt.Errorf("marking switch identifier used: %w", err)
-			}
-
-			switchStmt.Tag = ident
+			switchStmt.Tag = component.Ident(n.Identifier)
 		}
 
 		if n.Label != nil {

@@ -182,20 +182,23 @@ func (p *Parser) ParseBodies(ctx context.Context) error {
 		if db.Receiver != nil {
 			p.symbols = NewEnclosedSymbolTable(p.symbols)
 			p.symbols.Define(db.Receiver)
+			p.symbols.MarkUsed(db.Receiver.Token.Literal)
 		}
 
 		if len(procType.Parameters) > 0 {
 			p.symbols = NewEnclosedSymbolTable(p.symbols)
 
 			for _, param := range procType.Parameters {
-				p.symbols.Define(&ast.Identifier{
+				ident := &ast.Identifier{
 					Token: tokens.Token{
 						Type:    tokens.Identifier,
 						Literal: param.Name,
 					},
 					ValueType: param.Type,
 					Qualifier: ast.QualifierImmutable,
-				})
+				}
+				p.symbols.Define(ident)
+				p.symbols.MarkUsed(param.Name)
 			}
 		}
 
@@ -212,10 +215,12 @@ func (p *Parser) ParseBodies(ctx context.Context) error {
 
 		// Pop scopes.
 		if len(procType.Parameters) > 0 {
+			p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
 			p.symbols = p.symbols.Outer
 		}
 
 		if db.Receiver != nil {
+			p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
 			p.symbols = p.symbols.Outer
 		}
 
@@ -227,6 +232,9 @@ func (p *Parser) ParseBodies(ctx context.Context) error {
 			p.ast.SetNode(ast.NodeIndex(i), body)
 		}
 	}
+
+	// Check for unused variables in the global scope.
+	p.Errs = append(p.Errs, p.symbols.CheckUnused(p.filePath)...)
 
 	if err := errors.Join(p.Errs...); err != nil {
 		return fmt.Errorf("parser error:\n%w", err)

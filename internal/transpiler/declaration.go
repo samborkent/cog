@@ -33,11 +33,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		}
 
 		name := component.ConvertExport(n.Assignment.Identifier.Token.Literal, n.Assignment.Identifier.Exported, n.Assignment.Identifier.Global)
-		ident := t.symbols.Define(name)
-
-		// If the identifier was predeclared with a placeholder "_" name,
-		// update it to the proper name now.
-		ident.Name = name
+		ident := &goast.Ident{Name: name}
 
 		tok := gotoken.CONST
 
@@ -64,18 +60,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 
 		prevUsesDyn := t.usesDyn
 		t.usesDyn = false
-
-		// Pre-define ctx and dyn in the symbol table for main so that
-		// the body conversion can reference them (e.g. passing ctx to procs).
-		if n.Assignment.Identifier.Token.Literal == "main" {
-			if len(t.symbols.dynamics) > 0 {
-				t.symbols.Define("dyn")
-			}
-
-			if t.currentFileNeedsContext() {
-				t.symbols.Define("ctx")
-			}
-		}
 
 		assignmentExpr := t.Expr(n.Assignment.Expr)
 
@@ -108,16 +92,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				t.addStdLibImport("os/signal")
 				t.addStdLibImport("syscall")
 
-				hasDynVars := len(t.symbols.dynamics) > 0
+				hasDynVars := len(t.dynamics) > 0
 				needsContext := t.currentFileNeedsContext()
 				// Only pass existing ctx to Signal when dyn init creates one for proc propagation.
 				passCtx := hasDynVars && needsContext
 
-				ctxIdent := t.symbols.Define("ctx")
-
-				if err := t.symbols.MarkUsed("ctx"); err != nil {
-					return nil, fmt.Errorf("marking ctx used: %w", err)
-				}
+				ctxIdent := &goast.Ident{Name: "ctx"}
 
 				// Add signal notify context and adaptive GC.
 				body := component.Signal(ctxIdent, passCtx)
@@ -127,13 +107,10 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				if hasDynVars || needsContext {
 					if hasDynVars {
 						// Main with dynamic variables: init dyn struct.
-						dynIdent := t.symbols.Define("dyn")
-						if err := t.symbols.MarkUsed("dyn"); err != nil {
-							return nil, fmt.Errorf("marking dyn used: %w", err)
-						}
+						dynIdent := &goast.Ident{Name: "dyn"}
 
-						structElts := make([]goast.Expr, 0, len(t.symbols.dynamics))
-						for name := range t.symbols.dynamics {
+						structElts := make([]goast.Expr, 0, len(t.dynamics))
+						for name := range t.dynamics {
 							defaultExpr, hasDefault := t.dynDefaults[name]
 							if !hasDefault {
 								continue
@@ -183,7 +160,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			}
 
 			// Non-main proc: inject dyn preamble only when body uses dyn.
-			if bodyUsesDyn && len(t.symbols.dynamics) > 0 {
+			if bodyUsesDyn && len(t.dynamics) > 0 {
 				procType, ok := assignmentExpr.Type().(*types.Procedure)
 				if ok && !procType.Function {
 					funcDecl.Body.List = append(component.DynProcEntry(), funcDecl.Body.List...)
@@ -245,17 +222,10 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		var recIdent *goast.Ident
 
 		if n.Receiver != nil {
-			t.symbols = NewEnclosedSymbolTable(t.symbols)
-			// Create receiver ident with proper name directly
 			recIdent = &goast.Ident{Name: component.ConvertExport(n.Receiver.Token.Literal, n.Receiver.Exported, n.Receiver.Global)}
-			t.symbols.table[n.Receiver.Token.Literal] = recIdent
 		}
 
 		decls, err := t.convertDecl(t.Node(n.Declaration))
-
-		if n.Receiver != nil {
-			t.symbols = t.symbols.Outer
-		}
 
 		t.inMethod = prevInMethod
 

@@ -98,7 +98,7 @@ func TestParseTypedLiterals(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
+			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n_ = x\n}")
 			if f.LenNodes() == 0 {
 				t.Fatal("expected statements")
 			}
@@ -122,7 +122,7 @@ func TestParseInferredLiterals(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
+			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n_ = x\n}")
 			if f.LenNodes() == 0 {
 				t.Fatal("expected statements")
 			}
@@ -159,7 +159,7 @@ func TestParseArithmeticExpressions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
+			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n_ = x\n}")
 			if f.LenNodes() == 0 {
 				t.Fatal("expected statements")
 			}
@@ -245,7 +245,7 @@ func TestParseBooleanExpressions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
+			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n_ = x\n}")
 			if f.LenNodes() == 0 {
 				t.Fatal("expected statements")
 			}
@@ -272,7 +272,7 @@ func TestParseArithmeticPrecedence(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n}")
+			f := parse(t, "package p\nmain : proc() = {\n"+tt.src+"\n_ = x\n}")
 			if f.LenNodes() == 0 {
 				t.Fatal("expected statements")
 			}
