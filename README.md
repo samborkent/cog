@@ -15,7 +15,7 @@ The following basic features are missing that need to be implemented before Cog 
 ### Features
 - Remove `@ref` allocator.
 - Change `@cast` signature to `@cast<B, A any>(x A) B?`. Return type will only be set if lossless cast is possible.
-- Implement `@as<B, A any>(x A) B`, will perform best effort type conversion. Will return zero value of `B` if conversion if not possible.
+- Implement `@as<B, A any>(x A) B`, will perform best effort type conversion. Will return zero value of `B` if conversion is not possible.
 - Define builtin functions as `cog` functions.
 - Design how iterators should work.
     - Range over int (or other literal) should not be possible.

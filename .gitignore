@@ -1,4 +1,6 @@
 .agents/
+.caliber/
+.claude/
 .graymatter/
 .kilo/
 .kilocode/
@@ -6,3 +8,6 @@
 tmp/
 .env
 .kilocodeignore
+
+# Caliber local state
+.caliber/

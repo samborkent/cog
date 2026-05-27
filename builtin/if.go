@@ -9,9 +9,5 @@ func If[T any, B ~bool](condition B, consequence T, alternative ...T) T {
 		return *new(T)
 	}
 
-	if len(alternative) > 1 {
-		panic("@if: wrong number of arguments")
-	}
-
 	return alternative[0]
 }

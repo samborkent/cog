@@ -12,9 +12,11 @@ import (
 )
 
 type (
-	ASCII             []byte
-	ASCIIHash         uint64
-	Float16           = f16.Float16
+	ASCII     []byte
+	ASCIIHash uint64
+	Float16   struct {
+		f16.Float16
+	}
 	Int128            = wide.Int128
 	Set[T comparable] map[T]struct{}
 	Uint128           = u128.Uint128
@@ -32,7 +34,7 @@ func (s Set[T]) Copy() Set[T] {
 
 // Float16Fromfloat32 converts a float32 to a Float16.
 func Float16Fromfloat32(f float32) Float16 {
-	return f16.Fromfloat32(f)
+	return Float16{f16.Fromfloat32(f)}
 }
 
 // Uint128From64 converts a uint64 to a Uint128.
@@ -116,8 +118,8 @@ func Complex32Bits(c Complex32) uint32 {
 // Complex32FromBits constructs a Complex32 from a uint32 bit pattern (big-endian).
 func Complex32FromBits(bits uint32) Complex32 {
 	return Complex32{
-		Real: f16.Frombits(uint16(bits >> 16)),
-		Imag: f16.Frombits(uint16(bits)),
+		Real: Float16Frombits(uint16(bits >> 16)),
+		Imag: Float16Frombits(uint16(bits)),
 	}
 }
 
@@ -158,5 +160,5 @@ func Int128ToUint128(v Int128) Uint128 {
 
 // Float16Frombits converts a uint16 to a Float16.
 func Float16Frombits(bits uint16) Float16 {
-	return f16.Frombits(bits)
+	return Float16{f16.Frombits(bits)}
 }

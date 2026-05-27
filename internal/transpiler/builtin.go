@@ -261,7 +261,7 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 	}
 }
 
-// convertCast generates Go AST for a bitwise @cast from srcKind to dstKind.
+// convertCast generates Go AST for a bitwise type cast from srcKind to dstKind.
 // For same-family lossless casts, direct Go primitive conversions are used.
 // For cross-family casts, the strategy is: normalize src → unsigned int of
 // src bit width, widen if needed, then denormalize to the target type.
