@@ -14,7 +14,6 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Features
 - Remove `@ref` allocator.
-- Implement `@as<B, A any>(x A) B`, will perform best effort type conversion. Will return zero value of `B` if conversion is not possible.
 - Define builtin functions as `cog` functions.
 - Design how iterators should work.
     - Range over int (or other literal) should not be possible.
@@ -62,6 +61,7 @@ The following basic features are missing that need to be implemented before Cog 
     - `@print(msg any)` print to std out
     - `@if<T ~ any>(if : bool, then : T, else :? T)` conditional expression
     - `@cast<B, A ~ any>(x A) B?` bitwise type cast, returns `value` on success (same size or widening) and `None` on narrowing (src > dst)
+    - `@as<B, A any>(x A) B` best-effort type conversion (semantic, not bitwise): bool↔numeric, integer↔string, float↔string, ascii↔utf8, narrowing with overflow detection, NaN/Inf/fraction → 0, complex imag→zero
 - Allocation builtins with generic type arguments:
     - `@ref<T valueType>() &T`
     - `@slice<T any, I uint>(len : I, cap :? I = len) []T`
@@ -165,9 +165,7 @@ The following basic features are missing that need to be implemented before Cog 
     - `switch t { type uint64: ... }`
     - For `t ~ any | interface | union`
 - Select statement
-- Conversion builtins:
-    - `@convert<A, B any>(x A) B` to cast types instead of `float32()`, etc.
-        - Will perform best-effort conversion, allowing some precision loss and handling overflows.
+
 - Additional types:
     - `signal<T any>` alias of `chan<T any>struct{}`
 - Range operator `0..4 == [0, 1, 2, 3]`

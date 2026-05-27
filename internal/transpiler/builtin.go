@@ -4,7 +4,8 @@ import (
 	"errors"
 	"fmt"
 	goast "go/ast"
-	token "go/token"
+	gotoken "go/token"
+	"strconv"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/transpiler/component"
@@ -14,6 +15,7 @@ import (
 type Builtins string
 
 const (
+	BuiltinAs    Builtins = "as"
 	BuiltinCast  Builtins = "cast"
 	BuiltinIf    Builtins = "if"
 	BuiltinMap   Builtins = "map"
@@ -236,6 +238,26 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 		}
 
 		return component.BuiltinSlice(elemType, length, capacity), nil
+	case BuiltinAs:
+		if len(node.TypeArguments) == 0 {
+			return nil, fmt.Errorf("@as requires at least 1 type argument")
+		}
+
+		if len(node.Arguments) != 1 {
+			return nil, fmt.Errorf("@as expects 1 argument, got %d", len(node.Arguments))
+		}
+
+		argExpr := t.Expr(node.Arguments[0])
+
+		arg, err := t.convertExpr(argExpr)
+		if err != nil {
+			return nil, fmt.Errorf("converting @as argument: %w", err)
+		}
+
+		srcType := argExpr.Type()
+		dstType := node.TypeArguments[0]
+
+		return t.convertAs(arg, srcType, dstType)
 	case BuiltinCast:
 		if len(node.TypeArguments) == 0 {
 			return nil, fmt.Errorf("@cast requires at least 1 type argument")
@@ -396,7 +418,7 @@ func (t *Transpiler) castNormalize(arg goast.Expr, kind types.Kind) (goast.Expr,
 	switch kind {
 	case types.Bool:
 		t.addBuiltinImport()
-		return component.BuiltinIf(&goast.Ident{Name: "uint8"}, nil, arg, &goast.BasicLit{Kind: token.INT, Value: "1"}, &goast.BasicLit{Kind: token.INT, Value: "0"}), nil
+		return component.BuiltinIf(&goast.Ident{Name: "uint8"}, nil, arg, &goast.BasicLit{Kind: gotoken.INT, Value: "1"}, &goast.BasicLit{Kind: gotoken.INT, Value: "0"}), nil
 	case types.Uint8, types.Uint16, types.Uint32, types.Uint64:
 		return arg, nil
 	case types.Int8:
@@ -485,7 +507,7 @@ func (t *Transpiler) castWiden(arg goast.Expr, srcBits, dstBits int) goast.Expr 
 func (t *Transpiler) castDenormalize(arg goast.Expr, kind types.Kind) (goast.Expr, error) {
 	switch kind {
 	case types.Bool:
-		return &goast.BinaryExpr{X: arg, Op: token.NEQ, Y: &goast.BasicLit{Kind: token.INT, Value: "0"}}, nil
+		return &goast.BinaryExpr{X: arg, Op: gotoken.NEQ, Y: &goast.BasicLit{Kind: gotoken.INT, Value: "0"}}, nil
 	case types.Uint8:
 		return &goast.CallExpr{Fun: &goast.Ident{Name: "uint8"}, Args: []goast.Expr{arg}}, nil
 	case types.Uint16:
@@ -557,6 +579,418 @@ func (t *Transpiler) castDenormalize(arg goast.Expr, kind types.Kind) (goast.Exp
 	default:
 		return nil, fmt.Errorf("@cast: cannot denormalize to type kind %v", kind)
 	}
+}
+
+// convertAs generates Go AST for @as semantic type conversion.
+// Unlike @cast (bitwise reinterpretation), @as does value-preserving
+// conversions (e.g. int → string, string → int, bool → int, etc).
+func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goast.Expr, error) {
+	srcKind := srcType.Kind()
+	dstKind := dstType.Kind()
+
+	dstGoType, err := t.convertType(dstType)
+	if err != nil {
+		return nil, fmt.Errorf("converting @as target type: %w", err)
+	}
+
+	// same kind → passthrough (identity)
+	if srcKind == dstKind {
+		return arg, nil
+	}
+
+	// Helper: convert bool to string (used for both ascii and utf8)
+	if srcKind == types.Bool && types.IsString(dstType) {
+		t.addBuiltinImport()
+		if dstKind == types.ASCII {
+			t.addCogImport()
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "ASCII"}},
+				Args: []goast.Expr{
+					component.BuiltinIf(&goast.Ident{Name: "string"}, nil, arg,
+						&goast.BasicLit{Kind: gotoken.STRING, Value: `"true"`},
+						&goast.BasicLit{Kind: gotoken.STRING, Value: `"false"`}),
+				},
+			}, nil
+		}
+		return component.BuiltinIf(&goast.Ident{Name: "string"}, nil, arg,
+			&goast.BasicLit{Kind: gotoken.STRING, Value: `"true"`},
+			&goast.BasicLit{Kind: gotoken.STRING, Value: `"false"`}), nil
+	}
+
+	// ascii ↔ utf8: same-string passthrough (Go string under the hood)
+	if srcKind == types.ASCII && dstKind == types.UTF8 {
+		return arg, nil
+	}
+	if srcKind == types.UTF8 && dstKind == types.ASCII {
+		t.addCogImport()
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "ASCII"}},
+			Args: []goast.Expr{
+				&goast.CallExpr{
+					Fun:  &goast.Ident{Name: "string"},
+					Args: []goast.Expr{arg},
+				},
+			},
+		}, nil
+	}
+
+	// bool ↔ any numeric (non-complex)
+	if srcKind == types.Bool && types.IsReal(dstType) {
+		t.addBuiltinImport()
+		return component.BuiltinIf(dstGoType, nil, arg,
+			&goast.BasicLit{Kind: gotoken.INT, Value: "1"},
+			&goast.BasicLit{Kind: gotoken.INT, Value: "0"}), nil
+	}
+	if dstKind == types.Bool && types.IsReal(srcType) {
+		return &goast.BinaryExpr{X: arg, Op: gotoken.NEQ, Y: &goast.BasicLit{Kind: gotoken.INT, Value: "0"}}, nil
+	}
+
+	// string → bool
+	if types.IsString(srcType) && dstKind == types.Bool {
+		t.addStdLibImport("strconv")
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseBool"}},
+			Args: []goast.Expr{
+				&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+			},
+		}, nil
+	}
+
+	// string → integer
+	if types.IsString(srcType) && types.IsInt(dstType) {
+		t.addStdLibImport("strconv")
+		parsed := &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseInt"}},
+			Args: []goast.Expr{
+				&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+				&goast.BasicLit{Kind: gotoken.INT, Value: "10"},
+				&goast.BasicLit{Kind: gotoken.INT, Value: "64"},
+			},
+		}
+		return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{parsed}}, nil
+	}
+
+	// string → unsigned integer
+	if types.IsString(srcType) && types.IsUint(dstType) {
+		t.addStdLibImport("strconv")
+		parsed := &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseUint"}},
+			Args: []goast.Expr{
+				&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+				&goast.BasicLit{Kind: gotoken.INT, Value: "10"},
+				&goast.BasicLit{Kind: gotoken.INT, Value: "64"},
+			},
+		}
+		return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{parsed}}, nil
+	}
+
+	// string → float
+	if types.IsString(srcType) && types.IsFloat(dstType) {
+		t.addStdLibImport("strconv")
+		bits := types.Size(dstKind)
+		return &goast.CallExpr{
+			Fun: dstGoType,
+			Args: []goast.Expr{
+				&goast.CallExpr{
+					Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseFloat"}},
+					Args: []goast.Expr{
+						&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+						&goast.BasicLit{Kind: gotoken.INT, Value: strconv.Itoa(bits)},
+					},
+				},
+			},
+		}, nil
+	}
+
+	// integer → string (ascii or utf8)
+	if types.IsInt(srcType) && types.IsString(dstType) {
+		t.addStdLibImport("strconv")
+		result := &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "FormatInt"}},
+			Args: []goast.Expr{
+				&goast.CallExpr{Fun: &goast.Ident{Name: "int64"}, Args: []goast.Expr{arg}},
+				&goast.BasicLit{Kind: gotoken.STRING, Value: `"10"`},
+			},
+		}
+		if dstKind == types.ASCII {
+			t.addCogImport()
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "ASCII"}},
+				Args: []goast.Expr{result},
+			}, nil
+		}
+		return result, nil
+	}
+
+	// unsigned integer → string (ascii or utf8)
+	if types.IsUint(srcType) && types.IsString(dstType) {
+		t.addStdLibImport("strconv")
+		result := &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "FormatUint"}},
+			Args: []goast.Expr{
+				&goast.CallExpr{Fun: &goast.Ident{Name: "uint64"}, Args: []goast.Expr{arg}},
+				&goast.BasicLit{Kind: gotoken.STRING, Value: `"10"`},
+			},
+		}
+		if dstKind == types.ASCII {
+			t.addCogImport()
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "ASCII"}},
+				Args: []goast.Expr{result},
+			}, nil
+		}
+		return result, nil
+	}
+
+	// float → string (ascii or utf8)
+	if types.IsFloat(srcType) && types.IsString(dstType) {
+		t.addStdLibImport("strconv")
+		bits := types.Size(srcKind)
+		result := &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "FormatFloat"}},
+			Args: []goast.Expr{
+				arg,
+				&goast.BasicLit{Kind: gotoken.CHAR, Value: "'f'"},
+				&goast.BasicLit{Kind: gotoken.INT, Value: "-1"},
+				&goast.BasicLit{Kind: gotoken.INT, Value: strconv.Itoa(bits)},
+			},
+		}
+		if dstKind == types.ASCII {
+			t.addCogImport()
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "ASCII"}},
+				Args: []goast.Expr{result},
+			}, nil
+		}
+		return result, nil
+	}
+
+	// bool → string (ascii or utf8) — handled above, this is for complex → string fallback too
+
+	// integer ↔ integer (same or wider target) — direct conversion
+	if types.IsInt(srcType) && types.IsInt(dstType) {
+		srcBits := types.Size(srcKind)
+		dstBits := types.Size(dstKind)
+		if dstBits >= srcBits {
+			return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}, nil
+		}
+		// narrowing integer: check for overflow
+		narrowed, err := t.convertNarrowingInt(arg, dstGoType, srcKind, dstKind)
+		if err != nil {
+			return nil, err
+		}
+		return narrowed, nil
+	}
+
+	// unsigned ↔ unsigned (same or wider target) — direct conversion
+	if types.IsUint(srcType) && types.IsUint(dstType) {
+		srcBits := types.Size(srcKind)
+		dstBits := types.Size(dstKind)
+		if dstBits >= srcBits {
+			return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}, nil
+		}
+		narrowed, err := t.convertNarrowingInt(arg, dstGoType, srcKind, dstKind)
+		if err != nil {
+			return nil, err
+		}
+		return narrowed, nil
+	}
+
+	// signed ↔ unsigned cross-family: use wider conversion
+	if (types.IsInt(srcType) && types.IsUint(dstType)) || (types.IsUint(srcType) && types.IsInt(dstType)) {
+		srcBits := types.Size(srcKind)
+		dstBits := types.Size(dstKind)
+		if dstBits >= srcBits {
+			return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}, nil
+		}
+		narrowed, err := t.convertNarrowingInt(arg, dstGoType, srcKind, dstKind)
+		if err != nil {
+			return nil, err
+		}
+		return narrowed, nil
+	}
+
+	// integer → float (always safe)
+	if types.IsFixed(srcType) && types.IsFloat(dstType) {
+		return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}, nil
+	}
+
+	// float → integer: check NaN, infinity, fraction
+	if types.IsFloat(srcType) && (types.IsInt(dstType) || types.IsUint(dstType)) {
+		t.addStdLibImport("math")
+		mathAlias := goStdLibAlias("math")
+		return &goast.CallExpr{
+			Fun: &goast.Ident{Name: "func"},
+			Args: []goast.Expr{
+				&goast.FuncLit{
+					Type: &goast.FuncType{
+						Results: &goast.FieldList{
+							List: []*goast.Field{{Type: dstGoType}},
+						},
+					},
+					Body: &goast.BlockStmt{
+						List: []goast.Stmt{
+							&goast.IfStmt{
+								Cond: &goast.BinaryExpr{
+									X: &goast.CallExpr{
+										Fun: &goast.SelectorExpr{X: &goast.Ident{Name: mathAlias}, Sel: &goast.Ident{Name: "IsNaN"}},
+										Args: []goast.Expr{arg},
+									},
+									Op:  gotoken.LOR,
+									Y: &goast.BinaryExpr{
+										X:  arg,
+										Op: gotoken.NEQ,
+										Y: &goast.CallExpr{
+											Fun: &goast.SelectorExpr{X: &goast.Ident{Name: mathAlias}, Sel: &goast.Ident{Name: "Trunc"}},
+											Args: []goast.Expr{arg},
+										},
+									},
+								},
+								Body: &goast.BlockStmt{
+									List: []goast.Stmt{
+										&goast.ReturnStmt{
+											Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}},
+										},
+									},
+								},
+							},
+							&goast.ReturnStmt{
+								Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}},
+							},
+						},
+					},
+				},
+			},
+		}, nil
+	}
+
+	// float → float: wider is direct, narrower is direct Go conversion (may be ±Inf)
+	if types.IsFloat(srcType) && types.IsFloat(dstType) {
+		return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}, nil
+	}
+
+	// complex with non-zero imag → anything → zero value
+	// complex with zero imag → number → extract real
+	if types.IsComplex(srcType) {
+		if types.IsComplex(dstType) {
+			// complex → complex: extract real, check imag, convert
+			return &goast.CallExpr{
+				Fun: &goast.Ident{Name: "func"},
+				Args: []goast.Expr{
+					&goast.FuncLit{
+						Type: &goast.FuncType{
+							Results: &goast.FieldList{
+								List: []*goast.Field{{Type: dstGoType}},
+							},
+						},
+						Body: &goast.BlockStmt{
+							List: []goast.Stmt{
+								&goast.IfStmt{
+									Cond: &goast.BinaryExpr{
+										X: &goast.CallExpr{
+											Fun:  &goast.Ident{Name: "imag"},
+											Args: []goast.Expr{arg},
+										},
+										Op:  gotoken.NEQ,
+										Y: &goast.BasicLit{Kind: gotoken.FLOAT, Value: "0"},
+									},
+									Body: &goast.BlockStmt{
+										List: []goast.Stmt{
+											&goast.ReturnStmt{
+												Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}},
+											},
+										},
+									},
+								},
+								&goast.ReturnStmt{
+									Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.CallExpr{Fun: &goast.Ident{Name: "real"}, Args: []goast.Expr{arg}}}}},
+								},
+							},
+						},
+					},
+				},
+			}, nil
+		}
+		if types.IsNumber(dstType) {
+			// complex → real/number: extract real
+			realExpr := &goast.CallExpr{Fun: &goast.Ident{Name: "real"}, Args: []goast.Expr{arg}}
+			checkImag := &goast.BinaryExpr{
+				X:  &goast.CallExpr{Fun: &goast.Ident{Name: "imag"}, Args: []goast.Expr{arg}},
+				Op: gotoken.NEQ,
+				Y:  &goast.BasicLit{Kind: gotoken.FLOAT, Value: "0"},
+			}
+			return &goast.CallExpr{
+				Fun: &goast.Ident{Name: "func"},
+				Args: []goast.Expr{
+					&goast.FuncLit{
+						Type: &goast.FuncType{
+							Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
+						},
+						Body: &goast.BlockStmt{
+							List: []goast.Stmt{
+								&goast.IfStmt{
+									Cond: checkImag,
+									Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}}}}},
+								},
+								&goast.ReturnStmt{
+									Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{realExpr}}},
+								},
+							},
+						},
+					},
+				},
+			}, nil
+		}
+	}
+
+	// number → complex: fill real, imag zero
+	if types.IsNumber(srcType) && types.IsComplex(dstType) {
+		srcIsComplex := types.IsComplex(srcType)
+		var realPart goast.Expr
+		if srcIsComplex {
+			realPart = &goast.CallExpr{Fun: &goast.Ident{Name: "real"}, Args: []goast.Expr{arg}}
+		} else {
+			realPart = arg
+		}
+		return &goast.CallExpr{
+			Fun:  dstGoType,
+			Args: []goast.Expr{realPart, &goast.BasicLit{Kind: gotoken.INT, Value: "0"}},
+		}, nil
+	}
+
+	// bool → string (for ascii) — handled above already, this is catch-all
+
+	// unsupported pair → zero value of B
+	return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}, nil
+}
+
+// convertNarrowingInt generates overflow-safe narrowing: if T(v) != v { 0 } else { T(v) }
+func (t *Transpiler) convertNarrowingInt(arg goast.Expr, dstGoType goast.Expr, srcKind, dstKind types.Kind) (goast.Expr, error) {
+	narrowed := &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}
+	check := &goast.BinaryExpr{
+		X:  &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}},
+		Op: gotoken.NEQ,
+		Y:  arg,
+	}
+	return &goast.CallExpr{
+		Fun: &goast.Ident{Name: "func"},
+		Args: []goast.Expr{
+			&goast.FuncLit{
+				Type: &goast.FuncType{
+					Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
+				},
+				Body: &goast.BlockStmt{
+					List: []goast.Stmt{
+						&goast.IfStmt{
+							Cond: check,
+							Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}}}}},
+						},
+						&goast.ReturnStmt{Results: []goast.Expr{narrowed}},
+					},
+				},
+			},
+		},
+	}, nil
 }
 
 // uintNameForBits returns the Go unsigned integer type name for the given bit width.

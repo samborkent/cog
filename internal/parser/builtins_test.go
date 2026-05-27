@@ -357,12 +357,173 @@ main : proc() = {
 }`)
 	})
 
-	t.Run("utf8 to ascii rejected", func(t *testing.T) {
+t.Run("utf8 to ascii rejected", func(t *testing.T) {
 		t.Parallel()
+
 		parseShouldError(t, `package p
 main : proc() = {
 	x : utf8 = "hello"
 	y := @cast<ascii>(x)
+	@print(y)
+}`)
+	})
+}
+
+func TestParseBuiltinAs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("int64 identity", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	x : int8 = 42
+	y := @as<int64>(x)
+	@print(y)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("int to utf8", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	x : int64 = 42
+	y := @as<utf8>(x)
+	@print(y)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("string to int with explicit source type", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	x : utf8 = "42"
+	y := @as<int32, utf8>(x)
+	@print(y)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("int to bool", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	x : int8 = 1
+	y := @as<bool>(x)
+	@print(y)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("bool to utf8", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	x := true
+	y := @as<utf8>(x)
+	@print(y)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("ascii to utf8", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	x : ascii = "hi"
+	y := @as<utf8>(x)
+	@print(y)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("utf8 to ascii", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	x : utf8 = "hi"
+	y := @as<ascii>(x)
+	@print(y)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("float32 to float64 widening", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	x : float32 = 1.0
+	y := @as<float64>(x)
+	@print(y)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("float64 to int32", func(t *testing.T) {
+		t.Parallel()
+
+		f := parse(t, `package p
+main : proc() = {
+	x : float64 = 1.5
+	y := @as<int32>(x)
+	@print(y)
+}`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
+	})
+
+	t.Run("wrong number of type args", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	x : int8 = 1
+	y := @as(x)
+	@print(y)
+}`)
+	})
+
+	t.Run("too many type args", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	x : int8 = 1
+	y := @as<int16, int32, int64>(x)
+	@print(y)
+}`)
+	})
+
+	t.Run("second type arg mismatch", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main : proc() = {
+	x : int8 = 1
+	y := @as<int16, utf8>(x)
 	@print(y)
 }`)
 	})

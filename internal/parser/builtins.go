@@ -458,3 +458,58 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 
 	return p.ast.NewBuiltin(t, "cast", typArgs, []ast.ExprIndex{arg}, &types.Option{Value: targetType})
 }
+
+func (p *Parser) parseBuiltinAs(ctx context.Context, t tokens.Token, tokenType types.Type) ast.ExprIndex {
+	typArgs := p.parseTypeArguments(ctx)
+	if typArgs == nil {
+		return ast.ZeroExprIndex
+	}
+
+	if len(typArgs) == 0 || len(typArgs) > 2 {
+		p.error(t, "@as requires 1 or 2 type arguments", "parseBuiltinAs")
+		return ast.ZeroExprIndex
+	}
+
+	targetType := typArgs[0]
+
+	if !types.IsBasic(targetType) && !types.IsString(targetType) {
+		p.error(t, fmt.Sprintf("@as target type %q is not a basic or string type", targetType), "parseBuiltinAs")
+		return ast.ZeroExprIndex
+	}
+
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after @as", "parseBuiltinAs")
+		return ast.ZeroExprIndex
+	}
+
+	p.lex.Step() // consume (
+
+	var argType types.Type = types.None
+	if len(typArgs) == 2 {
+		argType = typArgs[1]
+	}
+
+	arg := p.expression(ctx, argType)
+	if arg == ast.ZeroExprIndex {
+		return ast.ZeroExprIndex
+	}
+
+	if p.lex.This().Type != tokens.RParen {
+		p.error(p.lex.This(), "expected ')' after argument in @as", "parseBuiltinAs")
+		return ast.ZeroExprIndex
+	}
+
+	p.lex.Step() // consume )
+
+	sourceType := p.ast.Expr(arg).Type()
+
+	// Validate second type argument matches source if provided.
+	if len(typArgs) == 2 {
+		if typArgs[1].Kind() != sourceType.Kind() {
+			p.error(t, fmt.Sprintf("@as second type argument %q does not match source type %q", typArgs[1], sourceType), "parseBuiltinAs")
+			return ast.ZeroExprIndex
+		}
+	}
+
+	return p.ast.NewBuiltin(t, "as", typArgs, []ast.ExprIndex{arg}, targetType)
+}

@@ -228,3 +228,163 @@ main : proc() = {
 		mustContain(t, got, "cog.Option[int32]{Set: false}")
 	})
 }
+
+func TestConvertBuiltinAs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("int64 to int8 widening", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : int8 = 1
+	y := @as<int64>(x)
+	_ = y
+}`)
+		mustContain(t, got, "int64(x)")
+	})
+
+	t.Run("int8 to int64 narrowing with overflow check", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : int64 = 1
+	y := @as<int8>(x)
+	_ = y
+}`)
+		mustContain(t, got, "int8(x)")
+		mustContain(t, got, "!=")
+	})
+
+	t.Run("bool to utf8", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := true
+	y := @as<utf8>(x)
+	_ = y
+}`)
+		mustContain(t, got, `"true"`)
+	})
+
+	t.Run("int32 to utf8", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : int32 = 42
+	y := @as<utf8>(x)
+	_ = y
+}`)
+		mustContain(t, got, "strconv.FormatInt")
+	})
+
+	t.Run("utf8 to ascii", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : utf8 = "hello"
+	y := @as<ascii>(x)
+	_ = y
+}`)
+		mustContain(t, got, "cog.ASCII")
+	})
+
+	t.Run("ascii to utf8", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : utf8 = "hello"
+	y := @as<utf8>(x)
+	_ = y
+}`)
+		mustNotContain(t, got, "strconv")
+	})
+
+	t.Run("float64 to int32", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : float64 = 1.5
+	y := @as<int32>(x)
+	_ = y
+}`)
+		mustContain(t, got, "math.IsNaN")
+	})
+
+	t.Run("bool to int8", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x := true
+	y := @as<int8>(x)
+	_ = y
+}`)
+		mustContain(t, got, "builtin.If[int8]")
+	})
+
+	t.Run("int32 to bool", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : int32 = 42
+	y := @as<bool>(x)
+	_ = y
+}`)
+		mustContain(t, got, "!= 0")
+	})
+
+	t.Run("utf8 to int32", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : utf8 = "42"
+	y := @as<int32>(x)
+	_ = y
+}`)
+		mustContain(t, got, "strconv.ParseInt")
+	})
+
+	t.Run("utf8 to bool", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : utf8 = "true"
+	y := @as<bool>(x)
+	_ = y
+}`)
+		mustContain(t, got, "strconv.ParseBool")
+	})
+
+	t.Run("utf8 to float32", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : utf8 = "3.14"
+	y := @as<float32>(x)
+	_ = y
+}`)
+		mustContain(t, got, "strconv.ParseFloat")
+	})
+
+	t.Run("float32 to utf8", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : float32 = 3.14
+	y := @as<utf8>(x)
+	_ = y
+}`)
+		mustContain(t, got, "strconv.FormatFloat")
+	})
+
+	t.Run("same type passthrough", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : int32 = 42
+	y := @as<int32>(x)
+	_ = y
+}`)
+		mustNotContain(t, got, "int64")
+		mustNotContain(t, got, "strconv")
+	})
+}
