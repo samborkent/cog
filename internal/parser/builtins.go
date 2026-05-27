@@ -430,18 +430,13 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 	sourceType := p.ast.Expr(arg).Type()
 	sourceKind := sourceType.Kind()
 
-	// Handle ascii -> utf8 special case.
-	if sourceKind == types.ASCII && targetKind == types.UTF8 {
-		return p.ast.NewBuiltin(t, "cast", typArgs, []ast.ExprIndex{arg}, targetType)
-	}
-
 	// Validate source type is castable.
 	if !types.IsBasic(sourceType) {
 		p.error(t, fmt.Sprintf("@cast source type %q is not a basic type", sourceType), "parseBuiltinCast")
 		return ast.ZeroExprIndex
 	}
 
-	// Reject any remaining string casts (only ascii -> utf8 is allowed above).
+	// Reject any casts involving string types.
 	if types.IsString(sourceType) || types.IsString(targetType) {
 		p.error(t, fmt.Sprintf("@cast cannot cast between %q and %q", sourceType, targetType), "parseBuiltinCast")
 		return ast.ZeroExprIndex
@@ -461,14 +456,5 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 		}
 	}
 
-	// Validate bit size: source must be <= target.
-	srcBits := types.Size(sourceKind)
-	dstBits := types.Size(targetKind)
-
-	if srcBits > dstBits {
-		p.error(t, fmt.Sprintf("@cast cannot narrow from %d-bit %q to %d-bit %q", srcBits, sourceType, dstBits, targetType), "parseBuiltinCast")
-		return ast.ZeroExprIndex
-	}
-
-	return p.ast.NewBuiltin(t, "cast", typArgs, []ast.ExprIndex{arg}, targetType)
+	return p.ast.NewBuiltin(t, "cast", typArgs, []ast.ExprIndex{arg}, &types.Option{Value: targetType})
 }

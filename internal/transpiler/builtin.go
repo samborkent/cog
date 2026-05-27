@@ -255,7 +255,26 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 		srcKind := argExpr.Type().Kind()
 		dstKind := node.TypeArguments[0].Kind()
 
-		return t.convertCast(arg, srcKind, dstKind)
+		targetGoType, err := t.convertType(node.TypeArguments[0])
+		if err != nil {
+			return nil, fmt.Errorf("converting @cast target type: %w", err)
+		}
+
+		t.addCogImport()
+
+		srcBits := types.Size(srcKind)
+		dstBits := types.Size(dstKind)
+
+		if srcBits > dstBits {
+			return component.BuiltinNone(targetGoType), nil
+		}
+
+		castExpr, err := t.convertCast(arg, srcKind, dstKind)
+		if err != nil {
+			return nil, err
+		}
+
+		return component.BuiltinSome(targetGoType, castExpr), nil
 	default:
 		return nil, fmt.Errorf("unknown builtin function '%s'", node.Name)
 	}
@@ -266,14 +285,6 @@ func (t *Transpiler) convertBuiltin(node *ast.Builtin) (goast.Expr, error) {
 // For cross-family casts, the strategy is: normalize src → unsigned int of
 // src bit width, widen if needed, then denormalize to the target type.
 func (t *Transpiler) convertCast(arg goast.Expr, srcKind, dstKind types.Kind) (goast.Expr, error) {
-	// Special case: ascii → utf8.
-	if srcKind == types.ASCII && dstKind == types.UTF8 {
-		return &goast.CallExpr{
-			Fun:  &goast.Ident{Name: "string"},
-			Args: []goast.Expr{arg},
-		}, nil
-	}
-
 	// Fast path: direct Go primitive casts that are lossless.
 	if goType, ok := directCastType(srcKind, dstKind); ok {
 		return &goast.CallExpr{

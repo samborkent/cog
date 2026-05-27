@@ -59,18 +59,20 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		}
 
 		if n.Identifier.ValueType.Kind() == types.OptionKind {
-			optionType, err := t.convertType(n.Identifier.ValueType)
-			if err != nil {
-				return nil, fmt.Errorf("converting option value type: %w", err)
-			}
+			// @cast already returns a cog.Option[T] — skip double-wrapping.
+			if builtin, ok := assignmentExpr.(*ast.Builtin); !ok || builtin.Name != "cast" {
+				optionType, err := t.convertType(n.Identifier.ValueType)
+				if err != nil {
+					return nil, fmt.Errorf("converting option value type: %w", err)
+				}
 
-			// Wrap option type.
-			expr = &goast.CompositeLit{
-				Type: optionType,
-				Elts: []goast.Expr{
-					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
-					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
-				},
+				expr = &goast.CompositeLit{
+					Type: optionType,
+					Elts: []goast.Expr{
+						&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
+						&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
+					},
+				}
 			}
 		}
 
@@ -144,13 +146,16 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		}
 
 		if typ.Kind() == types.OptionKind {
-			// Wrap option type.
-			expr = &goast.CompositeLit{
-				Type: declType,
-				Elts: []goast.Expr{
-					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
-					&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
-				},
+			// @cast already returns a cog.Option[T] — skip double-wrapping.
+			assignExpr := t.Expr(n.Assignment.Expr)
+			if builtin, ok := assignExpr.(*ast.Builtin); !ok || builtin.Name != "cast" {
+				expr = &goast.CompositeLit{
+					Type: declType,
+					Elts: []goast.Expr{
+						&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
+						&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
+					},
+				}
 			}
 		}
 

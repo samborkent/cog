@@ -187,7 +187,9 @@ func TestParseBuiltinCast(t *testing.T) {
 main : proc() = {
 	x : int8 = 1
 	y := @cast<int16>(x)
-	@print(y)
+	if y? {
+		@print(y)
+	}
 }`)
 		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
@@ -201,7 +203,9 @@ main : proc() = {
 main : proc() = {
 	x : int32 = 42
 	y := @cast<float32>(x)
-	@print(y)
+	if y? {
+		@print(y)
+	}
 }`)
 		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
@@ -215,7 +219,9 @@ main : proc() = {
 main : proc() = {
 	x := true
 	y := @cast<uint8>(x)
-	@print(y)
+	if y? {
+		@print(y)
+	}
 }`)
 		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
@@ -229,7 +235,9 @@ main : proc() = {
 main : proc() = {
 	x : float16 = 1.5
 	y := @cast<uint32>(x)
-	@print(y)
+	if y? {
+		@print(y)
+	}
 }`)
 		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
@@ -243,7 +251,9 @@ main : proc() = {
 main : proc() = {
 	x : uint64 = 42
 	y := @cast<int128>(x)
-	@print(y)
+	if y? {
+		@print(y)
+	}
 }`)
 		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
@@ -257,7 +267,9 @@ main : proc() = {
 main : proc() = {
 	x : int8 = 1
 	y := @cast<int16, int8>(x)
-	@print(y)
+	if y? {
+		@print(y)
+	}
 }`)
 		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
@@ -270,7 +282,9 @@ main : proc() = {
 		f := parse(t, `package p
 main : proc() = {
 	y := @cast<int16, int8>(1)
-	@print(y)
+	if y? {
+		@print(y)
+	}
 }`)
 		if f.LenNodes() == 0 {
 			t.Fatal("expected statements")
@@ -287,14 +301,20 @@ main : proc() = {
 }`)
 	})
 
-	t.Run("narrowing rejected", func(t *testing.T) {
+	t.Run("narrowing returns option", func(t *testing.T) {
 		t.Parallel()
-		parseShouldError(t, `package p
+
+		f := parse(t, `package p
 main : proc() = {
 	x : int64 = 1
 	y := @cast<int32>(x)
-	@print(y)
+	if y? {
+		@print(y)
+	}
 }`)
+		if f.LenNodes() == 0 {
+			t.Fatal("expected statements")
+		}
 	})
 
 	t.Run("wrong source type arg rejected", func(t *testing.T) {
@@ -307,18 +327,14 @@ main : proc() = {
 }`)
 	})
 
-	t.Run("ascii to utf8", func(t *testing.T) {
+	t.Run("ascii to utf8 rejected", func(t *testing.T) {
 		t.Parallel()
-
-		f := parse(t, `package p
+		parseShouldError(t, `package p
 main : proc() = {
 	x : ascii = "hello"
 	y := @cast<utf8>(x)
 	@print(y)
 }`)
-		if f.LenNodes() == 0 {
-			t.Fatal("expected statements")
-		}
 	})
 
 	t.Run("utf8 to int32 rejected", func(t *testing.T) {

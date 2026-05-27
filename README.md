@@ -14,7 +14,6 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Features
 - Remove `@ref` allocator.
-- Change `@cast` signature to `@cast<B, A any>(x A) B?`. Return type will only be set if lossless cast is possible.
 - Implement `@as<B, A any>(x A) B`, will perform best effort type conversion. Will return zero value of `B` if conversion is not possible.
 - Define builtin functions as `cog` functions.
 - Design how iterators should work.
@@ -62,7 +61,7 @@ The following basic features are missing that need to be implemented before Cog 
 - Clear builtin functions with `@` prefix
     - `@print(msg any)` print to std out
     - `@if<T ~ any>(if : bool, then : T, else :? T)` conditional expression
-    - `@cast<B, A ~ any>(x A) B` bitwise type cast (target must be same size or larger)
+    - `@cast<B, A ~ any>(x A) B?` bitwise type cast, returns `value` on success (same size or widening) and `None` on narrowing (src > dst)
 - Allocation builtins with generic type arguments:
     - `@ref<T valueType>() &T`
     - `@slice<T any, I uint>(len : I, cap :? I = len) []T`

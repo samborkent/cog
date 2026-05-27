@@ -5,27 +5,27 @@
 ## Build & Test
 
 ```bash
-GOEXPERIMENT=arenas rtk go vet ./...
+task vet
 ```
 
 ```bash
-GOEXPERIMENT=arenas rtk go test -timeout=10s ./...
+task test
 ```
 
 ```bash
-GOEXPERIMENT=arenas go test -bench=. -benchtime=100ms -count=1 -run=^$ -benchmem .
+task bench
 ```
 
 ```bash
-task compile FILE=example/example.cog
+task compile
 ```
 
 ```bash
-task transpile FILE=example/example.cog
+task transpile
 ```
 
 ```bash
-task run FILE=example/example.cog
+task run
 ```
 
 ## Project Structure
