@@ -1022,12 +1022,13 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 
 // convertNarrowingInt generates overflow-safe narrowing: if T(v) != v { 0 } else { T(v) }
 func (t *Transpiler) convertNarrowingInt(arg goast.Expr, dstGoType goast.Expr, srcKind, dstKind types.Kind) (goast.Expr, error) {
-	narrowed := &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}
-	check := &goast.BinaryExpr{
-		X:  &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}},
-		Op: gotoken.NEQ,
-		Y:  &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}},
+	srcGoType, err := t.convertType(types.Basics[srcKind])
+	if err != nil {
+		return nil, err
 	}
+	// Widen narrowed value back to source type: if int8(v) widened to int64 ≠ v, overflow occurred.
+	// This is a single expression — no function call wrapper needed.
+	widenBack := &goast.CallExpr{Fun: srcGoType, Args: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}}}
 	return &goast.CallExpr{
 		Fun: &goast.FuncLit{
 			Type: &goast.FuncType{
@@ -1036,10 +1037,10 @@ func (t *Transpiler) convertNarrowingInt(arg goast.Expr, dstGoType goast.Expr, s
 			Body: &goast.BlockStmt{
 				List: []goast.Stmt{
 					&goast.IfStmt{
-						Cond: check,
+						Cond: &goast.BinaryExpr{X: widenBack, Op: gotoken.NEQ, Y: arg},
 						Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}}}}},
 					},
-					&goast.ReturnStmt{Results: []goast.Expr{narrowed}},
+					&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}}},
 				},
 			},
 		},
