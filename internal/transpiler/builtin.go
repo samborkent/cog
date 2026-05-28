@@ -617,9 +617,9 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 			&goast.BasicLit{Kind: gotoken.STRING, Value: `"false"`}), nil
 	}
 
-	// ascii ↔ utf8: same-string passthrough (Go string under the hood)
+	// ascii ↔ utf8: wrap in string() since cog.ASCII is []byte
 	if srcKind == types.ASCII && dstKind == types.UTF8 {
-		return arg, nil
+		return &goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}}, nil
 	}
 	if srcKind == types.UTF8 && dstKind == types.ASCII {
 		t.addCogImport()
@@ -649,9 +649,27 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 	if types.IsString(srcType) && dstKind == types.Bool {
 		t.addStdLibImport("strconv")
 		return &goast.CallExpr{
-			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseBool"}},
-			Args: []goast.Expr{
-				&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+			Fun: &goast.FuncLit{
+				Type: &goast.FuncType{
+					Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
+				},
+				Body: &goast.BlockStmt{
+					List: []goast.Stmt{
+						&goast.AssignStmt{
+							Lhs: []goast.Expr{&goast.Ident{Name: "_v"}, &goast.Ident{Name: "_"}},
+							Tok: gotoken.DEFINE,
+							Rhs: []goast.Expr{
+								&goast.CallExpr{
+									Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseBool"}},
+									Args: []goast.Expr{
+										&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+									},
+								},
+							},
+						},
+						&goast.ReturnStmt{Results: []goast.Expr{&goast.Ident{Name: "_v"}}},
+					},
+				},
 			},
 		}, nil
 	}
@@ -659,29 +677,63 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 	// string → integer
 	if types.IsString(srcType) && types.IsInt(dstType) {
 		t.addStdLibImport("strconv")
-		parsed := &goast.CallExpr{
-			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseInt"}},
-			Args: []goast.Expr{
-				&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
-				&goast.BasicLit{Kind: gotoken.INT, Value: "10"},
-				&goast.BasicLit{Kind: gotoken.INT, Value: "64"},
+		return &goast.CallExpr{
+			Fun: &goast.FuncLit{
+				Type: &goast.FuncType{
+					Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
+				},
+				Body: &goast.BlockStmt{
+					List: []goast.Stmt{
+						&goast.AssignStmt{
+							Lhs: []goast.Expr{&goast.Ident{Name: "_v"}, &goast.Ident{Name: "_"}},
+							Tok: gotoken.DEFINE,
+							Rhs: []goast.Expr{
+								&goast.CallExpr{
+									Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseInt"}},
+									Args: []goast.Expr{
+										&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+										&goast.BasicLit{Kind: gotoken.INT, Value: "10"},
+										&goast.BasicLit{Kind: gotoken.INT, Value: "64"},
+									},
+								},
+							},
+						},
+						&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.Ident{Name: "_v"}}}}},
+					},
+				},
 			},
-		}
-		return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{parsed}}, nil
+		}, nil
 	}
 
 	// string → unsigned integer
 	if types.IsString(srcType) && types.IsUint(dstType) {
 		t.addStdLibImport("strconv")
-		parsed := &goast.CallExpr{
-			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseUint"}},
-			Args: []goast.Expr{
-				&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
-				&goast.BasicLit{Kind: gotoken.INT, Value: "10"},
-				&goast.BasicLit{Kind: gotoken.INT, Value: "64"},
+		return &goast.CallExpr{
+			Fun: &goast.FuncLit{
+				Type: &goast.FuncType{
+					Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
+				},
+				Body: &goast.BlockStmt{
+					List: []goast.Stmt{
+						&goast.AssignStmt{
+							Lhs: []goast.Expr{&goast.Ident{Name: "_v"}, &goast.Ident{Name: "_"}},
+							Tok: gotoken.DEFINE,
+							Rhs: []goast.Expr{
+								&goast.CallExpr{
+									Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseUint"}},
+									Args: []goast.Expr{
+										&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+										&goast.BasicLit{Kind: gotoken.INT, Value: "10"},
+										&goast.BasicLit{Kind: gotoken.INT, Value: "64"},
+									},
+								},
+							},
+						},
+						&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.Ident{Name: "_v"}}}}},
+					},
+				},
 			},
-		}
-		return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{parsed}}, nil
+		}, nil
 	}
 
 	// string → float
@@ -689,13 +741,26 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 		t.addStdLibImport("strconv")
 		bits := types.Size(dstKind)
 		return &goast.CallExpr{
-			Fun: dstGoType,
-			Args: []goast.Expr{
-				&goast.CallExpr{
-					Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseFloat"}},
-					Args: []goast.Expr{
-						&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
-						&goast.BasicLit{Kind: gotoken.INT, Value: strconv.Itoa(bits)},
+			Fun: &goast.FuncLit{
+				Type: &goast.FuncType{
+					Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
+				},
+				Body: &goast.BlockStmt{
+					List: []goast.Stmt{
+						&goast.AssignStmt{
+							Lhs: []goast.Expr{&goast.Ident{Name: "_v"}, &goast.Ident{Name: "_"}},
+							Tok: gotoken.DEFINE,
+							Rhs: []goast.Expr{
+								&goast.CallExpr{
+									Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseFloat"}},
+									Args: []goast.Expr{
+										&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+										&goast.BasicLit{Kind: gotoken.INT, Value: strconv.Itoa(bits)},
+									},
+								},
+							},
+						},
+						&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.Ident{Name: "_v"}}}}},
 					},
 				},
 			},
@@ -709,7 +774,7 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "FormatInt"}},
 			Args: []goast.Expr{
 				&goast.CallExpr{Fun: &goast.Ident{Name: "int64"}, Args: []goast.Expr{arg}},
-				&goast.BasicLit{Kind: gotoken.STRING, Value: `"10"`},
+				&goast.BasicLit{Kind: gotoken.INT, Value: "10"},
 			},
 		}
 		if dstKind == types.ASCII {
@@ -729,7 +794,7 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "FormatUint"}},
 			Args: []goast.Expr{
 				&goast.CallExpr{Fun: &goast.Ident{Name: "uint64"}, Args: []goast.Expr{arg}},
-				&goast.BasicLit{Kind: gotoken.STRING, Value: `"10"`},
+				&goast.BasicLit{Kind: gotoken.INT, Value: "10"},
 			},
 		}
 		if dstKind == types.ASCII {
@@ -820,43 +885,40 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 		t.addStdLibImport("math")
 		mathAlias := goStdLibAlias("math")
 		return &goast.CallExpr{
-			Fun: &goast.Ident{Name: "func"},
-			Args: []goast.Expr{
-				&goast.FuncLit{
-					Type: &goast.FuncType{
-						Results: &goast.FieldList{
-							List: []*goast.Field{{Type: dstGoType}},
-						},
+			Fun: &goast.FuncLit{
+				Type: &goast.FuncType{
+					Results: &goast.FieldList{
+						List: []*goast.Field{{Type: dstGoType}},
 					},
-					Body: &goast.BlockStmt{
-						List: []goast.Stmt{
-							&goast.IfStmt{
-								Cond: &goast.BinaryExpr{
-									X: &goast.CallExpr{
-										Fun: &goast.SelectorExpr{X: &goast.Ident{Name: mathAlias}, Sel: &goast.Ident{Name: "IsNaN"}},
+				},
+				Body: &goast.BlockStmt{
+					List: []goast.Stmt{
+						&goast.IfStmt{
+							Cond: &goast.BinaryExpr{
+								X: &goast.CallExpr{
+									Fun: &goast.SelectorExpr{X: &goast.Ident{Name: mathAlias}, Sel: &goast.Ident{Name: "IsNaN"}},
+									Args: []goast.Expr{arg},
+								},
+								Op:  gotoken.LOR,
+								Y: &goast.BinaryExpr{
+									X:  arg,
+									Op: gotoken.NEQ,
+									Y: &goast.CallExpr{
+										Fun: &goast.SelectorExpr{X: &goast.Ident{Name: mathAlias}, Sel: &goast.Ident{Name: "Trunc"}},
 										Args: []goast.Expr{arg},
 									},
-									Op:  gotoken.LOR,
-									Y: &goast.BinaryExpr{
-										X:  arg,
-										Op: gotoken.NEQ,
-										Y: &goast.CallExpr{
-											Fun: &goast.SelectorExpr{X: &goast.Ident{Name: mathAlias}, Sel: &goast.Ident{Name: "Trunc"}},
-											Args: []goast.Expr{arg},
-										},
-									},
 								},
-								Body: &goast.BlockStmt{
-									List: []goast.Stmt{
-										&goast.ReturnStmt{
-											Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}},
-										},
+							},
+							Body: &goast.BlockStmt{
+								List: []goast.Stmt{
+									&goast.ReturnStmt{
+										Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}},
 									},
 								},
 							},
-							&goast.ReturnStmt{
-								Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}},
-							},
+						},
+						&goast.ReturnStmt{
+							Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}},
 						},
 					},
 				},
@@ -875,36 +937,33 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 		if types.IsComplex(dstType) {
 			// complex → complex: extract real, check imag, convert
 			return &goast.CallExpr{
-				Fun: &goast.Ident{Name: "func"},
-				Args: []goast.Expr{
-					&goast.FuncLit{
-						Type: &goast.FuncType{
-							Results: &goast.FieldList{
-								List: []*goast.Field{{Type: dstGoType}},
-							},
+				Fun: &goast.FuncLit{
+					Type: &goast.FuncType{
+						Results: &goast.FieldList{
+							List: []*goast.Field{{Type: dstGoType}},
 						},
-						Body: &goast.BlockStmt{
-							List: []goast.Stmt{
-								&goast.IfStmt{
-									Cond: &goast.BinaryExpr{
-										X: &goast.CallExpr{
-											Fun:  &goast.Ident{Name: "imag"},
-											Args: []goast.Expr{arg},
-										},
-										Op:  gotoken.NEQ,
-										Y: &goast.BasicLit{Kind: gotoken.FLOAT, Value: "0"},
+					},
+					Body: &goast.BlockStmt{
+						List: []goast.Stmt{
+							&goast.IfStmt{
+								Cond: &goast.BinaryExpr{
+									X: &goast.CallExpr{
+										Fun:  &goast.Ident{Name: "imag"},
+										Args: []goast.Expr{arg},
 									},
-									Body: &goast.BlockStmt{
-										List: []goast.Stmt{
-											&goast.ReturnStmt{
-												Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}},
-											},
+									Op:  gotoken.NEQ,
+									Y: &goast.BasicLit{Kind: gotoken.FLOAT, Value: "0"},
+								},
+								Body: &goast.BlockStmt{
+									List: []goast.Stmt{
+										&goast.ReturnStmt{
+											Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}},
 										},
 									},
 								},
-								&goast.ReturnStmt{
-									Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.CallExpr{Fun: &goast.Ident{Name: "real"}, Args: []goast.Expr{arg}}}}},
-								},
+							},
+							&goast.ReturnStmt{
+								Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.CallExpr{Fun: &goast.Ident{Name: "real"}, Args: []goast.Expr{arg}}}}},
 							},
 						},
 					},
@@ -920,21 +979,18 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 				Y:  &goast.BasicLit{Kind: gotoken.FLOAT, Value: "0"},
 			}
 			return &goast.CallExpr{
-				Fun: &goast.Ident{Name: "func"},
-				Args: []goast.Expr{
-					&goast.FuncLit{
-						Type: &goast.FuncType{
-							Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
-						},
-						Body: &goast.BlockStmt{
-							List: []goast.Stmt{
-								&goast.IfStmt{
-									Cond: checkImag,
-									Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}}}}},
-								},
-								&goast.ReturnStmt{
-									Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{realExpr}}},
-								},
+				Fun: &goast.FuncLit{
+					Type: &goast.FuncType{
+						Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
+					},
+					Body: &goast.BlockStmt{
+						List: []goast.Stmt{
+							&goast.IfStmt{
+								Cond: checkImag,
+								Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}}}}},
+							},
+							&goast.ReturnStmt{
+								Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{realExpr}}},
 							},
 						},
 					},
@@ -970,23 +1026,20 @@ func (t *Transpiler) convertNarrowingInt(arg goast.Expr, dstGoType goast.Expr, s
 	check := &goast.BinaryExpr{
 		X:  &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}},
 		Op: gotoken.NEQ,
-		Y:  arg,
+		Y:  &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}},
 	}
 	return &goast.CallExpr{
-		Fun: &goast.Ident{Name: "func"},
-		Args: []goast.Expr{
-			&goast.FuncLit{
-				Type: &goast.FuncType{
-					Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
-				},
-				Body: &goast.BlockStmt{
-					List: []goast.Stmt{
-						&goast.IfStmt{
-							Cond: check,
-							Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}}}}},
-						},
-						&goast.ReturnStmt{Results: []goast.Expr{narrowed}},
+		Fun: &goast.FuncLit{
+			Type: &goast.FuncType{
+				Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
+			},
+			Body: &goast.BlockStmt{
+				List: []goast.Stmt{
+					&goast.IfStmt{
+						Cond: check,
+						Body: &goast.BlockStmt{List: []goast.Stmt{&goast.ReturnStmt{Results: []goast.Expr{&goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{&goast.BasicLit{Kind: gotoken.INT, Value: "0"}}}}}}},
 					},
+					&goast.ReturnStmt{Results: []goast.Expr{narrowed}},
 				},
 			},
 		},
