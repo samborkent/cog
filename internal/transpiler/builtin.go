@@ -674,6 +674,28 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 		}, nil
 	}
 
+	// string → int128
+	if types.IsString(srcType) && dstKind == types.Int128 {
+		t.addCogImport()
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Int128FromString"}},
+			Args: []goast.Expr{
+				&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+			},
+		}, nil
+	}
+
+	// string → uint128
+	if types.IsString(srcType) && dstKind == types.Uint128 {
+		t.addCogImport()
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Uint128FromString"}},
+			Args: []goast.Expr{
+				&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+			},
+		}, nil
+	}
+
 	// string → integer
 	if types.IsString(srcType) && types.IsInt(dstType) {
 		t.addStdLibImport("strconv")
@@ -736,6 +758,44 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 		}, nil
 	}
 
+	// string → float16
+	if types.IsString(srcType) && dstKind == types.Float16 {
+		t.addStdLibImport("strconv")
+		t.addCogImport()
+		return &goast.CallExpr{
+			Fun: &goast.FuncLit{
+				Type: &goast.FuncType{
+					Results: &goast.FieldList{List: []*goast.Field{{Type: dstGoType}}},
+				},
+				Body: &goast.BlockStmt{
+					List: []goast.Stmt{
+						&goast.AssignStmt{
+							Lhs: []goast.Expr{&goast.Ident{Name: "_v"}, &goast.Ident{Name: "_"}},
+							Tok: gotoken.DEFINE,
+							Rhs: []goast.Expr{
+								&goast.CallExpr{
+									Fun: &goast.SelectorExpr{X: &goast.Ident{Name: goStdLibAlias("strconv")}, Sel: &goast.Ident{Name: "ParseFloat"}},
+									Args: []goast.Expr{
+										&goast.CallExpr{Fun: &goast.Ident{Name: "string"}, Args: []goast.Expr{arg}},
+										&goast.BasicLit{Kind: gotoken.INT, Value: "32"},
+									},
+								},
+							},
+						},
+						&goast.ReturnStmt{Results: []goast.Expr{
+							&goast.CallExpr{
+								Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "Float16Fromfloat32"}},
+								Args: []goast.Expr{
+									&goast.CallExpr{Fun: &goast.Ident{Name: "float32"}, Args: []goast.Expr{&goast.Ident{Name: "_v"}}},
+								},
+							},
+						}},
+					},
+				},
+			},
+		}, nil
+	}
+
 	// string → float
 	if types.IsString(srcType) && types.IsFloat(dstType) {
 		t.addStdLibImport("strconv")
@@ -765,6 +825,36 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 				},
 			},
 		}, nil
+	}
+
+	// int128 → string (ascii or utf8)
+	if srcKind == types.Int128 && types.IsString(dstType) {
+		result := &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: arg, Sel: &goast.Ident{Name: "String"}},
+		}
+		if dstKind == types.ASCII {
+			t.addCogImport()
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "ASCII"}},
+				Args: []goast.Expr{result},
+			}, nil
+		}
+		return result, nil
+	}
+
+	// uint128 → string (ascii or utf8)
+	if srcKind == types.Uint128 && types.IsString(dstType) {
+		result := &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: arg, Sel: &goast.Ident{Name: "String"}},
+		}
+		if dstKind == types.ASCII {
+			t.addCogImport()
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "ASCII"}},
+				Args: []goast.Expr{result},
+			}, nil
+		}
+		return result, nil
 	}
 
 	// integer → string (ascii or utf8)
@@ -807,6 +897,21 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 		return result, nil
 	}
 
+	// float16 → string (ascii or utf8)
+	if srcKind == types.Float16 && types.IsString(dstType) {
+		result := &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: arg, Sel: &goast.Ident{Name: "String"}},
+		}
+		if dstKind == types.ASCII {
+			t.addCogImport()
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "ASCII"}},
+				Args: []goast.Expr{result},
+			}, nil
+		}
+		return result, nil
+	}
+
 	// float → string (ascii or utf8)
 	if types.IsFloat(srcType) && types.IsString(dstType) {
 		t.addStdLibImport("strconv")
@@ -831,6 +936,30 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 	}
 
 	// bool → string (ascii or utf8) — handled above, this is for complex → string fallback too
+
+	// complex32 → string (ascii or utf8)
+	if srcKind == types.Complex32 && types.IsString(dstType) {
+		fmtAlias := goStdLibAlias("fmt")
+		t.addStdLibImport("fmt")
+		t.addCogImport()
+		result := &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: &goast.Ident{Name: fmtAlias}, Sel: &goast.Ident{Name: "Sprintf"}},
+			Args: []goast.Expr{
+				&goast.BasicLit{Kind: gotoken.STRING, Value: `"(%g+%gi)"`},
+				&goast.CallExpr{
+					Fun: &goast.SelectorExpr{X: arg, Sel: &goast.Ident{Name: "Complex64"}},
+				},
+			},
+		}
+		if dstKind == types.ASCII {
+			t.addCogImport()
+			return &goast.CallExpr{
+				Fun: &goast.SelectorExpr{X: &goast.Ident{Name: "cog"}, Sel: &goast.Ident{Name: "ASCII"}},
+				Args: []goast.Expr{result},
+			}, nil
+		}
+		return result, nil
+	}
 
 	// integer ↔ integer (same or wider target) — direct conversion
 	if types.IsInt(srcType) && types.IsInt(dstType) {
@@ -884,6 +1013,10 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 	if types.IsFloat(srcType) && (types.IsInt(dstType) || types.IsUint(dstType)) {
 		t.addStdLibImport("math")
 		mathAlias := goStdLibAlias("math")
+		mathArg := arg
+		if srcKind == types.Float32 {
+			mathArg = &goast.CallExpr{Fun: &goast.Ident{Name: "float64"}, Args: []goast.Expr{arg}}
+		}
 		return &goast.CallExpr{
 			Fun: &goast.FuncLit{
 				Type: &goast.FuncType{
@@ -897,15 +1030,15 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 							Cond: &goast.BinaryExpr{
 								X: &goast.CallExpr{
 									Fun: &goast.SelectorExpr{X: &goast.Ident{Name: mathAlias}, Sel: &goast.Ident{Name: "IsNaN"}},
-									Args: []goast.Expr{arg},
+									Args: []goast.Expr{mathArg},
 								},
 								Op:  gotoken.LOR,
 								Y: &goast.BinaryExpr{
-									X:  arg,
+									X:  mathArg,
 									Op: gotoken.NEQ,
 									Y: &goast.CallExpr{
 										Fun: &goast.SelectorExpr{X: &goast.Ident{Name: mathAlias}, Sel: &goast.Ident{Name: "Trunc"}},
-										Args: []goast.Expr{arg},
+										Args: []goast.Expr{mathArg},
 									},
 								},
 							},
@@ -929,6 +1062,32 @@ func (t *Transpiler) convertAs(arg goast.Expr, srcType, dstType types.Type) (goa
 	// float → float: wider is direct, narrower is direct Go conversion (may be ±Inf)
 	if types.IsFloat(srcType) && types.IsFloat(dstType) {
 		return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{arg}}, nil
+	}
+
+	// complex32 → complex64/complex128: convert via Complex64()
+	if srcKind == types.Complex32 && types.IsComplex(dstType) {
+		t.addCogImport()
+		c64 := &goast.CallExpr{
+			Fun: &goast.SelectorExpr{X: arg, Sel: &goast.Ident{Name: "Complex64"}},
+		}
+		if dstKind == types.Complex64 {
+			return c64, nil
+		}
+		return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{c64}}, nil
+	}
+
+	// complex32 → number: extract real via Complex64()
+	if srcKind == types.Complex32 && types.IsNumber(dstType) {
+		t.addCogImport()
+		realArg := &goast.CallExpr{
+			Fun: &goast.Ident{Name: "real"},
+			Args: []goast.Expr{
+				&goast.CallExpr{
+					Fun: &goast.SelectorExpr{X: arg, Sel: &goast.Ident{Name: "Complex64"}},
+				},
+			},
+		}
+		return &goast.CallExpr{Fun: dstGoType, Args: []goast.Expr{realArg}}, nil
 	}
 
 	// complex with non-zero imag → anything → zero value

@@ -470,6 +470,12 @@ func (p *Parser) parseBuiltinAs(ctx context.Context, t tokens.Token, tokenType t
 		return ast.ZeroExprIndex
 	}
 
+	// Validate target type against expected type if provided.
+	if tokenType.Kind() != types.Invalid && len(typArgs) >= 1 && typArgs[0].Kind() != tokenType.Kind() {
+		p.error(t, "@as type argument does not match expected type", "parseBuiltinAs")
+		return ast.ZeroExprIndex
+	}
+
 	targetType := typArgs[0]
 
 	if !types.IsBasic(targetType) && !types.IsString(targetType) {

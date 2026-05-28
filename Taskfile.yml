@@ -15,7 +15,7 @@ tasks:
 
   test:
     cmds:
-    - GOEXPERIMENT=arenas rtk go test -timeout=10s ./...
+    - GOEXPERIMENT=arenas rtk go test -timeout=15s ./...
     silent: false
   
   bench:

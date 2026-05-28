@@ -442,6 +442,50 @@ outerLoop:
     _ = big128Sum
     _ = big128Cmp
 
+    // @as conversions for non-standard types.
+    // float32 → integer truncation: uses float64 wrapper for math.Trunc/math.IsNaN.
+    f32Val : float32 = 1.5
+    f32ToInt := @as<int32>(f32Val)
+    @print(f32ToInt)
+
+    // float16 → string conversion: uses Float16.String().
+    halfAsStr := @as<utf8>(half)
+    @print(halfAsStr)
+
+    // int128 → string conversion: uses Int128.String().
+    big128Str := @as<utf8>(big128)
+    @print(big128Str)
+
+    // uint128 → string conversion: uses Uint128.String().
+    bigStr := @as<utf8>(big)
+    @print(bigStr)
+
+    // string → int128/uint128 conversion.
+    parsedInt128 := @as<int128>("42")
+    parsedUint128 := @as<uint128>("42")
+    _ = parsedInt128
+    _ = parsedUint128
+
+    // complex32 → complex64 via Complex64().
+    compPromoted := @as<complex64>(comp)
+    _ = compPromoted
+
+    // complex32 → number: extract real via Complex64().
+    compReal := @as<float32>(comp)
+    @print(compReal)
+
+    // complex32 → string.
+    compStr := @as<utf8>(comp)
+    @print(compStr)
+
+    // Cross-family narrowing: signed ↔ unsigned overflow checks.
+    signedVal : int64 = 42
+    unsignedNarrow := @as<uint8>(signedVal)
+    _ = unsignedNarrow
+    unsignedWide : uint64 = 42
+    signedNarrow := @as<int8>(unsignedWide)
+    _ = signedNarrow
+
     // cross-file: Coordinate type and formatCoord function defined in other.cog.
     loc : Coordinate = {
         lat = 52.37,

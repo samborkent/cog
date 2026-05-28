@@ -215,6 +215,32 @@ main : proc() = {
 		mustContain(t, got, "cog.Option[bool]")
 	})
 
+	t.Run("widening uint8 to uint16 returns some", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : uint8 = 1
+	y := @cast<uint16>(x)
+	if y? {
+		@print(y)
+	}
+}`)
+		mustContain(t, got, "cog.Option[uint16]{Value: uint16(x), Set: true}")
+	})
+
+	t.Run("widening int8 to int16 returns some", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : int8 = 1
+	y := @cast<int16>(x)
+	if y? {
+		@print(y)
+	}
+}`)
+		mustContain(t, got, "cog.Option[int16]{Value: int16(x), Set: true}")
+	})
+
 	t.Run("narrowing int64 to int32 returns none", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
@@ -252,6 +278,42 @@ main : proc() = {
 	_ = y
 }`)
 		mustContain(t, got, "int8(x)")
+		mustContain(t, got, "!=")
+	})
+
+	t.Run("uint64 to uint8 narrowing", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : uint64 = 1
+	y := @as<uint8>(x)
+	_ = y
+}`)
+		mustContain(t, got, "uint8(x)")
+		mustContain(t, got, "!=")
+	})
+
+	t.Run("int64 to uint8 cross-family narrowing", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : int64 = 1
+	y := @as<uint8>(x)
+	_ = y
+}`)
+		mustContain(t, got, "uint8(x)")
+		mustContain(t, got, "!=")
+	})
+
+	t.Run("int32 to uint8 cross-family narrowing", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : int32 = 1
+	y := @as<uint8>(x)
+	_ = y
+}`)
+		mustContain(t, got, "uint8(x)")
 		mustContain(t, got, "!=")
 	})
 
@@ -308,6 +370,19 @@ main : proc() = {
 	_ = y
 }`)
 		mustContain(t, got, "math.IsNaN")
+	})
+
+	t.Run("float32 to int32", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : float32 = 1.5
+	y := @as<int32>(x)
+	_ = y
+}`)
+		mustContain(t, got, "float64(x)")
+		mustContain(t, got, "math.IsNaN")
+		mustContain(t, got, "math.Trunc")
 	})
 
 	t.Run("bool to int8", func(t *testing.T) {
@@ -386,5 +461,107 @@ main : proc() = {
 }`)
 		mustNotContain(t, got, "int64")
 		mustNotContain(t, got, "strconv")
+	})
+
+	t.Run("float16 to utf8", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : float16 = 1.5
+	y := @as<utf8>(x)
+	_ = y
+}`)
+		mustContain(t, got, ".String()")
+	})
+
+	t.Run("utf8 to float16", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : utf8 = "1.5"
+	y := @as<float16>(x)
+	_ = y
+}`)
+		mustContain(t, got, "strconv.ParseFloat")
+		mustContain(t, got, "cog.Float16Fromfloat32")
+	})
+
+	t.Run("int128 to utf8", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : int128 = 42
+	y := @as<utf8>(x)
+	_ = y
+}`)
+		mustContain(t, got, ".String()")
+	})
+
+	t.Run("uint128 to utf8", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : uint128 = 42
+	y := @as<utf8>(x)
+	_ = y
+}`)
+		mustContain(t, got, ".String()")
+	})
+
+	t.Run("utf8 to int128", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : utf8 = "42"
+	y := @as<int128>(x)
+	_ = y
+}`)
+		mustContain(t, got, "cog.Int128FromString")
+	})
+
+	t.Run("utf8 to uint128", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : utf8 = "42"
+	y := @as<uint128>(x)
+	_ = y
+}`)
+		mustContain(t, got, "cog.Uint128FromString")
+	})
+
+	t.Run("complex32 to complex64", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : complex32 = {1.0, 2.0}
+	y := @as<complex64>(x)
+	_ = y
+}`)
+		mustContain(t, got, ".Complex64()")
+	})
+
+	t.Run("complex32 to float64", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : complex32 = {1.0, 2.0}
+	y := @as<float64>(x)
+	_ = y
+}`)
+		mustContain(t, got, ".Complex64()")
+		mustContain(t, got, "real(")
+	})
+
+	t.Run("complex32 to utf8", func(t *testing.T) {
+		t.Parallel()
+		got := transpile(t, `package p
+main : proc() = {
+	x : complex32 = {1.0, 2.0}
+	y := @as<utf8>(x)
+	_ = y
+}`)
+		mustContain(t, got, "Sprintf")
+		mustContain(t, got, ".Complex64()")
 	})
 }

@@ -59,21 +59,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		}
 
 		if n.Identifier.ValueType.Kind() == types.OptionKind {
-			// @cast already returns a cog.Option[T] — skip double-wrapping.
-			if builtin, ok := assignmentExpr.(*ast.Builtin); !ok || builtin.Name != "cast" {
-				optionType, err := t.convertType(n.Identifier.ValueType)
-				if err != nil {
-					return nil, fmt.Errorf("converting option value type: %w", err)
-				}
-
-				expr = &goast.CompositeLit{
-					Type: optionType,
-					Elts: []goast.Expr{
-						&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
-						&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
-					},
-				}
-			}
+			expr = t.wrapOption(expr, assignmentExpr, n.Identifier.ValueType)
 		}
 
 		returnStmts = []goast.Stmt{&goast.AssignStmt{
@@ -146,17 +132,8 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		}
 
 		if typ.Kind() == types.OptionKind {
-			// @cast already returns a cog.Option[T] — skip double-wrapping.
 			assignExpr := t.Expr(n.Assignment.Expr)
-			if builtin, ok := assignExpr.(*ast.Builtin); !ok || builtin.Name != "cast" {
-				expr = &goast.CompositeLit{
-					Type: declType,
-					Elts: []goast.Expr{
-						&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
-						&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
-					},
-				}
-			}
+			expr = t.wrapOption(expr, assignExpr, typ)
 		}
 
 		// Replace type string with type name if missing (for structs, tuples, unions).
@@ -416,4 +393,23 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 	t.lastSourceLine = ln
 
 	return returnStmts, nil
+}
+
+// wrapOption wraps an expression in cog.Option[T]{Value: expr, Set: true},
+// unless the expression is already an @cast result (which returns cog.Option[T] directly).
+func (t *Transpiler) wrapOption(expr goast.Expr, assignmentExpr ast.Expr, valueType types.Type) goast.Expr {
+	if builtin, ok := assignmentExpr.(*ast.Builtin); ok && builtin.Name == "cast" {
+		return expr
+	}
+	optionType, err := t.convertType(valueType)
+	if err != nil {
+		return expr
+	}
+	return &goast.CompositeLit{
+		Type: optionType,
+		Elts: []goast.Expr{
+			&goast.KeyValueExpr{Key: &goast.Ident{Name: "Value"}, Value: expr},
+			&goast.KeyValueExpr{Key: &goast.Ident{Name: "Set"}, Value: &goast.Ident{Name: "true"}},
+		},
+	}
 }
