@@ -211,9 +211,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			Specs: []goast.Spec{valueSpec},
 		}}, nil
 	case *ast.Method:
-		prevInMethod := t.inMethod
-		t.inMethod = true
-
 		recType, err := t.convertType(n.Type)
 		if err != nil {
 			return nil, err
@@ -226,9 +223,6 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		}
 
 		decls, err := t.convertDecl(t.Node(n.Declaration))
-
-		t.inMethod = prevInMethod
-
 		if err != nil {
 			return nil, err
 		}

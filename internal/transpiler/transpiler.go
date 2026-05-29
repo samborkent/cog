@@ -35,7 +35,6 @@ type Transpiler struct {
 	dynamics       map[string]*ast.Identifier // dynamically scoped variable declarations
 	dynDefaults    map[string]ast.Expr        // Default expressions for dynamic variables
 	inFunc         bool
-	inMethod       bool            // set when transpiling a method body
 	usesDyn        bool            // set during body conversion when a dyn var is read or written
 	needsContext   map[uint16]bool // per-file tracking of context requirement by file ID
 	ifLabelCounter uint32
@@ -178,7 +177,6 @@ func (t *Transpiler) resetFileState(fileIndex int) {
 	t.imports = make(map[string]*goast.ImportSpec)
 	t.lastSourceLine = 0
 	t.inFunc = false
-	t.inMethod = false
 	t.usesDyn = false
 	t.ifLabelCounter = 0
 }
