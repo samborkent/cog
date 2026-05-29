@@ -430,18 +430,13 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 	sourceType := p.ast.Expr(arg).Type()
 	sourceKind := sourceType.Kind()
 
-	// Handle ascii -> utf8 special case.
-	if sourceKind == types.ASCII && targetKind == types.UTF8 {
-		return p.ast.NewBuiltin(t, "cast", typArgs, []ast.ExprIndex{arg}, targetType)
-	}
-
 	// Validate source type is castable.
 	if !types.IsBasic(sourceType) {
 		p.error(t, fmt.Sprintf("@cast source type %q is not a basic type", sourceType), "parseBuiltinCast")
 		return ast.ZeroExprIndex
 	}
 
-	// Reject any remaining string casts (only ascii -> utf8 is allowed above).
+	// Reject any casts involving string types.
 	if types.IsString(sourceType) || types.IsString(targetType) {
 		p.error(t, fmt.Sprintf("@cast cannot cast between %q and %q", sourceType, targetType), "parseBuiltinCast")
 		return ast.ZeroExprIndex
@@ -461,14 +456,66 @@ func (p *Parser) parseBuiltinCast(ctx context.Context, t tokens.Token, tokenType
 		}
 	}
 
-	// Validate bit size: source must be <= target.
-	srcBits := types.Size(sourceKind)
-	dstBits := types.Size(targetKind)
+	return p.ast.NewBuiltin(t, "cast", typArgs, []ast.ExprIndex{arg}, &types.Option{Value: targetType})
+}
 
-	if srcBits > dstBits {
-		p.error(t, fmt.Sprintf("@cast cannot narrow from %d-bit %q to %d-bit %q", srcBits, sourceType, dstBits, targetType), "parseBuiltinCast")
+func (p *Parser) parseBuiltinAs(ctx context.Context, t tokens.Token, tokenType types.Type) ast.ExprIndex {
+	typArgs := p.parseTypeArguments(ctx)
+	if typArgs == nil {
 		return ast.ZeroExprIndex
 	}
 
-	return p.ast.NewBuiltin(t, "cast", typArgs, []ast.ExprIndex{arg}, targetType)
+	if len(typArgs) == 0 || len(typArgs) > 2 {
+		p.error(t, "@as requires 1 or 2 type arguments", "parseBuiltinAs")
+		return ast.ZeroExprIndex
+	}
+
+	// Validate target type against expected type if provided.
+	if tokenType.Kind() != types.Invalid && len(typArgs) >= 1 && typArgs[0].Kind() != tokenType.Kind() {
+		p.error(t, "@as type argument does not match expected type", "parseBuiltinAs")
+		return ast.ZeroExprIndex
+	}
+
+	targetType := typArgs[0]
+
+	if !types.IsBasic(targetType) && !types.IsString(targetType) {
+		p.error(t, fmt.Sprintf("@as target type %q is not a basic or string type", targetType), "parseBuiltinAs")
+		return ast.ZeroExprIndex
+	}
+
+	if p.lex.This().Type != tokens.LParen {
+		p.error(p.lex.This(), "expected '(' after @as", "parseBuiltinAs")
+		return ast.ZeroExprIndex
+	}
+
+	p.lex.Step() // consume (
+
+	var argType types.Type = types.None
+	if len(typArgs) == 2 {
+		argType = typArgs[1]
+	}
+
+	arg := p.expression(ctx, argType)
+	if arg == ast.ZeroExprIndex {
+		return ast.ZeroExprIndex
+	}
+
+	if p.lex.This().Type != tokens.RParen {
+		p.error(p.lex.This(), "expected ')' after argument in @as", "parseBuiltinAs")
+		return ast.ZeroExprIndex
+	}
+
+	p.lex.Step() // consume )
+
+	sourceType := p.ast.Expr(arg).Type()
+
+	// Validate second type argument matches source if provided.
+	if len(typArgs) == 2 {
+		if typArgs[1].Kind() != sourceType.Kind() {
+			p.error(t, fmt.Sprintf("@as second type argument %q does not match source type %q", typArgs[1], sourceType), "parseBuiltinAs")
+			return ast.ZeroExprIndex
+		}
+	}
+
+	return p.ast.NewBuiltin(t, "as", typArgs, []ast.ExprIndex{arg}, targetType)
 }

@@ -315,31 +315,100 @@ outerLoop:
 
 	arenaProc(arg)
 
-    // @cast: bitwise type reinterpretation (source size <= target size).
+// @cast: bitwise type reinterpretation, returns B? (option type).
+    // Narrowing (src > dst) returns None; same-size or widening returns Some.
     bits : int32 = 42
-    asFloat := @cast<float32>(bits)         // int32 -> float32 (same size, reinterpret bits)
-    asBigFloat := @cast<float64>(bits)      // int32 -> float64 (widen then reinterpret)
-    asUnsigned := @cast<uint32>(bits)       // int32 -> uint32 (same-width sign reinterpret)
+    asFloat := @cast<float32>(bits)               // int32 -> float32 (same size, reinterpret bits)
+    asBigFloat := @cast<float64>(bits)            // int32 -> float64 (widen then reinterpret)
+    asUnsigned := @cast<uint32>(bits)             // int32 -> uint32 (same-width sign reinterpret)
     flag := true
-    flagByte := @cast<uint8>(flag)          // bool -> uint8
+    flagByte := @cast<uint8>(flag)                // bool -> uint8
     h : float16 = 1.5
-    hWide := @cast<uint32>(h)              // float16 -> uint32 (extract bits, widen)
+    hWide := @cast<uint32>(h)                    // float16 -> uint32 (extract bits, widen)
     narrow : uint8 = 255
-    wide := @cast<uint64>(narrow)           // uint8 -> uint64 (zero-extend)
+    wide := @cast<uint64>(narrow)                 // uint8 -> uint64 (zero-extend)
     small : int8 = 1
-    withSource := @cast<int16, int8>(small)  // explicit source type annotation
-    withLiteral := @cast<int16, int8>(1)     // literal inferred as int8 from type arg
-    lng2 : ascii = "hello"
-    asUtf := @cast<utf8>(lng2)              // ascii -> utf8
-    _ = asFloat
-    _ = asBigFloat
-    _ = asUnsigned
-    _ = flagByte
-    _ = hWide
-    _ = wide
-    _ = withSource
-    _ = withLiteral
-    _ = asUtf
+    withSource := @cast<int16, int8>(small)       // explicit source type annotation
+    withLiteral := @cast<int16, int8>(1)          // literal inferred as int8 from type arg
+
+    // Must check option before accessing value:
+    if asFloat? { _ = asFloat }
+    if asBigFloat? { _ = asBigFloat }
+    if asUnsigned? { _ = asUnsigned }
+    if flagByte? { _ = flagByte }
+    if hWide? { _ = hWide }
+    if wide? { _ = wide }
+    if withSource? { _ = withSource }
+    if withLiteral? { _ = withLiteral }
+
+    // @as: semantic value conversion (not bitwise reinterpretation).
+    // Returns B directly — no Option wrapping.
+    myInt : int32 = 42
+    myBool := true
+    myFloat : float64 = 3.14
+    myStr : utf8 = "42"
+
+    // identity: same type = passthrough.
+    same := @as<int32>(myInt)
+    _ = same
+
+    // numeric widening: safe direct conversion.
+    wider := @as<int64>(myInt)
+    _ = wider
+
+    // numeric narrowing: returns 0 on overflow.
+    narrower := @as<int8>(myInt)
+    _ = narrower
+
+    // bool ↔ numeric.
+    boolAsInt := @as<int8>(myBool)      // 1
+    intAsBool := @as<bool>(myInt)        // true (if non-zero)
+    @print(boolAsInt)
+    @print(intAsBool)
+
+    // bool ↔ string.
+    boolStr := @as<utf8>(myBool)         // "true"
+    _ = boolStr
+
+    // string ↔ numeric (parse/format).
+    strInt := @as<int32>(myStr)          // 42
+    intStr := @as<utf8>(myInt)           // "42"
+    @print(strInt)
+    @print(intStr)
+
+    // string ↔ float.
+    strFloat := @as<float32>(myStr)      // 42.0
+    floatStr := @as<utf8>(myFloat)       // "3.14"
+    _ = strFloat
+    _ = floatStr
+
+    // string ↔ bool.
+    strBool := @as<bool>("true")         // true
+    boolStr2 := @as<utf8>(myBool)        // "true"
+    _ = strBool
+    _ = boolStr2
+
+    // ascii ↔ utf8: same-string passthrough.
+    val := "hello"
+    asAscii := @as<ascii>(val)           // cog.ASCII wrapping
+    backToUTF8 := @as<utf8>(asAscii)     // same string
+    _ = asAscii
+    _ = backToUTF8
+
+    // integer → ascii: FormatInt wrapped in cog.ASCII.
+    intAsAscii := @as<ascii>(myInt)      // cog.ASCII("42")
+    _ = intAsAscii
+
+    // float → integer: NaN/infinity/fraction becomes 0.
+    fltInt := @as<int32>(myFloat)        // 3 (truncated)
+    _ = fltInt
+
+    // integer → float: always safe.
+    intFlt := @as<float64>(myInt)        // 42.0
+    _ = intFlt
+
+    // Cast still works for bitwise reinterpretation.
+    // ascii -> utf8 is not supported by @cast (different memory layouts).
 
     // float16: backed by x448/float16 package, arithmetic promotes to float32.
     half : float16 = 1.5
@@ -372,6 +441,50 @@ outerLoop:
     big128Cmp := big128 < big128Neg
     _ = big128Sum
     _ = big128Cmp
+
+    // @as conversions for non-standard types.
+    // float32 → integer truncation: uses float64 wrapper for math.Trunc/math.IsNaN.
+    f32Val : float32 = 1.5
+    f32ToInt := @as<int32>(f32Val)
+    @print(f32ToInt)
+
+    // float16 → string conversion: uses Float16.String().
+    halfAsStr := @as<utf8>(half)
+    @print(halfAsStr)
+
+    // int128 → string conversion: uses Int128.String().
+    big128Str := @as<utf8>(big128)
+    @print(big128Str)
+
+    // uint128 → string conversion: uses Uint128.String().
+    bigStr := @as<utf8>(big)
+    @print(bigStr)
+
+    // string → int128/uint128 conversion.
+    parsedInt128 := @as<int128>("42")
+    parsedUint128 := @as<uint128>("42")
+    _ = parsedInt128
+    _ = parsedUint128
+
+    // complex32 → complex64 via Complex64().
+    compPromoted := @as<complex64>(comp)
+    _ = compPromoted
+
+    // complex32 → number: extract real via Complex64().
+    compReal := @as<float32>(comp)
+    @print(compReal)
+
+    // complex32 → string.
+    compStr := @as<utf8>(comp)
+    @print(compStr)
+
+    // Cross-family narrowing: signed ↔ unsigned overflow checks.
+    signedVal : int64 = 42
+    unsignedNarrow := @as<uint8>(signedVal)
+    _ = unsignedNarrow
+    unsignedWide : uint64 = 42
+    signedNarrow := @as<int8>(unsignedWide)
+    _ = signedNarrow
 
     // cross-file: Coordinate type and formatCoord function defined in other.cog.
     loc : Coordinate = {

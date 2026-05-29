@@ -54,7 +54,12 @@ The following basic features are missing that need to be implemented before Cog 
 - Clear builtin functions with `@` prefix
     - `@print(msg any)` print to std out
     - `@if<T ~ any>(if : bool, then : T, else :? T)` conditional expression
-    - `@cast<B, A ~ any>(x A) B` bitwise type cast (target must be same size or larger)
+    - `@cast<B, A ~ any>(x A) B?` bitwise type cast, returns `value` on success (same size or widening) and `None` on narrowing (src > dst)
+    - `@as<B, A any>(x A) B` best-effort type conversion (semantic, not bitwise):
+        - bool ↔ numeric, bool ↔ string, integer ↔ string, float ↔ string
+        - ascii ↔ utf8, int128/uint128 ↔ string (via `.String()`)
+        - float16 ↔ string (via `.String()`), complex32 ↔ complex64/complex128/number/string
+        - narrowing with overflow detection, NaN/Inf/fraction → 0, complex imag→zero
 - Allocation builtins with generic type arguments:
     - `@ref<T valueType>() &T`
     - `@slice<T any, I uint>(len : I, cap :? I = len) []T`
@@ -159,9 +164,7 @@ The following basic features are missing that need to be implemented before Cog 
     - `switch t { type uint64: ... }`
     - For `t ~ any | interface | union`
 - Select statement
-- Conversion builtins:
-    - `@convert<A, B any>(x A) B` to cast types instead of `float32()`, etc.
-        - Will perform best-effort conversion, allowing some precision loss and handling overflows.
+
 - Additional types:
     - `signal<T any>` alias of `chan<T any>struct{}`
 - Range operator `0..4 == [0, 1, 2, 3]`
@@ -442,10 +445,10 @@ outerLoop:
     bigCmp := big < bigSum
 
     // int128: backed by ryanavella/wide, ops via methods.
-    signed : int128 = 42
-    signedNeg := -signed
-    signedSum := signed + signed
-    signedCmp := signed < signedNeg
+    big128 : int128 = 42
+    big128Neg := -big128
+    big128Sum := big128 + big128
+    big128Cmp := big128 < big128Neg
 
     // cross-file: Coordinate type and formatCoord function defined in other.cog.
     loc : Coordinate = {
