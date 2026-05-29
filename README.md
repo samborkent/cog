@@ -18,9 +18,6 @@ The following basic features are missing that need to be implemented before Cog 
     - Range over int (or other literal) should not be possible.
     - Instead we should range over an iterator function which takes literal as argument.
 
-### Improvements
-- Defining receiver vars should use regular symbol table, instead of custom fields (e.g. p.currentReceiver)
-
 ## Features
 
 ### Implemented
