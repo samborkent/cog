@@ -14,15 +14,9 @@ The following basic features are missing that need to be implemented before Cog 
 
 ### Features
 - Remove `@ref` allocator.
-- Define builtin functions as `cog` functions.
 - Design how iterators should work.
     - Range over int (or other literal) should not be possible.
     - Instead we should range over an iterator function which takes literal as argument.
-- Automatically use `https://github.com/go4org/hashtriemap` as map type in concurrent scenarios.
-
-### Improvements
-- Get rid of symbol table in transpiler if possible.
-- Defining receiver vars should use regular symbol table, instead of custom fields (e.g. t.inMethod, p.currentReceiver)
 
 ## Features
 
@@ -160,6 +154,7 @@ The following basic features are missing that need to be implemented before Cog 
 
 - Result type `T ! E` with typed error handling
     - Also allow `interface{ String() string }` and `interface{ Error() string }` as error types
+- Automatically use `https://github.com/go4org/hashtriemap` as map type in concurrent scenarios.
 - Type qualifiers
     - `comp` for compile time constants. Similar to Zig' `comptime`. When used on variables, like C++ `constexpr`, when used for functions like C++ `consteval`.
 - Variables need to be passed to scope explicitely (no catch all closures)
