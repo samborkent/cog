@@ -195,7 +195,7 @@
       "patterns": [
         {
           "name": "keyword.control.cog",
-          "match": "\\b(if|else|for|switch|select|case|default|return|break|continue|in|async)\\b"
+          "match": "\\b(if|else|for|switch|match|select|case|default|return|break|continue|in|async)\\b"
         }
       ]
     },
@@ -239,7 +239,7 @@
       "patterns": [
         {
           "comment": "Label on its own line (excludes keywords)",
-          "match": "^(\\s*)(?!(?:if|else|for|switch|select|case|default|return|break|continue|in|async|var|dyn|export|func|proc|struct|enum|map|set|package|goimport|import|true|false)\\b)([a-zA-Z_]\\w*)(:)\\s*$",
+          "match": "^(\\s*)(?!(?:if|else|for|switch|match|select|case|default|return|break|continue|in|async|var|dyn|export|func|proc|struct|enum|map|set|package|goimport|import|true|false)\\b)([a-zA-Z_]\\w*)(:)\\s*$",
           "captures": {
             "2": { "name": "entity.name.label.cog" },
             "3": { "name": "punctuation.separator.label.cog" }
@@ -247,7 +247,7 @@
         },
         {
           "comment": "Label before for/if/switch on same line",
-          "match": "^(\\s*)(?!(?:if|else|for|switch|select|case|default|return|break|continue|in|async|var|dyn|export|func|proc|struct|enum|map|set|package|goimport|import|true|false)\\b)([a-zA-Z_]\\w*)(:)\\s+(?=for|if|switch)",
+          "match": "^(\\s*)(?!(?:if|else|for|switch|match|select|case|default|return|break|continue|in|async|var|dyn|export|func|proc|struct|enum|map|set|package|goimport|import|true|false)\\b)([a-zA-Z_]\\w*)(:)\\s+(?=for|if|switch|match)",
           "captures": {
             "2": { "name": "entity.name.label.cog" },
             "3": { "name": "punctuation.separator.label.cog" }

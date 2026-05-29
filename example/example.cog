@@ -380,6 +380,22 @@ outerLoop:
     }
     @print(formatCoord(loc))
 
+    // Match on a generic type parameter constrained by a union.
+    describe(42)
+    describe("hello match")
+
+    // Match with binding variable — each arm narrows the binding type.
+    matchDescribe(3.14)
+    matchDescribe("world")
+
+    // Match with default case for unhandled types.
+    describeDefault(true)
+    describeDefault(99)
+
+    // Match with tilde case — matches the exact type (no constraint propagation).
+    matchExact("exact")
+    matchExact(100)
+
     // imported package: geom.Origin and geom.Distance from geom/ subdirectory.
     @print(geom.Origin)
     @print(geom.Distance(geom.Origin, geom.Origin))
@@ -564,6 +580,56 @@ Dict<K ~ comparable, V ~ any> ~ map<K, V>
 
 // Multi-constraint union: T must be string or int.
 TagSlice<T ~ string | int> ~ []T
+
+// Match on a generic type parameter constrained by a union.
+// The type switch narrows T to each concrete case type inside the arm.
+describe : func<T ~ int64 | utf8>(x : T) = {
+    match x {
+    case int64:
+        @print("int64: ")
+        @print(x)
+    case utf8:
+        @print("utf8: ")
+        @print(x)
+    }
+}
+
+// Match with binding variable — each arm narrows the binding to the case type.
+// The binding shadows the subject with the narrowed type.
+matchDescribe : func<T ~ float64 | utf8>(x : T) = {
+    match val := x {
+    case float64:
+        @print("float64: ")
+        @print(val)
+    case utf8:
+        @print("utf8: ")
+        @print(val)
+    }
+}
+
+// Match with default case for unhandled types.
+// The default branch receives the full union type.
+describeDefault : func<T ~ int64 | utf8 | bool>(x : T) = {
+    match x {
+    case int64:
+        @print("int matched")
+    default:
+        @print("fallback: ")
+        @print(x)
+    }
+}
+
+// Match with tilde case — the ~ prefix means "exact type match" and does
+// not propagate the constraint to the case body (for constraint types that
+// should not be narrowed).
+matchExact : func<T ~ utf8 | int64>(x : T) = {
+    match x {
+    case ~utf8:
+        @print("exact utf8")
+    case ~int64:
+        @print("exact int64")
+    }
+}
 
 /*
 switch variable { // value type
