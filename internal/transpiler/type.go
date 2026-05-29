@@ -491,6 +491,10 @@ func (t *Transpiler) convertConstraint(typ types.Type) (goast.Expr, error) {
 		// utf8 is Go string. Only ~string is representable.
 		// TODO: handle ascii
 		return component.TildeUnion(component.GoString...), nil
+	case "fixed":
+		return component.TildeUnion(append(component.GoInt, component.GoUint...)...), nil
+	case "real":
+		return component.TildeUnion(append(append(component.GoInt, component.GoUint...), component.GoFloat...)...), nil
 	case "signed":
 		return component.TildeUnion(append(append(component.GoInt, component.GoFloat...), component.GoComplex...)...), nil
 	case "number":

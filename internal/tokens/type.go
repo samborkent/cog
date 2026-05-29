@@ -105,10 +105,13 @@ const (
 	Complex    // c32, c64, c128
 	String     // ascii, utf8
 	Signed     // int, float, complex
+	Fixed      // int, uint
+	Real       // fixed, float
 	Number     // signed, uint
 	Ordered    // int, uint, float, string
 	Summable   // number, string
 	Comparable // ordered, complex, bool, struct, array, enum, pointer, tuple, set
+	Stringer   // string, interface<S ~ string> { String() S }
 
 	// Import keywords
 	Package
@@ -264,6 +267,12 @@ func (t Type) String() string {
 		return "in"
 	case Async:
 		return "async"
+	case Fixed:
+		return "fixed"
+	case Real:
+		return "real"
+	case Stringer:
+		return "stringer"
 	case Function:
 		return "func"
 	case Procedure:

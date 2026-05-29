@@ -1,6 +1,8 @@
 package types
 
-import "github.com/samborkent/cog/internal/tokens"
+import (
+	"github.com/samborkent/cog/internal/tokens"
+)
 
 // Constraints is the set of builtin named type constraints.
 // Each entry is a named Union whose Variants list the concrete types
@@ -16,6 +18,20 @@ var Constraints = map[string]*Union{
 func init() {
 	// Composite constraints reference other constraints, so they must be
 	// initialised after the base entries exist.
+	Constraints["fixed"] = &Union{
+		Name: "fixed",
+		Variants: flatten(
+			Constraints["int"].Variants,
+			Constraints["uint"].Variants,
+		),
+	}
+	Constraints["real"] = &Union{
+		Name: "real",
+		Variants: flatten(
+			Constraints["fixed"].Variants,
+			Constraints["float"].Variants,
+		),
+	}
 	Constraints["signed"] = &Union{
 		Name: "signed",
 		Variants: flatten(
@@ -64,12 +80,14 @@ func init() {
 		tokens.Any:        Any,
 		tokens.Int:        Constraints["int"],
 		tokens.Uint:       Constraints["uint"],
+		tokens.Fixed:      Constraints["fixed"],
 		tokens.Float:      Constraints["float"],
 		tokens.Complex:    Constraints["complex"],
 		tokens.String:     Constraints["string"],
 		tokens.Signed:     Constraints["signed"],
 		tokens.Number:     Constraints["number"],
 		tokens.Ordered:    Constraints["ordered"],
+		tokens.Real:       Constraints["real"],
 		tokens.Summable:   Constraints["summable"],
 		tokens.Comparable: Constraints["comparable"],
 	}

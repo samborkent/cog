@@ -13,6 +13,7 @@ The following basic features are missing that need to be implemented before Cog 
     This is required for method declaration, so we need to manually disallow using a type which is only defined later in the file in script mode.
 
 ### Features
+- Implement monomorphization once Go 1.27 generics methods have been released.
 - Remove `@ref` allocator.
 - Design how iterators should work.
     - Range over int (or other literal) should not be possible.

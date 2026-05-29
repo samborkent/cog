@@ -3,7 +3,8 @@ package types
 import "strings"
 
 type Interface struct {
-	Methods []*Method
+	TypeParams []*Alias
+	Methods    []*Method
 }
 
 type Method struct {

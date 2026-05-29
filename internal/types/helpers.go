@@ -265,7 +265,11 @@ func Implements(concrete Type, iface *Interface) bool {
 		found := false
 
 		for _, m := range s.Methods {
-			if m.Name == required.Name && Equal(m.Procedure, required.Procedure) {
+			if m.Name != required.Name {
+				continue
+			}
+
+			if proceduresMatch(m.Procedure, required.Procedure) {
 				found = true
 				break
 			}
@@ -277,6 +281,37 @@ func Implements(concrete Type, iface *Interface) bool {
 	}
 
 	return true
+}
+
+// proceduresMatch reports whether a concrete procedure matches a required
+// interface procedure, accounting for type parameter return types in the
+// required signature.
+func proceduresMatch(concrete, required *Procedure) bool {
+	if len(concrete.Parameters) != len(required.Parameters) {
+		return false
+	}
+
+	for i := range concrete.Parameters {
+		if !Equal(concrete.Parameters[i].Type, required.Parameters[i].Type) {
+			return false
+		}
+	}
+
+	if concrete.ReturnType == nil && required.ReturnType == nil {
+		return true
+	}
+
+	if concrete.ReturnType == nil || required.ReturnType == nil {
+		return false
+	}
+
+	// If the required return type is a type parameter, check that the
+	// concrete return type satisfies its constraint.
+	if tp, ok := required.ReturnType.(*Alias); ok && tp.IsTypeParam() {
+		return Satisfies(concrete.ReturnType, tp.Constraint)
+	}
+
+	return Equal(concrete.ReturnType, required.ReturnType)
 }
 
 // isStructuralSentinel reports whether a type is one of the zero-value

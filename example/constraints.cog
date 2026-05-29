@@ -1,0 +1,70 @@
+package main
+
+// ---------------------------------------------------------------------------
+// fixed  = int + uint
+// ---------------------------------------------------------------------------
+
+// Generic type with fixed constraint: accepts any signed or unsigned integer.
+FixedSlice<T ~ fixed> ~ []T
+
+useFixed : func() = {
+    xs : FixedSlice<int8> = {1, 2, 3}
+    @print(xs)
+
+    ys : FixedSlice<uint64> = {10, 20}
+    @print(ys)
+}
+
+// ---------------------------------------------------------------------------
+// real  = fixed + float  =  int + uint + float
+// ---------------------------------------------------------------------------
+
+RealSlice<T ~ real> ~ []T
+
+useReal : func() = {
+    xs : RealSlice<int32> = {-1, 0, 1}
+    @print(xs)
+
+    ys : RealSlice<float64> = {1.5, 2.5}
+    @print(ys)
+
+    zs : RealSlice<uint8> = {100}
+    @print(zs)
+}
+
+// TODO: reenable once monomorphization is implemented
+
+// // ---------------------------------------------------------------------------
+// // stringer  = string | interface { String : func() utf8 }
+// // ---------------------------------------------------------------------------
+
+// // A type that implements the Stringer interface.
+// export MyLabel ~ struct {
+//     value : utf8
+// }
+
+// export MyLabel.String : func() utf8 = {
+//     return "hello from MyLabel"
+// }
+
+// // Generic function that works with any stringer type.
+// printStringer : func<T ~ stringer>(x : T) = {
+//     @print(x)
+// }
+
+// // Using stringer with a custom type that has a String() method.
+// useStringer : func() = {
+//     label : MyLabel = { value = "hello" }
+//     printStringer(label)
+// }
+
+// // Type alias constrained by stringer.
+// StringerSlice<T ~ stringer> ~ []T
+
+// useStringerSlice : func() = {
+//     labels : StringerSlice<MyLabel> = {
+//         { value = "alpha" },
+//         { value = "beta" },
+//     }
+//     @print(labels)
+// }
