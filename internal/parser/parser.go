@@ -289,6 +289,7 @@ func (p *Parser) parseFile(ctx context.Context, fileName string) (*ast.AST, erro
 	p.lex.Reset()
 
 	p.builtins = map[string]BuiltinParser{
+		"as":    p.parseBuiltinAs,
 		"cast":  p.parseBuiltinCast,
 		"if":    p.parseBuiltinIf,
 		"map":   p.parseBuiltinMap,

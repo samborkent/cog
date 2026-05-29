@@ -90,6 +90,47 @@ func BuiltinSet(keyType, capacity goast.Expr) *goast.CallExpr {
 	}
 }
 
+// cogOptionType returns a goast.Expr for cog.Option[T].
+func cogOptionType(valueType goast.Expr) goast.Expr {
+	return &goast.IndexExpr{
+		X: &goast.SelectorExpr{
+			X:   cogPkg,
+			Sel: &goast.Ident{Name: "Option"},
+		},
+		Index: valueType,
+	}
+}
+
+// BuiltinSome generates cog.Option[T]{Value: expr, Set: true}.
+func BuiltinSome(valueType, expr goast.Expr) *goast.CompositeLit {
+	return &goast.CompositeLit{
+		Type: cogOptionType(valueType),
+		Elts: []goast.Expr{
+			&goast.KeyValueExpr{
+				Key:   &goast.Ident{Name: "Value"},
+				Value: expr,
+			},
+			&goast.KeyValueExpr{
+				Key:   &goast.Ident{Name: "Set"},
+				Value: &goast.Ident{Name: "true"},
+			},
+		},
+	}
+}
+
+// BuiltinNone generates cog.Option[T]{Set: false}.
+func BuiltinNone(valueType goast.Expr) *goast.CompositeLit {
+	return &goast.CompositeLit{
+		Type: cogOptionType(valueType),
+		Elts: []goast.Expr{
+			&goast.KeyValueExpr{
+				Key:   &goast.Ident{Name: "Set"},
+				Value: &goast.Ident{Name: "false"},
+			},
+		},
+	}
+}
+
 // BuiltinSlice generates make([]T, len) or make([]T, len, cap).
 func BuiltinSlice(elemType, length, capacity goast.Expr) *goast.CallExpr {
 	sliceType := &goast.ArrayType{
