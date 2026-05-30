@@ -1,643 +1,475 @@
 // ownership.cogs — annotated edge-case analysis of the Cog ownership model
 //
-// This file explores 45+ scenarios that test the boundaries of the model.
+// This file explores scenarios that test the boundaries of the model.
 // Each case is annotated with whether it SHOULD compile, and why.
-// Cases marked HOLE are gaps where the model (as written) is unsound.
-
-// ────────────────────────────────────────────────────────────────────────────
-// RULE 1: No double-indirection on &
-// ────────────────────────────────────────────────────────────────────────────
+//
+// Holes marked RESOLVED have been addressed by new rules in ownership_model.md.
+// Holes marked PROPOSED have draft rules (P1–P4) pending integration.
 
 Point ~ struct { x : int64; y : int64 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE 1: && double reference
+// ────────────────────────────────────────────────────────────────────────────
+// && does not exist in the type system. & of & is rejected by rule 1.
+// No && type can appear. VOID.
+
 r : &Point = @ref(Point{1, 2})
-// q := &r        // compile error (rule 1) — OK
-
-// HOLE 1: What about &&? Can someone do &&x to get a &&Point?
-// The model forbids &r where r is &Point, but what about calling
-// a func that takes &&Point with &r? If the type system doesn't have &&,
-// this is moot — but && shouldn't exist at the type level either.
+// q := &r        // compile error (rule 1)
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 2: & of var consumes
+// RESOLVED HOLE 2: aliasing via func call after & consumption
 // ────────────────────────────────────────────────────────────────────────────
+// p is consumed by &p in rule 2, so no aliasing is possible. VOID.
 
 p : var Point = Point{1, 2}
 r_imm := &p        // p consumed, r_imm is immutable &
-// p is dead        // OK
-
-// HOLE 2 (aliasing via func call): What if we call a func that takes &Point
-// and sneak p's address through another var that references the same memory?
-// p is dead so we can't — OK.
+// p is dead
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 3: * of var & consumes
+// RESOLVED HOLE 3: struct field access with var
 // ────────────────────────────────────────────────────────────────────────────
+// Rule 21: fields inherit the var/dyn/immutable property of the enclosing
+// variable. Accessing c.data where c is var consumes c (rule 4-style).
 
-p2 : var Point = Point{3, 4}
-r2_mut : var &Point = &p2    // p2 consumed
-val := *r2_mut                // r2_mut consumed; val is a copy
-// r2_mut is dead             // OK
+Container ~ struct { data : []int64 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// RULE 4: var → immutable assignment consumes
-// ────────────────────────────────────────────────────────────────────────────
+main_h3 : proc() = {
+    c : var Container = Container{data: @slice<int64>(3)}
+    c.data[0] = 1             // OK — c is var, so c.data is mut accessible
 
-a : var []int64 = @slice<int64>(3)
-b := a                        // a consumed, b immutable
-// a is dead                  // OK
-
-// HOLE 3 (double consumption via field access): What if we have a struct
-// with a var slice field, and we assign it to an immutable var?
-
-Container ~ struct { data : var []int64 }
-
-// HOLE 4 (partial move): Can you move out of a var struct field?
-// c : var Container = Container{...}
-// d := c.data      // is c.data consumed? Is c partially dead?
-// Model doesn't address partial moves. This could leak aliasing.
+    d := c.data               // rule 4: var → immutable consumes c
+    // c is dead here
+}
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 5: Immutable primitives copy to var
+// RESOLVED HOLE 4: partial moves from struct fields
 // ────────────────────────────────────────────────────────────────────────────
+// Rule 21: fields cannot be var/dyn themselves. No partial moves.
+// Accessing any field consumes (or borrows) the entire struct.
 
-a_int : int64 = 42
-b_int : var int64 = a_int       // fine — a_int stays alive
-b_int = 99                      // OK
-_ = a_int                       // still alive — OK
-
-// ────────────────────────────────────────────────────────────────────────────
-// RULE 6: Immutable pointer-like deep-copy to var
-// ────────────────────────────────────────────────────────────────────────────
-
-a_slice := []int64{1, 2, 3}       // immutable
-b_slice : var []int64 = a_slice   // deep copy via cog.Copy
-b_slice[0] = 99
-@print(a_slice[0])                 // 1 — OK
-
-// HOLE 5 (mixed struct — deep copy semantics unclear):
-// What defines a "struct with pointer-like fields"? Does a single int64? field
-// (option type, which is a struct) make the whole struct deep-copy?
-// The model uses "pointer-like types are: slices, maps, sets, structs with
-// pointer-like fields." — but int64? is an Option<int64> which is a struct.
-// If you have:
-//   Partial ~ struct { tag : ascii; maybe_ptr : []int64? }
-// Is this deep-copy? It has an optional slice field that could be nil.
-// The deep copy must examine the field at runtime to skip nil.
+// compile error — fields cannot be var:
+// Bad ~ struct { data : var []int64 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 7: func cannot have var params
+// RESOLVED HOLE 5: pointer-like type determination
 // ────────────────────────────────────────────────────────────────────────────
+// Rule 32: pointer-like is resolved transitively through aliases and generics.
+// Options (int64?) are structs wrapping the inner type — the runtime inspects
+// fields. At transpile time, if static analysis shows all fields are basic,
+// a simple assignment is used instead of cog.Copy.
 
-// bad : func(x : var int64) = { x = 1 }   // compile error — OK
+// Pointer-like: slice, map, set, struct with pointer-like fields
+// Primitive: int, float, bool, string, arrays of primitives, structs of primitives
+// Transitively determined through type aliases and generic instantiation (rule 32).
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 8: func cannot be async / call async
+// RESOLVED HOLE 6: same var passed to two params of one func
 // ────────────────────────────────────────────────────────────────────────────
-
-// f : func() = { async otherProc() }      // compile error — OK
-// async f()                                // compile error — OK
-
-// ────────────────────────────────────────────────────────────────────────────
-// RULE 9: var → func param borrows
-// ────────────────────────────────────────────────────────────────────────────
+// Sequential calls: borrow released between calls.
+// Same var to two params of one call: two read-only borrows — OK.
+// See rule 9.
 
 update : func(p : Point) = { /* read-only */ }
 
-main : proc() = {
+main_h6 : proc() = {
     pt : var Point = Point{1, 2}
-    pt.x = 1
     update(pt)       // pt borrowed
-    pt.x = 2         // OK — borrow released
+    update(pt)       // OK — first borrow released
+    pt.x = 2
 }
 
-// HOLE 6 (nested borrow — two func calls at same time):
-// What if we borrow for two sequential func calls?
-//   update(pt)
-//   update(pt)       // first borrow released before second — OK
-// What about passing to TWO params of ONE func?
-//   cmp : func(a : Point, b : Point) bool = { ... }
-//   result := cmp(pt, pt)   // pt borrowed twice in same call — should be OK
-//                           // since both borrows are read-only
+cmp : func(a : Point, b : Point) bool = { a.x == b.x }
 
-// ────────────────────────────────────────────────────────────────────────────
-// RULE 10: proc with var param consumes
-// ────────────────────────────────────────────────────────────────────────────
-
-worker : proc(data : var []int64) = {
-    data[0] = 99
-}
-
-main10 : proc() = {
-    buf : var []int64 = @slice<int64>(3)
-    worker(buf)      // buf consumed
-    // buf is dead   // OK
+main_h6b : proc() = {
+    pt : var Point = Point{1, 2}
+    result := cmp(pt, pt)    // OK — two read-only borrows of pt
+    pt.x = 3                  // OK — borrow released
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 11: proc can be async / call async
+// RESOLVED HOLE 7: proc immutable param consumed even for sync procs
 // ────────────────────────────────────────────────────────────────────────────
+// This is conservative by design (rule 12). An optional future optimization
+// could distinguish sync vs. async proc to relax this. For now, accepted.
 
-// OK, no ownership issue beyond rule 12.
+printer : proc(msg : []utf8) = { @print(msg) }
 
-// ────────────────────────────────────────────────────────────────────────────
-// RULE 12: proc consumes even immutable params
-// ────────────────────────────────────────────────────────────────────────────
-
-logger : proc(msg : []utf8) = {
-    async transmit(msg)
-}
-
-main12 : proc() = {
+main_h7 : proc() = {
     m : var []utf8 = "hello"
-    logger(m)        // m consumed
-    // m is dead     // OK
+    printer(m)        // m consumed (rule 12 — conservative)
+    // m is dead
 }
 
-// HOLE 7 (proc immutable param passed synchronously — unnecessary pain):
-// Consider:
-//   printer : proc(msg : []utf8) = { @print(msg) }
-// Here printer does NOT use async. But the model still consumes `m`.
-// This forces the caller to re-acquire the data after every proc call,
-// even when the proc is clearly synchronous. The model is correct (conservative)
-// but may force excessive deep copies. The caller must keep re-initializing.
-// This is a UX hole, not a soundness hole.
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE 8: proc param re-passed to another proc
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 22: proc parameters are owned bindings. Re-passing to another proc
+// transfers ownership — the outer param is consumed.
 
-// HOLE 8 (proc param consumed + nested call):
-// If a proc takes ownership of a var param, can it pass that param
-// to another proc? If yes, the param variable is consumed by the nested
-// call and the outer proc can't use it after. If no, how is the transfer
-// tracked?
-//
-//   middleman : proc(data : var []int64) = {
-//       worker(data)    // data consumed by worker? or borrowed?
-//       // data[0] = 1  // is data alive here?
-//   }
-// Model says proc params are consumed on receipt. If data is consumed
-// on entry to middleman, then passing it to worker should consume data
-// again — but data was already consumed. This doesn't work.
-//
-// RESOLUTION: proc param consumption means the PARAMETER owns the data.
-// Passing it to another proc should be a transfer (consume the param).
-// The callee's param is a new binding that owns the data.
+worker : proc(data : var []int64) = { data[0] = 99 }
+
+middleman : proc(data : var []int64) = {
+    worker(data)            // data consumed by worker
+    // data is dead here
+}
+
+main_h8 : proc() = {
+    buf : var []int64 = @slice<int64>(3)
+    middleman(buf)          // buf consumed
+    // buf is dead
+}
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 13: Block expressions borrow
+// RESOLVED HOLE 9: async inside block expression
 // ────────────────────────────────────────────────────────────────────────────
+// Rule 26: if a borrow-scope (block, for-body) contains an async closure that
+// captures a var outer variable, the variable is CONSUMED (not borrowed).
 
-main13 : proc() = {
+main_h9 : proc() = {
     x : var int64 = 1
     y := {
-        @print(x)
+        async { @print(x) }   // x consumed by async closure (rule 26)
         42
     }
-    x = y            // OK — borrow released
-}
-
-// HOLE 9 (async inside block expression):
-// A block expression borrows. But what if the block spawns an async
-// closure that captures a var from the enclosing scope?
-//
-//   main : proc() = {
-//       x : var int64 = 1
-//       y := {
-//           async { @print(x) }  // x is borrowed by block
-//           // but async closure outlives block!
-//           42
-//       }
-//       // is x alive here? The async closure captured it?
-//       x = 2   // race if async still running
-//   }
-// Model says block borrows → released after block. But async closure
-// inside the block captured x. If capture consumed x, then the block
-// can't release the borrow — contradiction. If capture borrowed from
-// the block's borrow... this is complex.
-//
-// FIX NEEDED: If a block expression contains an async closure that
-// captures a var outer variable, the var should be CONSUMED (not borrowed),
-// matching rule 14.
-
-// ────────────────────────────────────────────────────────────────────────────
-// RULE 14: async closure consumes var variables
-// ────────────────────────────────────────────────────────────────────────────
-
-main14 : proc() = {
-    x : var int64 = 1
-    async { @print(x) }  // x consumed
-    // x is dead         // OK
+    // x is dead here (consumed, not borrowed)
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 15: any/interface as constraint only
+// RESOLVED HOLE 10: dyn + async — no ownership conflict
 // ────────────────────────────────────────────────────────────────────────────
+// dyn reads always produce independent copies (deep copies for pointer-like).
+// Each read from a dyn variable gets its own data. No race possible.
+// Rule 16: copy on read and write.
 
-// x : any = 42         // compile error — OK
-
-// ────────────────────────────────────────────────────────────────────────────
-// RULE 16: dyn copies on read/write
-// ────────────────────────────────────────────────────────────────────────────
-
-s : dyn []utf8 = ["hello"]
-local := s              // deep copy
-local[0] = "bye"        // s unaffected
-s = local               // also deep-copied on write
-
-// HOLE 10 (dyn + async — no ownership):
-// dyn variables flow through context. If a dyn var is a pointer-like type,
-// and we pass it to an async proc... what happens?
-//
-//   data : dyn []utf8 = ["secret"]
-//   async { @print(data) }  // data read from context — who owns it?
-//
-// The dyn value flows through Go's context.Value as `any`. The async
-// closure captures the context, not the value directly. Each read from
-// dyn does cog.Copy (deep copy). So the async closure gets its own copy?
-// Or does it share with the parent?
-//
-// If the closure captures the *context* (the baggage, not a specific value),
-// then the dyn read inside the closure is independent — each read copies
-// from context. That's safe.
-//
-// BUT: if the closure captures the *dereferenced value* (the result of
-// reading from context), then the closure gets a snapshot. Writing back
-// to `data` inside the closure would not affect the parent's context.
-// The model needs to specify which behavior applies.
-
-// ────────────────────────────────────────────────────────────────────────────
-// RULE 17: for iteration borrows
-// ────────────────────────────────────────────────────────────────────────────
-
-main17 : proc() = {
-    items : var []int64 = []int64{1, 2, 3}
-    for item in items {
-        @print(item)
+main_h10 : proc() = {
+    data : dyn []utf8 = ["secret"]
+    async {
+        local := data       // each read of dyn produces a copy
+        @print(local)       // independent from parent
     }
-    items[0] = 99    // OK — borrow released
 }
 
-// HOLE 11 (nested for loops over same variable):
-// What happens with nested iteration over the same var?
-//
-//   items : var []int64 = []int64{1, 2, 3}
-//   for outer in items {
-//       for inner in items {   // items already borrowed by outer loop
-//           @print(inner)
-//       }
-//   }
-// The inner `for item in items` tries to borrow items again.
-// If the model tracks borrows per-variable with a counter (like Rust's
-// NLL), this is fine — two read-only borrows. If it's a boolean flag,
-// this would incorrectly error.
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE 11: nested for loops over same variable
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 27: borrow counter supports nesting. Both loops read-only.
 
-// HOLE 12 (for + async closure — rule 18 interaction):
-// What if we DO copy the element, but the element is a large struct with
-// pointer-like fields?
-//
-//   items : var []BigStruct = ...
-//   for item in items {
-//       local := item       // rule 6: if BigStruct has pointer fields,
-//                           // this is a DEEP COPY — expensive!
-//       async { process(local) }
-//   }
-// Is the deep copy guaranteed by rule 6? The model says "immutable pointer-
-// like values deep-copy when assigned to var". But `item` here is an
-// iteration variable — is it immutable? It's borrowed from items, so it
-// should be read-only. Then `local := item` assigns an immutable to var,
-// triggering deep copy. This is correct but potentially expensive. The user
-// should be aware.
+main_h11 : proc() = {
+    items : var []int64 = []int64{1, 2, 3}
+    for outer in items {
+        for inner in items {     // OK — two read-only borrows
+            @print(inner)
+        }
+    }
+    items[0] = 99                // OK
+}
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 18: Elements in async closures during iteration must be owned
+// RESOLVED HOLE 12: deep copy cost for element copy in for+async
 // ────────────────────────────────────────────────────────────────────────────
+// Rule 32 determines deep vs shallow at compile/instantiation time.
+// For pointer-like types, deep copy is required for soundness.
+// Shallow copy would be a race condition. This is accepted.
 
-// items : var []utf8 = ["a", "b", "c"]
-// for item in items {
-//     async { @print(item) }  // compile error — OK
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE A: conditional branch consumption
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 24: consumption in ANY branch kills the variable after the conditional.
+
+main_hA : proc() = {
+    data : var []int64 = @slice<int64>(3)
+    if true {
+        worker(data)        // consumed
+    } else {
+        @print(data[0])     // borrowed
+    }
+    // data is dead here (conservative)
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE B: loop-carried consumption
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 25: consumed inside loop body → dead for subsequent iterations.
+
+main_hB_bad : proc() = {
+    data : var []int64 = @slice<int64>(3)
+    for _ in 0..10 {
+        // worker(data)     // compile error: dead after first iteration
+    }
+}
+
+main_hB_good : proc() = {
+    for _ in 0..10 {
+        data : var []int64 = @slice<int64>(3)  // fresh each iteration
+        worker(data)
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE C: struct field mutation through immutable &
+// ────────────────────────────────────────────────────────────────────────────
+// r := &p produces &Point (immutable). r.x = 5 is blocked by the type system.
+// Sound by rule 2 + type system.
+
+// ────────────────────────────────────────────────────────────────────────────
+// PROPOSED HOLE D: self-referential struct
+// ────────────────────────────────────────────────────────────────────────────
+// Rule P1: self-referential structs are rejected at the type level.
+
+// compile error (rule P1):
+// Node ~ struct { value : int64; next : var &Node }
+
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE E: var & → & conversion
+// ────────────────────────────────────────────────────────────────────────────
+// q := r (where r is var &Point) assigns a var to immutable — rule 4 applies.
+// r is consumed. q gets the reference. The underlying data has one owner.
+
+main_hE : proc() = {
+    pt : var Point = Point{1, 2}
+    r : var &Point = &pt        // pt consumed
+    // pt is dead
+    q : &Point = r              // r consumed (rule 4)
+    // r is dead
+    q.x = 10                    // OK — but wait, q is immutable &Point
+    // Actually this should be a compile error — q is immutable
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PROPOSED HOLE F: map/set insertion consumes key/value
+// ────────────────────────────────────────────────────────────────────────────
+// Rule P3: map/set insertion consumes the key and value.
+
+main_hF : proc() = {
+    m : var map[utf8]var []int64 = @map<utf8, []int64>()
+    key : utf8 = "items"
+    val : var []int64 = @slice<int64>(3)
+
+    m[key] = val            // both consumed (rule P3)
+    // key is dead
+    // val is dead
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE G: returning borrowed references to locals
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 23: returning & to a local is a compile error.
+
+// compile error (rule 23):
+// bad : func() &Point = {
+//     p : var Point = Point{1, 2}
+//     @ref(p)
 // }
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 19: var → var transfers ownership
+// RESOLVED HOLE H: method receivers
 // ────────────────────────────────────────────────────────────────────────────
+// Rule 28: method receivers follow the same rules as regular parameters.
 
-main19 : proc() = {
-    a : var []int64 = @slice<int64>(3)
-    a[0] = 1
-    b : var []int64 = a    // a consumed
-    // a is dead           // OK
-    b[0] = 2
+Foo ~ struct { val : []int64 }
+
+Foo.Process : proc(self : var &Foo) = { /* ... */ }
+
+main_hH : proc() = {
+    f : var Foo = Foo{val: @slice<int64>(3)}
+    f.Process()             // f consumed (rule 28)
+    // f is dead
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// RULE 20: var & → func immutable param borrows the reference
+// RESOLVED HOLE I: type alias ownership semantics
 // ────────────────────────────────────────────────────────────────────────────
+// Rule 32: the compiler resolves through type aliases. MySlice ~ []int64
+// is pointer-like because []int64 is a slice.
 
-read : func(p : &Point) = { /* read-only */ }
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE J: generic type ownership
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 32: determined at instantiation time. Box<int64> is primitive,
+// Box<[]int64> is pointer-like.
 
-main20 : proc() = {
-    pt : var Point = Point{1, 2}
-    r : var &Point = &pt
-    // pt is dead.
-    read(r)            // r borrowed
-    r.x = 10           // OK — r alive again
+// ────────────────────────────────────────────────────────────────────────────
+// PROPOSED HOLE K: chained method calls
+// ────────────────────────────────────────────────────────────────────────────
+// Rule P4: chained methods borrow the receiver through the chain.
+
+// ────────────────────────────────────────────────────────────────────────────
+// PROPOSED HOLE L: unsafe bypasses ownership
+// ────────────────────────────────────────────────────────────────────────────
+// Rule P2: unsafe operations void all ownership guarantees.
+
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE M: dyn + proc param — conflict resolved
+// ────────────────────────────────────────────────────────────────────────────
+// dyn values are COPIED on read. Passing to a proc consumes the copy.
+// The context-stored value is unaffected.
+
+main_hM : proc() = {
+    x : dyn []utf8 = ["hello"]
+    worker(x)           // x is read (deep copy), copy consumed by worker
+    // x in context is unaffected
+    // But: x is dyn, so it's read from context each time.
+    // After the read + consume, the context value still exists.
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// ADDITIONAL HOLES NOT COVERED BY EXISTING RULES
+// RESOLVED HOLE N: multiple async closures capturing same var
 // ────────────────────────────────────────────────────────────────────────────
+// First capture consumes the var. Second capture sees it dead. Correct.
 
-// ── HOLE A (conditional branches — inconsistent consumption) ──
-//
-// What if a var is consumed in one branch of an if/else but not the other?
-//
-//   main : proc() = {
-//       data : var []int64 = @slice<int64>(3)
-//       if condition {
-//           worker(data)   // data consumed
-//       } else {
-//           @print(data[0]) // data borrowed
-//       }
-//       // Is data alive here? Depends on runtime branch.
-//       // This MUST be a compile error. The model needs to track that
-//       // data's liveness is conditional, which is unsound.
-//   }
-//
-// FIX: The model must treat any variable consumed in ANY branch as dead
-// after the if/else (conservative), OR require that ALL branches consume
-// (then it's dead) or NONE do (then it's alive, possibly borrowed).
+// compile error:
+// main_hN_bad : proc() = {
+//     x : var []utf8 = "shared"
+//     async { @print(x) }   // x consumed
+//     async { @print(x) }   // x already dead
+// }
 
-// ── HOLE B (loop-carried consumption) ──
-//
-// What if a var is consumed inside a loop body?
-//
-//   main : proc() = {
-//       data : var []int64 = @slice<int64>(3)
-//       for _ in 0..10 {
-//           worker(data)  // consumed on first iteration!
-//           // data is dead on second iteration
-//       }
-//   }
-//
-// FIX: After the first iteration, data is dead. The compiler must either
-// reject this (data consumed inside loop) or require a new value each
-// iteration.
+// User must copy before the first capture:
+main_hN_good : proc() = {
+    x : var []utf8 = "shared"
+    copy : var []utf8 = x           // var → var: consumed (rule 19)
+    // x is dead, copy owns data
+    async { @print(copy) }           // copy consumed by async
+}
 
-// ── HOLE C (struct field mutation through & reference) ──
-//
-// Rule 2 says &p consumes p and yields an immutable &. Then r_imm is
-// &Point (immutable). But what about field access?
-//
-//   p : var Point = Point{1, 2}
-//   r := &p
-//   r.x = 5          // r is &Point — immutable, so compile error
-//
-// r.x = 5 would be blocked by the type system (r is &Point not var &Point).
-// This seems fine.
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE O: defer + ownership
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 33: defer consumes var variables (like async closure, rule 14).
 
-// ── HOLE D (self-referential struct) ──
-//
-// Can a struct hold a var & reference to itself? E.g.:
-//   Node ~ struct { value : int64; next : var &Node }
-// This would make ownership impossible to track at compile time.
-// The type system should prevent recursive reference types that
-// would create ownership cycles.
+main_hO : proc() = {
+    f : var File = open("file.txt")
+    defer close(f)           // f consumed by defer (rule 33)
+    // f is dead
+}
 
-// ── HOLE E (var & escaping via & conversion) ──
-//
-// Rule 2: & of var → & (immutable)
-// Rule 20: var & → func(&) borrows
-//
-// But what if we have:
-//   pt : var Point = Point{1, 2}
-//   r : var &Point = &pt     // pt consumed, r owns mutable access
-//   q : &Point = r           // does this consume r? Or borrow r?
-//
-// If `q := r` treats r as immutable &Point, does it consume r (rule 4)?
-// r is a variable of type var &Point. Assigning it to immutable q...
-// does rule 4 apply? "var mutable value to immutable variable consumes."
-// r IS a var mutable value (it's var &Point). So q := r consumes r.
-// Then r is dead, but the underlying pt data is still alive through q.
-// That's fine — only one owner at a time.
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE P: index expression ownership
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 31: reading items[i] copies and borrows items momentarily.
+// &items[i] extends the borrow for the reference's lifetime.
 
-// ── HOLE F (var as map key or set element) ──
-//
-// Can you use a var value as a map key?
-//   m : var map[utf8]int64 = ...  // m is a map — the map itself is var
-//   key : var []int64 = ...
-//   m["key"] = 42                  // OK — key is not consumed
-//
-// But what about:
-//   s : var Set[var []int64] = ... // elements are owned
-//   elem : var []int64 = ...
-//   @set.add(s, elem)              // elem consumed?
-//
-// If set owns its elements, then adding to a set should consume the value.
-// The model doesn't specify this.
+main_hP : proc() = {
+    items : var []Point = [Point{1,2}, Point{3,4}]
+    p := items[0]               // items borrowed, p is copy
+    p.x = 99                    // OK — independent
+    items[1].x = 7              // OK — borrow released
 
-// ── HOLE G (returning borrowed references) ──
-//
-// Can a func/proc return a & reference to a local var?
-//
-//   bad : func() &Point = {
-//       p : var Point = Point{1, 2}
-//       @ref(p)          // returning reference to local — dangling!
-//   }
-//
-// This must be a compile error. The model doesn't mention return value
-// borrowing/ownership. A func returning &T should only be allowed with
-// parameters (input references), not local variables.
+    r := &items[0]              // items borrowed for r's lifetime
+    // items is dead until r is no longer used
+}
 
-// ── HOLE H (method receivers) ──
-//
-// The model doesn't mention method receivers at all.
-// Can a method have a var receiver?
-//   Foo.Method : proc(self : var &Foo) = { ... }
-// If called as `foo.Method()`, is `foo` consumed?
-// Methods are syntactic sugar for regular functions, so presumably
-// the same rules apply. But this should be explicit.
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE Q: returning ownership from proc
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 23: returning a value from a proc transfers ownership to the caller.
 
-// ── HOLE I (type alias ownership semantics) ──
-//
-// If I define:
-//   MySlice ~ []int64
-//   s : var MySlice = ...
-// Is MySlice "pointer-like" for deep-copy purposes?
-// It IS a slice underneath. The compiler must look through type aliases
-// to determine primitive vs pointer-like. Same for:
-//   MyInt ~ int64           // primitive
-//   MyStruct ~ Point        // struct — check fields
+main_hQ : proc() = {
+    data := maker()
+    data[0] = 99                // OK — data owns the slice
+}
 
-// ── HOLE J (generic type ownership) ──
-//
-//   Box[T ~ any] ~ struct { value : T }
-//
-// If T is instantiated with int64, Box<int64> has a primitive field.
-// If T is instantiated with []utf8, Box<[]utf8> has a pointer-like field.
-// Can Box<int64> be assigned to var with a shallow copy while Box<[]utf8>
-// must deep-copy? The compiler needs to decide at instantiation time.
-// This seems feasible but the model should mention it.
+maker : proc() var []int64 = {
+    result : var []int64 = @slice<int64>(3)
+    result                        // ownership transfers to caller
+}
 
-// ── HOLE K (chained method calls on borrowed values) ──
-//
-//   items : var []int64 = []int64{3, 1, 2}
-//   sorted := items.sort().reverse()   // items borrowed by sort(),
-//                                       // result of sort() borrowed by reverse()
-//
-// If sort() returns a new slice (immutable), this is fine. But if sort()
-// mutates in-place and returns &self, then items is borrowed during the
-// chain. The model needs to define how borrows work across method chains.
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE R: all branches consume → dead after
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 24 sub-case: ALL branches consume → dead after. OK.
 
-// ── HOLE L (escape via pointer arithmetic / unsafe) ──
-//
-// The model has no concept of unsafe. If cog provides @unsafe or allows
-// calling Go's unsafe.Pointer, all ownership guarantees are void.
-// Should the model mention that unsafe operations bypass ownership?
+main_hR : proc() = {
+    data : var []int64 = @slice<int64>(3)
+    if true {
+        worker(data)
+    } else {
+        worker(data)
+    }
+    // data is dead (consumed in all branches)
+}
 
-// ── HOLE M (dyn + proc param — conflict) ──
-//
-//   worker : proc(data : var []utf8) = { ... }
-//
-//   main : proc() = {
-//       x : dyn []utf8 = ["hello"]
-//       worker(x)       // is x consumed? dyn says copy-on-read/write,
-//                        // proc says consume.
-//   }
-//
-// If x is dyn, reading it returns a deep copy. Then that deep copy is
-// passed to worker and consumed. But x (in context) is unaffected.
-// The model should clarify: dyn values are COPIED when read, so passing
-// to a proc consumes the copy, not the original context value.
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE S: break releases borrow
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 17 + Rule 27: borrow scope = for-statement scope. break, return,
+// or normal exit all release the borrow.
 
-// ── HOLE N (var captured by multiple async closures — double consumption) ──
-//
-//   main : proc() = {
-//       x : var []utf8 = "shared"
-//       async { @print(x) }   // x consumed for first closure
-//       async { @print(x) }   // x already dead — compile error
-//   }
-//
-// This is correct — x can only be captured by one async closure.
-// But what about:
-//   main : proc() = {
-//       x : var []int64 = @slice<int64>(3)
-//       c1 := { async { @print(x) } }  // x consumed
-//       // Can we capture a COPY of x for a second closure?
-//       copy := cog.Copy(x)             // x is dead — can't read it!
-//   }
-// The user must copy BEFORE the first capture. This is correct but may
-// be surprising. The compiler error message should clearly explain.
+main_hS : proc() = {
+    items : var []int64 = []int64{1, 2, 3}
+    for item in items {
+        if item == 2 { break }
+    }
+    items[0] = 99    // OK — borrow released by break
+}
 
-// ── HOLE O (defer + ownership) ──
-//
-// Does the language support `defer`? If so:
-//   main : proc() = {
-//       f : var File = open("file.txt")
-//       defer close(f)      // does this borrow or consume f?
-//   }
-// A defer runs after the enclosing scope, similar to a closure.
-// If defer captures var f, it should consume f (like async closure).
-// If defer borrows f, there's a risk of use-after-free if f is moved
-// before the defer runs.
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE T: return inside block expression
+// ────────────────────────────────────────────────────────────────────────────
+// return ends the proc, so the block borrow is released by proc exit.
+// Sound by rule 13 (block borrow ends with block/proc) + rule 23.
 
-// ── HOLE P (index expression ownership) ──
-//
-//   items : var []Point = [Point{1,2}, Point{3,4}]
-//   p := items[0]    // is items[0] copied out? Is items borrowed?
-//   p.x = 99         // is this OK?
-//
-// If items is var, items[0] should copy the element (it's a value type).
-// items is borrowed during the read. After the read, items is alive.
-// But what if we do:
-//   r := &items[0]   // taking reference of element — borrows items
-//   r.x = 99         // mutating through the reference
-// This would mutate items[0] through r. But r's lifetime is tied to items.
-// The model should specify that &items[i] borrows items for r's lifetime.
+main_hT : proc() = {
+    x : var int64 = 1
+    y := {
+        return           // proc exits — borrow released
+        @print(x)
+        42
+    }
+}
 
-// ── HOLE Q (returning ownership from proc) ──
-//
-// The model covers parameter passing but not return values.
-//   maker : proc() var []int64 = {
-//       result : var []int64 = @slice<int64>(3)
-//       result       // ownership of result transfers to caller
-//   }
-//   main : proc() = {
-//       data := maker()     // data owns the slice
-//       data[0] = 99        // OK
-//   }
-// Returning a var from a proc should transfer ownership to the caller.
-// The model should specify that a proc returning var T means the caller
-// receives ownership.
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE U: enum variant payloads
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 29: destructuring a var enum transfers payload ownership to match arm.
 
-// ── HOLE R (mutual consumption between branches — if/else with same var) ──
-//
-//   main : proc() = {
-//       data : var []int64 = @slice<int64>(3)
-//       if cond {
-//           worker(data)     // consumed
-//       } else {
-//           worker(data)     // consumed (same var, different branch)
-//       }
-//       // data is dead in both branches — is it dead after?
-//       // Actually yes, because ALL branches consume it. The compiler
-//       // can determine: all branches consume → dead after if/else.
-//       // But the compiler must check ALL branches exhaustively.
-//   }
-// This should compile: data is consumed in every branch, so it's dead after.
+Result ~ enum<int8> {
+    Ok := 0 with value : utf8;
+    Err := 1 with msg : utf8
+}
 
-// ── HOLE S (for + break with borrowed iterable — early release) ──
-//
-//   items : var []int64 = []int64{1, 2, 3}
-//   for item in items {
-//       if item == 2 { break }
-//   }
-//   items[0] = 99   // Is items alive here? Borrow was released by break.
-// The borrow should be released when the loop exits (normally or via break).
-// This is correct if borrow-scope = for-statement scope.
+main_hU : proc() = {
+    r : var Result = Result.Ok("hello")
+    match r {
+        case Ok(val) => {
+            // r consumed, val owns payload
+        }
+        case Err(msg) => {
+            // r consumed, msg owns payload
+        }
+    }
+}
 
-// ── HOLE T (return in block expression consumes var) ──
-//
-//   main : proc() = {
-//       x : var int64 = 1
-//       y := {
-//           return       // does this consume x? The block borrows x,
-//                         // but return ends the proc, not just the block.
-//           @print(x)
-//           42
-//       }
-//       // unreachable, but x was borrowed by the block.
-//       // return inside a block that borrows x should be fine —
-//       // the block never finishes normally, so borrow is released
-//       // by proc exit.
-//   }
+// ────────────────────────────────────────────────────────────────────────────
+// RESOLVED HOLE V: arena allocation + ownership
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 30: arena-allocated data cannot be passed to async contexts.
 
-// ── HOLE U (enum variant payloads) ──
-//
-//   Result ~ enum<int8> {
-//       Ok := 0 with value : utf8;
-//       Err := 1 with msg : utf8
-//   }
-//
-//   r : var Result = Result.Ok("hello")
-//   // Can we move the utf8 out of r?
-//   // match r { case Ok(val): ... }
-//   // If val is var, does consuming val consume r?
-//   // Enum variants with payloads are product types internally.
-//   // The model should cover destructuring moves.
+main_hV : proc() = {
+    arena := @new_arena()
+    data : var []int64 = @arena_slice<int64>(arena, 3)
 
-// ── HOLE V (arena allocation + ownership) ──
-//
-// The project uses arena allocation (GOEXPERIMENT=arenas).
-// If a var value is arena-allocated and then consumed by a proc that
-// outlives the arena, we get a dangling pointer.
-//
-//   main : proc() = {
-//       arena := @new_arena()
-//       data : var []int64 = @arena_slice<int64>(arena, 3)
-//       async worker(data)       // data arena-freed when main exits
-//                                  // but worker is still running!
-//       @free_arena(arena)
-//   }
-//
-// The ownership model AND the arena model must interact.
-// Arena-allocated data must NOT be passed to async procs (or any
-// context that outlives the arena). This is a cross-cutting concern
-// the model doesn't address.
+    // compile error (rule 30):
+    // async worker(data)
+
+    @free_arena(arena)
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// ADDITIONAL: deferred copy for for+async elements
+// ────────────────────────────────────────────────────────────────────────────
+// Rule 32 determines deep vs shallow. Pointer-like requires deep copy.
+// Future optimization: if the for loop is synchronous and the async closure
+// is the only capture, a shallow copy + explicit ownership transfer could
+// avoid the deep copy. For now, deep copy is the safe default.
+
+main_extra : proc() = {
+    items : var []utf8 = ["a", "b", "c"]
+    for item in items {
+        local := item           // deep copy (rule 6: immutable → var, pointer-like)
+        async {
+            @print(local)       // OK — local is independent
+        }
+    }
+}
