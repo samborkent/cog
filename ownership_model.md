@@ -321,34 +321,104 @@ main : proc() = {
 Without this rule, the callee could hold a reference aliasing the same data
 that the caller continues to mutate through `r` — unsound.
 
-### 21. Struct fields inherit the `var`/`dyn`/immutable property of the enclosing variable.
+### 21. Struct fields inherit the `var`/`dyn`/immutable property of the enclosing variable and support partial moves.
 
-Struct fields do not carry independent ownership annotations. The `var` or `dyn`
-qualifier applies to the entire struct value. A field access inherits the
-qualifier from the root variable.
+Struct fields do not carry independent `var`/`dyn` annotations — those
+qualifiers are inherited from the enclosing variable. Ownership is tracked
+per-field. Moving a field out of a `var` struct consumes only that field; the
+struct variable and its other fields remain alive.
 
 ```go
-Container ~ struct { data : []int64 }
+Container ~ struct { data : []int64; label : utf8 }
 
 main : proc() = {
-    c : var Container = Container{data: @slice<int64>(3)}
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
     c.data[0] = 1            // OK — c is var, so c.data is also var
 
-    d := c.data              // rule 4: var → immutable consumes c
-    // c is dead here        // the WHOLE struct is consumed
+    d := c.data              // c.data is consumed (var → immutable)
+    // c.data is dead here   // but c itself is still alive
+    // c.label is still alive
+
+    @print(c.label)          // OK — other fields accessible
 }
 ```
 
-An immutable struct with a field typed as `var []int64` is a compile error —
-fields cannot declare ownership:
+When a specific field is accessed via the struct variable (e.g. `c.label`),
+only that field's liveness matters. Using `c` as a whole (e.g. passing to a
+`proc`) requires all fields to be alive:
 
 ```go
-// compile error — fields cannot be var:
-Bad ~ struct { data : var []int64 }
+main : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+
+    d := c.data              // c.data consumed
+
+    // worker(c)             // compile error — c.data is dead
+    // c.data = @slice<int64>(5)  // OK — re-assign
+    // worker(c)             // now OK — all fields alive again
+}
 ```
 
-This also means there are no partial moves: accessing a field of a `var` struct
-consumes the entire struct (or borrows it, depending on context).
+When all fields are consumed, the struct variable itself becomes dead:
+
+```go
+main : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    d := c.data              // c.data consumed
+    s := c.label             // c.label consumed (shallow copy — primitive)
+    // c is dead here        // all fields consumed
+}
+```
+
+Passing a `var` struct to a `proc` consumes the entire struct — all fields are
+transferred as a unit.
+
+```go
+main : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    worker_proc(c)           // entire c consumed (rule 10/12)
+    // c is dead here
+}
+```
+
+A `func` call borrows the entire struct — no field can be mutated during the
+call, and all fields are alive afterward.
+
+```go
+read : func(c : Container) = { /* read-only */ }
+
+main : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    read(c)                  // c borrowed entirely (rule 9)
+    c.data[0] = 1            // OK — borrow released
+}
+```
+
+Partial moves interact with borrowing:
+
+- **Whole-struct borrow** (passing to `func`): no field can be moved out,
+  and field-level mutation is blocked for the call duration.
+- **Per-field borrow** (taking `&c.data`): only that specific field is
+  borrowed. Other fields can be read and mutated freely. This follows from
+  rule 31 (index borrows) extended to named fields.
+- **Move-out after whole-struct borrow**: `"cannot move c.data: c is borrowed"`
+- **Whole-struct use after field moved out**: `"cannot move c: field 'data' is already moved out"`
+
+When a moved-out field is re-assigned (`c.data = @slice<int64>(5)`), the field
+becomes alive again. The struct as a whole can then be borrowed, passed, or
+moved normally.
+
+Error messages for common violations:
+
+| Violation | Error message |
+|-----------|---------------|
+| Use of a moved-out field | `c.data: field 'data' moved out here` |
+| Pass whole struct after partial move | `cannot move c: field 'data' is already moved out` |
+| Borrow whole struct after partial move | `cannot borrow c: field 'data' is moved out` |
+| Move field while struct is borrowed | `cannot move c.data: c is borrowed` |
+
+The `&items[i]` case (rule 31) is a natural extension of partial borrows —
+only the indexed element is borrowed, not the entire container.
 
 ### 22. Proc parameters are owned bindings; re-passing to another proc consumes them.
 
@@ -525,6 +595,23 @@ main : proc() = {
 Since only one match arm executes, the value is consumed in the matching arm
 and dropped in the others.
 
+If the match binds are immutable (the match arm does not declare `var`), the
+enum value is borrowed (not consumed). The enum variable is alive after the
+match. This follows the same `func`/`proc` distinction (rules 9, 12): an
+immutable binding borrows; a `var` binding consumes.
+
+```go
+match r {
+    case Ok(val) => {    // val is immutable — r is borrowed
+        @print(val)
+    }
+    case Err(msg) => {   // msg is immutable — r is borrowed
+        @print(msg)
+    }
+}
+// r is alive here
+```
+
 ### 30. Arena-allocated data cannot be passed to contexts that outlive the arena.
 
 Arena allocation is an explicit optimization. Passing arena-allocated memory to
@@ -605,31 +692,7 @@ main : proc() = {
 }
 ```
 
-## Proposed rules (not yet finalized)
-
-The following rules address edge cases identified during model validation and
-are proposed for addition. They are logically sound but have not been
-integrated into the official ruleset above.
-
-### P1. Self-referential struct types are rejected at the type level.
-
-A struct that (directly or indirectly) contains a `var &` or `&` reference to
-its own type creates an ownership cycle that cannot be tracked at compile time.
-
-```go
-// compile error — self-referential:
-Node ~ struct { value : int64; next : var &Node }
-```
-
-The compiler must detect cycles in struct definitions involving reference types.
-
-### P2. `unsafe` operations bypass ownership guarantees.
-
-If the language adds an `unsafe` package or `@unsafe` builtin, all ownership
-guarantees are void within those operations. This must be explicitly stated so
-users understand the safety boundary.
-
-### P3. Map/set insertion consumes the key/value.
+### 34. Map/set insertion consumes the key/value.
 
 When inserting into a `var` map or set, the key and value are consumed (the
 collection owns its contents).
@@ -646,7 +709,7 @@ main : proc() = {
 }
 ```
 
-### P4. Chained method calls borrow the receiver through the chain.
+### 35. Chained method calls borrow the receiver through the chain.
 
 When methods are chained (e.g., `x.foo().bar().baz()`), the receiver `x` is
 borrowed for the duration of the entire chain if any intermediate method returns

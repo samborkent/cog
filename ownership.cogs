@@ -1,475 +1,171 @@
-// ownership.cogs — annotated edge-case analysis of the Cog ownership model
+// ownership.cogs — edge-case analysis of the Cog ownership model
 //
-// This file explores scenarios that test the boundaries of the model.
-// Each case is annotated with whether it SHOULD compile, and why.
+// Scenarios that test the boundaries of the model. Each is annotated with
+// whether it SHOULD compile, referencing the relevant rule.
 //
-// Holes marked RESOLVED have been addressed by new rules in ownership_model.md.
-// Holes marked PROPOSED have draft rules (P1–P4) pending integration.
+// All holes from the original audit are addressed by rules 1-35 in
+// ownership_model.md. This file captures the remaining nuance cases that
+// the model handles correctly but which may not be obvious at first glance.
 
 Point ~ struct { x : int64; y : int64 }
+Container ~ struct { data : []int64; label : utf8 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 1: && double reference
-// ────────────────────────────────────────────────────────────────────────────
-// && does not exist in the type system. & of & is rejected by rule 1.
-// No && type can appear. VOID.
+// ── 1. Partial move + re-assignment revives the struct ──
+// After c.data is consumed, assigning a new value to c.data makes the
+// struct whole again. It can then be passed to a proc.
 
-r : &Point = @ref(Point{1, 2})
-// q := &r        // compile error (rule 1)
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 2: aliasing via func call after & consumption
-// ────────────────────────────────────────────────────────────────────────────
-// p is consumed by &p in rule 2, so no aliasing is possible. VOID.
-
-p : var Point = Point{1, 2}
-r_imm := &p        // p consumed, r_imm is immutable &
-// p is dead
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 3: struct field access with var
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 21: fields inherit the var/dyn/immutable property of the enclosing
-// variable. Accessing c.data where c is var consumes c (rule 4-style).
-
-Container ~ struct { data : []int64 }
-
-main_h3 : proc() = {
-    c : var Container = Container{data: @slice<int64>(3)}
-    c.data[0] = 1             // OK — c is var, so c.data is mut accessible
-
-    d := c.data               // rule 4: var → immutable consumes c
-    // c is dead here
+main_revive : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    d := c.data                     // c.data consumed
+    // worker(c)                    // compile error — c.data dead
+    c.data = @slice<int64>(5)       // re-assign — c.data alive again
+    worker(c)                       // OK — all fields alive
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 4: partial moves from struct fields
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 21: fields cannot be var/dyn themselves. No partial moves.
-// Accessing any field consumes (or borrows) the entire struct.
+worker : proc(data : Container) = { /* ... */ }
 
-// compile error — fields cannot be var:
-// Bad ~ struct { data : var []int64 }
+// ── 2. Partial borrow + mutate other field ──
+// When passed to a func, the whole struct is borrowed. But when only
+// a specific field is accessed (e.g. &c.data), the borrow is narrower.
 
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 5: pointer-like type determination
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 32: pointer-like is resolved transitively through aliases and generics.
-// Options (int64?) are structs wrapping the inner type — the runtime inspects
-// fields. At transpile time, if static analysis shows all fields are basic,
-// a simple assignment is used instead of cog.Copy.
+main_partial_borrow : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
 
-// Pointer-like: slice, map, set, struct with pointer-like fields
-// Primitive: int, float, bool, string, arrays of primitives, structs of primitives
-// Transitively determined through type aliases and generic instantiation (rule 32).
+    r := &c.data                    // borrows c.data specifically (rule 31)
+    c.label = "bye"                 // OK — c.label not borrowed
 
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 6: same var passed to two params of one func
-// ────────────────────────────────────────────────────────────────────────────
-// Sequential calls: borrow released between calls.
-// Same var to two params of one call: two read-only borrows — OK.
-// See rule 9.
-
-update : func(p : Point) = { /* read-only */ }
-
-main_h6 : proc() = {
-    pt : var Point = Point{1, 2}
-    update(pt)       // pt borrowed
-    update(pt)       // OK — first borrow released
-    pt.x = 2
+    // r must die before c.data can be mutated again
+    @print(r[0])
+    c.data[0] = 99                  // OK — r is no longer used
 }
 
-cmp : func(a : Point, b : Point) bool = { a.x == b.x }
-
-main_h6b : proc() = {
-    pt : var Point = Point{1, 2}
-    result := cmp(pt, pt)    // OK — two read-only borrows of pt
-    pt.x = 3                  // OK — borrow released
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 7: proc immutable param consumed even for sync procs
-// ────────────────────────────────────────────────────────────────────────────
-// This is conservative by design (rule 12). An optional future optimization
-// could distinguish sync vs. async proc to relax this. For now, accepted.
-
-printer : proc(msg : []utf8) = { @print(msg) }
-
-main_h7 : proc() = {
-    m : var []utf8 = "hello"
-    printer(m)        // m consumed (rule 12 — conservative)
-    // m is dead
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 8: proc param re-passed to another proc
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 22: proc parameters are owned bindings. Re-passing to another proc
-// transfers ownership — the outer param is consumed.
-
-worker : proc(data : var []int64) = { data[0] = 99 }
-
-middleman : proc(data : var []int64) = {
-    worker(data)            // data consumed by worker
-    // data is dead here
-}
-
-main_h8 : proc() = {
-    buf : var []int64 = @slice<int64>(3)
-    middleman(buf)          // buf consumed
-    // buf is dead
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 9: async inside block expression
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 26: if a borrow-scope (block, for-body) contains an async closure that
-// captures a var outer variable, the variable is CONSUMED (not borrowed).
-
-main_h9 : proc() = {
-    x : var int64 = 1
-    y := {
-        async { @print(x) }   // x consumed by async closure (rule 26)
-        42
-    }
-    // x is dead here (consumed, not borrowed)
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 10: dyn + async — no ownership conflict
-// ────────────────────────────────────────────────────────────────────────────
-// dyn reads always produce independent copies (deep copies for pointer-like).
-// Each read from a dyn variable gets its own data. No race possible.
-// Rule 16: copy on read and write.
-
-main_h10 : proc() = {
-    data : dyn []utf8 = ["secret"]
-    async {
-        local := data       // each read of dyn produces a copy
-        @print(local)       // independent from parent
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 11: nested for loops over same variable
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 27: borrow counter supports nesting. Both loops read-only.
-
-main_h11 : proc() = {
-    items : var []int64 = []int64{1, 2, 3}
-    for outer in items {
-        for inner in items {     // OK — two read-only borrows
-            @print(inner)
-        }
-    }
-    items[0] = 99                // OK
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE 12: deep copy cost for element copy in for+async
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 32 determines deep vs shallow at compile/instantiation time.
-// For pointer-like types, deep copy is required for soundness.
-// Shallow copy would be a race condition. This is accepted.
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE A: conditional branch consumption
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 24: consumption in ANY branch kills the variable after the conditional.
-
-main_hA : proc() = {
-    data : var []int64 = @slice<int64>(3)
-    if true {
-        worker(data)        // consumed
-    } else {
-        @print(data[0])     // borrowed
-    }
-    // data is dead here (conservative)
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE B: loop-carried consumption
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 25: consumed inside loop body → dead for subsequent iterations.
-
-main_hB_bad : proc() = {
-    data : var []int64 = @slice<int64>(3)
-    for _ in 0..10 {
-        // worker(data)     // compile error: dead after first iteration
-    }
-}
-
-main_hB_good : proc() = {
-    for _ in 0..10 {
-        data : var []int64 = @slice<int64>(3)  // fresh each iteration
-        worker(data)
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE C: struct field mutation through immutable &
-// ────────────────────────────────────────────────────────────────────────────
-// r := &p produces &Point (immutable). r.x = 5 is blocked by the type system.
-// Sound by rule 2 + type system.
-
-// ────────────────────────────────────────────────────────────────────────────
-// PROPOSED HOLE D: self-referential struct
-// ────────────────────────────────────────────────────────────────────────────
-// Rule P1: self-referential structs are rejected at the type level.
-
-// compile error (rule P1):
-// Node ~ struct { value : int64; next : var &Node }
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE E: var & → & conversion
-// ────────────────────────────────────────────────────────────────────────────
-// q := r (where r is var &Point) assigns a var to immutable — rule 4 applies.
-// r is consumed. q gets the reference. The underlying data has one owner.
-
-main_hE : proc() = {
-    pt : var Point = Point{1, 2}
-    r : var &Point = &pt        // pt consumed
-    // pt is dead
-    q : &Point = r              // r consumed (rule 4)
-    // r is dead
-    q.x = 10                    // OK — but wait, q is immutable &Point
-    // Actually this should be a compile error — q is immutable
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// PROPOSED HOLE F: map/set insertion consumes key/value
-// ────────────────────────────────────────────────────────────────────────────
-// Rule P3: map/set insertion consumes the key and value.
-
-main_hF : proc() = {
-    m : var map[utf8]var []int64 = @map<utf8, []int64>()
-    key : utf8 = "items"
-    val : var []int64 = @slice<int64>(3)
-
-    m[key] = val            // both consumed (rule P3)
-    // key is dead
-    // val is dead
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE G: returning borrowed references to locals
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 23: returning & to a local is a compile error.
-
-// compile error (rule 23):
-// bad : func() &Point = {
-//     p : var Point = Point{1, 2}
-//     @ref(p)
-// }
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE H: method receivers
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 28: method receivers follow the same rules as regular parameters.
-
-Foo ~ struct { val : []int64 }
-
-Foo.Process : proc(self : var &Foo) = { /* ... */ }
-
-main_hH : proc() = {
-    f : var Foo = Foo{val: @slice<int64>(3)}
-    f.Process()             // f consumed (rule 28)
-    // f is dead
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE I: type alias ownership semantics
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 32: the compiler resolves through type aliases. MySlice ~ []int64
-// is pointer-like because []int64 is a slice.
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE J: generic type ownership
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 32: determined at instantiation time. Box<int64> is primitive,
-// Box<[]int64> is pointer-like.
-
-// ────────────────────────────────────────────────────────────────────────────
-// PROPOSED HOLE K: chained method calls
-// ────────────────────────────────────────────────────────────────────────────
-// Rule P4: chained methods borrow the receiver through the chain.
-
-// ────────────────────────────────────────────────────────────────────────────
-// PROPOSED HOLE L: unsafe bypasses ownership
-// ────────────────────────────────────────────────────────────────────────────
-// Rule P2: unsafe operations void all ownership guarantees.
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE M: dyn + proc param — conflict resolved
-// ────────────────────────────────────────────────────────────────────────────
-// dyn values are COPIED on read. Passing to a proc consumes the copy.
-// The context-stored value is unaffected.
-
-main_hM : proc() = {
-    x : dyn []utf8 = ["hello"]
-    worker(x)           // x is read (deep copy), copy consumed by worker
-    // x in context is unaffected
-    // But: x is dyn, so it's read from context each time.
-    // After the read + consume, the context value still exists.
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE N: multiple async closures capturing same var
-// ────────────────────────────────────────────────────────────────────────────
-// First capture consumes the var. Second capture sees it dead. Correct.
-
-// compile error:
-// main_hN_bad : proc() = {
-//     x : var []utf8 = "shared"
-//     async { @print(x) }   // x consumed
-//     async { @print(x) }   // x already dead
-// }
-
-// User must copy before the first capture:
-main_hN_good : proc() = {
-    x : var []utf8 = "shared"
-    copy : var []utf8 = x           // var → var: consumed (rule 19)
-    // x is dead, copy owns data
-    async { @print(copy) }           // copy consumed by async
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE O: defer + ownership
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 33: defer consumes var variables (like async closure, rule 14).
-
-main_hO : proc() = {
-    f : var File = open("file.txt")
-    defer close(f)           // f consumed by defer (rule 33)
-    // f is dead
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE P: index expression ownership
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 31: reading items[i] copies and borrows items momentarily.
-// &items[i] extends the borrow for the reference's lifetime.
-
-main_hP : proc() = {
-    items : var []Point = [Point{1,2}, Point{3,4}]
-    p := items[0]               // items borrowed, p is copy
-    p.x = 99                    // OK — independent
-    items[1].x = 7              // OK — borrow released
-
-    r := &items[0]              // items borrowed for r's lifetime
-    // items is dead until r is no longer used
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE Q: returning ownership from proc
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 23: returning a value from a proc transfers ownership to the caller.
-
-main_hQ : proc() = {
-    data := maker()
-    data[0] = 99                // OK — data owns the slice
-}
-
-maker : proc() var []int64 = {
-    result : var []int64 = @slice<int64>(3)
-    result                        // ownership transfers to caller
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE R: all branches consume → dead after
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 24 sub-case: ALL branches consume → dead after. OK.
-
-main_hR : proc() = {
-    data : var []int64 = @slice<int64>(3)
-    if true {
-        worker(data)
-    } else {
-        worker(data)
-    }
-    // data is dead (consumed in all branches)
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE S: break releases borrow
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 17 + Rule 27: borrow scope = for-statement scope. break, return,
-// or normal exit all release the borrow.
-
-main_hS : proc() = {
-    items : var []int64 = []int64{1, 2, 3}
-    for item in items {
-        if item == 2 { break }
-    }
-    items[0] = 99    // OK — borrow released by break
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE T: return inside block expression
-// ────────────────────────────────────────────────────────────────────────────
-// return ends the proc, so the block borrow is released by proc exit.
-// Sound by rule 13 (block borrow ends with block/proc) + rule 23.
-
-main_hT : proc() = {
-    x : var int64 = 1
-    y := {
-        return           // proc exits — borrow released
-        @print(x)
-        42
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE U: enum variant payloads
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 29: destructuring a var enum transfers payload ownership to match arm.
+// ── 3. Enum match without consumption (borrow match) ──
+// Rule 29 says a var enum transfers payload ownership when matched.
+// But if the match only borrows (the match binds are immutable), the
+// enum variable should survive.
 
 Result ~ enum<int8> {
     Ok := 0 with value : utf8;
     Err := 1 with msg : utf8
 }
 
-main_hU : proc() = {
+main_enum_borrow : proc() = {
+    r : var Result = Result.Ok("hello")
+    match r {
+        case Ok(val) => {           // val is immutable borrow
+            @print(val)
+        }
+        case Err(msg) => {
+            @print(msg)
+        }
+    }
+    // r is alive here — borrow released
+    // But: does the model distinguish "consume match" (rule 29) from
+    // "borrow match"? If match arms receive immutable bindings, the
+    // enum ought to be borrowed (rule 9 analog). This is a subtle
+    // distinction the model should clarify.
+}
+
+// ── 4. Arena allocation + partial move ──
+// Arena provenance is a property of the VALUE, not the variable.
+// If an arena-allocated struct has a field moved out, the field
+// value retains its arena provenance. The new owner is responsible
+// for the arena lifetime constraint (rule 30).
+
+main_arena_partial : proc() = {
+    arena := @new_arena()
+    c : var Container = Container{data: @arena_slice<int64>(arena, 3), label: "hello"}
+
+    d := c.data                     // partial move — d is arena-allocated
+
+    async worker_arena(d)           // compile error (rule 30) — d is arena
+    // @free_arena(arena)
+}
+
+worker_arena : proc(data : []int64) = {
+    @print(data[0])
+}
+
+// ── 5. Map key of var pointer-like type ──
+// If the key itself is var and pointer-like, insertion consumes it.
+// The value is also consumed. This is already covered by rule 34.
+
+main_map_key_var : proc() = {
+    m : var map[[]int64]utf8 = @map<[]int64, utf8>()
+    key : var []int64 = @slice<int64>(3)
+    key[0] = 42
+
+    m[key] = "found"                // key consumed (rule 34)
+    // key is dead
+}
+
+// ── 6. Chained method that mutates in-place ──
+// If sort() mutates self and returns &self, the chain borrows `items`
+// for the entire chain (rule 35). After the chain, items is alive.
+
+main_chain : proc() = {
+    items : var []int64 = []int64{3, 1, 2}
+    result := items.sort().reverse()
+    items[0] = 99                   // OK — borrow released
+}
+
+// ── 7. All-consumed match on var enum ──
+// When all match arms consume the payload, the enum variable is dead
+// after the match (rule 24 analog, via rule 29).
+
+main_enum_consume : proc() = {
     r : var Result = Result.Ok("hello")
     match r {
         case Ok(val) => {
-            // r consumed, val owns payload
+            @print(val)             // val borrowed (not consumed)
         }
         case Err(msg) => {
-            // r consumed, msg owns payload
+            @print(msg)
         }
     }
+    // r is alive — nothing was consumed
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// RESOLVED HOLE V: arena allocation + ownership
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 30: arena-allocated data cannot be passed to async contexts.
+// ── 8. defer + partial move ──
+// If defer closes over a var field, does it consume the whole struct
+// or just the field? Rule 33 says defer consumes var variables.
+// If the defer captures `c.data`, it should consume `c.data`
+// specifically (or the whole `c` if it references `c`).
 
-main_hV : proc() = {
-    arena := @new_arena()
-    data : var []int64 = @arena_slice<int64>(arena, 3)
-
-    // compile error (rule 30):
-    // async worker(data)
-
-    @free_arena(arena)
+main_defer_field : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    defer cleanup(c.data)           // c.data consumed by defer
+    // c.data is dead
+    // c.label is still alive
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// ADDITIONAL: deferred copy for for+async elements
-// ────────────────────────────────────────────────────────────────────────────
-// Rule 32 determines deep vs shallow. Pointer-like requires deep copy.
-// Future optimization: if the for loop is synchronous and the async closure
-// is the only capture, a shallow copy + explicit ownership transfer could
-// avoid the deep copy. For now, deep copy is the safe default.
+cleanup : proc(data : []int64) = { /* ... */ }
 
-main_extra : proc() = {
-    items : var []utf8 = ["a", "b", "c"]
-    for item in items {
-        local := item           // deep copy (rule 6: immutable → var, pointer-like)
-        async {
-            @print(local)       // OK — local is independent
-        }
+// ── 9. Conditional with partial moves ──
+// Rule 24 (consumption in ANY branch kills the variable) interacts
+// with partial moves (rule 21). If c.data is consumed in one branch
+// and borrowed in another, c.data is dead after the conditional.
+// But c.label remains alive.
+
+main_cond_partial : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    if true {
+        d := c.data                 // c.data consumed
+    } else {
+        @print(c.data[0])           // c.data borrowed
     }
+    // c.data is dead (rule 24 — conservative)
+    @print(c.label)                 // OK — label still alive
+}
+
+// ── 10. Return of var struct after partial move ──
+// Returning a struct where one field is dead should be a compile error,
+// just like passing to a proc.
+
+main_return_partial : proc() var Container = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    d := c.data                     // c.data consumed
+    // return c                     // compile error — c.data dead
+    c.data = @slice<int64>(5)       // re-assign
+    return c                        // OK — all fields alive
 }
