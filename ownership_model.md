@@ -5,256 +5,331 @@ shared, and will always be borrowed, as they are read-only.
 
 Mutable values and references follow the rules below.
 
-## Core ownership rules
+## Rules
 
-1.  Cannot take `&` reference of `&` variable reference.
-2.  Taking `&` reference of `var` mutable value will consume the variable.
-3.  Taking `*` dereferenced value of `var &` mutable reference will consume the
-    variable.
-4.  Assigning a `var` mutable value to a new immutable variable consumes the
-    variable.
-5.  `&` reference cannot be assigned to `var &`, need to take the `*`
-    dereferenced value first.
-6.  Immutable primitive types can simply be assigned to `var`.
-7.  Immutable pointer-like (structs with pointer-like fields, slices, maps,
-    sets) values will automatically deep copy when assigned to a mutable value.
-8.  `func` cannot have a `var` mutable argument.
-9.  `func` cannot be called `async`, and cannot call `async`.
-10. `var` mutable variables passed as argument to `func` immutable parameters
-    will be borrowed.
-11. `proc` can have `var` mutable parameters, argument variable is consumed,
-    ownership is transferred.
-12. `proc` can be called `async`, and can call `async`.
-13. `var` mutable variables passed as argument to `proc` immutable parameters
-    will be consumed.
-14. Sync closure will borrow `var` mutable variables.
-15. `async` closure consumes `var` mutable variables, ownership is transferred.
-16. Interfaces and `any` can only be used as generic type constraints, not as
-    value type.
-17. When a `dyn` variable gets assigned or used in another variable assignment
-    or declaration, its value gets copied via `cog.Copy` (deep copy for
-    pointer-like types, shallow for primitives).
-18. When an immutable or `var` variable gets assigned to `dyn` variables, its
-    value gets copied via `cog.Copy`.
-19. Reassigning a `var` variable drops the old value.
+### 1. Cannot take `&` reference of `&` variable reference.
 
-## Passing `var &` to a `func` (rule 10 detail)
-
-Passing a `var &` mutable reference to a `func` immutable parameter borrows
-the reference; the underlying value becomes borrowed (no mutation through
-the caller's reference for the duration of the call).
+An immutable reference cannot be re-referenced — there is no double-indirection.
 
 ```go
-update : func(point : &Point) = {
-    // point is an immutable & reference; read-only
+r : &Point = ...
+q := &r  // compile error
+```
+
+### 2. Taking `&` reference of `var` mutable value consumes the variable.
+
+```go
+p : var Point = Point{...}
+r := &p        // p is consumed; r is an immutable & reference to its data
+// p is dead here
+_ = p // compile error
+```
+
+### 3. Taking `*` dereferenced value of `var &` mutable reference consumes the variable.
+
+```go
+p : var Point = Point{...}
+r : var &Point = &p     // r owns mutable access
+// p is dead here
+val := *r               // r is consumed; val is a copy of the pointed-to value
+// r is dead here
+```
+
+### 4. Assigning a `var` mutable value to a new immutable variable consumes the variable.
+
+```go
+a : var []int64 = @slice<int64>(3)
+b := a         // ownership transfers from a to b; b is immutable
+// a is dead here
+```
+
+### 5. Immutable primitive types can simply be assigned to `var`.
+
+Primitives (int, float, bool, string, arrays of primitives, structs of only
+primitives) are value types. Assigning to `var` is a trivial copy.
+
+```go
+a : int64 = 42
+b : var int64 = a    // fine — simple copy, a stays alive
+```
+
+### 6. Immutable pointer-like values deep-copy when assigned to `var`.
+
+Pointer-like types are: slices, maps, sets, structs with pointer-like fields.
+Assigning an immutable value of such a type to a `var` variable performs an
+automatic `cog.Copy` deep copy.
+
+```go
+a := []int64{1, 2, 3}      // immutable slice
+b : var []int64 = a         // deep copy — a stays alive, b gets independent data
+b[0] = 99                   // only b's copy changes
+@print(a[0])                // 1 — unchanged
+```
+
+Without this rule, mutating `b` would corrupt the immutable `a`, breaking
+read-only guarantees.
+
+### 7. `func` cannot have `var` mutable parameters.
+
+A `func` is a pure function — it cannot mutate its arguments.
+
+```go
+// compile error:
+bad : func(x : var int64) = { x = 1 }
+
+// correct:
+good : func(x : int64) int64 = { x + 1 }
+```
+
+### 8. `func` cannot be called `async` and cannot call `async`.
+
+A `func` is synchronous and pure. It must not launch concurrent work.
+
+```go
+// compile error:
+f : func() = {
+    async otherProc()
 }
 
+// also compile error:
+async f()
+```
+
+### 9. `var` mutable variables passed as argument to `func` immutable parameters are borrowed.
+
+The variable is available again after the call completes. The callee cannot
+mutate it.
+
+```go
+update : func(p : Point) = { /* read-only */ }
+
 main : proc() = {
-    p := Point{ ... } // immutable
-    r : var &Point = &p   // r owns mutable access to p
+    pt : var Point = Point{...}
+    pt.x = 1
 
-    update(r)             // r is *borrowed* — update can read but not mutate
-                          // p is still alive, r is not consumed
-
-    // After the call, r can be used for mutation again
-    r.x = 10
+    update(pt)       // pt is borrowed during the call
+    pt.x = 2         // OK — borrow is released
 }
 ```
 
-Without this rule:
-```go
-update : func(point : &Point) = { /* read-only */ }
-
-main : proc() = {
-    p : var Point = ...
-    r : var &Point = &p      // r has write access to p
-
-    update(r)                // If r were not tracked as borrowed,
-                             // update could mutate p through a copy.
-                             // Meanwhile r still has a live reference
-                             // to the same data — aliased mutation.
-    r.x = 10                 // r.x and update's `point` would alias
-}
-```
-
-## Assigning `var` to `var` transfers ownership
-
-```go
-main : proc() = {
-    a : var []int64 = @slice<int64>(3)
-    a[0] = 1
-
-    b : var []int64 = a     // ownership of the underlying slice data
-                            // transfers from a to b
-    // a is now dead — cannot use a here
-
-    b[0] = 2                // OK
-}
-```
-
-Without this rule, both `a` and `b` would alias the same slice data.
-Mutating through `b` would affect `a`, violating single-writer guarantees.
-
-## Assigning immutable to new `var` declaration copies
-
-```go
-main : proc() = {
-    a := []int64{1, 2, 3}       // immutable slice
-    b : var []int64 = a         // deep copy — a stays alive, b gets its own data
-
-    b[0] = 99                   // only b's copy is mutated
-
-    @print(a[0])                // 1 — a is unchanged
-}
-```
-
-Without this rule, `b` would alias `a`'s data, meaning mutating `b[0]`
-would corrupt the immutable `a` — a soundness hole.
-
-## Reassigning a `var` variable drops the old value
-
-```go
-main : proc() = {
-    x : var []int64 = @slice<int64>(3)
-    x[0] = 1
-
-    x = @slice<int64>(5)        // old slice data is dropped/freed
-    x[0] = 2                    // new data is independent
-}
-```
-
-Without this rule, the old slice memory would leak.
-
-## Option value access (`x!` after `if x?`) consumes the option
-
-```go
-main : proc() = {
-    x : int64? = 42
-
-    if x? {
-        val := x!       // consumes the inner value from x
-                        // x is now in "none" state (Set = false)
-
-        @print(val)     // 42
-    }
-
-    // x still exists, but its Value is no longer valid
-}
-```
-
-The transpiler already emits `cog.Option[T]{Value: expr, Set: true}` for
-assignments, and `x!` maps to `x.Value`. After consuming the inner value,
-the symbol table should mark `x` as having `Set = false` to prevent
-double-access.
-
-## Result error access (`x!`) after check
-
-```go
-readFile : proc(path utf8) utf8 ! IOError = { ... }
-
-main : proc() = {
-    contents : utf8 ! IOError = readFile("foo.txt")
-
-    if contents? { // is contents error?
-        @print(contents!)       // error access
-    } else {   
-        @print(contents)  // value access
-    }
-}
-```
-
-The transpiler's suffix `!` maps to `.Error` for results. After consuming
-either branch, the result should be marked consumed.
-
-## `for` iteration borrows the iterable
-
-```go
-main : proc() = {
-    items : var []int64 = []int64{1, 2, 3}
-
-    for item in items {         // items is borrowed during iteration
-        @print(item)
-    }
-
-    items[0] = 99               // OK — iteration is done, ownership returned
-}
-```
-
-```go
-main : proc() = {
-    items : var []int64 = []int64{1, 2, 3}
-
-    for item in items {
-        // items is borrowed — cannot mutate during iteration
-        // items[0] = 99  ← compile error: items is borrowed
-        @print(item)
-    }
-}
-```
-
-Without this rule, mutating the collection during iteration could cause
-use-after-free or iteration over invalidated positions (e.g. map insertion
-causing rehash, slice append causing reallocation).
-
-## `async` proc with `var` params — ownership is transferred once
+### 10. `proc` can have `var` mutable parameters. The argument variable is consumed — ownership transfers.
 
 ```go
 worker : proc(data : var []int64) = {
-    // data is owned by this proc
-    data[0] = 99
+    data[0] = 99     // worker owns data
 }
 
 main : proc() = {
-    buf : var []int64 = @slice<int64>(5)
-
-    async worker(buf)   // buf is consumed — ownership transferred to worker
+    buf : var []int64 = @slice<int64>(3)
+    worker(buf)      // buf is consumed; ownership transferred to worker
     // buf is dead here
 }
 ```
 
-When called with `async`, the argument is consumed at the call site.
-The async closure does NOT re-capture it (it was already transferred).
-
-## `dyn` variables copy via `cog.Copy`
+### 11. `proc` can be called `async` and can call `async`.
 
 ```go
-MyStruct ~ struct {
-    data : []utf8
+worker : proc() = {
+    async otherWorker() // OK
 }
 
 main : proc() = {
-    dyn s : MyStruct = MyStruct{data: []utf8{"hello"}}
-
-    // Reading dyn copies the value
-    local := s
-    // `local` is a deep copy of `s` — cog.Copy is invoked under the hood for complex types
-
-    // Assigning to dyn also copies
-    s = local
+    async worker()    // OK
 }
 ```
 
-Since `dyn` uses `context.WithValue` under the hood, values flow through
-interface{}, which copies the interface header but not the pointed-to data.
-`cog.Copy` ensures pointer-like fields are deep-copied so the original
-scope cannot mutate data visible through a `dyn` read elsewhere.
+### 12. A `proc` always takes ownership — even immutable `proc` parameters consume the argument.
 
-## Tuple ownership (future work)
+A `proc` can outlive its caller (via `async`), so the caller cannot retain
+access to the argument after the call returns. The argument is consumed
+regardless of the parameter's mutability.
 
-Tuples are not yet fully worked out. When implemented, tuple element access
-should consume individual elements (like destructuring), and assigning a
-tuple to a variable should deep-copy the elements.
+```go
+logger : proc(msg : []utf8) = {
+    // msg is immutable inside logger, but owned
+}
 
-## Key types and their ownership behavior
+main : proc() = {
+    m : var []utf8 = "hello"
 
-| Type | Assignment to `var` | Pass to `func` param | Pass to `proc` param | `dyn` copy |
-|------|--------------------|----------------------|----------------------|-----------|
-| Primitive (int, float, bool, string) | Shallow copy | Borrow | Consume | Shallow copy |
-| Array of primitives | Shallow copy | Borrow | Consume | Shallow copy |
-| Array of pointer-like | Deep copy | Borrow | Consume | Deep copy |
-| Struct (value fields only) | Shallow copy | Borrow | Consume | Shallow copy |
-| Struct (with pointer fields) | Deep copy | Borrow | Consume | Deep copy |
-| Slice, Map, Set | Deep copy | Borrow | Consume | Deep copy |
-| Option, Result, Either | Deep copy | Borrow | Consume | Deep copy |
-| `&` reference | Copied (shared) | Borrow (read-only) | N/A | N/A |
+    logger(m)        // m is consumed — logger might be async, so
+    // m is dead here // the caller cannot assume m survives
+}
+```
+
+To see why consumption is necessary even for immutable parameters:
+
+```go
+logger : proc(msg : []utf8) = {
+    async transmit(msg)     // msg used after caller returns
+}
+
+main : proc() = {
+    buf : var []utf8 = @utf8("hello")
+    logger(buf)
+    // buf was not consumed → caller could reuse buf's memory
+    // while transmit(buf) in logger is still reading it
+}
+```
+
+### 13. A block expression borrows `var` mutable variables.
+
+A block expression (`{ stmts; expr }`) evaluates its statements and final
+expression, then yields the result. Block expressions are not first-class
+values — they cannot be assigned or returned.
+
+```go
+main : proc() = {
+    x : var int64 = 1
+    y := {              // x is borrowed during the block
+        @print(x)
+        42
+    }                   // x is alive again after the block
+    x = y               // OK
+}
+```
+
+### 14. An `async` closure consumes `var` mutable variables.
+
+An async closure runs in a separate goroutine and may outlive the caller.
+`var` variables referenced inside are moved into the closure — ownership
+transfers permanently. Async closures are not first-class values and cannot
+be assigned or returned.
+
+```go
+main : proc() = {
+    x : var int64 = 1
+    async { @print(x) } // x is consumed, moved into async closure
+    // x is dead here
+}
+```
+
+### 15. Interfaces and `any` can only be used as generic type constraints, not as value types.
+
+```go
+// OK — constraint only:
+Box ~ struct[T ~ any] { value : T }
+
+// compile error — any used as value type:
+x : any = 42
+```
+
+### 16. `dyn` variables copy on read and write.
+
+Since `dyn` is implemented with Go's `context.WithValue`, values flow through
+`any`, which copies the interface header but not the pointed-to data.
+
+For basic types (primitives, structs of primitives), the copy is trivial:
+
+```go
+dyn x : int64 = 42
+y := x              // simple value copy
+y = 99              // x is unaffected
+```
+
+For pointer-like types (slices, maps, structs with pointer fields), `cog.Copy`
+is used to deep-copy:
+
+```go
+dyn s : []utf8 = ["hello"]
+local := s              // deep copy via cog.Copy
+local[0] = "bye"        // s is unaffected
+
+s = local               // also deep-copied on write
+```
+
+### 17. `for` iteration borrows the iterable.
+
+```go
+items : var []int64 = []int64{1, 2, 3}
+
+for item in items {     // items is borrowed during iteration
+    // items[0] = 99   ← compile error: items is borrowed
+    @print(item)
+}
+
+items[0] = 99           // OK — iteration done, borrow released
+```
+
+Without this rule, mutating the collection during iteration would cause
+use-after-free or iteration over invalidated positions (map rehash, slice
+reallocation).
+
+### 18. Elements captured into async closures during iteration must be owned.
+
+If an async closure is spawned inside a for-loop body, the iterable is
+borrow-live for the synchronous body — but any elements captured by the async
+closure must be owned, not borrowed from the iterable.
+
+```go
+items : var []utf8 = ["a", "b", "c"]
+
+for item in items {         // items is borrowed
+    async {                 // item is borrowed from items
+        @print(item)        // unsafe: item refers into items, which may
+                            // be freed or mutated after the loop ends
+    }
+}
+// compile error: cannot borrow item into async closure
+```
+
+To safely capture individual elements, the element must be copied first:
+
+```go
+for item in items {
+    local := item           // copy the element
+    async {
+        @print(local)       // OK — local is independent
+    }
+}
+```
+
+### 19. Assigning `var` to `var` transfers ownership.
+
+```go
+a : var []int64 = @slice<int64>(3)
+a[0] = 1
+
+b : var []int64 = a     // ownership transfers from a to b
+// a is dead here
+
+b[0] = 2                // OK
+```
+
+Without this rule, both would alias the same data — mutating `b` would
+unexpectedly affect `a`.
+
+### 20. Passing a `var &` mutable reference to a `func` immutable parameter borrows the reference.
+
+The underlying value is borrowed — the caller cannot mutate through its
+reference for the duration of the call.
+
+```go
+read : func(p : &Point) = { /* read-only */ }
+
+main : proc() = {
+    pt : var Point = Point{...}
+    r : var &Point = &pt        // r has mutable access
+    // pt is dead.
+
+    read(r)                     // r is borrowed
+    // r is alive again after the call
+    r.x = 10                    // OK
+}
+```
+
+Without this rule, the callee could hold a reference aliasing the same data
+that the caller continues to mutate through `r` — unsound.
+
+## Type behavior reference
+
+| Type | Assign to `var` | Pass to `func` | Pass to `proc` | `dyn` copy |
+|------|----------------|----------------|----------------|-----------|
+| Primitive (int, float, bool, string) | Shallow copy | Borrow | Consume | Shallow |
+| Array of primitives | Shallow copy | Borrow | Consume | Shallow |
+| Array of pointer-like elements | Deep copy | Borrow | Consume | Deep |
+| Struct (value fields only) | Shallow copy | Borrow | Consume | Shallow |
+| Struct (pointer-like fields) | Deep copy | Borrow | Consume | Deep |
+| Slice, Map, Set | Deep copy | Borrow | Consume | Deep |
+| `&` reference | Copied (shared) | Borrowed (read-only) | N/A | N/A |
 | `var &` reference | Consumed on deref | Borrowed | Consumed | N/A |
