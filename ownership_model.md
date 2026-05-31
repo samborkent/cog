@@ -5,15 +5,31 @@ shared, and will always be borrowed, as they are read-only.
 
 Mutable values and references follow the rules below.
 
+## Core principles
+
+The model is built on two fundamental distinctions:
+
+1. **`func` (pure function) vs `proc` (procedure)**: A `func` is synchronous and
+   read-only — it borrows arguments. A `proc` may be async — it always consumes
+   arguments.
+2. **Borrow vs consume**: A borrow is temporary (call duration, block duration).
+   A consume is permanent (ownership transfers, source is dead).
+
+The type system determines whether assignment to `var` is a shallow copy
+(primitives, structs of primitives, fixed arrays of primitives) or a deep copy
+(pointer-like types: slices, maps, sets, structs with pointer-like fields).
+See the [reference table](#type-behavior-reference) below.
+
 ## Rules
 
-### 1. Cannot take `&` reference of `&` variable reference.
+### 1. Immutable values are always borrowed.
 
-An immutable reference cannot be re-referenced — there is no double-indirection.
+Immutable values and references are read-only. They can be freely shared,
+copied, and passed — no ownership tracking needed.
 
 ```go
 r : &Point = ...
-q := &r  // compile error
+q := &r   // compile error — no double-indirection on immutable & reference
 ```
 
 ### 2. Taking `&` reference of `var` mutable value consumes the variable.
@@ -22,10 +38,9 @@ q := &r  // compile error
 p : var Point = Point{...}
 r := &p        // p is consumed; r is an immutable & reference to its data
 // p is dead here
-_ = p // compile error
 ```
 
-### 3. Taking `*` dereferenced value of `var &` mutable reference consumes the variable.
+### 3. Dereferencing `var &` mutable reference consumes the variable.
 
 ```go
 p : var Point = Point{...}
@@ -35,29 +50,31 @@ val := *r               // r is consumed; val is a copy of the pointed-to value
 // r is dead here
 ```
 
-### 4. Assigning a `var` mutable value to a new immutable variable consumes the variable.
+### 4. Assigning `var` to `var` transfers ownership.
 
 ```go
 a : var []int64 = @slice<int64>(3)
-b := a         // ownership transfers from a to b; b is immutable
+b : var []int64 = a     // ownership transfers from a to b
 // a is dead here
+b[0] = 2                // OK — b owns the data
 ```
 
-### 5. Immutable primitive types can simply be assigned to `var`.
+Without this rule, both would alias the same data — mutating `b` would
+unexpectedly affect `a`.
+
+### 5. Assigning immutable to `var` copies: shallow for primitives, deep for pointer-like types.
 
 Primitives (int, float, bool, string, arrays of primitives, structs of only
-primitives) are value types. Assigning to `var` is a trivial copy.
+primitives) are value types. Assigning to `var` is a trivial copy:
 
 ```go
 a : int64 = 42
 b : var int64 = a    // fine — simple copy, a stays alive
 ```
 
-### 6. Immutable pointer-like values deep-copy when assigned to `var`.
-
-Pointer-like types are: slices, maps, sets, structs with pointer-like fields.
-Assigning an immutable value of such a type to a `var` variable performs an
-automatic `cog.Copy` deep copy.
+Pointer-like types (slices, maps, sets, structs with pointer-like fields)
+require a deep copy. Assigning an immutable value of such a type to a `var`
+variable performs an automatic `cog.Copy`:
 
 ```go
 a := []int64{1, 2, 3}      // immutable slice
@@ -66,39 +83,27 @@ b[0] = 99                   // only b's copy changes
 @print(a[0])                // 1 — unchanged
 ```
 
-Without this rule, mutating `b` would corrupt the immutable `a`, breaking
-read-only guarantees.
+The compiler resolves pointer-like vs. primitive transitively through type
+aliases and generic instantiations. See the [reference table](#type-behavior-reference)
+and [rule 21](#21-the-compiler-resolves-pointer-like-vs-primitive-transitively-including-through-type-aliases-and-generics) for details.
 
-### 7. `func` cannot have `var` mutable parameters.
-
-A `func` is a pure function — it cannot mutate its arguments.
+### 6. `func` is pure: no `var` params, no `async`, no mutation.
 
 ```go
-// compile error:
-bad : func(x : var int64) = { x = 1 }
+// compile errors:
+bad  : func(x : var int64) = { x = 1 }
+bad2 : func() = { async otherProc() }
+bad3 : async someFunc()
 
 // correct:
 good : func(x : int64) int64 = { x + 1 }
 ```
 
-### 8. `func` cannot be called `async` and cannot call `async`.
+### 7. `func` borrows arguments.
 
-A `func` is synchronous and pure. It must not launch concurrent work.
-
-```go
-// compile error:
-f : func() = {
-    async otherProc()
-}
-
-// also compile error:
-async f()
-```
-
-### 9. `var` mutable variables passed as argument to `func` immutable parameters are borrowed.
-
-The variable is available again after the call completes. The callee cannot
-mutate it.
+A `var` argument passed to a `func` is borrowed for the duration of the call.
+The callee cannot mutate it, and the caller can use the variable again after
+the call returns.
 
 ```go
 update : func(p : Point) = { /* read-only */ }
@@ -106,39 +111,31 @@ update : func(p : Point) = { /* read-only */ }
 main : proc() = {
     pt : var Point = Point{...}
     pt.x = 1
-
     update(pt)       // pt is borrowed during the call
     pt.x = 2         // OK — borrow is released
 }
 ```
 
-### 10. `proc` can have `var` mutable parameters. The argument variable is consumed — ownership transfers.
+This includes `var &` mutable references passed to `func` — the reference is
+borrowed, and the caller can mutate through it again after the call:
 
 ```go
-worker : proc(data : var []int64) = {
-    data[0] = 99     // worker owns data
-}
+read : func(p : &Point) = { /* read-only */ }
 
 main : proc() = {
-    buf : var []int64 = @slice<int64>(3)
-    worker(buf)      // buf is consumed; ownership transferred to worker
-    // buf is dead here
+    pt : var Point = Point{...}
+    r : var &Point = &pt        // r has mutable access; pt is dead.
+
+    read(r)                     // r is borrowed
+    // r is alive again after the call
+    r.x = 10                    // OK
 }
 ```
 
-### 11. `proc` can be called `async` and can call `async`.
+Without this rule, the callee could hold a reference aliasing the same data
+that the caller continues to mutate through `r` — unsound.
 
-```go
-worker : proc() = {
-    async otherWorker() // OK
-}
-
-main : proc() = {
-    async worker()    // OK
-}
-```
-
-### 12. A `proc` always takes ownership — even immutable `proc` parameters consume the argument.
+### 8. `proc` always consumes arguments.
 
 A `proc` can outlive its caller (via `async`), so the caller cannot retain
 access to the argument after the call returns. The argument is consumed
@@ -151,9 +148,18 @@ logger : proc(msg : []utf8) = {
 
 main : proc() = {
     m : var []utf8 = "hello"
+    logger(m)        // m is consumed — logger might be async
+    // m is dead here
+}
+```
 
-    logger(m)        // m is consumed — logger might be async, so
-    // m is dead here // the caller cannot assume m survives
+This applies transitively: passing a proc parameter to another proc also
+consumes it:
+
+```go
+middleman : proc(data : var []int64) = {
+    worker(data)            // data consumed by worker
+    // data is dead here
 }
 ```
 
@@ -172,7 +178,49 @@ main : proc() = {
 }
 ```
 
-### 13. A block expression borrows `var` mutable variables.
+### 9. `proc` can be async; `func` cannot.
+
+```go
+worker : proc() = {
+    async otherWorker() // OK
+}
+
+main : proc() = {
+    async worker()    // OK
+    // someFunc()    // compile error: cannot call func as async
+}
+```
+
+### 10. Returning a value from a `proc` transfers ownership to the caller.
+
+A `proc` that returns a `var` type transfers ownership of the returned value to
+the caller. The caller receives an owned value.
+
+```go
+maker : proc() var []int64 = {
+    result : var []int64 = @slice<int64>(3)
+    result                          // ownership of result transfers to caller
+}
+
+main : proc() = {
+    data : var []int64 = maker()    // data owns the returned slice
+    data[0] = 99                    // OK
+}
+```
+
+A `proc` cannot return a `&` reference to a local variable — that would create
+a dangling pointer. `&` return types are only valid when the reference comes
+from a parameter.
+
+```go
+// compile error — returning reference to local:
+bad : func() &Point = {
+    p : var Point = Point{1, 2}
+    @ref(p)
+}
+```
+
+### 11. A block expression borrows `var` mutable variables.
 
 A block expression (`{ stmts; expr }`) evaluates its statements and final
 expression, then yields the result. Block expressions are not first-class
@@ -189,7 +237,7 @@ main : proc() = {
 }
 ```
 
-### 14. An `async` closure consumes `var` mutable variables.
+### 12. An `async` closure consumes `var` mutable variables.
 
 An async closure runs in a separate goroutine and may outlive the caller.
 `var` variables referenced inside are moved into the closure — ownership
@@ -204,7 +252,175 @@ main : proc() = {
 }
 ```
 
-### 15. Interfaces and `any` can only be used as generic type constraints, not as value types.
+### 13. `defer` reserves a `var` variable — the variable must survive intact to scope exit.
+
+A `defer` statement registers a call to be executed in reverse order when the
+enclosing scope exits. The deferred call will consume the variable when it
+executes. Since the deferred call runs *last* (at scope exit), the variable
+must survive all intervening code without being consumed or moved.
+
+The compiler checks this at the `defer` declaration point: the variable must
+be alive and remain alive through the rest of the scope. Any subsequent
+consumption, re-assignment, or move of the variable (or its reserved field)
+is a compile error — it would leave the variable dead before the defer runs.
+
+The compiler checks forward from the `defer` declaration: if any subsequent
+statement consumes or moves the variable (or its reserved field), the `defer`
+is a compile error — the deferred call would find the variable dead at scope
+exit.
+
+```go
+main : proc() = {
+    f : var File = open("file.txt")
+    defer close(f)        // OK — f is never consumed after this point
+    f.Read()              // OK — borrowing is fine
+}
+```
+
+```go
+main : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    defer cleanup(c.data)    // compile error — c.data is consumed below
+    c.data = @slice<int64>(5)
+}
+```
+
+If the variable was already consumed before the `defer`, the `defer` itself is
+a compile error:
+
+```go
+main : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    d := c.data                // c.data consumed
+    defer cleanup(c.data)      // compile error — c.data is already dead
+}
+```
+
+Multiple defers capturing the same variable are rejected. The first-to-execute
+defer (last in source order) reserves the variable; the other defer (earlier in
+source order) sees it already reserved:
+
+```go
+main : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    defer cleanup(c.data)   // compile error — c.data is reserved by the defer below
+    defer cleanup(c.data)   // reserves c.data (first-to-execute at scope exit)
+}
+```
+
+Field-level reservation follows partial-move semantics (rule 19): reserving
+`c.data` for a defer does not reserve `c.label`.
+
+```go
+main : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    defer cleanup(c.data)   // OK — c.label can still be used, no consumption of c.data after this
+    c.label = "bye"         // OK — c.label is not reserved
+}
+```
+
+### 14. An `async` closure inside a borrow-scope overrides the borrow with consumption.
+
+If a borrow-scope (block expression, for-loop body) contains an `async` closure
+that captures a `var` outer variable, the variable is consumed (not borrowed).
+The borrow is never released because the async closure outlives the borrow-scope.
+
+```go
+main : proc() = {
+    x : var int64 = 1
+    y := {
+        async { @print(x) }   // x consumed by async closure
+        42
+    }
+    // x is dead here (consumed, not borrowed)
+}
+```
+
+This overrides rules 11 (block borrows) and 15 (for borrows) when an async
+capture is present. The compiler must scan all nested statements in the
+borrow-scope for async closures before deciding borrow vs. consume.
+
+### 15. `for` iteration borrows the iterable.
+
+```go
+items : var []int64 = []int64{1, 2, 3}
+
+for item in items {     // items is borrowed during iteration
+    // items[0] = 99   ← compile error: items is borrowed
+    @print(item)
+}
+
+items[0] = 99           // OK — iteration done, borrow released
+```
+
+The borrow spans the entire loop construct, including nested loops over the
+same variable (read-only borrows are shareable):
+
+```go
+items : var []int64 = []int64{1, 2, 3}
+for outer in items {
+    for inner in items {   // OK — both are read-only borrows
+        @print(inner)
+    }
+}
+items[0] = 99              // OK — borrow released
+```
+
+The borrow count must be a counter (not a boolean flag) to support nesting.
+
+Elements captured into async closures during iteration must be owned — copied
+before capture:
+
+```go
+for item in items {
+    local := item           // copy the element
+    async {
+        @print(local)       // OK — local is independent
+    }
+}
+```
+
+### 16. Consumption is permanent across conditional branches.
+
+If a `var` variable is consumed in any branch of `if`/`else` or `match`, it is
+considered dead after the entire conditional — even if other branches only
+borrow it.
+
+```go
+main : proc() = {
+    data : var []int64 = @slice<int64>(3)
+    if cond {
+        worker(data)        // data consumed
+    } else {
+        @print(data[0])     // data borrowed
+    }
+    // data is dead here    // conservative: consumed in some branch
+}
+```
+
+Consumption is also permanent across loop iterations. A `var` consumed inside
+a loop body is dead for subsequent iterations:
+
+```go
+main : proc() = {
+    data : var []int64 = @slice<int64>(3)
+    for i in 0..10 {
+        worker(data)        // consumed on first iteration
+        // compile error: data is dead on second iteration
+    }
+}
+```
+
+To re-initialize each iteration, declare a fresh variable inside the loop:
+
+```go
+for i in 0..10 {
+    data : var []int64 = @slice<int64>(3)  // fresh each iteration
+    worker(data)
+}
+```
+
+### 17. Interfaces and `any` can only be used as generic type constraints, not as value types.
 
 ```go
 // OK — constraint only:
@@ -214,7 +430,7 @@ Box ~ struct[T ~ any] { value : T }
 x : any = 42
 ```
 
-### 16. `dyn` variables copy on read and write.
+### 18. `dyn` variables copy on read and write.
 
 Since `dyn` is implemented with Go's `context.WithValue`, values flow through
 `any`, which copies the interface header but not the pointed-to data.
@@ -238,90 +454,7 @@ local[0] = "bye"        // s is unaffected
 s = local               // also deep-copied on write
 ```
 
-### 17. `for` iteration borrows the iterable.
-
-```go
-items : var []int64 = []int64{1, 2, 3}
-
-for item in items {     // items is borrowed during iteration
-    // items[0] = 99   ← compile error: items is borrowed
-    @print(item)
-}
-
-items[0] = 99           // OK — iteration done, borrow released
-```
-
-Without this rule, mutating the collection during iteration would cause
-use-after-free or iteration over invalidated positions (map rehash, slice
-reallocation).
-
-### 18. Elements captured into async closures during iteration must be owned.
-
-If an async closure is spawned inside a for-loop body, the iterable is
-borrow-live for the synchronous body — but any elements captured by the async
-closure must be owned, not borrowed from the iterable.
-
-```go
-items : var []utf8 = ["a", "b", "c"]
-
-for item in items {         // items is borrowed
-    async {                 // item is borrowed from items
-        @print(item)        // unsafe: item refers into items, which may
-                            // be freed or mutated after the loop ends
-    }
-}
-// compile error: cannot borrow item into async closure
-```
-
-To safely capture individual elements, the element must be copied first:
-
-```go
-for item in items {
-    local := item           // copy the element
-    async {
-        @print(local)       // OK — local is independent
-    }
-}
-```
-
-### 19. Assigning `var` to `var` transfers ownership.
-
-```go
-a : var []int64 = @slice<int64>(3)
-a[0] = 1
-
-b : var []int64 = a     // ownership transfers from a to b
-// a is dead here
-
-b[0] = 2                // OK
-```
-
-Without this rule, both would alias the same data — mutating `b` would
-unexpectedly affect `a`.
-
-### 20. Passing a `var &` mutable reference to a `func` immutable parameter borrows the reference.
-
-The underlying value is borrowed — the caller cannot mutate through its
-reference for the duration of the call.
-
-```go
-read : func(p : &Point) = { /* read-only */ }
-
-main : proc() = {
-    pt : var Point = Point{...}
-    r : var &Point = &pt        // r has mutable access
-    // pt is dead.
-
-    read(r)                     // r is borrowed
-    // r is alive again after the call
-    r.x = 10                    // OK
-}
-```
-
-Without this rule, the callee could hold a reference aliasing the same data
-that the caller continues to mutate through `r` — unsound.
-
-### 21. Struct fields inherit the `var`/`dyn`/immutable property of the enclosing variable and support partial moves.
+### 19. Struct fields inherit the `var`/`dyn`/immutable property of the enclosing variable and support partial moves.
 
 Struct fields do not carry independent `var`/`dyn` annotations — those
 qualifiers are inherited from the enclosing variable. Ownership is tracked
@@ -343,19 +476,26 @@ main : proc() = {
 }
 ```
 
-When a specific field is accessed via the struct variable (e.g. `c.label`),
-only that field's liveness matters. Using `c` as a whole (e.g. passing to a
-`proc`) requires all fields to be alive:
+Partial moves interact with borrowing:
+
+- **Whole-struct borrow** (passing to `func`): no field can be moved out,
+  and field-level mutation is blocked for the call duration.
+- **Per-field borrow** (taking `&c.data`): only that specific field is
+  borrowed. Other fields can be read and mutated freely.
+- **Move-out after whole-struct borrow**: `"cannot move c.data: c is borrowed"`
+- **Whole-struct use after field moved out**: `"cannot move c: field 'data' is already moved out"`
+
+When a moved-out field is re-assigned (`c.data = @slice<int64>(5)`), the field
+becomes alive again. The struct as a whole can then be borrowed, passed, or
+moved normally.
 
 ```go
 main : proc() = {
     c : var Container = Container{data: @slice<int64>(3), label: "hello"}
-
-    d := c.data              // c.data consumed
-
-    // worker(c)             // compile error — c.data is dead
-    // c.data = @slice<int64>(5)  // OK — re-assign
-    // worker(c)             // now OK — all fields alive again
+    d := c.data                     // c.data consumed
+    // worker(c)                    // compile error — c.data is dead
+    c.data = @slice<int64>(5)       // re-assign — c.data alive again
+    worker(c)                       // OK — all fields alive
 }
 ```
 
@@ -371,42 +511,8 @@ main : proc() = {
 ```
 
 Passing a `var` struct to a `proc` consumes the entire struct — all fields are
-transferred as a unit.
-
-```go
-main : proc() = {
-    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
-    worker_proc(c)           // entire c consumed (rule 10/12)
-    // c is dead here
-}
-```
-
-A `func` call borrows the entire struct — no field can be mutated during the
-call, and all fields are alive afterward.
-
-```go
-read : func(c : Container) = { /* read-only */ }
-
-main : proc() = {
-    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
-    read(c)                  // c borrowed entirely (rule 9)
-    c.data[0] = 1            // OK — borrow released
-}
-```
-
-Partial moves interact with borrowing:
-
-- **Whole-struct borrow** (passing to `func`): no field can be moved out,
-  and field-level mutation is blocked for the call duration.
-- **Per-field borrow** (taking `&c.data`): only that specific field is
-  borrowed. Other fields can be read and mutated freely. This follows from
-  rule 31 (index borrows) extended to named fields.
-- **Move-out after whole-struct borrow**: `"cannot move c.data: c is borrowed"`
-- **Whole-struct use after field moved out**: `"cannot move c: field 'data' is already moved out"`
-
-When a moved-out field is re-assigned (`c.data = @slice<int64>(5)`), the field
-becomes alive again. The struct as a whole can then be borrowed, passed, or
-moved normally.
+transferred as a unit. A `func` call borrows the entire struct — no field can
+be mutated during the call, and all fields are alive afterward.
 
 Error messages for common violations:
 
@@ -417,157 +523,7 @@ Error messages for common violations:
 | Borrow whole struct after partial move | `cannot borrow c: field 'data' is moved out` |
 | Move field while struct is borrowed | `cannot move c.data: c is borrowed` |
 
-The `&items[i]` case (rule 31) is a natural extension of partial borrows —
-only the indexed element is borrowed, not the entire container.
-
-### 22. Proc parameters are owned bindings; re-passing to another proc consumes them.
-
-When a `proc` receives a parameter (whether `var` or immutable), that parameter
-is an owned binding. Passing it to another `proc` transfers ownership — the
-outer parameter becomes dead after the call.
-
-```go
-middleman : proc(data : var []int64) = {
-    worker(data)            // data consumed by worker
-    // data is dead here
-}
-```
-
-This follows the same rules as any other `var`-to-`proc` consumption
-(rules 10, 12). If the outer proc needs to keep its own copy, it must copy
-before the nested call.
-
-### 23. Returning a value from a `proc` transfers ownership to the caller.
-
-A `proc` that returns a `var` type transfers ownership of the returned value to
-the caller. The caller receives an owned value.
-
-```go
-maker : proc() var []int64 = {
-    result : var []int64 = @slice<int64>(3)
-    result                          // ownership of result transfers to caller
-}
-
-main : proc() = {
-    data : var []int64 = maker()    // data owns the returned slice
-    data[0] = 99                    // OK
-}
-```
-
-A `proc` cannot return a `&` reference to a local variable — that would create
-a dangling pointer.
-
-```go
-// compile error — returning reference to local:
-bad : func() &Point = {
-    p : var Point = Point{1, 2}
-    @ref(p)
-}
-```
-
-`&` return types are only valid when the reference comes from a parameter.
-
-### 24. Conditional branches: consumption in ANY branch kills the variable.
-
-If a `var` variable is consumed in any branch of `if`/`else` or `match`, it is
-considered dead after the entire conditional — even if other branches only
-borrow it.
-
-```go
-main : proc() = {
-    data : var []int64 = @slice<int64>(3)
-    if cond {
-        worker(data)        // data consumed
-    } else {
-        @print(data[0])     // data borrowed
-    }
-    // data is dead here    // conservative: consumed in some branch
-}
-```
-
-If ALL branches consume the variable, the compiler can note that. If NO branches
-consume it, the variable survives. If ANY branch consumes it, the variable is
-dead after the conditional.
-
-### 25. A `var` variable consumed inside a loop body is dead for subsequent iterations.
-
-```go
-main : proc() = {
-    data : var []int64 = @slice<int64>(3)
-    for i in 0..10 {
-        worker(data)        // consumed on first iteration
-        // compile error: data is dead on second iteration
-    }
-}
-```
-
-To re-initialize each iteration, the user must reassign inside the loop:
-
-```go
-for i in 0..10 {
-    data : var []int64 = @slice<int64>(3)  // fresh each iteration
-    worker(data)
-}
-```
-
-### 26. An `async` closure inside a borrow-scope (block, for-body) overrides the borrow with consumption.
-
-If a borrow-scope (block expression, for-loop body) contains an `async` closure
-that captures a `var` outer variable, the variable is consumed (not borrowed).
-The borrow is never released because the async closure outlives the borrow-scope.
-
-```go
-main : proc() = {
-    x : var int64 = 1
-    y := {
-        async { @print(x) }   // x consumed by async closure
-        42
-    }
-    // x is dead here (consumed, not borrowed)
-}
-```
-
-This overrides rule 13 (block borrows) and rule 17 (for borrows) when an async
-capture is present. The compiler must scan all nested statements in the
-borrow-scope for async closures before deciding borrow vs. consume.
-
-### 27. `for` loops borrow the iterable across the entire loop construct — including nested loops over the same variable.
-
-The iterable is shared (read-only) for the duration of the loop. Nested
-iteration over the same variable is permitted because both loops only read.
-
-```go
-items : var []int64 = []int64{1, 2, 3}
-for outer in items {
-    for inner in items {   // OK — both are read-only borrows
-        @print(inner)
-    }
-}
-items[0] = 99              // OK — borrow released
-```
-
-The borrow count must be a counter (not a boolean flag) to support nesting.
-
-### 28. Method receivers follow the same ownership rules as regular parameters.
-
-Methods are syntactic sugar for functions where the receiver is the first
-parameter. A `proc` method with a `var` receiver consumes the receiver value:
-
-```go
-Foo ~ struct { val : []int64 }
-
-Foo.Process : proc(self : var &Foo) = { ... }
-
-main : proc() = {
-    f : var Foo = Foo{...}
-    f.Process()             // f consumed (self is var &Foo)
-    // f is dead here
-}
-```
-
-A `func` method borrows the receiver for the duration of the call.
-
-### 29. Enum variant payloads follow struct-like ownership.
+### 20. Enum variant payloads follow struct-like ownership.
 
 When destructuring an enum variant via `match`, the payload value inherits the
 ownership qualifier of the matched value. A `var` enum transfers payload
@@ -597,7 +553,7 @@ and dropped in the others.
 
 If the match binds are immutable (the match arm does not declare `var`), the
 enum value is borrowed (not consumed). The enum variable is alive after the
-match. This follows the same `func`/`proc` distinction (rules 9, 12): an
+match. This follows the same `func`/`proc` distinction (rules 7, 8): an
 immutable binding borrows; a `var` binding consumes.
 
 ```go
@@ -612,48 +568,7 @@ match r {
 // r is alive here
 ```
 
-### 30. Arena-allocated data cannot be passed to contexts that outlive the arena.
-
-Arena allocation is an explicit optimization. Passing arena-allocated memory to
-an `async` closure or a `proc` that may outlive the arena creates dangling
-pointers. The compiler must reject this.
-
-```go
-main : proc() = {
-    arena := @new_arena()
-    data : var []int64 = @arena_slice<int64>(arena, 3)
-
-    // compile error — data is arena-allocated and may outlive arena:
-    async worker(data)
-
-    @free_arena(arena)
-}
-```
-
-Arena-allocated values can only be passed to synchronous contexts (synchronous
-`proc` calls, `func` calls) that complete before the arena is freed. The
-compiler must track which values originate from arena allocation.
-
-### 31. Index expressions borrow the container; `&items[i]` extends the borrow for the reference's lifetime.
-
-Reading `items[i]` copies the element out (for value types) and borrows `items`
-for the duration of the read. Taking a reference `&items[i]` borrows `items`
-for the lifetime of the resulting reference.
-
-```go
-main : proc() = {
-    items : var []Point = [Point{1,2}, Point{3,4}]
-    p := items[0]               // items borrowed, p is a copy
-    p.x = 99                    // OK — p is independent
-    items[1].x = 7              // OK — items no longer borrowed
-
-    r := &items[0]              // items borrowed for r's lifetime
-    r.x = 99                    // OK — mutation through reference
-    // items is alive again when r is no longer used
-}
-```
-
-### 32. The compiler resolves pointer-like vs. primitive transitively, including through type aliases and generics.
+### 21. The compiler resolves pointer-like vs. primitive transitively, including through type aliases and generics.
 
 "Pointer-like" is determined by examining the underlying Go representation:
 
@@ -678,21 +593,48 @@ At transpile time, if the compiler can statically determine that a type is
 primitive (all fields/elements are basic Go types), it generates a simple
 assignment instead of `cog.Copy`.
 
-### 33. `defer` captures `var` variables by consumption.
+### 22. Index expressions borrow the container; `&items[i]` extends the borrow for the reference's lifetime.
 
-A `defer` closure runs after the enclosing scope exits and may reference `var`
-variables. To prevent use-after-free, `defer` consumes `var` variables (same
-as rule 14 for async closures).
+Reading `items[i]` copies the element out (for value types) and borrows `items`
+for the duration of the read. Taking a reference `&items[i]` borrows `items`
+for the lifetime of the resulting reference.
 
 ```go
 main : proc() = {
-    f : var File = open("file.txt")
-    defer close(f)       // f consumed by defer closure
-    // f is dead here    // cannot use f after this point
+    items : var []Point = [Point{1,2}, Point{3,4}]
+    p := items[0]               // items borrowed, p is a copy
+    p.x = 99                    // OK — p is independent
+    items[1].x = 7              // OK — items no longer borrowed
+
+    r := &items[0]              // items borrowed for r's lifetime
+    r.x = 99                    // OK — mutation through reference
+    // items is alive again when r is no longer used
 }
 ```
 
-### 34. Map/set insertion consumes the key/value.
+This is a natural extension of partial borrows (rule 19) — only the indexed
+element is borrowed, not the entire container.
+
+### 23. Method receivers follow the same ownership rules as regular parameters.
+
+Methods are syntactic sugar for functions where the receiver is the first
+parameter. A `proc` method with a `var` receiver consumes the receiver value:
+
+```go
+Foo ~ struct { val : []int64 }
+
+Foo.Process : proc(self : var &Foo) = { ... }
+
+main : proc() = {
+    f : var Foo = Foo{...}
+    f.Process()             // f consumed (self is var &Foo)
+    // f is dead here
+}
+```
+
+A `func` method borrows the receiver for the duration of the call.
+
+### 24. Map/set insertion consumes the key/value.
 
 When inserting into a `var` map or set, the key and value are consumed (the
 collection owns its contents).
@@ -709,7 +651,7 @@ main : proc() = {
 }
 ```
 
-### 35. Chained method calls borrow the receiver through the chain.
+### 25. Chained method calls borrow the receiver through the chain.
 
 When methods are chained (e.g., `x.foo().bar().baz()`), the receiver `x` is
 borrowed for the duration of the entire chain if any intermediate method returns

@@ -2,10 +2,6 @@
 //
 // Scenarios that test the boundaries of the model. Each is annotated with
 // whether it SHOULD compile, referencing the relevant rule.
-//
-// All holes from the original audit are addressed by rules 1-35 in
-// ownership_model.md. This file captures the remaining nuance cases that
-// the model handles correctly but which may not be obvious at first glance.
 
 Point ~ struct { x : int64; y : int64 }
 Container ~ struct { data : []int64; label : utf8 }
@@ -31,7 +27,7 @@ worker : proc(data : Container) = { /* ... */ }
 main_partial_borrow : proc() = {
     c : var Container = Container{data: @slice<int64>(3), label: "hello"}
 
-    r := &c.data                    // borrows c.data specifically (rule 31)
+    r := &c.data                    // borrows c.data specifically (rule 22)
     c.label = "bye"                 // OK — c.label not borrowed
 
     // r must die before c.data can be mutated again
@@ -40,7 +36,7 @@ main_partial_borrow : proc() = {
 }
 
 // ── 3. Enum match without consumption (borrow match) ──
-// Rule 29 says a var enum transfers payload ownership when matched.
+// Rule 20 says a var enum transfers payload ownership when matched.
 // But if the match only borrows (the match binds are immutable), the
 // enum variable should survive.
 
@@ -60,48 +56,28 @@ main_enum_borrow : proc() = {
         }
     }
     // r is alive here — borrow released
-    // But: does the model distinguish "consume match" (rule 29) from
+    // But: does the model distinguish "consume match" (rule 20) from
     // "borrow match"? If match arms receive immutable bindings, the
-    // enum ought to be borrowed (rule 9 analog). This is a subtle
+    // enum ought to be borrowed (rule 7 analog). This is a subtle
     // distinction the model should clarify.
 }
 
-// ── 4. Arena allocation + partial move ──
-// Arena provenance is a property of the VALUE, not the variable.
-// If an arena-allocated struct has a field moved out, the field
-// value retains its arena provenance. The new owner is responsible
-// for the arena lifetime constraint (rule 30).
-
-main_arena_partial : proc() = {
-    arena := @new_arena()
-    c : var Container = Container{data: @arena_slice<int64>(arena, 3), label: "hello"}
-
-    d := c.data                     // partial move — d is arena-allocated
-
-    async worker_arena(d)           // compile error (rule 30) — d is arena
-    // @free_arena(arena)
-}
-
-worker_arena : proc(data : []int64) = {
-    @print(data[0])
-}
-
-// ── 5. Map key of var pointer-like type ──
+// ── 4. Map key of var pointer-like type ──
 // If the key itself is var and pointer-like, insertion consumes it.
-// The value is also consumed. This is already covered by rule 34.
+// The value is also consumed. This is already covered by rule 24.
 
 main_map_key_var : proc() = {
     m : var map[[]int64]utf8 = @map<[]int64, utf8>()
     key : var []int64 = @slice<int64>(3)
     key[0] = 42
 
-    m[key] = "found"                // key consumed (rule 34)
+    m[key] = "found"                // key consumed (rule 24)
     // key is dead
 }
 
-// ── 6. Chained method that mutates in-place ──
+// ── 5. Chained method that mutates in-place ──
 // If sort() mutates self and returns &self, the chain borrows `items`
-// for the entire chain (rule 35). After the chain, items is alive.
+// for the entire chain (rule 25). After the chain, items is alive.
 
 main_chain : proc() = {
     items : var []int64 = []int64{3, 1, 2}
@@ -109,9 +85,9 @@ main_chain : proc() = {
     items[0] = 99                   // OK — borrow released
 }
 
-// ── 7. All-consumed match on var enum ──
+// ── 6. All-consumed match on var enum ──
 // When all match arms consume the payload, the enum variable is dead
-// after the match (rule 24 analog, via rule 29).
+// after the match (rule 16 analog, via rule 20).
 
 main_enum_consume : proc() = {
     r : var Result = Result.Ok("hello")
@@ -126,24 +102,41 @@ main_enum_consume : proc() = {
     // r is alive — nothing was consumed
 }
 
-// ── 8. defer + partial move ──
-// If defer closes over a var field, does it consume the whole struct
-// or just the field? Rule 33 says defer consumes var variables.
-// If the defer captures `c.data`, it should consume `c.data`
-// specifically (or the whole `c` if it references `c`).
+// ── 7. defer reserves var — variable must survive to scope exit ──
+// The deferred call runs at scope exit, so the variable must stay alive
+// through all intervening code. Any consumption/move of the reserved
+// variable after the defer is a compile error (the defer would find it
+// dead). Multiple defers on the same variable are also rejected.
 
-main_defer_field : proc() = {
+main_defer_reassigned_after : proc() = {
     c : var Container = Container{data: @slice<int64>(3), label: "hello"}
-    defer cleanup(c.data)           // c.data consumed by defer
-    // c.data is dead
-    // c.label is still alive
+    defer cleanup(c.data)            // compile error — c.data is consumed below
+    c.data = @slice<int64>(5)        // c.data consumed
+}
+
+main_defer_ok : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    defer cleanup(c.data)            // OK — no consumption of c.data after this
+    c.label = "bye"                  // OK — c.label not reserved
+}
+
+main_defer_double : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    defer cleanup(c.data)            // compile error — c.data already reserved below
+    defer cleanup(c.data)            // reserves c.data (first-to-execute)
+}
+
+main_defer_already_dead : proc() = {
+    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    d := c.data                      // c.data consumed
+    defer cleanup(c.data)            // compile error — c.data already dead
 }
 
 cleanup : proc(data : []int64) = { /* ... */ }
 
-// ── 9. Conditional with partial moves ──
-// Rule 24 (consumption in ANY branch kills the variable) interacts
-// with partial moves (rule 21). If c.data is consumed in one branch
+// ── 8. Conditional with partial moves ──
+// Rule 16 (consumption in ANY branch kills the variable) interacts
+// with partial moves (rule 19). If c.data is consumed in one branch
 // and borrowed in another, c.data is dead after the conditional.
 // But c.label remains alive.
 
@@ -154,11 +147,11 @@ main_cond_partial : proc() = {
     } else {
         @print(c.data[0])           // c.data borrowed
     }
-    // c.data is dead (rule 24 — conservative)
+    // c.data is dead (rule 16 — conservative)
     @print(c.label)                 // OK — label still alive
 }
 
-// ── 10. Return of var struct after partial move ──
+// ── 9. Return of var struct after partial move ──
 // Returning a struct where one field is dead should be a compile error,
 // just like passing to a proc.
 
