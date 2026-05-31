@@ -39,6 +39,7 @@ var Keywords = map[string]Type{
 	Complex64.String():  Complex64,
 	Complex128.String(): Complex128,
 	Continue.String():   Continue,
+	Defer.String():      Defer,
 	Default.String():    Default,
 	Dynamic.String():    Dynamic,
 	Else.String():       Else,

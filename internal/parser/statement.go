@@ -406,6 +406,23 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 			false,
 			reference,
 		)
+	case tokens.Defer:
+		deferToken := p.lex.This()
+		p.lex.Step()
+
+		exprIdx := p.expression(ctx, types.None)
+		if exprIdx == ast.ZeroExprIndex {
+			return ast.ZeroNodeIndex
+		}
+
+		switch p.ast.Expr(exprIdx).(type) {
+		case *ast.Call, *ast.ProcedureLiteral:
+		default:
+			p.error(deferToken, "defer requires a procedure call or closure", "parseStatement")
+			return ast.ZeroNodeIndex
+		}
+
+		return p.ast.NewDefer(deferToken, exprIdx)
 	case tokens.Match:
 		return p.parseMatch(ctx)
 	case tokens.Return:

@@ -687,10 +687,12 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 
 		stmts := make([]goast.Stmt, 0, len(body.Statements))
 
-		// Track whether we're inside a func and reset usesDyn for this body.
 		prevInFunc := t.inFunc
 		prevUsesDyn := t.usesDyn
-
+		prevDeferStack := t.deferStack
+		prevLoopDepth := t.loopDepth
+		t.deferStack = nil
+		t.loopDepth = 0
 		t.usesDyn = false
 		if procType, ok := n.ProcedureType.(*types.Procedure); ok {
 			t.inFunc = procType.Function
@@ -707,7 +709,6 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			stmts = append(stmts, stmt...)
 		}
 
-		// Capture whether this body used dyn vars, then restore outer state.
 		bodyUsesDyn := t.usesDyn
 		t.usesDyn = prevUsesDyn || bodyUsesDyn
 		t.inFunc = prevInFunc
@@ -717,12 +718,19 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			return nil, fmt.Errorf("converting procedure type: %w", err)
 		}
 
-		return &goast.FuncLit{
+		funcLit := &goast.FuncLit{
 			Type: procType.(*goast.FuncType),
 			Body: &goast.BlockStmt{
 				List: stmts,
 			},
-		}, nil
+		}
+
+		t.injectDeferred(funcLit.Body)
+
+		t.deferStack = prevDeferStack
+		t.loopDepth = prevLoopDepth
+
+		return funcLit, nil
 	case *ast.Selector:
 		// TODO: update to handle new selector structure with slice of fields.
 

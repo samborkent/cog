@@ -176,20 +176,23 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 			X: expr,
 		}}
 	case *ast.ForStatement:
+		t.loopDepth++
+
 		body, err := t.convertForBlock(n.Loop)
 		if err != nil {
+			t.loopDepth--
 			return nil, err
 		}
+
+		t.loopDepth--
 
 		var stmt goast.Stmt
 
 		if n.Range == ast.ZeroExprIndex {
-			// C-style for loop.
 			stmt = &goast.ForStmt{
 				Body: body,
 			}
 		} else {
-			// Range based for loop.
 			rangeExpr, err := t.convertExpr(t.Expr(n.Range))
 			if err != nil {
 				return nil, err
@@ -276,6 +279,35 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		}
 
 		returnStmts = stmts
+	case *ast.Defer:
+		if t.loopDepth > 0 {
+			expr := t.Expr(n.Expr)
+			callExpr, ok := expr.(*ast.Call)
+			if !ok {
+				return nil, fmt.Errorf("defer inside loop requires a procedure call")
+			}
+
+			goExpr, err := t.convertExpr(callExpr)
+			if err != nil {
+				return nil, err
+			}
+
+			goCall, ok := goExpr.(*goast.CallExpr)
+			if !ok {
+				return nil, fmt.Errorf("defer call expression is not a call")
+			}
+
+			returnStmts = []goast.Stmt{&goast.DeferStmt{Call: goCall}}
+		} else {
+			srcLine, _ := n.Pos()
+			expr := t.Expr(n.Expr)
+			stmts, err := t.convertDeferExpr(expr, srcLine)
+			if err != nil {
+				return nil, err
+			}
+
+			returnStmts = stmts
+		}
 	case *ast.Match:
 		stmts, err := t.convertMatch(n)
 		if err != nil {
@@ -381,7 +413,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 	// Attach //line directives to statements that don't already carry one.
 	// Comments return early above; declarations embed their own //line inline.
 	switch node.(type) {
-	case *ast.Comment, *ast.Declaration:
+	case *ast.Comment, *ast.Declaration, *ast.Defer:
 	default:
 		ln, _ := node.Pos()
 		lineComment := fmt.Sprintf("\n//line %s:%d", t.file.Name, ln)

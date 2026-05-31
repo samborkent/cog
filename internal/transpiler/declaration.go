@@ -154,6 +154,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					}
 				}
 
+				t.injectDeferred(funcDecl.Body)
 				t.injectArena(funcDecl.Body)
 
 				return []goast.Decl{funcDecl}, nil
@@ -171,6 +172,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				t.addStdLibImport("context")
 			}
 
+			t.injectDeferred(funcDecl.Body)
 			t.injectArena(funcDecl.Body)
 
 			// Return function declaration for procedures

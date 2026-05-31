@@ -77,7 +77,9 @@ func main() {
 	// Script mode: single .cogs file.
 	if strings.HasSuffix(files[0], ".cogs") {
 		projectRoot := filepath.Dir(files[0])
-		runScript(ctx, projectRoot, files[0], "")
+		if err := runScript(ctx, projectRoot, files[0], ""); err != nil {
+			fmt.Println(err.Error())
+		}
 
 		return
 	}
@@ -86,7 +88,9 @@ func main() {
 	// Import paths are resolved relative to this root.
 	projectRoot := filepath.Dir(files[0])
 
-	runProject(ctx, projectRoot, files)
+	if err := runProject(ctx, projectRoot, files); err != nil {
+		fmt.Println(err.Error())
+	}
 }
 
 // discoverFiles resolves the input flag to a sorted list of .cog file paths.

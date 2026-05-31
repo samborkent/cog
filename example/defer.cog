@@ -1,0 +1,11 @@
+package main
+
+fclose : proc(f : utf8) = {
+    @print("closing: " + f)
+}
+
+demonstrateDefer : proc() = {
+    defer fclose("a.txt")
+    defer fclose("b.txt")
+    @print("done")
+}

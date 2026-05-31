@@ -45,6 +45,13 @@ type Transpiler struct {
 	lastSourceLine uint32              // tracks the source line of the previous statement
 
 	titleCaser cases.Caser
+
+	deferStack  []deferInfo
+	loopDepth   int
+}
+
+type deferInfo struct {
+	callStmts []goast.Stmt
 }
 
 type TranspilerOption func(*Transpiler)
@@ -168,6 +175,7 @@ func (t *Transpiler) fileWorker() *Transpiler {
 		skipComments: t.skipComments,
 		titleCaser:   t.titleCaser,
 		typeCache:    make(map[types.Type]goast.Expr),
+		deferStack:   make([]deferInfo, 0),
 	}
 }
 
@@ -179,6 +187,8 @@ func (t *Transpiler) resetFileState(fileIndex int) {
 	t.inFunc = false
 	t.usesDyn = false
 	t.ifLabelCounter = 0
+	t.deferStack = nil
+	t.loopDepth = 0
 }
 
 func (t *Transpiler) transpileFile(fileIndex int) (*goast.File, error) {
@@ -367,6 +377,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 		},
 	}
 
+	t.injectDeferred(mainFunc.Body)
 	t.injectArena(mainFunc.Body)
 
 	t.addGCImports()
