@@ -6,6 +6,21 @@ Implement the Cog ownership model as described in `ownership_model.md` and teste
 
 The plan has **two major phases**, each split into incremental steps that can be verified independently:
 
+## Validation Policy
+
+After every functionally complete step that can compile and run, the implementer **must** run these commands and fix any failures before proceeding to the next step:
+
+```bash
+GOEXPERIMENT=arenas rtk go vet ./...   # compilation check
+GOEXPERIMENT=arenas rtk go test ./...  # all tests pass
+rtk go run ./cmd/main.go -file <test-file>  # transpile a test program
+```
+
+- `task vet` runs `go vet` (compilation check)
+- `task test` runs all tests
+- `task run` runs the transpiler on a sample file to verify end-to-end
+- Always use `rtk` prefix and `GOEXPERIMENT=arenas`
+
 ---
 
 ## Phase 1: Parser (Ownership Tracking)
@@ -93,10 +108,11 @@ In expression parsing for the prefix `*` operator:
 
 #### Rule 4: `var` to `var` assignment consumes source
 
-In `parseAssignment` (in `assignment.go`), when the RHS is an identifier with `QualifierVariable` and pointer-like type:
-- Call `MarkConsumed` on the source
+In `parseAssignment` (in `assignment.go`), when the RHS is an identifier with `QualifierVariable`:
+- Call `MarkConsumed` on the source — ownership transfers uniformly for **all** types
 - Error if the source is already dead
-- **Even non-pointer-like types must be consumed**: rule 4 says any `var` to `var` assignment transfers ownership, regardless of whether the type is pointer-like. Non-pointer-like types (primitives, structs of primitives) are cheap to copy, but ownership still transfers — the source is dead after assignment. This prevents aliasing bugs uniformly.
+- **Even non-pointer-like types must be consumed**: rule 4 says any `var` to `var` assignment transfers ownership, regardless of whether the type is pointer-like. Non-pointer-like types (primitives, structs of primitives) are cheap to copy, but ownership still transfers — the source is dead after assignment. This prevents aliasing bugs uniformly — distinguishing pointer-like vs. primitive at this level would create a confusing gap where some `var`→`var` assignments consume and others don't.
+- At the transpiler level, `var → var` assignment of primitives generates a plain Go assignment (the consumption is purely a compile-time tracking artifact), while pointer-like `var → var` generates the same plain assignment (ownership semantics are compile-time, not runtime copies).
 
 #### Rule 5: Immutable to `var` deep copies
 
@@ -184,7 +200,7 @@ In the `parseReturn` handler (`statement.go:428-462`):
 
 #### Rule 11: Block expression borrows
 
-Block expressions (`{ stmts; expr }`) are currently not parsed as expressions — the `{` token only starts literals in `primary.go:386-810`. **This is a pre-requisite for Rule 11 (and Rule 14 which depends on borrow-scopes).** Implemented as a separate parser step (Step 2b in the implementation order) before ownership tracking:
+Block expressions (`{ stmts; expr }`) are currently not parsed as expressions — the `{` token only starts literals in `primary.go:386-810`. **This is a pre-requisite for Rule 11 (and Rule 14 which depends on borrow-scopes).** Implemented as a separate parser step (Step 0b in the implementation order) before ownership tracking:
 
 **Block expression parser changes** (in `primary.go`, around line 386-810 where `tokens.LBrace` is handled):
 - Add a new case before the existing `default` fallthrough at line 789: when `typeToken == types.None` or `typeToken == nil` and `p.lex.This().Type == tokens.LBrace`, parse a block expression.
@@ -209,7 +225,75 @@ Block expressions (`{ stmts; expr }`) are currently not parsed as expressions �
           // See design note below.
       }
   ```
-  **Design note**: `parseBlockStatement` expects `p.lex.This()` to be `{` and consumes it. To reuse it, call it before the LBrace case is reached, or restructure the primary function flow. Alternative: inline the block parsing logic in `primary` directly (create scope, parse statements, expect final expression, close brace). The simplest approach: add a dedicated `parseBlockExpression` method that mirrors `parseBlockStatement` but returns the final expression's type.
+  **Design note**: This detection happens inside the `default:` branch of the `switch p.lex.This().Type` in `primary.go` (line 788), NOT in `case tokens.LBrace:` (line 386) which handles typed literals (struct, array, map, set, slice, etc.). The `default:` branch currently emits an error for untyped `{`. The new logic:
+
+```go
+// In primary.go default: branch (line 788-809):
+default:
+    if typeToken == nil || typeToken == types.None {
+        if p.lex.This().Type == tokens.LBrace {
+            // Block expression — delegate to dedicated method
+            return p.parseBlockExpression(ctx)
+        }
+        p.error(p.lex.Peek(-1), "cannot infer type for untyped literal", "primary")
+        // ... existing error recovery ...
+        return ast.ZeroExprIndex
+    }
+    // ... existing error for unexpected type ...
+```
+
+**`parseBlockExpression` implementation**: Mirrors `parseBlockStatement` but:
+1. Creates an enclosed scope
+2. Parses statements until the final expression statement
+3. The final statement's expression type becomes the block expression's type
+4. Returns `ast.BlockExpr` wrapping the block node
+5. Does NOT restore scope — borrow/release (rules 11, 14) is applied from the enclosing scope
+
+```go
+// New method on *Parser:
+func (p *Parser) parseBlockExpression(ctx context.Context) ast.ExprIndex {
+    braceToken := p.lex.This()
+    p.lex.Step() // consume {
+    
+    blockBody := p.parseBlockStatement(ctx)
+    if blockBody == nil {
+        return ast.ZeroExprIndex
+    }
+    
+    if len(blockBody.Statements) == 0 {
+        p.error(braceToken, "block expression must have at least one statement ending in an expression", "primary")
+        return ast.ZeroExprIndex
+    }
+    
+    // Determine block expression type from final expression statement.
+    lastStmt := blockBody.Statements[len(blockBody.Statements)-1]
+    exprStmt, ok := p.ast.Node(lastStmt).(*ast.ExpressionStatement)
+    if !ok {
+        p.error(braceToken, "last statement in block expression must be an expression", "primary")
+        return ast.ZeroExprIndex
+    }
+    
+    exprType := p.ast.Expr(exprStmt.Expr).Type()
+    return p.ast.AddExpr(&ast.BlockExpr{
+        Token: braceToken,
+        Block: p.ast.AddNode(blockBody),
+        Type:  exprType,
+    })
+}
+```
+
+**BlockExpr AST type** (`internal/ast/block_expr.go`): The node must implement `ast.Expr`. Since `BlockExpr` wraps a `NodeIndex` (the Block), and `Expr` in this AST is an interface, `BlockExpr` stores the block's node index and reports its type from the final expression.
+
+```go
+type BlockExpr struct {
+    Token tokens.Token
+    Block NodeIndex
+    exprType types.Type
+}
+
+func (b *BlockExpr) Type() types.Type { return b.exprType }
+func (b *BlockExpr) Pos() (uint32, uint16) { return b.Token.Ln, b.Token.Col }
+```
 
 - At block entry: `MarkBorrowed` on all `var` variables referenced inside (identified by walking the parsed statements for identifiers).
 - At block exit: `ReleaseBorrowed` on each.
@@ -221,7 +305,91 @@ In `parseProcedureLiteral` when the closure has `async` annotation:
 - Identify `var` variables referenced inside the closure body by walking the AST
 - Call `MarkConsumed` on each — the closure outlives the enclosing scope
 - Consumed variables cannot be used after the async closure definition
-- Requires a helper to walk the deferred body's expression tree and collect all `ast.Identifier` nodes with `QualifierVariable` that resolve to local scope variables
+- Requires a helper to walk the closure body's expression tree and collect all `ast.Identifier` nodes with `QualifierVariable` that resolve to local scope variables
+
+**AST walker helper**: The Cog AST is a flat `[]Node` array indexed by `NodeIndex`. A generic walker must understand each node type's children. The helper narrows the focus to `var` variables:
+
+```go
+// collectCapturedVars walks an AST node tree and returns all var identifiers
+// that reference variables in the parser's scope chain.
+func (p *Parser) collectCapturedVars(nodeIdx ast.NodeIndex) map[string]struct{} {
+    captured := make(map[string]struct{})
+    p.walkForVarIdentifiers(nodeIdx, captured)
+    return captured
+}
+
+func (p *Parser) walkForVarIdentifiers(nodeIdx ast.NodeIndex, captured map[string]struct{}) {
+    n := p.ast.Node(nodeIdx)
+    switch n := n.(type) {
+    case *ast.Block:
+        for _, stmt := range n.Statements {
+            p.walkForVarIdentifiers(stmt, captured)
+        }
+    case *ast.ExpressionStatement:
+        p.walkExprForVarIdentifiers(n.Expr, captured)
+    case *ast.Assignment:
+        p.walkExprForVarIdentifiers(n.Value, captured)
+    case *ast.Return:
+        p.walkExprForVarIdentifiers(n.Expr, captured)
+    case *ast.IfStatement:
+        p.walkExprForVarIdentifiers(n.Condition, captured)
+        if n.Consequence != nil {
+            p.walkForVarIdentifiers(*n.Consequence, captured)
+        }
+        if n.Alternative != nil {
+            p.walkForVarIdentifiers(*n.Alternative, captured)
+        }
+    case *ast.ForStatement:
+        if n.Range != nil {
+            p.walkExprForVarIdentifiers(*n.Range, captured)
+        }
+        p.walkForVarIdentifiers(n.Body, captured)
+    // ... extend for Switch, Match, Defer, Branch, etc.
+    }
+}
+
+func (p *Parser) walkExprForVarIdentifiers(exprIdx ast.ExprIndex, captured map[string]struct{}) {
+    e := p.ast.Expr(exprIdx)
+    switch e := e.(type) {
+    case *ast.Identifier:
+        if e.Qualifier == ast.QualifierVariable {
+            if _, ok := p.symbols.Resolve(e.Token.Literal); ok {
+                captured[e.Token.Literal] = struct{}{}
+            }
+        }
+    case *ast.Call:
+        for _, arg := range e.Args {
+            p.walkExprForVarIdentifiers(arg, captured)
+        }
+    case *ast.Selector:
+        for _, f := range e.Fields {
+            p.walkExprForVarIdentifiers(p.ast.AddExpr(f), captured)
+        }
+    case *ast.Infix:
+        p.walkExprForVarIdentifiers(e.Left, captured)
+        p.walkExprForVarIdentifiers(e.Right, captured)
+    case *ast.Prefix:
+        p.walkExprForVarIdentifiers(e.Right, captured)
+    case *ast.Suffix:
+        p.walkExprForVarIdentifiers(p.ast.Expr(e.Left), captured)
+    // ... extend for all expression types
+    }
+}
+```
+
+**Integration into `parseProcedureLiteral`**: After parsing the closure body and before returning, if the procedure literal is async:
+
+```go
+if procType.Function == false && p.lex.Peek(-1).Type == tokens.Async {
+    // Walk the body to find captured var variables.
+    captured := p.collectCapturedVars(bodyIdx)
+    for name := range captured {
+        p.symbols.MarkConsumed(name)
+    }
+}
+```
+
+Note: This runs after the body has been fully parsed, ensuring all identifier references are already registered.
 
 #### Rule 13: Defer reserves
 
@@ -239,7 +407,27 @@ Before deciding borrow vs. consume for a block expression (rule 11) or for-loop 
 - Scan all nested statements for `async` closures that capture `var` outer variables
 - If any such async capture is found, the outer variable is *consumed* (not borrowed)
 - This means scanning the statement tree before applying the borrow, or performing the scan during expression parsing and upgrading borrows to consumes retroactively
-- Implementation approach: during the block/for entry, tentatively mark the variable as borrowed. If an async closure is encountered later that captures it, upgrade the entry to consumed (change state in the owning scope's ownership map and decrement any borrow counter). Any code between block entry and the async closure that relied on the borrow is still valid (borrow semantics are a subset of consume — the variable was alive until the consume point)
+
+Implementation approach: during the block/for entry, tentatively mark the variable as borrowed. If an async closure is encountered later that captures it, upgrade the entry to consumed:
+
+```go
+// Upgrade borrow to consume (called when async closure captures a borrowed var):
+func (s *SymbolTable) UpgradeBorrowToConsume(name string) {
+    // 1. Clear borrow counter for this variable in the current scope.
+    if count, ok := s.borrowCounts.Load(name); ok && count > 0 {
+        s.borrowCounts.Store(name, 0)
+    }
+    
+    // 2. Mark as consumed in the owning scope (walks up).
+    s.MarkConsumed(name)
+}
+```
+
+Key invariants:
+- The borrow counter in the current scope is **decremented to zero** during the upgrade. This prevents a subsequent `ReleaseBorrowed` from underflowing or incorrectly releasing the now-consumed variable.
+- Any code between block entry and the async closure that relied on the borrow is still valid (borrow semantics are a subset of consume — the variable was alive until the consume point).
+- After the upgrade, all subsequent uses of the variable report "cannot use: variable is consumed".
+- The upgrade is applied inline during expression parsing: when `parseProcedureLiteral` encounters `async`, it walks the body's expression tree to identify captured `var` identifiers. For each one that is currently borrowed (not just borrowed, but any var reference from an enclosing scope), call `UpgradeBorrowToConsume`.
 
 #### Rule 15: For-loop borrows iterable
 
@@ -258,30 +446,126 @@ After `parseIfStatement` or `parseMatch` or `parseSwitch`:
 - Track per-branch consumption and union across branches
 - For partial moves (rule 19), apply the union per-field: if `c.data` is consumed in any branch, `c.data` is dead after the conditional; `c.label` remains alive
 
-**Cross-branch ownership propagation mechanism**: Each branch block (consequence, alternative, match arm, switch case) creates its own symbol table scope via `parseBlockStatement`. Consumption inside that scope does NOT automatically propagate to the enclosing scope. After each branch finishes parsing, its consumed state must be explicitly propagated:
+**Cross-branch ownership propagation mechanism**: `parseBlockStatement` creates an enclosed scope internally and restores `p.symbols` to its parent before returning. Therefore, the block's inner scope is lost unless captured. The implementation must save a reference to the child scope before it is restored:
 
 ```go
-// After parsing each branch in parseIfStatement, parseMatch, or parseSwitch:
-if branchScope != nil && branchScope.ownership != nil {
-    for name, state := range branchScope.ownership.All() {
-        if state == stateConsumed {
-            // Propagate to the enclosing scope (p.symbols after restore).
-            p.symbols.MarkConsumed(name)
+// Pattern for capturing branch scope (applied in parseIfStatement, parseMatch, parseSwitch):
+
+// Before calling parseBlockStatement, save the current scope.
+scopeBeforeBranch := p.symbols
+
+consequence := p.parseBlockStatement(ctx)
+// p.symbols is now restored to scopeBeforeBranch
+
+// The inner scope created by parseBlockStatement is scopeBeforeBranch's child.
+// Walk scopeBeforeBranch (now current) for ownership state set by MarkConsumed
+// calls that happened through scope-walking (those target the enclosing scope).
+// NOTE: parseBlockStatement creates p.symbols = NewEnclosedSymbolTable(p.symbols)
+// at entry, then restores p.symbols = p.symbols.Outer at exit. After exit,
+// p.symbols == scopeBeforeBranch. Any MarkConsumed() calls in the branch's
+// inner scope that walked up to find the original var would have operated on
+// the *original declaring scope*, not the branch's inner scope.
+//
+// CORRECTION: MarkConsumed walks up the scope chain to find the variable's
+// definition, then stores ownershipState in the scope where the variable is
+// defined (the owning scope). So after parseBlockStatement restores scope,
+// consumed state is already correctly recorded in the owning scope.
+//
+// The key insight: ownership changes made by MarkConsumed/MarkFieldConsumed
+// during branch parsing are applied to the scope chain by walking up — they
+// end up in the right place automatically. The cross-branch union problem is:
+// a var consumed in branch A should be dead even if branch B only borrows.
+// This is handled by rule 16's conservative approach: if any branch consumed,
+// the var is dead after the conditional. BUT consumption from branch A's scope
+// does NOT automatically propagate because branch B's scope doesn't see it.
+//
+// Solution: after ALL branches are parsed (not per-branch), check if the
+// variable was consumed in at least one branch. If so, mark it consumed.
+// This requires tracking which vars were consumed across branches.
+
+// Save consumed sets per branch.
+type branchConsumption struct {
+    vars    map[string]struct{}
+    fields  map[string]map[string]struct{} // structVar → {fieldName}
+}
+
+// After each branch's scope is restored, capture the branch's consumption:
+func (p *Parser) captureBranchConsumption(saved *SymbolTable) branchConsumption {
+    bc := branchConsumption{
+        vars:   make(map[string]struct{}),
+        fields: make(map[string]map[string]struct{}),
+    }
+    if saved.ownership != nil {
+        for name, state := range saved.ownership.All() {
+            if state == stateConsumed {
+                bc.vars[name] = struct{}{}
+            }
         }
     }
-    if branchScope.fieldOwnership != nil {
-        for structVar, fields := range branchScope.fieldOwnership.All() {
+    if saved.fieldOwnership != nil {
+        for structVar, fields := range saved.fieldOwnership.All() {
             for fieldName, fieldState := range fields.All() {
                 if fieldState == stateConsumed {
-                    p.symbols.MarkFieldConsumed(structVar, fieldName)
+                    if bc.fields[structVar] == nil {
+                        bc.fields[structVar] = make(map[string]struct{})
+                    }
+                    bc.fields[structVar][fieldName] = struct{}{}
                 }
             }
+        }
+    }
+    return bc
+}
+```
+
+After all branches, union the consumption sets:
+
+```go
+// After all branches parsed (consequence + alternative, or all match arms):
+for name := range branchConsumptions[0].vars {
+    // Propagate consumption to outer scope.
+    p.symbols.MarkConsumed(name)
+}
+// Similarly for fields, propagating if consumed in any branch:
+for structVar, fields := range branchConsumptions[0].fields {
+    for fieldName := range fields {
+        // Check if this field was consumed in any branch.
+        consumed := false
+        for _, bc := range branchConsumptions[1:] {
+            if _, ok := bc.fields[structVar][fieldName]; ok {
+                consumed = true
+                break
+            }
+        }
+        if consumed {
+            p.symbols.MarkFieldConsumed(structVar, fieldName)
         }
     }
 }
 ```
 
-The propagation runs AFTER the branch's scope has been restored (`p.symbols = p.symbols.Outer`). This way, `MarkConsumed` is called on the enclosing scope where the variable was originally defined.
+**Alternate simpler approach**: After `parseBlockStatement` restores the scope, call `MarkConsumed` for each variable that was consumed in the branch. Since `MarkConsumed` walks up and operates on the owning scope, the inner scope state is irrelevant — the owning scope's ownership map already reflects the consumption. The issue is that a subsequent branch's borrow doesn't override a prior branch's consumption in the owning scope. The solution: before entering each subsequent branch, save and restore the owning scope's ownership state so each branch starts with a clean slate. After all branches, merge (union) the consumption states.
+
+**Clean-slate approach**: Before parsing each branch, snapshot the owning scope's ownership state. After the branch, diff the state. After all branches, apply the union:
+
+```go
+// Before parsing a branch:
+snapshot := p.snapshotOwnership()
+
+// After the branch:
+delta := p.diffOwnership(snapshot)
+branchConsumptions = append(branchConsumptions, delta)
+
+// Then restore the snapshot before the next branch:
+p.restoreOwnership(snapshot)
+
+// After all branches, union:
+for _, consumed := range unionConsumptions(branchConsumptions) {
+    p.symbols.MarkConsumed(consumed)
+}
+```
+
+This clean-slate approach is preferred: it correctly handles the cross-branch union without double-marking or requiring branch-specific tracking. The `snapshotOwnership`, `diffOwnership`, `restoreOwnership` helpers operate on the ownership maps that walk up to the owning scope.
 
 **Implementation placement**:
 1. `parseIfStatement` (`if_statement.go`): after line 68 (`consequence := p.parseBlockStatement(ctx)`) and after line 105 (`alternative = p.parseBlockStatement(ctx)`)
@@ -381,8 +665,8 @@ In `parseProcedureLiteral` and declaration parsing:
 
 Define ownership-specific error messages in an error table:
 
-| Violation | Error |
-|-----------|-------|
+| Violation | Error format (first %s = var name, second %s = detail) |
+|-----------|-------------------------------------------------------|
 | Use of consumed variable | `"cannot use %s: variable is consumed"` |
 | Consumed twice | `"cannot use %s: variable is consumed"` |
 | Borrowed while mutating | `"cannot mutate %s: variable is borrowed"` |
@@ -540,7 +824,39 @@ In `internal/transpiler/expression.go`, in the `MapLiteral` and `SetLiteral` cas
 - For infix index assignment (`m[key] = val`), handled in the transpiler's statement conversion: when the assigned value is a `var` pointer-like type, wrap in `cog.Copy(...)`
 - The parser already marks the source consumed; the transpiler ensures the Go copy preserves independence
 
-**Implementation detail**: The transpiler currently has no runtime notion of `var` vs immutable — the qualifier is only on the AST `Identifier`. The key/value expressions need to be inspected for their qualifier during transpilation, or the parser must annotate the AST nodes to signal "this expression needs a copy." The recommended approach: add a boolean flag to the `ast.MapPair` struct or to `ast.MapLiteral`/`ast.SetLiteral` indicating which key/value indices came from `var` sources, set during parser ownership tracking.
+**Implementation detail**: The transpiler currently has no runtime notion of `var` vs immutable — the qualifier is only on the AST `Identifier`. The key/value expressions need to be inspected for their qualifier during transpilation, or the parser must annotate the AST nodes to signal "this expression needs a copy." The recommended approach: add boolean flags to `ast.KeyValue` indicating which expressions came from `var` sources:
+
+```go
+// In internal/ast/ast.go or internal/ast/expression.go:
+type KeyValue struct {
+    Key           ExprIndex
+    Value         ExprIndex
+    KeyConsumed   bool  // set when key is a var pointer-like type (needs deep copy)
+    ValueConsumed bool  // set when value is a var pointer-like type (needs deep copy)
+}
+```
+
+Set during parser ownership tracking in `primary.go`'s map literal parsing (line 479-482):
+```go
+pairs = append(pairs, ast.KeyValue{
+    Key:           key,
+    Value:         val,
+    KeyConsumed:   p.isVarPointerLike(key),
+    ValueConsumed: p.isVarPointerLike(val),
+})
+```
+
+The transpiler then checks these flags when building `goast.KeyValueExpr` or `goast.CallExpr` entries:
+```go
+if pair.KeyConsumed {
+    keyExpr = wrapInCogCopy(keyExpr)
+}
+if pair.ValueConsumed {
+    valExpr = wrapInCogCopy(valExpr)
+}
+```
+
+The `SetLiteral` case can carry a parallel `Consumed []bool` field, one per element, or reuse the `KeyValue` approach with `ValueConsumed` only.
 
 ### Step 11: Transpiler Ownership Tests
 
@@ -565,7 +881,7 @@ The recommended order is restructured to resolve **parser pre-requisites before 
 | Step | Description | Dependencies | Testable | Risk |
 |------|-------------|--------------|----------|------|
 | 0a | `types.Parameter.Mutable` field + `var` keyword in parameter grammar | None | ✅ Unit test | Low |
-| 0b | `ast.BlockExpr` node + block expression parsing in `primary.go` | None | ✅ Integration test | Medium |
+| 0b | `ast.BlockExpr` node + block expression parsing in `primary.go` | None | ✅ Integration test | Medium-High |
 | 1 | `types.IsPointerLike()` in `internal/types/is.go` | None | ✅ Unit test | Low |
 | 2 | Ownership state types (`ownershipState`, maps on `SymbolTable`) | None | ✅ Unit test | Low |
 | 3 | Core ownership API (`MarkConsumed`, `MarkBorrowed`, `IsAlive`, etc.) | Step 2 | ✅ Unit test | Low |
@@ -575,12 +891,14 @@ The recommended order is restructured to resolve **parser pre-requisites before 
 | 7 | Deep copy generation in transpiler (Rule 5: `cog.Copy` on immutable→var) | Step 1 | ✅ Verify output | Medium |
 | 8 | Dynamic variable deep copy in transpiler (Rule 18) | Step 1 | ✅ Verify output | Low |
 | 9 | Map/set insertion deep copy in transpiler (Rule 24) | Steps 1, 4 | ✅ Verify output | Medium |
-| 10 | Parser ownership tests (31 test cases covering all 25 rules) | Steps 4-6 | ✅ Verify | Low |
+| 10 | Parser ownership tests (31 test cases covering all 25 rules) | Steps 4-6 | ✅ Verify | Medium |
 | 11 | Transpiler ownership tests (7 test cases) | Steps 7-9 | ✅ Verify | Low |
 
 **Step 4 risk** is **High** because it encompasses 13 rules with complex interactions: async closure inside borrow-scope (rule 14), defer forward-checking (rule 13), conditional branch union propagation (rule 16), switch coverage (rule 16 extension), cross-branch propagation mechanics, and chained method borrows (rule 25).
 
-**Step 9 risk** is **Medium** because it requires AST annotation plumbing between parser and transpiler (adding `ConsumedKey`/`ConsumedValue` flags to `ast.KeyValue`).
+**Step 9 risk** is **Medium** because it requires AST annotation plumbing between parser and transpiler (adding `KeyConsumed`/`ValueConsumed` flags to `ast.KeyValue`).
+
+**Step 10 risk** is **Medium** (not Low) because each test case requires a complete multi-declaration Cog program with type declarations, enum definitions, and proc bodies. Many tests involve type declarations (`Container`, `Result`, `Point`) that must be repeated per test or placed in shared test scaffolding. The 31-test matrix covers all 25 rules with both positive and negative cases, requiring careful assertion setup.
 
 **Critical path**: Steps 0a + 0b are parser pre-requisites that ALL subsequent ownership tracking depends on. These should be implemented and verified before Step 4 begins.
 
