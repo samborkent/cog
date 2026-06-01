@@ -4,6 +4,8 @@
 
 Implement the Cog ownership model as described in `ownership_model.md` and tested in `ownership.cogs`. The model tracks `var` mutable variables through borrow/consume semantics during parsing (phase 1), then generates appropriate Go code in the transpiler (phase 2).
 
+~~**Note**: Step 0b (block expressions) has been removed from the plan — Cog does not have block expressions. The `ast.BlockExpr` type and `parseBlockExpression` method were created and then deleted.~~
+
 The plan has **two major phases**, each split into incremental steps that can be verified independently:
 
 ## Validation Policy
@@ -200,104 +202,12 @@ In the `parseReturn` handler (`statement.go:428-462`):
 
 #### Rule 11: Block expression borrows
 
-Block expressions (`{ stmts; expr }`) are currently not parsed as expressions — the `{` token only starts literals in `primary.go:386-810`. **This is a pre-requisite for Rule 11 (and Rule 14 which depends on borrow-scopes).** Implemented as a separate parser step (Step 0b in the implementation order) before ownership tracking:
+~~**Block expressions (`{ stmts; expr }`) were planned but REMOVED — Cog does not have block expressions.** The plan originally specified `ast.BlockExpr` and `parseBlockExpression` as Step 0b, but these were incorrect and have been deleted.~~
 
-**Block expression parser changes** (in `primary.go`, around line 386-810 where `tokens.LBrace` is handled):
-- Add a new case before the existing `default` fallthrough at line 789: when `typeToken == types.None` or `typeToken == nil` and `p.lex.This().Type == tokens.LBrace`, parse a block expression.
-- The block expression must produce an expression node. Add a new AST type `ast.BlockExpr` that wraps an `ast.Block`:
-  ```go
-  // In internal/ast/block_expr.go (new file)
-  type BlockExpr struct {
-      Token tokens.Token
-      Block NodeIndex  // points to an ast.Block node
-  }
-  ```
-- `ast.BlockExpr.Type()` returns the type of its final expression (the last statement must be an expression statement).
-- In `primary.go`, parse the block using `parseBlockStatement`, then create a `BlockExpr` node:
-  ```go
-  case tokens.LBrace:
-      if typeToken == nil || typeToken == types.None {
-          // Block expression
-          braceToken := p.lex.This()
-          p.lex.Step() // will be re-consumed by parseBlockStatement
-          // Actually, need to handle differently — parseBlockStatement
-          // expects the current token to be '{'. Re-architecture needed.
-          // See design note below.
-      }
-  ```
-  **Design note**: This detection happens inside the `default:` branch of the `switch p.lex.This().Type` in `primary.go` (line 788), NOT in `case tokens.LBrace:` (line 386) which handles typed literals (struct, array, map, set, slice, etc.). The `default:` branch currently emits an error for untyped `{`. The new logic:
-
-```go
-// In primary.go default: branch (line 788-809):
-default:
-    if typeToken == nil || typeToken == types.None {
-        if p.lex.This().Type == tokens.LBrace {
-            // Block expression — delegate to dedicated method
-            return p.parseBlockExpression(ctx)
-        }
-        p.error(p.lex.Peek(-1), "cannot infer type for untyped literal", "primary")
-        // ... existing error recovery ...
-        return ast.ZeroExprIndex
-    }
-    // ... existing error for unexpected type ...
-```
-
-**`parseBlockExpression` implementation**: Mirrors `parseBlockStatement` but:
-1. Creates an enclosed scope
-2. Parses statements until the final expression statement
-3. The final statement's expression type becomes the block expression's type
-4. Returns `ast.BlockExpr` wrapping the block node
-5. Does NOT restore scope — borrow/release (rules 11, 14) is applied from the enclosing scope
-
-```go
-// New method on *Parser:
-func (p *Parser) parseBlockExpression(ctx context.Context) ast.ExprIndex {
-    braceToken := p.lex.This()
-    p.lex.Step() // consume {
-    
-    blockBody := p.parseBlockStatement(ctx)
-    if blockBody == nil {
-        return ast.ZeroExprIndex
-    }
-    
-    if len(blockBody.Statements) == 0 {
-        p.error(braceToken, "block expression must have at least one statement ending in an expression", "primary")
-        return ast.ZeroExprIndex
-    }
-    
-    // Determine block expression type from final expression statement.
-    lastStmt := blockBody.Statements[len(blockBody.Statements)-1]
-    exprStmt, ok := p.ast.Node(lastStmt).(*ast.ExpressionStatement)
-    if !ok {
-        p.error(braceToken, "last statement in block expression must be an expression", "primary")
-        return ast.ZeroExprIndex
-    }
-    
-    exprType := p.ast.Expr(exprStmt.Expr).Type()
-    return p.ast.AddExpr(&ast.BlockExpr{
-        Token: braceToken,
-        Block: p.ast.AddNode(blockBody),
-        Type:  exprType,
-    })
-}
-```
-
-**BlockExpr AST type** (`internal/ast/block_expr.go`): The node must implement `ast.Expr`. Since `BlockExpr` wraps a `NodeIndex` (the Block), and `Expr` in this AST is an interface, `BlockExpr` stores the block's node index and reports its type from the final expression.
-
-```go
-type BlockExpr struct {
-    Token tokens.Token
-    Block NodeIndex
-    exprType types.Type
-}
-
-func (b *BlockExpr) Type() types.Type { return b.exprType }
-func (b *BlockExpr) Pos() (uint32, uint16) { return b.Token.Ln, b.Token.Col }
-```
-
-- At block entry: `MarkBorrowed` on all `var` variables referenced inside (identified by walking the parsed statements for identifiers).
-- At block exit: `ReleaseBorrowed` on each.
-- The borrow scope is the enclosing scope's current `borrowCounts` map, not the block's inner scope.
+If block expressions are added to Cog in the future, the ownership model would:
+- At block entry: `MarkBorrowed` on all `var` variables referenced inside
+- At block exit: `ReleaseBorrowed` on each
+- The borrow scope is the enclosing scope's current `borrowCounts` map, not the block's inner scope
 
 #### Rule 12: Async closure consumes `var` mutable variables
 
@@ -580,12 +490,6 @@ In `parseAssignment` when a field selector is used as RHS:
 - For whole-struct operations (pass to proc, return, pass to func), check `IsFullyAlive`
 - Re-assigning a moved-out field (`c.data = @slice<int64>(5)`) makes that field alive again. The re-assignment is tracked by removing the field's consumed state. After re-assignment, `IsFullyAlive` returns true
 
-#### Rule 20: Match on enum borrows vs consumes
-
-In `parseMatch`:
-- If match arm bindings are immutable → borrow the subject (alive after match)
-- If match arm bindings use `var` → consume the subject
-
 #### Rule 22: Index expressions borrow
 
 In expression parsing for index expressions:
@@ -708,7 +612,7 @@ Add test cases covering all rules from `ownership.cogs` to existing parser test 
 | 9 | `main_func_borrow_after` | 7 | Func arg borrowed, caller can use after call | ✅ No error |
 | 10 | `main_dyn_copy` | 18 | Dyn read on pointer-like type (deep copy) | ✅ No error |
 | 11 | `main_for_borrow` | 15 | For-loop iterable borrowed, alive after loop | ✅ No error |
-| 12 | `main_block_borrow` | 11 | Block expression borrows var, alive after | ✅ No error |
+| ~~12~~ | ~~`main_block_borrow`~~ | ~~11~~ | ~~Block expression borrows var, alive after~~ | ~~REMOVED~~ |
 | 13 | `main_defer_reassigned` | 13 | Defer followed by field reassignment | ❌ Should error |
 | 14 | `main_defer_double` | 13 | Two defers on same variable | ❌ Should error |
 | 15 | `main_defer_already_dead` | 13 | Defer on already-consumed variable | ❌ Should error |
@@ -880,27 +784,32 @@ The recommended order is restructured to resolve **parser pre-requisites before 
 
 | Step | Description | Dependencies | Testable | Risk |
 |------|-------------|--------------|----------|------|
-| 0a | `types.Parameter.Mutable` field + `var` keyword in parameter grammar | None | ✅ Unit test | Low |
-| 0b | `ast.BlockExpr` node + block expression parsing in `primary.go` | None | ✅ Integration test | Medium-High |
-| 1 | `types.IsPointerLike()` in `internal/types/is.go` | None | ✅ Unit test | Low |
-| 2 | Ownership state types (`ownershipState`, maps on `SymbolTable`) | None | ✅ Unit test | Low |
-| 3 | Core ownership API (`MarkConsumed`, `MarkBorrowed`, `IsAlive`, etc.) | Step 2 | ✅ Unit test | Low |
-| 4 | Borrow/consume rules in parser (Rules 2-16, 19-25) | Steps 0a, 0b, 3 | ✅ Integration test | High |
-| 5 | Func restriction checks (Rules 6, 9: `func` vs `proc` enforcement) | Step 0a | ✅ Integration test | Low |
-| 6 | Comparable constraint validation (map key, set element) | None | ✅ Integration test | Low |
-| 7 | Deep copy generation in transpiler (Rule 5: `cog.Copy` on immutable→var) | Step 1 | ✅ Verify output | Medium |
-| 8 | Dynamic variable deep copy in transpiler (Rule 18) | Step 1 | ✅ Verify output | Low |
-| 9 | Map/set insertion deep copy in transpiler (Rule 24) | Steps 1, 4 | ✅ Verify output | Medium |
-| 10 | Parser ownership tests (31 test cases covering all 25 rules) | Steps 4-6 | ✅ Verify | Medium |
-| 11 | Transpiler ownership tests (7 test cases) | Steps 7-9 | ✅ Verify | Low |
+| Step | Description | Status |
+|------|-------------|--------|
+| 0a | `types.Parameter.Mutable` field + `var` keyword in parameter grammar | ✅ DONE |
+| ~~0b~~ | ~~BlockExpr~~ | ~~REMOVED~~ |
+| 1 | `types.IsPointerLike()` in `internal/types/is.go` | ✅ DONE |
+| 2 | Ownership state types (`ownershipState`, maps on `SymbolTable`) | ✅ DONE |
+| 3 | Core ownership API (`MarkConsumed`, `MarkBorrowed`, `IsAlive`, etc.) | ✅ DONE |
+| 4 | Borrow/consume rules in parser (Rules 2-16, 19) | ✅ DONE |
+| 5 | Func restriction checks (Rules 6, 9: `func` vs `proc` enforcement) | ✅ DONE |
+| 6 | Comparable constraint validation (map key, set element) | ✅ DONE |
+| 7 | Deep copy generation in transpiler (Rule 5: `cog.Copy` on immutable→var) | ✅ DONE |
+| 8 | Dynamic variable deep copy in transpiler (Rule 18) | ✅ DONE |
+| 9 | Map/set insertion deep copy in transpiler (Rule 24) | ✅ DONE |
+| 10 | Parser ownership tests | ✅ DONE |
+| 11 | Transpiler ownership tests (7 test cases) | ✅ DONE |
+| **20** | Match on enum borrows vs consumes | ❌ REMOVED — does not apply to Cog's match/enum design; match subjects are never consumed by the match expression |
+| **22** | Index expressions borrow | ✅ DONE |
+| **25** | Chained method calls borrow | ❌ SKIPPED — Cog parser does not support `.Method()` after a call expression (chained calls not in grammar) |
 
-**Step 4 risk** is **High** because it encompasses 13 rules with complex interactions: async closure inside borrow-scope (rule 14), defer forward-checking (rule 13), conditional branch union propagation (rule 16), switch coverage (rule 16 extension), cross-branch propagation mechanics, and chained method borrows (rule 25).
+**Step 4 dependency updated**: was `Steps 0a, 0b, 3`, now `Steps 0a, 3` (0b removed). Step 4 risk remains **High** because it encompasses 13 rules with complex interactions: async closure inside borrow-scope (rule 14), defer forward-checking (rule 13), conditional branch union propagation (rule 16), switch coverage (rule 16 extension), cross-branch propagation mechanics, and chained method borrows (rule 25).
 
 **Step 9 risk** is **Medium** because it requires AST annotation plumbing between parser and transpiler (adding `KeyConsumed`/`ValueConsumed` flags to `ast.KeyValue`).
 
 **Step 10 risk** is **Medium** (not Low) because each test case requires a complete multi-declaration Cog program with type declarations, enum definitions, and proc bodies. Many tests involve type declarations (`Container`, `Result`, `Point`) that must be repeated per test or placed in shared test scaffolding. The 31-test matrix covers all 25 rules with both positive and negative cases, requiring careful assertion setup.
 
-**Critical path**: Steps 0a + 0b are parser pre-requisites that ALL subsequent ownership tracking depends on. These should be implemented and verified before Step 4 begins.
+**Critical path**: Step 0a is a parser pre-requisite that ownership tracking (Step 4) depends on. Step 0b was removed — Cog does not have block expressions.
 
 ## Key Design Decisions
 

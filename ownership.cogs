@@ -3,7 +3,10 @@
 // Scenarios that test the boundaries of the model. Each is annotated with
 // whether it SHOULD compile, referencing the relevant rule.
 
-Point ~ struct { x : int64; y : int64 }
+Point ~ struct {
+    x : int64
+    y : int64
+}
 Container ~ struct { data : []int64; label : utf8 }
 
 // ── 1. Partial move + re-assignment revives the struct ──
@@ -11,7 +14,10 @@ Container ~ struct { data : []int64; label : utf8 }
 // struct whole again. It can then be passed to a proc.
 
 main_revive : proc() = {
-    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    c : var Container = Container{
+        data = @slice<int64>(3),
+        label = "hello",
+    }
     d := c.data                     // c.data consumed
     // worker(c)                    // compile error — c.data dead
     c.data = @slice<int64>(5)       // re-assign — c.data alive again
@@ -25,7 +31,10 @@ worker : proc(data : Container) = { /* ... */ }
 // a specific field is accessed (e.g. &c.data), the borrow is narrower.
 
 main_partial_borrow : proc() = {
-    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    c : var Container = Container{
+        data = @slice<int64>(3),
+        label = "hello",
+    }
 
     r := &c.data                    // borrows c.data specifically (rule 22)
     c.label = "bye"                 // OK — c.label not borrowed
@@ -41,19 +50,17 @@ main_partial_borrow : proc() = {
 // enum variable should survive.
 
 Result ~ enum<int8> {
-    Ok := 0 with value : utf8;
-    Err := 1 with msg : utf8
+    Ok := 0,
+    Err := 1,
 }
 
 main_enum_borrow : proc() = {
-    r : var Result = Result.Ok("hello")
-    match r {
-        case Ok(val) => {           // val is immutable borrow
-            @print(val)
-        }
-        case Err(msg) => {
-            @print(msg)
-        }
+    r : var Result = Result.Ok
+    switch r {
+    case Result.Ok:           // val is immutable borrow
+        @print(val)
+    case Result.Err:
+        @print(msg)
     }
     // r is alive here — borrow released
     // But: does the model distinguish "consume match" (rule 20) from
@@ -97,14 +104,12 @@ main_chain : proc() = {
 // after the match (rule 16 analog, via rule 20).
 
 main_enum_consume : proc() = {
-    r : var Result = Result.Ok("hello")
-    match r {
-        case Ok(val) => {
-            @print(val)             // val borrowed (not consumed)
-        }
-        case Err(msg) => {
-            @print(msg)
-        }
+    r : var Result = Result.Ok
+    switch r {
+    case Result.Ok:
+        @print(val)             // val borrowed (not consumed)
+    case Result.Err(msg):
+        @print(msg)
     }
     // r is alive — nothing was consumed
 }
@@ -116,25 +121,37 @@ main_enum_consume : proc() = {
 // dead). Multiple defers on the same variable are also rejected.
 
 main_defer_reassigned_after : proc() = {
-    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    c : var Container = Container{
+        data = @slice<int64>(3),
+        label = "hello",
+    }
     defer cleanup(c.data)            // compile error — c.data is consumed below
     c.data = @slice<int64>(5)        // c.data consumed
 }
 
 main_defer_ok : proc() = {
-    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    c : var Container = Container{
+        data = @slice<int64>(3),
+        label = "hello",
+    }
     defer cleanup(c.data)            // OK — no consumption of c.data after this
     c.label = "bye"                  // OK — c.label not reserved
 }
 
 main_defer_double : proc() = {
-    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    c : var Container = Container{
+        data = @slice<int64>(3),
+        label = "hello",
+    }
     defer cleanup(c.data)            // compile error — c.data already reserved below
     defer cleanup(c.data)            // reserves c.data (first-to-execute)
 }
 
 main_defer_already_dead : proc() = {
-    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    c : var Container = Container{
+        data = @slice<int64>(3),
+        label = "hello",
+    }
     d := c.data                      // c.data consumed
     defer cleanup(c.data)            // compile error — c.data already dead
 }
@@ -148,7 +165,10 @@ cleanup : proc(data : []int64) = { /* ... */ }
 // But c.label remains alive.
 
 main_cond_partial : proc() = {
-    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    c : var Container = Container{
+        data = @slice<int64>(3),
+        label = "hello",
+    }
     if true {
         d := c.data                 // c.data consumed
     } else {
@@ -163,7 +183,10 @@ main_cond_partial : proc() = {
 // just like passing to a proc.
 
 main_return_partial : proc() var Container = {
-    c : var Container = Container{data: @slice<int64>(3), label: "hello"}
+    c : var Container = Container{
+        data = @slice<int64>(3),
+        label = "hello",
+    }
     d := c.data                     // c.data consumed
     // return c                     // compile error — c.data dead
     c.data = @slice<int64>(5)       // re-assign

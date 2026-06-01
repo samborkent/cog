@@ -214,6 +214,9 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				return ast.ZeroExprIndex
 			}
 
+			// Rules 7 & 8: func borrows args, proc consumes args.
+			p.applyCallOwnership(callToken, procType, args)
+
 			if len(procType.TypeParams) > 0 {
 				// Generic call with type inference.
 				typeArgs, returnType := p.inferTypeArgs(procType, args)
@@ -355,6 +358,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 				args := p.parseCallArguments(ctx, procType)
 				if args == nil {
+					return ast.ZeroExprIndex
+				}
+
+				// Rules 7 & 8: func borrows args, proc consumes args.
+				if !p.applyCallOwnership(callToken, procType, args) {
 					return ast.ZeroExprIndex
 				}
 
@@ -541,13 +549,17 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				p.symbols = NewEnclosedSymbolTable(p.symbols)
 
 				for _, param := range t.Parameters {
+					qualifier := ast.QualifierImmutable
+					if param.Mutable {
+						qualifier = ast.QualifierVariable
+					}
 					p.symbols.Define(&ast.Identifier{
 						Token: tokens.Token{
 							Type:    tokens.Identifier,
 							Literal: param.Name,
 						},
 						ValueType: param.Type,
-						Qualifier: ast.QualifierImmutable,
+						Qualifier: qualifier,
 					})
 					p.symbols.MarkUsed(param.Name)
 				}

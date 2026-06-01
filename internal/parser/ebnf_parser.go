@@ -36,6 +36,12 @@ func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.ExprI
 			return ast.ZeroExprIndex
 		}
 
+		// Rule 22: Index expressions borrow the container.
+		if exprIdent, ok := p.ast.Expr(expr).(*ast.Identifier); ok &&
+			exprIdent.Qualifier == ast.QualifierVariable {
+			p.symbols.MarkBorrowed(exprIdent.Token.Literal)
+		}
+
 		// Allocate index expression.
 		indexExpr := ast.New[ast.Index](p.ast)
 		indexExpr.Token = operator
@@ -62,6 +68,12 @@ func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.ExprI
 			}
 		default:
 			panic(fmt.Sprintf("unexpected indexable type that is not array, slice, map, set, or string: %v", exprType))
+		}
+
+		// Rule 22: Release borrow after index expression.
+		if exprIdent, ok := p.ast.Expr(expr).(*ast.Identifier); ok &&
+			exprIdent.Qualifier == ast.QualifierVariable {
+			p.symbols.ReleaseBorrowed(exprIdent.Token.Literal)
 		}
 
 		expr = p.ast.AddExpr(indexExpr)
@@ -143,6 +155,9 @@ func (p *Parser) comparison(ctx context.Context, typeToken types.Type) ast.ExprI
 
 func (p *Parser) term(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.factor(ctx, typeToken)
+	if expr == ast.ZeroExprIndex {
+		return ast.ZeroExprIndex
+	}
 
 	for p.match(p.lex.This(), tokens.Minus, tokens.Plus) {
 		operator := p.lex.This()
@@ -195,7 +210,7 @@ func (p *Parser) factor(ctx context.Context, typeToken types.Type) ast.ExprIndex
 }
 
 func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex {
-	if p.match(p.lex.This(), tokens.Not, tokens.Minus, tokens.BitAnd) {
+	if p.match(p.lex.This(), tokens.Not, tokens.Minus, tokens.BitAnd, tokens.Asterisk) {
 		// Previous operator is stored, to disallow double references.
 		prevOperator := p.lex.Peek(-1)
 		if prevOperator.Type == tokens.LParen && p.lex.Peek(-2).Type == tokens.BitAnd {
@@ -239,6 +254,27 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex 
 		} else if operator.Type == tokens.Minus && !types.IsSigned(rightType) {
 			p.error(operator, "operator requires signed numeric type", "unary")
 			return ast.ZeroExprIndex
+		} else if operator.Type == tokens.Asterisk && rightType.Kind() != types.ReferenceKind {
+			p.error(operator, "dereference requires reference type", "unary")
+			return ast.ZeroExprIndex
+		} else if operator.Type == tokens.BitAnd {
+			// Rule 2: & consumes var variable.
+			if ident, ok := p.ast.Expr(right).(*ast.Identifier); ok && ident.Qualifier == ast.QualifierVariable {
+				if !p.symbols.IsAlive(ident.Token.Literal) {
+					p.error(operator, fmt.Sprintf("cannot take reference of %s: variable is consumed", ident.Token.Literal), "unary")
+					return ast.ZeroExprIndex
+				}
+				p.symbols.MarkConsumed(ident.Token.Literal)
+			}
+		} else if operator.Type == tokens.Asterisk {
+			// Rule 3: * deref consumes var & reference.
+			if ident, ok := p.ast.Expr(right).(*ast.Identifier); ok && ident.Qualifier == ast.QualifierVariable {
+				if !p.symbols.IsAlive(ident.Token.Literal) {
+					p.error(operator, fmt.Sprintf("cannot dereference %s: variable is consumed", ident.Token.Literal), "unary")
+					return ast.ZeroExprIndex
+				}
+				p.symbols.MarkConsumed(ident.Token.Literal)
+			}
 		}
 
 		return p.ast.NewPrefix(operator, rightType, right)
@@ -297,12 +333,18 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex 
 		return p.ast.NewSuffix(token, typeToken, expr)
 	}
 
-	// Must-check analysis: bare access to option/result requires prior ? check.
 	if ident, ok := p.ast.Expr(expr).(*ast.Identifier); ok {
 		kind := typeToken.Kind()
 
+		// Must-check analysis: bare access to option/result requires prior ? check.
 		if (kind == types.OptionKind || kind == types.ResultKind) && !p.symbols.IsValueChecked(ident.Token.Literal) {
 			p.error(ident.Token, "must check "+ident.Token.Literal+" before accessing value", "unary")
+			return ast.ZeroExprIndex
+		}
+
+		// Consumed variable check: use of a consumed var is an error.
+		if ident.Qualifier == ast.QualifierVariable && !p.symbols.IsAlive(ident.Token.Literal) {
+			p.error(ident.Token, fmt.Sprintf("cannot use %s: variable is consumed", ident.Token.Literal), "unary")
 			return ast.ZeroExprIndex
 		}
 	}

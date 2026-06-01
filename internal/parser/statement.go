@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
@@ -313,10 +314,29 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 				selectorToken := identToken
 				selectorToken.Literal += "." + selector.Fields[len(selector.Fields)-1].Token.Literal
 
+				// Rule 13: Check if the field is reserved by a defer.
+				if p.symbols.IsFieldReserved(ident.Token.Literal, selector.Fields[len(selector.Fields)-1].Token.Literal) {
+					p.error(ident.Token, fmt.Sprintf("cannot reassign %s: field '%s' reserved by defer", ident.Token.Literal, selector.Fields[len(selector.Fields)-1].Token.Literal), "parseStatement")
+					// Skip the rest of the assignment to continue parsing.
+					p.lex.Step() // consume =
+					_ = p.expression(ctx, types.None)
+					return ast.ZeroNodeIndex
+				}
+				// Rule 19: Re-assigning a moved-out field revives it.
+				p.symbols.ReviveField(ident.Token.Literal, selector.Fields[len(selector.Fields)-1].Token.Literal)
+
+				// Determine the field's type for type-checking the RHS expression.
+				var fieldType types.Type
+				if len(selector.Fields) > 1 {
+					lastField := selector.Fields[len(selector.Fields)-1]
+					fieldType = lastField.ValueType
+				}
+
 				// Build a selector identifier for the assignment.
 				selectorIdent := &ast.Identifier{
 					Token:     selectorToken,
 					Qualifier: ast.QualifierVariable,
+					ValueType: fieldType,
 				}
 
 				return p.parseAssignment(ctx, selectorIdent)
@@ -410,6 +430,10 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 		deferToken := p.lex.This()
 		p.lex.Step()
 
+		// Save ownership state before expression parsing so we can detect
+		// double-defer even when the call expression overwrites stateReserved.
+		preOwn, _ := p.symbols.snapshotOwnership()
+
 		exprIdx := p.expression(ctx, types.None)
 		if exprIdx == ast.ZeroExprIndex {
 			return ast.ZeroNodeIndex
@@ -420,6 +444,37 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 		default:
 			p.error(deferToken, "defer requires a procedure call or closure", "parseStatement")
 			return ast.ZeroNodeIndex
+		}
+
+		// Rule 13: Defer reserves captured var variables.
+		captured := p.collectCapturedVars(exprIdx)
+		capturedFields := p.collectCapturedStructFields(exprIdx)
+		for name := range captured {
+			// Check reservation constraint using the pre-call snapshot.
+			if prevState, ok := preOwn[name]; ok && prevState == stateReserved {
+				p.error(deferToken, fmt.Sprintf("cannot defer %s: already reserved by a defer", name), "parseStatement")
+				return ast.ZeroNodeIndex
+			}
+
+			// Undo any consumption from the call expression so MarkReserved can apply.
+			owning := p.symbols.owningScope(name)
+			if owning != nil {
+				if state, ok := owning.ownership.Load(name); ok && state == stateConsumed {
+					owning.ownership.Delete(name)
+				}
+			}
+			if err := p.symbols.MarkReserved(name); err != nil {
+				p.error(deferToken, err.Error(), "parseStatement")
+				return ast.ZeroNodeIndex
+			}
+		}
+		for sv, fields := range capturedFields {
+			for f := range fields {
+				if err := p.symbols.MarkFieldReserved(sv, f); err != nil {
+					p.error(deferToken, err.Error(), "parseStatement")
+					return ast.ZeroNodeIndex
+				}
+			}
 		}
 
 		return p.ast.NewDefer(deferToken, exprIdx)
@@ -456,6 +511,34 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 				// A checked result identifier used as a bare expression denotes
 				// its success value; wrap it for a result-typed return.
 				exprIndex = p.ast.NewResultLiteral(returnToken, p.currentReturnType, exprIndex, exprType.Kind() == types.ErrorKind)
+			}
+		}
+
+		// Rule 10: Return transfers ownership.
+		{
+			e := p.ast.Expr(exprIndex)
+			if ident, ok := e.(*ast.Identifier); ok && ident.Qualifier == ast.QualifierVariable {
+				// Check struct fields before consuming the whole variable.
+				if ident.ValueType.Kind() == types.StructKind && !p.symbols.IsFullyAlive(ident.Token.Literal) {
+					var deadField string
+					if sym, ok := p.symbols.Resolve(ident.Token.Literal); ok && sym.Identifier.ValueType.Kind() == types.StructKind {
+						if st, ok := sym.Identifier.ValueType.Underlying().(*types.Struct); ok {
+							for _, f := range st.Fields {
+								if !p.symbols.IsFieldAlive(ident.Token.Literal, f.Name) {
+									deadField = f.Name
+									break
+								}
+							}
+						}
+					}
+					p.error(returnToken, fmt.Sprintf("cannot move %s: field '%s' is already moved out", ident.Token.Literal, deadField), "parseReturn")
+					return ast.ZeroNodeIndex
+				}
+				if !p.symbols.IsAlive(ident.Token.Literal) {
+					p.error(returnToken, fmt.Sprintf("cannot return %s: variable is consumed", ident.Token.Literal), "parseReturn")
+					return ast.ZeroNodeIndex
+				}
+				p.symbols.MarkConsumed(ident.Token.Literal)
 			}
 		}
 

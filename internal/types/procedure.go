@@ -14,6 +14,7 @@ type Procedure struct {
 type Parameter struct {
 	Name     string
 	Optional bool
+	Mutable  bool
 	Type     Type
 	Default  *Expression // cannot be ast.Expression due to import cycle
 }
@@ -56,6 +57,10 @@ func (p *Procedure) String() string {
 		}
 
 		_, _ = out.WriteString(" : ")
+
+		if param.Mutable {
+			_, _ = out.WriteString("var ")
+		}
 		_, _ = out.WriteString(param.Type.String())
 
 		if param.Default != nil {

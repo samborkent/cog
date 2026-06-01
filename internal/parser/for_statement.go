@@ -125,6 +125,16 @@ func (p *Parser) parseForStatement(ctx context.Context) ast.NodeIndex {
 		}
 	}
 
+	// Rule 15: For-loop borrows iterable.
+	var borrowedVar string
+	if rangeExpr != ast.ZeroExprIndex {
+		if ident, ok := p.ast.Expr(rangeExpr).(*ast.Identifier); ok &&
+			ident.Qualifier == ast.QualifierVariable {
+			borrowedVar = ident.Token.Literal
+			p.symbols.MarkBorrowed(borrowedVar)
+		}
+	}
+
 	prevErrorCount := len(p.Errs)
 
 	loop := p.parseBlockStatement(ctx)
@@ -138,6 +148,11 @@ func (p *Parser) parseForStatement(ctx context.Context) ast.NodeIndex {
 		p.checkUnused()
 		// Restore scope.
 		p.symbols = p.symbols.Outer
+	}
+
+	// Rule 15: Release borrow after loop body.
+	if borrowedVar != "" {
+		p.symbols.ReleaseBorrowed(borrowedVar)
 	}
 
 	// Logic for specific error when a untyped container literal is passed in loop range expression.

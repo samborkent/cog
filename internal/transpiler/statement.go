@@ -46,7 +46,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 				}
 
 				return []goast.Stmt{
-					component.DynWrite(name, val),
+					component.DynWrite(name, val, t.dynPointerLike[name]),
 				}, nil
 			}
 
@@ -119,6 +119,23 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 		expr, err := t.convertExpr(t.Expr(n.Assignment.Expr))
 		if err != nil {
 			return nil, err
+		}
+
+		// Rule 5: immutable → var deep copy for pointer-like types (inside proc body).
+		if n.Assignment.Identifier.Qualifier == ast.QualifierVariable &&
+			n.Assignment.Expr != ast.ZeroExprIndex {
+			if astIdent, ok := t.Expr(n.Assignment.Expr).(*ast.Identifier); ok &&
+				astIdent.Qualifier != ast.QualifierVariable &&
+				astIdent.Qualifier != ast.QualifierDynamic &&
+				types.IsPointerLike(astIdent.Type()) {
+				expr = &goast.CallExpr{
+					Fun: &goast.SelectorExpr{
+						X:   &goast.Ident{Name: "cog"},
+						Sel: &goast.Ident{Name: "Copy"},
+					},
+					Args: []goast.Expr{expr},
+				}
+			}
 		}
 
 		// Optional type declaration.

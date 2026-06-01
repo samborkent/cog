@@ -246,7 +246,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 
 			t.usesDyn = true
 
-			return component.DynRead(name), nil
+			return component.DynRead(name, t.dynPointerLike[name]), nil
 		}
 
 		goIdent := component.Ident(n)
@@ -598,6 +598,18 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 				return nil, fmt.Errorf("converting map literal value %d: %w", i, err)
 			}
 
+			// Map insertion: wrap var pointer-like keys/values in cog.Copy.
+			if keyIdent, ok := t.Expr(pair.Key).(*ast.Identifier); ok &&
+				keyIdent.Qualifier == ast.QualifierVariable &&
+				identIsPointerLike(keyIdent) {
+				keyExpr = cogCopyExpr(keyExpr)
+			}
+			if valIdent, ok := t.Expr(pair.Value).(*ast.Identifier); ok &&
+				valIdent.Qualifier == ast.QualifierVariable &&
+				identIsPointerLike(valIdent) {
+				valExpr = cogCopyExpr(valExpr)
+			}
+
 			exprs[i] = &goast.KeyValueExpr{
 				Key:   keyExpr,
 				Value: valExpr,
@@ -808,6 +820,13 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			goExpr, err := t.convertExpr(t.Expr(v))
 			if err != nil {
 				return nil, fmt.Errorf("converting set literal value %d: %w", i, err)
+			}
+
+			// Rule 24: Set insertion wraps var pointer-like values in cog.Copy.
+			if setIdent, ok := t.Expr(v).(*ast.Identifier); ok &&
+				setIdent.Qualifier == ast.QualifierVariable &&
+				identIsPointerLike(setIdent) {
+				goExpr = cogCopyExpr(goExpr)
 			}
 
 			if isASCII {
@@ -1135,4 +1154,21 @@ func convertUnaryOperator(t tokens.Type) (gotoken.Token, error) {
 	default:
 		return gotoken.ILLEGAL, fmt.Errorf("unknown unary operator %s", t.String())
 	}
+}
+
+func cogCopyExpr(inner goast.Expr) goast.Expr {
+	return &goast.CallExpr{
+		Fun: &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "cog"},
+			Sel: &goast.Ident{Name: "Copy"},
+		},
+		Args: []goast.Expr{inner},
+	}
+}
+
+func identIsPointerLike(ident *ast.Identifier) bool {
+	if ident.ValueType == nil {
+		return false
+	}
+	return types.IsPointerLike(ident.ValueType)
 }

@@ -113,6 +113,11 @@ func (p *Parser) parseBuiltinMap(ctx context.Context, t tokens.Token, tokenType 
 		return ast.ZeroExprIndex
 	}
 
+	if !types.IsComparable(typArgs[0]) {
+		p.error(p.lex.This(), fmt.Sprintf("map key type %q is not comparable", typArgs[0]), "parseBuiltinMap")
+		return ast.ZeroExprIndex
+	}
+
 	if tokenType.Kind() != types.Invalid {
 		mapType, ok := tokenType.Underlying().(*types.Map)
 		if !ok {
@@ -258,6 +263,11 @@ func (p *Parser) parseBuiltinSet(ctx context.Context, t tokens.Token, tokenType 
 
 	if len(typArgs) == 0 || len(typArgs) > 2 {
 		p.error(p.lex.This(), "@set wrong number of type arguments", "parseBuiltinSet")
+		return ast.ZeroExprIndex
+	}
+
+	if !types.IsComparable(typArgs[0]) {
+		p.error(p.lex.This(), fmt.Sprintf("set element type %q is not comparable", typArgs[0]), "parseBuiltinSet")
 		return ast.ZeroExprIndex
 	}
 

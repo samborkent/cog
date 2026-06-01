@@ -79,6 +79,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 	p.lex.Step() // consume {
 
 	cases := make([]*ast.MatchCase, 0, matchPreallocationSize)
+	var branchDeltas []branchConsumption
 
 	for p.lex.This().Type == tokens.Case {
 		caseNode := &ast.MatchCase{
@@ -108,6 +109,9 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 
 		p.lex.Step() // consume :
 
+		// Rule 16: Snapshot the enclosing scope's ownership before entering the arm.
+		caseOwn, caseFieldOwn := p.symbols.snapshotOwnership()
+
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
 		if binding != nil {
@@ -132,10 +136,15 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 		p.checkUnused()
 		p.symbols = p.symbols.Outer
 
+		// Rule 16: Capture delta and restore for next case.
+		branchDeltas = append(branchDeltas, p.symbols.diffOwnership(caseOwn, caseFieldOwn))
+		p.symbols.restoreOwnership(caseOwn, caseFieldOwn)
+
 		cases = append(cases, caseNode)
 	}
 
 	var defaultNode *ast.Default
+	var defDelta branchConsumption
 
 	if p.lex.This().Type == tokens.Default {
 		defaultNode = &ast.Default{
@@ -150,6 +159,9 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 		}
 
 		p.lex.Step() // consume :
+
+		// Rule 16: Snapshot the enclosing scope's ownership before default arm.
+		caseOwn, caseFieldOwn := p.symbols.snapshotOwnership()
 
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
@@ -175,6 +187,9 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 
 		p.checkUnused()
 		p.symbols = p.symbols.Outer
+
+		defDelta = p.symbols.diffOwnership(caseOwn, caseFieldOwn)
+		p.symbols.restoreOwnership(caseOwn, caseFieldOwn)
 	}
 
 	if p.lex.This().Type != tokens.RBrace {
@@ -183,6 +198,22 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 	}
 
 	p.lex.Step() // consume }
+
+	// Rule 16: Union consumption across match arms.
+	if len(branchDeltas) > 0 || (defaultNode != nil) {
+		if defaultNode != nil {
+			branchDeltas = append(branchDeltas, defDelta)
+		}
+		unionVars, unionFields := unionConsumption(branchDeltas)
+		for name := range unionVars {
+			p.symbols.MarkConsumed(name)
+		}
+		for sv, fs := range unionFields {
+			for f := range fs {
+				p.symbols.MarkFieldConsumed(sv, f)
+			}
+		}
+	}
 
 	return p.ast.NewMatch(matchToken, label, binding, subject, cases, defaultNode)
 }

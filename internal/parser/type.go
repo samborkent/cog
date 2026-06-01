@@ -235,6 +235,11 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 
 		p.lex.Step() // consume >
 
+		if !types.IsComparable(keyType) {
+			p.error(p.lex.Peek(-1), fmt.Sprintf("map key type %q is not comparable", keyType), "parseType")
+			return nil
+		}
+
 		return &types.Map{
 			Key:   keyType,
 			Value: valType,
@@ -260,6 +265,11 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		}
 
 		p.lex.Step() // consume >
+
+		if !types.IsComparable(elemType) {
+			p.error(p.lex.Peek(-1), fmt.Sprintf("set element type %q is not comparable", elemType), "parseType")
+			return nil
+		}
 
 		return &types.Set{Element: elemType}
 	case tokens.Struct:
@@ -755,6 +765,12 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 
 		p.lex.Step() // consume :
 
+		// Check for mutable qualifier before the type.
+		if p.lex.This().Type == tokens.Variable {
+			param.Mutable = true
+			p.lex.Step() // consume var
+		}
+
 		paramType := p.parseCombinedType(ctx, false, false)
 		if paramType == nil {
 			p.error(p.lex.This(), "unknown parameter type", "parseParameters")
@@ -786,6 +802,16 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 	}
 
 	p.lex.Step() // consume )
+
+	// func cannot have mutable parameters.
+	if procType.Function {
+		for _, param := range procType.Parameters {
+			if param.Mutable {
+				p.error(p.lex.Peek(-1), "func cannot have mutable parameters", "parseProcedureType")
+				return nil
+			}
+		}
+	}
 
 	if p.lex.This().Type == tokens.Assign {
 		// No return type.
