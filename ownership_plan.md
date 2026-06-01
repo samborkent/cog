@@ -14,7 +14,7 @@ The plan has **two major phases**, each split into incremental steps that can be
 
 Add a borrow/consume/dead tracking system to the `SymbolTable` that is checked during parsing. Errors are emitted as parse errors (compile-time).
 
-### Step 1: Ownership State Types (`internal/parser/ownership.go`)
+### Step 2: Ownership State Types (`internal/parser/ownership.go`)
 
 Create new types parallel to the existing `checkState` pattern:
 
@@ -22,9 +22,9 @@ Create new types parallel to the existing `checkState` pattern:
 type ownershipState uint8
 
 const (
-    stateAlive     ownershipState = 0  // variable is live (default for var)
-    stateConsumed  ownershipState = 1 << iota // permanently consumed
-    stateReserved                            // reserved by defer (rule 13)
+    stateAlive    ownershipState = iota // variable is live (default for var)
+    stateConsumed                       // permanently consumed
+    stateReserved                       // reserved by defer (rule 13)
 )
 
 type fieldState struct {
@@ -42,7 +42,7 @@ Add three maps to `SymbolTable`:
 
 **Files affected**: `internal/parser/symbol_table.go`, new file `internal/parser/ownership.go`
 
-### Step 2: Core Ownership API on SymbolTable
+### Step 3: Core Ownership API on SymbolTable
 
 Add methods to `SymbolTable`:
 
@@ -73,16 +73,17 @@ Borrow counter methods (`MarkBorrowed`, `ReleaseBorrowed`, `IsBorrowed`) operate
 
 **Files affected**: `internal/parser/ownership.go`, `internal/parser/symbol_table.go`
 
-### Step 3: Borrow/Consume Rules in Parser Statement Processing
+### Step 4: Borrow/Consume Rules in Parser Statement Processing
 
 Modify `parseStatement` and related functions to enforce ownership rules:
 
 #### Rule 2: Taking `&` reference of `var` mutable value consumes the variable
 
-In expression parsing for the prefix `&` operator (in `internal/parser/expression.go`):
+In expression parsing for the prefix `&` operator (in `internal/parser/ebnf_parser.go`, the `unary` function):
 - When the operand is a `var` variable identifier, call `MarkConsumed` on it
 - The resulting `&` reference is immutable — the variable's data is now accessible only through the reference
 - Checking `IsAlive` afterward should report the variable as dead
+- Implementation: insert the `MarkConsumed` call after `p.unary(ctx, exprType)` returns and before the `p.ast.NewPrefix(...)` call, using the returned expression to detect if it's a `var` identifier
 
 #### Rule 3: Dereferencing `var &` mutable reference consumes the reference
 
@@ -95,6 +96,7 @@ In expression parsing for the prefix `*` operator:
 In `parseAssignment` (in `assignment.go`), when the RHS is an identifier with `QualifierVariable` and pointer-like type:
 - Call `MarkConsumed` on the source
 - Error if the source is already dead
+- **Even non-pointer-like types must be consumed**: rule 4 says any `var` to `var` assignment transfers ownership, regardless of whether the type is pointer-like. Non-pointer-like types (primitives, structs of primitives) are cheap to copy, but ownership still transfers — the source is dead after assignment. This prevents aliasing bugs uniformly.
 
 #### Rule 5: Immutable to `var` deep copies
 
@@ -112,23 +114,114 @@ When a `func` call is detected (via `Procedure.Function == true`):
 When a `proc` call is detected:
 - For each argument that is a `var` identifier, call `MarkConsumed`
 
+**Parameter qualifier alignment**: When a `proc` has a `var` parameter, the parameter inside the proc body must be defined with `QualifierVariable`, not `QualifierImmutable`. Currently `primary.go:549` hardcodes `QualifierImmutable` for all parameters. Fix: after parsing the procedure type (where parameter qualifiers are part of the type definition — the `proc` type carries a `Mutable` flag per parameter), use that flag to set the correct qualifier when defining the parameter symbol.
+
+The parameter type (`types.Parameter`) needs a `Mutable bool` field. Set it during parameter parsing in `parseProcedureType`:
+
+The parameter loop at `type.go:723-786` currently starts each parameter by expecting `tokens.Identifier`. The `var` keyword would appear before the type, after the colon: `proc(x : var T)`. The loop must be extended:
+```go
+for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+    tok := p.lex.This()
+    if tok.Type == tokens.RParen {
+        break
+    }
+    if tok.Type != tokens.Identifier {
+        p.error(tok, "expected parameter identifier", "parseParameters")
+        return nil
+    }
+    param := &types.Parameter{
+        Name: tok.Literal,
+        Mutable: false,                                  // <-- default
+    }
+    p.lex.Step() // consume identifier
+
+    if p.lex.This().Type == tokens.Question {
+        param.Optional = true
+        haveOptional = true
+        p.lex.Step() // consume ?
+    }
+
+    if p.lex.This().Type != tokens.Colon {
+        p.error(p.lex.This(), "expected ':' after input parameter identifier", "parseParameters")
+        return nil
+    }
+    p.lex.Step() // consume :
+
+    // Check for mutable qualifier before the type.
+    if p.lex.This().Type == tokens.Variable {             // <-- new
+        param.Mutable = true                              // <-- new
+        p.lex.Step() // consume var                       // <-- new
+    }
+
+    paramType := p.parseCombinedType(ctx, false, false)
+    ...
+}
+```
+
+For `func` type checking: after the parameter loop, if `procType.Function == true` and any `param.Mutable == true`, emit a compile error (`"func cannot have mutable parameters"`).
+
+For `proc`: proc parameters may be mutable. The `func` rejection check prevents `var` usage in `func` types.
+
+When defining parameter symbols in `primary.go:543-552`, use `QualifierVariable` for mutable params and `QualifierImmutable` for immutable params:
+```go
+qualifier := ast.QualifierImmutable
+if param.Mutable {
+    qualifier = ast.QualifierVariable
+}
+ident := &ast.Identifier{
+    ...
+    Qualifier: qualifier,
+}
+```
+
 #### Rule 10: Return transfers ownership
 
-In the `parseReturn` handler:
-- The returned expression's `var` ownership transfers to caller → mark consumed
+In the `parseReturn` handler (`statement.go:428-462`):
+- If the returned expression is a `var` struct variable, call `p.symbols.IsFullyAlive(ident.Name)` to verify no fields have been moved out. If any field is dead, emit a compile error (`"cannot move %s: field '%s' is already moved out"`).
+- If the returned expression is a `var` identifier of pointer-like type, call `MarkConsumed` on it — ownership transfers to the caller.
+- If the returned expression is a `var` struct with all fields alive, call `MarkConsumed` on the entire struct — ownership transfers as a unit.
+- **Rationale for `IsFullyAlive`**: A struct with a moved-out field cannot be meaningfully returned because the returned value would have a dead field. The check mirrors the whole-struct pass-to-proc check (Rule 19) — both are whole-value transfer operations.
 
 #### Rule 11: Block expression borrows
 
-Block expressions are currently not first-class. When block expressions borrow:
-- At block entry, `MarkBorrowed` on all `var` variables referenced inside
-- At block exit, `ReleaseBorrowed`
+Block expressions (`{ stmts; expr }`) are currently not parsed as expressions — the `{` token only starts literals in `primary.go:386-810`. **This is a pre-requisite for Rule 11 (and Rule 14 which depends on borrow-scopes).** Implemented as a separate parser step (Step 2b in the implementation order) before ownership tracking:
+
+**Block expression parser changes** (in `primary.go`, around line 386-810 where `tokens.LBrace` is handled):
+- Add a new case before the existing `default` fallthrough at line 789: when `typeToken == types.None` or `typeToken == nil` and `p.lex.This().Type == tokens.LBrace`, parse a block expression.
+- The block expression must produce an expression node. Add a new AST type `ast.BlockExpr` that wraps an `ast.Block`:
+  ```go
+  // In internal/ast/block_expr.go (new file)
+  type BlockExpr struct {
+      Token tokens.Token
+      Block NodeIndex  // points to an ast.Block node
+  }
+  ```
+- `ast.BlockExpr.Type()` returns the type of its final expression (the last statement must be an expression statement).
+- In `primary.go`, parse the block using `parseBlockStatement`, then create a `BlockExpr` node:
+  ```go
+  case tokens.LBrace:
+      if typeToken == nil || typeToken == types.None {
+          // Block expression
+          braceToken := p.lex.This()
+          p.lex.Step() // will be re-consumed by parseBlockStatement
+          // Actually, need to handle differently — parseBlockStatement
+          // expects the current token to be '{'. Re-architecture needed.
+          // See design note below.
+      }
+  ```
+  **Design note**: `parseBlockStatement` expects `p.lex.This()` to be `{` and consumes it. To reuse it, call it before the LBrace case is reached, or restructure the primary function flow. Alternative: inline the block parsing logic in `primary` directly (create scope, parse statements, expect final expression, close brace). The simplest approach: add a dedicated `parseBlockExpression` method that mirrors `parseBlockStatement` but returns the final expression's type.
+
+- At block entry: `MarkBorrowed` on all `var` variables referenced inside (identified by walking the parsed statements for identifiers).
+- At block exit: `ReleaseBorrowed` on each.
+- The borrow scope is the enclosing scope's current `borrowCounts` map, not the block's inner scope.
 
 #### Rule 12: Async closure consumes `var` mutable variables
 
 In `parseProcedureLiteral` when the closure has `async` annotation:
-- Identify `var` variables referenced inside the closure body
+- Identify `var` variables referenced inside the closure body by walking the AST
 - Call `MarkConsumed` on each — the closure outlives the enclosing scope
 - Consumed variables cannot be used after the async closure definition
+- Requires a helper to walk the deferred body's expression tree and collect all `ast.Identifier` nodes with `QualifierVariable` that resolve to local scope variables
 
 #### Rule 13: Defer reserves
 
@@ -151,17 +244,49 @@ Before deciding borrow vs. consume for a block expression (rule 11) or for-loop 
 #### Rule 15: For-loop borrows iterable
 
 In `parseForStatement`:
-- Before parsing the loop body, `MarkBorrowed` on the range expression's variable
+- Before parsing the loop body, `MarkBorrowed` on the range expression's variable (**in the enclosing scope**, not the body's scope — the borrow counter lives one level above the body)
 - After the loop body, `ReleaseBorrowed`
 - Handle nesting with a counter (the borrow counter in the current scope)
 - Before finalizing borrow vs. consume, scan the loop body for async closures capturing the iterable (see Rule 14)
 
+**`break`/`continue` interaction**: These statements do not affect borrow tracking. `MarkBorrowed` and `ReleaseBorrowed` bracket the *parse* of the loop body, not its runtime execution. `parseBlockStatement` returns the body node (potentially containing `Branch` nodes for break/continue), and then `ReleaseBorrowed` runs immediately in the parser. The borrow counter is a compile-time artifact — `break`/`continue` inside the body are already parsed statements in the returned Block; the borrow release is unconditional after `parseBlockStatement` returns.
+
 #### Rule 16: Consumption is permanent across branches
 
-After `parseIfStatement` or `parseMatch`:
+After `parseIfStatement` or `parseMatch` or `parseSwitch`:
 - Any variable consumed in ANY branch → mark consumed for the rest of the scope
 - Track per-branch consumption and union across branches
 - For partial moves (rule 19), apply the union per-field: if `c.data` is consumed in any branch, `c.data` is dead after the conditional; `c.label` remains alive
+
+**Cross-branch ownership propagation mechanism**: Each branch block (consequence, alternative, match arm, switch case) creates its own symbol table scope via `parseBlockStatement`. Consumption inside that scope does NOT automatically propagate to the enclosing scope. After each branch finishes parsing, its consumed state must be explicitly propagated:
+
+```go
+// After parsing each branch in parseIfStatement, parseMatch, or parseSwitch:
+if branchScope != nil && branchScope.ownership != nil {
+    for name, state := range branchScope.ownership.All() {
+        if state == stateConsumed {
+            // Propagate to the enclosing scope (p.symbols after restore).
+            p.symbols.MarkConsumed(name)
+        }
+    }
+    if branchScope.fieldOwnership != nil {
+        for structVar, fields := range branchScope.fieldOwnership.All() {
+            for fieldName, fieldState := range fields.All() {
+                if fieldState == stateConsumed {
+                    p.symbols.MarkFieldConsumed(structVar, fieldName)
+                }
+            }
+        }
+    }
+}
+```
+
+The propagation runs AFTER the branch's scope has been restored (`p.symbols = p.symbols.Outer`). This way, `MarkConsumed` is called on the enclosing scope where the variable was originally defined.
+
+**Implementation placement**:
+1. `parseIfStatement` (`if_statement.go`): after line 68 (`consequence := p.parseBlockStatement(ctx)`) and after line 105 (`alternative = p.parseBlockStatement(ctx)`)
+2. `parseMatch` (`match.go`): after line 117-133 (each case arm's scope restored at line 133)
+3. `parseSwitch` (`switch.go`): `parseBoolSwitch` at lines 71-82 (each case body) and `parseIdentSwitch` at lines 177-188
 
 #### Rule 19: Partial moves for struct fields
 
@@ -188,9 +313,53 @@ In expression parsing for index expressions:
 In the map literal/set literal handling or key-value assignment parsing:
 - Keys/values that are `var` identifiers are consumed
 
-**Files affected**: `internal/parser/statement.go`, `internal/parser/assignment.go`, `internal/parser/for_statement.go`, `internal/parser/if_statement.go`, `internal/parser/match.go`, `internal/parser/expression.go`
+**Pre-condition: Map keys must satisfy `comparable`**: Go map keys must be comparable (no slices, no maps, no procs, and no structs/arrays containing them). The Cog type system already has `types.IsComparable()` at `is.go:68-114` and the `comparable` constraint at `generics.go:66-77`. The parser must validate map key types against `IsComparable`:
 
-### Step 4: Func Restriction Checks
+In `parseType` (`type.go:204-241`), after parsing the key type for a `map<K, V>`:
+```go
+if !types.IsComparable(keyType) {
+    p.error(keyToken, fmt.Sprintf("map key type %q is not comparable", keyType))
+    return nil
+}
+```
+
+The same check applies to the `@map` builtin (`parseBuiltinMap` at `builtins.go:99-166`), after resolving the key type argument and before constructing the `types.Map`.
+
+The same check also applies to `Set` types: a `Set` transpiles to `map[T]struct{}` in Go, so `T` must also be comparable. Validate in `parseType` at the `Set` case (`type.go:242-264`) and in `parseBuiltinSet`.
+
+**`ownership.cogs` correction**: The test case `main_map_key_var` originally used `map[[]int64]utf8` — `[]int64` is not comparable (`types.IsComparable` returns false), so this is invalid Cog. Updated to use `map[utf8]var []int64` which is valid (utf8 is comparable, and the value being pointer-like only affects copy semantics).
+
+#### Rule 25: Chained method calls borrow receiver for chain duration
+
+In `primary.go:267-365` (selector + method call parsing), the parser chains `.Method()` calls via the `for p.lex.This().Type == tokens.Dot` loop. When the loop exits (no more `.` or method calls), the chain is complete. Implementation:
+
+```go
+// Track chain start for borrow/release.
+var chainRootVar string // set when first .Method() encountered on a var identifier
+var chainBorrowed bool
+
+// Inside the dot-loop, when a method call is detected (line 331):
+if p.match(p.lex.This(), tokens.LParen, tokens.LT) {
+    if chainRootVar == "" && symbol.Identifier.Qualifier == ast.QualifierVariable {
+        // First method call in chain on a var variable — borrow it.
+        chainRootVar = symbol.Identifier.Token.Literal
+        p.symbols.MarkBorrowed(chainRootVar)
+        chainBorrowed = true
+    }
+    // ... parse call args and return ...
+}
+
+// After the dot-loop ends (no more method calls):
+if chainBorrowed {
+    p.symbols.ReleaseBorrowed(chainRootVar)
+}
+```
+
+The borrow counter supports nesting: `items.sort().reverse()` calls `MarkBorrowed` once (counter → 1) and `ReleaseBorrowed` once (counter → 0). If the chain itself is inside a borrow-scope (e.g., inside a for-loop over `items`), the borrow counter correctly reflects both borrows.
+
+**Files affected**: `internal/parser/statement.go`, `internal/parser/assignment.go`, `internal/parser/for_statement.go`, `internal/parser/if_statement.go`, `internal/parser/match.go`, `internal/parser/switch.go`, `internal/parser/ebnf_parser.go`, `internal/parser/primary.go`, `internal/parser/type.go`, `internal/parser/builtins.go`
+
+### Step 5: Func Restriction Checks
 
 In `parseProcedureLiteral` and declaration parsing:
 
@@ -200,7 +369,15 @@ In `parseProcedureLiteral` and declaration parsing:
 
 **Files affected**: `internal/parser/declaration.go`, `internal/parser/parser.go`
 
-### Step 5: Error Messages
+### Step 6: Comparable Constraint Validation + Error Messages
+
+**Comparable validation** is a pre-condition for map key and set element types (enforced during type parsing, before any ownership tracking runs). Implemented in `internal/parser/type.go` and `internal/parser/builtins.go`:
+- In `parseType` at the `map<K, V>` case: after parsing `keyType`, call `types.IsComparable(keyType)`. If false, emit error `"map key type %q is not comparable"`.
+- In `parseType` at the `Set` case: after parsing element type, call `types.IsComparable`. If false, emit error `"set element type %q is not comparable"`.
+- In `parseBuiltinMap` (`builtins.go`): same check on `typArgs[0]`.
+- In `parseBuiltinSet` (`builtins.go`): same check on `typArgs[0]`.
+
+**Error messages** are defined inline at each enforcement point using the existing `p.error()` mechanism.
 
 Define ownership-specific error messages in an error table:
 
@@ -224,28 +401,53 @@ Define ownership-specific error messages in an error table:
 | func with async | `"func cannot contain async calls"` |
 | async func declaration | `"func cannot be async"` |
 | async closure captures borrowed variable | `"cannot capture %s in async closure: variable is borrowed"` |
+| Map key not comparable | `"map key type %q is not comparable"` |
+| Set element not comparable | `"set element type %q is not comparable"` |
 
-### Step 6: Parser Ownership Tests
+### Step 10: Parser Ownership Tests
 
 Add test cases covering all rules from `ownership.cogs` to existing parser test files:
 
 - New test file: `internal/parser/ownership_test.go`
-- For each scenario in `ownership.cogs`, write a test that verifies the correct error or no-error. Cover both **positive tests** (should compile) and **negative tests** (should error) including:
-  - `main_revive` — partial move + re-assignment revives struct (no error)
-  - `main_partial_borrow` — narrower field borrow (no error)
-  - `main_enum_borrow` — immutable match borrows enum (no error)
-  - `main_chain` — chained method call (no error)
-  - `main_enum_consume` — all-immutable match arms (no error)
-  - `main_defer_ok` — defer with no subsequent consumption (no error)
-  - `main_cond_partial` — conditional partial move (no error)
-  - `main_return_partial` — return after re-assign revives struct (no error)
-  - `main_defer_reassigned_after` — defer followed by reassignment (should error)
-  - `main_defer_double` — two defers on same variable (should error)
-  - `main_defer_already_dead` — defer on already-consumed variable (should error)
-  - `main_map_key_var` — map insertion consumes key (should error: key dead after)
-  - Rule 6 violations: `func` with `var` param (should error)
-  - Rule 9 violations: `async func` (should error)
+- Comprehensive test matrix covering ALL 25 rules with both positive (should compile) and negative (should error) cases:
+
+| # | Test name | Rule | What it tests | Expected |
+|---|-----------|------|---------------|----------|
+| 1 | `main_revive` | 19 | Partial move + re-assignment revives struct | ✅ No error |
+| 2 | `main_partial_borrow` | 22 | Narrower field borrow, other field still mutable | ✅ No error |
+| 3 | `main_enum_borrow` | 20 | Immutable match arm borrows enum, alive after | ✅ No error |
+| 4 | `main_enum_consume` | 20 | All-immutable match — no consumption | ✅ No error |
+| 5 | `main_chain` | 25 | Chained method call, receiver alive after | ✅ No error |
+| 6 | `main_defer_ok` | 13 | Defer with no subsequent consumption | ✅ No error |
+| 7 | `main_cond_partial` | 16 | Conditional partial move, other field alive after | ✅ No error |
+| 8 | `main_return_partial` | 10,19 | Return after re-assign revives struct | ✅ No error |
+| 9 | `main_func_borrow_after` | 7 | Func arg borrowed, caller can use after call | ✅ No error |
+| 10 | `main_dyn_copy` | 18 | Dyn read on pointer-like type (deep copy) | ✅ No error |
+| 11 | `main_for_borrow` | 15 | For-loop iterable borrowed, alive after loop | ✅ No error |
+| 12 | `main_block_borrow` | 11 | Block expression borrows var, alive after | ✅ No error |
+| 13 | `main_defer_reassigned` | 13 | Defer followed by field reassignment | ❌ Should error |
+| 14 | `main_defer_double` | 13 | Two defers on same variable | ❌ Should error |
+| 15 | `main_defer_already_dead` | 13 | Defer on already-consumed variable | ❌ Should error |
+| 16 | `main_ref_consumes` | 2 | Taking & of var consumes the variable | ❌ Should error |
+| 17 | `main_deref_consumes` | 3 | Dereferencing var & consumes the reference | ❌ Should error |
+| 18 | `main_var_to_var` | 4 | var to var assignment consumes source | ❌ Should error |
+| 19 | `main_map_key_var` | 24 | Map insertion consumes key and val | ❌ Should error |
+| 20 | `main_proc_consume` | 8 | Proc arg consumed, dead after call | ❌ Should error |
+| 21 | `main_switch_consume` | 16 | Variable consumed in switch case dead after | ❌ Should error |
+| 22 | `main_for_consume` | 16 | Variable consumed in for body dead next iteration | ❌ Should error |
+| 23 | `main_func_var_param` | 6 | func with var parameter | ❌ Should error |
+| 24 | `main_async_func` | 9 | async func declaration | ❌ Should error |
+| 25 | `main_map_key_not_comparable` | 24 | Map with slice key (not comparable) | ❌ Should error |
+| 26 | `main_set_element_not_comparable` | 24 | Set with slice element (not comparable) | ❌ Should error |
+| 27 | `main_enum_consume_var` | 20 | Match arm with var binding consumes enum | ❌ Should error |
+| 28 | `main_defer_field_after` | 13 | Defer on field, field reassigned after | ❌ Should error |
+| 29 | `main_return_dead_field` | 10,19 | Return struct with moved-out field | ❌ Should error |
+| 30 | `main_borrow_mutate` | 7 | Mutate var while func call borrows it | ❌ Should error |
+| 31 | `main_async_capture_borrowed` | 14 | Async closure captures borrowed variable | ❌ Should error |
+
 - Use the existing `parse` and `parseShouldError` helpers from `internal/parser/helpers_test.go`
+- Each test case should be a self-contained Cog function body that exercises one ownership rule
+- The `ownership.cogs` file already provides scenario bodies for tests 1-8, 13-15, 19, 22, 25, 29
 
 ---
 
@@ -258,31 +460,36 @@ Generate correct Go code that enforces ownership at runtime:
 2. No-op borrowing (already safe in Go, only affects parser tracking)
 3. Dynamic variable deep copy on read/write (rule 18)
 
-### Step 7: PointerLike Detection
+### Step 1 (Phase 2, Step 1/4): PointerLike Detection
+
+Note: This step has no parser or transpiler dependencies and can be implemented at any time, including before all parser ownership steps.
 
 Add a function to determine if a type is pointer-like (needs deep copy on `immutable → var` assignment):
 
 ```go
-// In internal/types/is.go or new file internal/types/ownership.go
+// In internal/types/is.go — add alongside the existing IsPointer
 func IsPointerLike(t Type) bool
 ```
 
+This extends the existing `types.IsPointer` (`is.go:117-119`) which returns true for ReferenceKind, SliceKind, SetKind, MapKind, ProcedureKind. `IsPointerLike` differs:
+
 Logic:
 - Primitives (int, float, bool, string): false
-- Slices, Maps, Sets: true
-- Structs: `types.Struct.IsComplex` (already computed during parsing) — true if any field transitively contains a pointer-like type. If `IsComplex` is false, the struct is a plain value type (all fields are primitives or structs of primitives)
+- Slices, Maps, Sets: true (same as `IsPointer`)
+- ProcedureKind: true (closures need deep copy; same as `IsPointer`)
+- Structs: `types.Struct.IsComplex` — true if any field transitively contains a pointer-like type. If `IsComplex` is false, the struct is a plain value type.
 - Arrays: true if element type is pointer-like
-- `&` references: false (immutable, copied by pointer-copy)
+- `&` references: **false** (immutable, copied by pointer-copy; differs from `IsPointer`)
 - Options: true if inner type is pointer-like
 - Results: true if value or error type is pointer-like
 - Either: true if left or right type is pointer-like
 - Alias resolution: recurse through `Underlying()`
 - Generic instantiation: evaluate at instantiation time
-- Interface/any: false (interface header copy, not deep copy — though interface usage as value type is restricted by rule 17)
+- Interface/any: false (interface header copy)
 
-This mirrors the existing `types.IsPointer` but is more precise (includes structs with pointer-like fields via `IsComplex`, excludes immutable references). It avoids re-traversing struct field graphs by using the pre-computed `IsComplex` field.
+Implementation can reuse `IsPointer` as base, then add cases for Struct and Reference that diverge:
 
-### Step 8: Deep Copy Generation in Transpiler
+### Step 7 (Phase 2, Step 2/4): Deep Copy Generation in Transpiler
 
 In `internal/transpiler/declaration.go`, modify the `convertDecl` method:
 
@@ -296,7 +503,7 @@ In `internal/transpiler/declaration.go`, modify the `convertDecl` method:
 - Already handled by parser (consumes source)
 - The Go code is a simple assignment (ownership semantics are compile-time)
 
-### Step 9: Dynamic Variable Deep Copy (Rule 18)
+### Step 8 (Phase 2, Step 3/4): Dynamic Variable Deep Copy (Rule 18)
 
 In `internal/transpiler/component/context.go`, modify `DynRead`:
 
@@ -324,7 +531,7 @@ Similarly for `DynWrite` — wrap the value in `cog.Copy(...)` for pointer-like 
 
 The transpiler needs to know whether each dyn field's type is pointer-like. Add a `dynPointerLike map[string]bool` field to `Transpiler`, computed during `predeclareGlobals` by calling `types.IsPointerLike` on each `ident.ValueType` from the `dynamics` map. `DynRead` and `DynWrite` callers (in `expression.go` and `statement.go`) look up this map when building the read/write expression for a dyn variable.
 
-### Step 10: Map/Set Insertion Copy (Rule 24)
+### Step 9 (Phase 2, Step 4/4): Map/Set Insertion Copy (Rule 24)
 
 In `internal/transpiler/expression.go`, in the `MapLiteral` and `SetLiteral` cases:
 
@@ -353,23 +560,29 @@ Use the existing `transpile`/`mustContain`/`mustNotContain` helpers from `intern
 
 ## Implementation Order
 
-The recommended order minimizes risk and allows incremental verification:
+The recommended order is restructured to resolve **parser pre-requisites before ownership tracking** and to **interleave parser and transpiler phases** for incremental verification:
 
-| Step | Description | Testable | Risk |
-|------|-------------|----------|------|
-| 1 | Ownership state types | ✅ Unit test | Low |
-| 2 | Core ownership API | ✅ Unit test | Low |
-| 7 | PointerLike detection | ✅ Unit test | Low |
-| 3 | Borrow/consume rules in parser | ✅ Integration test | High |
-| 4 | Func restriction checks | ✅ Integration test | Low |
-| 5 | Error messages | ✅ Already covered | Low |
-| 6 | Parser ownership tests | ✅ Verify | Low |
-| 8 | Deep copy generation | ✅ Verify output | Medium |
-| 9 | Dynamic deep copy | ✅ Verify output | Low |
-| 10 | Map/set insertion copy | ✅ Verify output | Medium |
-| 11 | Transpiler ownership tests | ✅ Verify | Low |
+| Step | Description | Dependencies | Testable | Risk |
+|------|-------------|--------------|----------|------|
+| 0a | `types.Parameter.Mutable` field + `var` keyword in parameter grammar | None | ✅ Unit test | Low |
+| 0b | `ast.BlockExpr` node + block expression parsing in `primary.go` | None | ✅ Integration test | Medium |
+| 1 | `types.IsPointerLike()` in `internal/types/is.go` | None | ✅ Unit test | Low |
+| 2 | Ownership state types (`ownershipState`, maps on `SymbolTable`) | None | ✅ Unit test | Low |
+| 3 | Core ownership API (`MarkConsumed`, `MarkBorrowed`, `IsAlive`, etc.) | Step 2 | ✅ Unit test | Low |
+| 4 | Borrow/consume rules in parser (Rules 2-16, 19-25) | Steps 0a, 0b, 3 | ✅ Integration test | High |
+| 5 | Func restriction checks (Rules 6, 9: `func` vs `proc` enforcement) | Step 0a | ✅ Integration test | Low |
+| 6 | Comparable constraint validation (map key, set element) | None | ✅ Integration test | Low |
+| 7 | Deep copy generation in transpiler (Rule 5: `cog.Copy` on immutable→var) | Step 1 | ✅ Verify output | Medium |
+| 8 | Dynamic variable deep copy in transpiler (Rule 18) | Step 1 | ✅ Verify output | Low |
+| 9 | Map/set insertion deep copy in transpiler (Rule 24) | Steps 1, 4 | ✅ Verify output | Medium |
+| 10 | Parser ownership tests (31 test cases covering all 25 rules) | Steps 4-6 | ✅ Verify | Low |
+| 11 | Transpiler ownership tests (7 test cases) | Steps 7-9 | ✅ Verify | Low |
 
-Note: Step 3 risk is raised to **High** because it encompasses the widest surface area: 13 distinct rules, including complex interactions between borrow-scopes and async closures (rule 14), defer forward-checking (rule 13), and conditional branch union (rule 16). Step 10 risk is raised to **Medium** because it requires AST annotation plumbing between parser and transpiler.
+**Step 4 risk** is **High** because it encompasses 13 rules with complex interactions: async closure inside borrow-scope (rule 14), defer forward-checking (rule 13), conditional branch union propagation (rule 16), switch coverage (rule 16 extension), cross-branch propagation mechanics, and chained method borrows (rule 25).
+
+**Step 9 risk** is **Medium** because it requires AST annotation plumbing between parser and transpiler (adding `ConsumedKey`/`ConsumedValue` flags to `ast.KeyValue`).
+
+**Critical path**: Steps 0a + 0b are parser pre-requisites that ALL subsequent ownership tracking depends on. These should be implemented and verified before Step 4 begins.
 
 ## Key Design Decisions
 

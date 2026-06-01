@@ -65,14 +65,21 @@ main_enum_borrow : proc() = {
 // ── 4. Map key of var pointer-like type ──
 // If the key itself is var and pointer-like, insertion consumes it.
 // The value is also consumed. This is already covered by rule 24.
+//
+// NOTE: slices are NOT comparable in Go, so they cannot be map keys.
+// Using a struct with a single slice field would also fail the comparable
+// check for the same reason. Use a string/utf8 key, or a generic type
+// constrained by `comparable`, or a cog.Set instead.
 
 main_map_key_var : proc() = {
-    m : var map[[]int64]utf8 = @map<[]int64, utf8>()
-    key : var []int64 = @slice<int64>(3)
-    key[0] = 42
+    m : var map[utf8]var []int64 = @map<utf8, []int64>()
+    key : utf8 = "items"
+    val : var []int64 = @slice<int64>(3)
+    val[0] = 42
 
-    m[key] = "found"                // key consumed (rule 24)
+    m[key] = val                    // key consumed (immutable shallow copy), val consumed (rule 24)
     // key is dead
+    // val is dead
 }
 
 // ── 5. Chained method that mutates in-place ──
