@@ -11,6 +11,9 @@ import (
 
 func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.boolean(ctx, typeToken)
+	if expr == ast.ZeroExprIndex {
+		return ast.ZeroExprIndex
+	}
 
 	for p.lex.This().Type == tokens.LBracket {
 		if ctx.Err() != nil || expr == ast.ZeroExprIndex {
@@ -21,6 +24,9 @@ func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.ExprI
 		p.lex.Step() // consume [
 
 		index := p.boolean(ctx, types.None)
+		if index == ast.ZeroExprIndex {
+			return ast.ZeroExprIndex
+		}
 
 		if p.lex.This().Type != tokens.RBracket {
 			p.error(p.lex.This(), "expected ] after index expression", "expression")
@@ -84,11 +90,17 @@ func (p *Parser) expression(ctx context.Context, typeToken types.Type) ast.ExprI
 
 func (p *Parser) boolean(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.equality(ctx, typeToken)
+	if expr == ast.ZeroExprIndex {
+		return ast.ZeroExprIndex
+	}
 
 	for p.match(p.lex.This(), tokens.And, tokens.Or) {
 		operator := p.lex.This()
 		p.lex.Step() // consume operator
 		right := p.equality(ctx, types.Basics[types.Bool])
+		if right == ast.ZeroExprIndex {
+			return ast.ZeroExprIndex
+		}
 
 		if !types.IsBool(p.ast.Expr(expr).Type()) {
 			p.error(p.lex.This(), "operator requires bool type", "boolean")
@@ -104,6 +116,9 @@ func (p *Parser) boolean(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 func (p *Parser) equality(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.comparison(ctx, typeToken)
+	if expr == ast.ZeroExprIndex {
+		return ast.ZeroExprIndex
+	}
 
 	for p.match(p.lex.This(), tokens.Equal, tokens.NotEqual) {
 		left := p.ast.Expr(expr)
@@ -111,6 +126,9 @@ func (p *Parser) equality(ctx context.Context, typeToken types.Type) ast.ExprInd
 		operator := p.lex.This()
 		p.lex.Step() // consume operator
 		rightIndex := p.comparison(ctx, types.None)
+		if rightIndex == ast.ZeroExprIndex {
+			return ast.ZeroExprIndex
+		}
 
 		right := p.ast.Expr(rightIndex)
 
@@ -127,12 +145,18 @@ func (p *Parser) equality(ctx context.Context, typeToken types.Type) ast.ExprInd
 
 func (p *Parser) comparison(ctx context.Context, typeToken types.Type) ast.ExprIndex {
 	expr := p.term(ctx, typeToken)
+	if expr == ast.ZeroExprIndex {
+		return ast.ZeroExprIndex
+	}
 
 	for p.match(p.lex.This(), tokens.GT, tokens.GTEqual, tokens.LT, tokens.LTEqual) {
 		operator := p.lex.This()
 		p.lex.Step() // consume operator
 		// TODO: should we pass expr.Type()?
 		rightIndex := p.term(ctx, types.None)
+		if rightIndex == ast.ZeroExprIndex {
+			return ast.ZeroExprIndex
+		}
 
 		if !types.IsNumber(p.ast.Expr(expr).Type()) {
 			p.error(operator, "operator requires numeric type", "comparison")
