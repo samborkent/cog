@@ -5,6 +5,7 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"slices"
+	"strings"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
@@ -249,7 +250,18 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			return component.DynRead(name, t.dynPointerLike[name]), nil
 		}
 
-		goIdent := component.Ident(n)
+		// Handle selector identifiers: c.data → c.Data (selector expression)
+		name = component.ConvertExport(n.Token.Literal, n.Exported, n.Global)
+
+		var goIdent goast.Expr
+		if idx := strings.LastIndexByte(name, '.'); idx >= 0 {
+			goIdent = &goast.SelectorExpr{
+				X:   component.IdentName(name[:idx]),
+				Sel: component.IdentName(name[idx+1:]),
+			}
+		} else {
+			goIdent = component.Ident(n)
+		}
 
 		// Auto-unwrap checked option/result identifiers to .Value
 		if n.ValueType != nil {
@@ -602,11 +614,13 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			if keyIdent, ok := t.Expr(pair.Key).(*ast.Identifier); ok &&
 				keyIdent.Qualifier == ast.QualifierVariable &&
 				identIsPointerLike(keyIdent) {
+				t.addCogImport()
 				keyExpr = cogCopyExpr(keyExpr)
 			}
 			if valIdent, ok := t.Expr(pair.Value).(*ast.Identifier); ok &&
 				valIdent.Qualifier == ast.QualifierVariable &&
 				identIsPointerLike(valIdent) {
+				t.addCogImport()
 				valExpr = cogCopyExpr(valExpr)
 			}
 
@@ -826,6 +840,7 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			if setIdent, ok := t.Expr(v).(*ast.Identifier); ok &&
 				setIdent.Qualifier == ast.QualifierVariable &&
 				identIsPointerLike(setIdent) {
+				t.addCogImport()
 				goExpr = cogCopyExpr(goExpr)
 			}
 

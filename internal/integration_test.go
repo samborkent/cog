@@ -265,7 +265,7 @@ func TestDynDeclarationInsideProcShouldError(t *testing.T) {
 	src := `package main
 
 main : proc() = {
-	dyn inner : utf8 = "nope"
+	inner : dyn utf8 = "nope"
 }`
 
 	_, err := tryTranspile(t.Context(), src)
@@ -342,7 +342,7 @@ func TestDynamicVarDefaultAndOverwrite(t *testing.T) {
 
 	src := `package main
 
-dyn val : utf8 = "default"
+val : dyn utf8 = "default"
 
 main : proc() = {
     @print(val)
@@ -419,7 +419,7 @@ func TestFuncReferencingDynShouldError(t *testing.T) {
 
 	src := `package main
 
-dyn val : utf8 = "def"
+val : dyn utf8 = "def"
 
 upper : func() utf8 = {
 	return val
@@ -439,7 +439,7 @@ func TestFuncWritingDynShouldError(t *testing.T) {
 
 	src := `package main
 
-dyn val : utf8 = "def"
+val : dyn utf8 = "def"
 
 writer : func() utf8 = {
 	val = "changed"
@@ -618,7 +618,7 @@ main : proc() = {
 func TestDynVarWithoutProcs(t *testing.T) {
 	src := `package main
 
-dyn val : utf8 = "hello"
+val : dyn utf8 = "hello"
 
 main : proc() = {
 	@print(val)
@@ -681,7 +681,7 @@ main : proc() = {
 func TestDynVarWithProc(t *testing.T) {
 	src := `package main
 
-dyn val : utf8 = "initial"
+val : dyn utf8 = "initial"
 
 setter : proc(s : utf8) = {
 	val = s
@@ -1622,7 +1622,7 @@ func TestVariableReassignment(t *testing.T) {
 	src := `package main
 
 main : proc() = {
-	var x : int64 = 10
+	x : var int64 = 10
 	x = 20
 	@print(x)
 }

@@ -30,6 +30,7 @@ type Lexer struct {
 	cursor  uint8  // window slot of the current token
 	scanErr bool   // set by s.Error callback, cleared after each scanNext iteration
 	debug   bool
+	baseLn  uint32 // line offset applied to tokens after SeekTo (0 for top-level parse)
 }
 
 func New(r io.ReadSeeker, len uint32, debug bool) *Lexer {
@@ -85,13 +86,17 @@ func (l *Lexer) Reset() {
 // SeekTo seeks the lexer to the given byte offset in the source, clears the
 // ring buffer, and primes with the token at that position. Used for deferred
 // body parsing — seek back to a '{' captured earlier via Offset().
-func (l *Lexer) SeekTo(offset uint32) {
+// baseLine is the global line number at the seek offset. Token line numbers
+// are reported as baseLine - 1 + scanner.Line, so the first token at the seek
+// position (absolute line baseLine) reports line baseLine.
+func (l *Lexer) SeekTo(offset uint32, baseLine uint32) {
 	_, _ = l.src.Seek(int64(offset), io.SeekStart)
 	l.scan.Init(l.src)
 	l.scan.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
 	l.cursor = 0
 	l.scanErr = false
 	l.window = [windowSize]tokenOffset{}
+	l.baseLn = baseLine - 1
 	l.Step()
 }
 
@@ -251,7 +256,7 @@ func (l *Lexer) scanNext() tokenOffset {
 
 		t := tokens.Token{
 			Pos: tokens.Pos{
-				Ln:  uint32(min(s.Line, math.MaxUint32)),
+				Ln:  l.baseLn + uint32(min(s.Line, math.MaxUint32)),
 				Col: uint16(min(s.Column, math.MaxUint16)),
 			},
 		}

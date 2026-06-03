@@ -60,16 +60,6 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 		}
 
 		return p.ast.NewExpressionStatement(t, expr)
-	case tokens.Dynamic:
-		// Skip, get it with prev in identifier case.
-		p.lex.Step() // consume dyn
-
-		if p.symbols.Outer != nil {
-			p.error(p.lex.This(), "dynamic scope variable declarations are only allowed in package scope", "parseStatement")
-			return ast.ZeroNodeIndex
-		}
-
-		return p.parseStatement(ctx)
 	case tokens.Export:
 		if p.scriptMode {
 			p.error(p.lex.This(), "export keyword not allowed in script files", "parseStatement")
@@ -197,22 +187,12 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 	case tokens.For:
 		return p.parseForStatement(ctx)
 	case tokens.Identifier:
-		qualifier := ast.QualifierImmutable
-
-		switch p.lex.Peek(-1).Type {
-		case tokens.Variable:
-			qualifier = ast.QualifierVariable
-		case tokens.Dynamic:
-			qualifier = ast.QualifierDynamic
-		}
-
-		// Check if previous token was &, for reference method receiver.
 		reference := p.lex.Peek(-1).Type == tokens.BitAnd
 
 		ident := &ast.Identifier{
 			Token:     p.lex.This(),
 			Exported:  false,
-			Qualifier: qualifier,
+			Qualifier: ast.QualifierImmutable,
 			Global:    p.symbols.Outer == nil,
 		}
 
@@ -325,21 +305,67 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 				// Rule 19: Re-assigning a moved-out field revives it.
 				p.symbols.ReviveField(ident.Token.Literal, selector.Fields[len(selector.Fields)-1].Token.Literal)
 
-				// Determine the field's type for type-checking the RHS expression.
+				// Determine the field's type and export status for type-checking and transpilation.
+				fieldName := selector.Fields[len(selector.Fields)-1].Token.Literal
+
 				var fieldType types.Type
+				var fieldExported bool
+
 				if len(selector.Fields) > 1 {
 					lastField := selector.Fields[len(selector.Fields)-1]
 					fieldType = lastField.ValueType
 				}
 
-				// Build a selector identifier for the assignment.
-				selectorIdent := &ast.Identifier{
-					Token:     selectorToken,
-					Qualifier: ast.QualifierVariable,
-					ValueType: fieldType,
+				// Look up the struct field to get the actual exported status.
+				var structType *types.Struct
+				switch st := symbol.Type().Underlying().(type) {
+				case *types.Struct:
+					structType = st
+				case *types.Alias:
+					if underlying, ok := st.Underlying().(*types.Struct); ok {
+						structType = underlying
+					}
 				}
 
-				return p.parseAssignment(ctx, selectorIdent)
+				if structType != nil {
+					if f := structType.Field(fieldName); f != nil {
+						fieldExported = f.Exported
+						if fieldType == nil {
+							fieldType = f.Type
+						}
+					}
+				}
+
+				assignmentToken := p.lex.This()
+				p.lex.Step() // consume =
+
+				expr := p.expression(ctx, fieldType)
+				if expr == ast.ZeroExprIndex {
+					return ast.ZeroNodeIndex
+				}
+
+				exprType := p.ast.Expr(expr).Type()
+
+				// Rule 19 (RHS): var to var field consumption.
+				if sourceIdent, ok := p.ast.Expr(expr).(*ast.Identifier); ok &&
+					sourceIdent.Qualifier == ast.QualifierVariable &&
+					sourceIdent.Token.Literal != "_" {
+					if !p.symbols.IsAlive(sourceIdent.Token.Literal) {
+						p.error(assignmentToken, fmt.Sprintf("cannot assign %s: variable is consumed", sourceIdent.Token.Literal), "parseStatement")
+						return ast.ZeroNodeIndex
+					}
+					p.symbols.MarkConsumed(sourceIdent.Token.Literal)
+				}
+
+				if !types.Equal(fieldType, exprType) &&
+					!types.AssignableTo(exprType, fieldType) {
+					p.error(assignmentToken, fmt.Sprintf("type mismatch: cannot assign %q to field %q of type %q", exprType, fieldName, fieldType), "parseStatement")
+					return ast.ZeroNodeIndex
+				}
+
+				return p.ast.NewAssignment(assignmentToken, symbol.Identifier, expr,
+					ast.WithField(fieldName, fieldExported),
+				)
 			}
 
 			return p.ast.NewExpressionStatement(identToken, callExpr)
@@ -456,6 +482,13 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 				return ast.ZeroNodeIndex
 			}
 
+			// If the variable was already consumed before the defer expression,
+			// reject — the deferred call would find the variable dead at scope exit.
+			if prevState, ok := preOwn[name]; ok && prevState == stateConsumed {
+				p.error(deferToken, fmt.Sprintf("cannot defer %s: variable is already consumed", name), "parseStatement")
+				return ast.ZeroNodeIndex
+			}
+
 			// Undo any consumption from the call expression so MarkReserved can apply.
 			owning := p.symbols.owningScope(name)
 			if owning != nil {
@@ -545,16 +578,6 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 		return p.ast.NewReturn(returnToken, exprIndex)
 	case tokens.Switch:
 		return p.parseSwitch(ctx)
-	case tokens.Variable:
-		// Skip, get it with prev in identifier case.
-		p.lex.Step() // consume var
-
-		if !p.scriptMode && p.symbols.Outer == nil {
-			p.error(p.lex.This(), "variable declarations are not allowed in package scope", "parseStatement")
-			return ast.ZeroNodeIndex
-		}
-
-		return p.parseStatement(ctx)
 	case tokens.EOF:
 		return ast.ZeroNodeIndex
 	default:

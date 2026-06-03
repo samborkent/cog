@@ -283,7 +283,7 @@ main : proc() = {}`)
 		t.Parallel()
 		parseShouldError(t, `package p
 main : proc() = {
-	var x : any
+	x : var any
 }`)
 	})
 }
@@ -298,7 +298,7 @@ func TestConstraintNamesRejectedInTypePosition(t *testing.T) {
 			t.Parallel()
 			parseShouldError(t, `package p
 main : proc() = {
-	var x : `+name+`
+	x : var `+name+`
 }`)
 		})
 

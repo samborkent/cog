@@ -245,4 +245,83 @@ main_return_partial : proc() Container = {
 	return c
 }`)
 	})
+
+	// Issue 2: Defer on a variable that was already consumed before the defer expression.
+	t.Run("main_defer_already_consumed_before_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main_defer_pre_consumed : proc() = {
+	x : var []int64 = @slice<int64>(3)
+	takes_slice(x)
+	defer echo(x)
+}
+echo : proc(x : int64) = {}
+takes_slice : proc(x : []int64) = {}`)
+	})
+
+	// Issue 4: Proc call on a deferred-reserved variable should be rejected.
+	t.Run("main_defer_then_proc_consume_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main_defer_then_proc : proc() = {
+	x : var []int64 = @slice<int64>(3)
+	defer echo_len(x)
+	takes_slice(x)
+}
+echo_len : proc(x : []int64) = { @print(len(x)) }
+takes_slice : proc(x : []int64) = {}`)
+	})
+
+	// Issue 4: Field move-out on a deferred-reserved field should be rejected.
+	t.Run("main_defer_then_field_move_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+Container ~ struct { data : []int64; label : utf8 }
+main_defer_then_move : proc() = {
+	c : var Container = Container{data = @slice<int64>(3), label = "hello"}
+	defer print_data(c.data)
+	d := c.data
+}
+print_data : proc(d : []int64) = {}`)
+	})
+
+	// Issue 9: Func borrow on a partially-moved struct should be rejected.
+	t.Run("main_func_borrow_partial_move_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+Container ~ struct { data : []int64; label : utf8 }
+main_func_borrow_partial : proc() = {
+	c : var Container = Container{data = @slice<int64>(3), label = "hello"}
+	d := c.data
+	@print(d[0])
+	read_container(c)
+}
+read_container : func(c : Container) = {}`)
+	})
+
+	// Issue 9: Func borrow on a fully alive struct works after re-assignment.
+	t.Run("main_func_borrow_after_revive_ok", func(t *testing.T) {
+		t.Parallel()
+		parse(t, `package p
+Container ~ struct { data : []int64; label : utf8 }
+main_func_revive_borrow : proc() = {
+	c : var Container = Container{data = @slice<int64>(3), label = "hello"}
+	d := c.data
+	@print(d[0])
+	c.data = @slice<int64>(5)
+	read_container(c)
+}
+read_container : func(c : Container) = {}`)
+	})
+
+	// Var to var assignment of primitive still consumes (Rule 4 applies uniformly).
+	t.Run("main_var_to_var_primitive_consume_error", func(t *testing.T) {
+		t.Parallel()
+		parseShouldError(t, `package p
+main_var_to_var_prim : proc() = {
+	x : var int64 = 42
+	y : var int64 = x
+	@print(x)
+}`)
+	})
 }

@@ -12,10 +12,29 @@ import (
 func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifier) ast.NodeIndex {
 	declToken := p.lex.Peek(-1)
 
-	// Handle var qualifier after colon: c : var Type
-	if p.lex.This().Type == tokens.Variable {
+	// Handle qualifier after colon: c : var Type or c : dyn Type
+	switch p.lex.This().Type {
+	case tokens.Variable:
+		if p.symbols.Outer == nil && !p.scriptMode {
+			p.error(p.lex.This(), "variable declarations are not allowed in package scope", "parseTypedDeclaration")
+			return ast.ZeroNodeIndex
+		}
 		ident.Qualifier = ast.QualifierVariable
 		p.lex.Step() // consume var
+	case tokens.Dynamic:
+		if p.symbols.Outer != nil {
+			p.error(p.lex.This(), "dynamic scope variable declarations are only allowed in package scope", "parseTypedDeclaration")
+			return ast.ZeroNodeIndex
+		}
+		ident.Qualifier = ast.QualifierDynamic
+		p.lex.Step() // consume dyn
+	}
+
+	// If the qualifier was consumed and the next token is = or :=,
+	// this is an untyped var/dyn declaration (x : var = expr).
+	if ident.Qualifier != ast.QualifierImmutable &&
+		(p.lex.This().Type == tokens.Assign || p.lex.This().Type == tokens.Declaration) {
+		return p.parseDeclaration(ctx, declToken, ident)
 	}
 
 	identType := p.parseCombinedType(ctx, ident.Exported, ident.Global)

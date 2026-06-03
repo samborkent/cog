@@ -41,7 +41,7 @@ const minParallelFiles = 4
 
 func main() {
 	flag.StringVar(&fileName, "file", "", "Name of .cog/.cogs file or directory containing .cog files.")
-	flag.BoolVar(&debugMode, "debug", false, "Enable debug parser mode.")
+	flag.BoolVar(&debugMode, "debug", true, "Enable debug parser mode.")
 	flag.BoolVar(&write, "write", false, "Write to file.")
 	flag.BoolVar(&replaceLocalCog, "replace-local-cog", false, "Add replace directive for local cog module in generated go.mod.")
 	flag.Parse()
@@ -165,7 +165,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 	symbols := parser.NewSymbolTableAuto(1, minParallelFiles)
 
-	p, err := parser.NewScriptParserWithSymbols(toks, symbols, nil)
+	p, err := parser.NewScriptParserWithSymbols(toks, symbols, nil, scriptPath)
 	if err != nil {
 		return err
 	}
@@ -357,7 +357,6 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 	if len(entryLexed) < minParallelFiles {
 		for i, lf := range entryLexed {
 			if err := entryParsers[i].ParseBodies(ctx); err != nil {
-				fmt.Println(err.Error())
 				return err
 			}
 
@@ -372,7 +371,6 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 		for i, lf := range entryLexed {
 			group.Go(func() error {
 				if err := entryParsers[i].ParseBodies(ctx); err != nil {
-					fmt.Println(err.Error())
 					return err
 				}
 

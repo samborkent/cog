@@ -25,7 +25,7 @@ main : proc() = {}`)
 		t.Parallel()
 		got := transpile(t, `package p
 main : proc() = {
-	var x := 1
+	x : var = 1
 	x = 2
 	@print(x)
 }`)
@@ -59,7 +59,7 @@ main : proc() = {}`)
 	t.Run("dyn_skipped", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-dyn val : utf8 = "default"
+val : dyn utf8 = "default"
 main : proc() = {}`)
 		mustNotContain(t, got, "const val")
 		mustNotContain(t, got, "var val")
@@ -96,7 +96,7 @@ main : proc() = {}`)
 	t.Run("proc_no_dyn_no_preamble", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-dyn val : utf8 = "default"
+val : dyn utf8 = "default"
 noop : proc() = {
 	@print("hello")
 }
@@ -107,7 +107,7 @@ main : proc() = {}`)
 	t.Run("proc_uses_dyn_has_preamble", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-dyn val : utf8 = "default"
+val : dyn utf8 = "default"
 reader : proc() = {
 	@print(val)
 }
@@ -119,7 +119,7 @@ main : proc() = {}`)
 	t.Run("func_no_dyn_no_ctx", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-dyn val : utf8 = "default"
+val : dyn utf8 = "default"
 add : func(a : int64, b : int64) int64 = {
 	return a + b
 }

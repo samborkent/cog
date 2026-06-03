@@ -10,7 +10,7 @@ func TestParseAssignment(t *testing.T) {
 
 		f := parse(t, `package p
 main : proc() = {
-	var x := 1
+	x : var = 1
 	x = 2
 	_ = x
 }`)
@@ -44,7 +44,7 @@ get : func(x : int64) int64 ! MyErr = {
 	return 1
 }
 main : proc() = {
-	var r : int64 ! MyErr = 1
+	r : var int64 ! MyErr = 1
 	if r? {
 		@print(r)
 	}
@@ -61,7 +61,7 @@ get : func(x : int64) int64 ! MyErr = {
 	return 1
 }
 main : proc() = {
-	var r : int64 ! MyErr = 1
+	r : var int64 ! MyErr = 1
 	r = get(1)
 	if r? {
 		@print(r)

@@ -321,7 +321,7 @@ main : proc() = {}`)
 
 		parseShouldError(t, `package p
 Foo ~ struct { value : utf8 }
-(var f : &Foo).Get : func() utf8 = {
+(f : var &Foo).Get : func() utf8 = {
 	return f.value
 }
 main : proc() = {}`)
@@ -335,7 +335,7 @@ Foo ~ struct { value : utf8 }
 Foo.String : func() utf8 = {
 	return "foo"
 }
-(var f : &Foo).String : proc() utf8 = {
+(f : var &Foo).String : proc() utf8 = {
 	return f.value
 }
 main : proc() = {}`)

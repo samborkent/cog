@@ -30,6 +30,22 @@ func (p *Parser) applyCallOwnership(callToken tokens.Token, procType *types.Proc
 			argIdent.Qualifier == ast.QualifierVariable {
 			if procType.Function {
 				// Rule 7: func borrows.
+				// Rule 19: Cannot borrow a struct with moved-out fields.
+				if !p.symbols.IsFullyAlive(argIdent.Token.Literal) {
+					var deadField string
+					if sym, ok := p.symbols.Resolve(argIdent.Token.Literal); ok && sym.Identifier.ValueType.Kind() == types.StructKind {
+						if st, ok := sym.Identifier.ValueType.Underlying().(*types.Struct); ok {
+							for _, f := range st.Fields {
+								if !p.symbols.IsFieldAlive(argIdent.Token.Literal, f.Name) {
+									deadField = f.Name
+									break
+								}
+							}
+						}
+					}
+					p.error(callToken, fmt.Sprintf("cannot borrow %s: field '%s' is moved out", argIdent.Token.Literal, deadField), "applyCallOwnership")
+					return false
+				}
 				p.symbols.MarkBorrowed(argIdent.Token.Literal)
 			} else {
 				// Rule 8: proc consumes.
@@ -37,7 +53,10 @@ func (p *Parser) applyCallOwnership(callToken tokens.Token, procType *types.Proc
 					p.error(callToken, fmt.Sprintf("cannot use %s: variable is consumed", argIdent.Token.Literal), "applyCallOwnership")
 					return false
 				}
-				p.symbols.MarkConsumed(argIdent.Token.Literal)
+				if err := p.symbols.MarkConsumed(argIdent.Token.Literal); err != nil {
+					p.error(callToken, err.Error(), "applyCallOwnership")
+					return false
+				}
 			}
 		}
 	}
@@ -88,6 +107,53 @@ func (p *Parser) walkExprForStructFieldAccess(exprIdx ast.ExprIndex, captured ma
 		p.walkExprForStructFieldAccess(e.Left, captured)
 	case *ast.Grouped:
 		p.walkExprForStructFieldAccess(e.Expr, captured)
+	case *ast.Index:
+		p.walkExprForStructFieldAccess(e.Expr, captured)
+		p.walkExprForStructFieldAccess(e.Index, captured)
+	case *ast.Builtin:
+		for _, arg := range e.Arguments {
+			p.walkExprForStructFieldAccess(arg, captured)
+		}
+	case *ast.GoCallExpression:
+		for _, arg := range e.Arguments {
+			p.walkExprForStructFieldAccess(arg, captured)
+		}
+	case *ast.ArrayLiteral:
+		for _, v := range e.Values {
+			p.walkExprForStructFieldAccess(v, captured)
+		}
+	case *ast.SliceLiteral:
+		for _, v := range e.Values {
+			p.walkExprForStructFieldAccess(v, captured)
+		}
+	case *ast.MapLiteral:
+		for _, pair := range e.Pairs {
+			p.walkExprForStructFieldAccess(pair.Key, captured)
+			p.walkExprForStructFieldAccess(pair.Value, captured)
+		}
+	case *ast.SetLiteral:
+		for _, v := range e.Values {
+			p.walkExprForStructFieldAccess(v, captured)
+		}
+	case *ast.StructLiteral:
+		for _, fv := range e.Values {
+			p.walkExprForStructFieldAccess(fv.Value, captured)
+		}
+	case *ast.TupleLiteral:
+		for _, v := range e.Values {
+			p.walkExprForStructFieldAccess(v, captured)
+		}
+	case *ast.EitherLiteral:
+		p.walkExprForStructFieldAccess(e.Value, captured)
+	case *ast.ResultLiteral:
+		p.walkExprForStructFieldAccess(e.Value, captured)
+	case *ast.ProcedureLiteral:
+		body := p.ast.Node(e.Body)
+		if block, ok := body.(*ast.Block); ok {
+			for _, s := range block.Statements {
+				p.walkNodeForStructFieldAccess(s, captured)
+			}
+		}
 	}
 }
 
@@ -140,6 +206,198 @@ func (p *Parser) walkExprForVarIdentifiers(exprIdx ast.ExprIndex, captured map[s
 		}
 	case *ast.Grouped:
 		p.walkExprForVarIdentifiers(e.Expr, captured)
+	case *ast.Index:
+		p.walkExprForVarIdentifiers(e.Expr, captured)
+		p.walkExprForVarIdentifiers(e.Index, captured)
+	case *ast.Builtin:
+		for _, arg := range e.Arguments {
+			p.walkExprForVarIdentifiers(arg, captured)
+		}
+	case *ast.GoCallExpression:
+		for _, arg := range e.Arguments {
+			p.walkExprForVarIdentifiers(arg, captured)
+		}
+	case *ast.ArrayLiteral:
+		for _, v := range e.Values {
+			p.walkExprForVarIdentifiers(v, captured)
+		}
+	case *ast.SliceLiteral:
+		for _, v := range e.Values {
+			p.walkExprForVarIdentifiers(v, captured)
+		}
+	case *ast.MapLiteral:
+		for _, pair := range e.Pairs {
+			p.walkExprForVarIdentifiers(pair.Key, captured)
+			p.walkExprForVarIdentifiers(pair.Value, captured)
+		}
+	case *ast.SetLiteral:
+		for _, v := range e.Values {
+			p.walkExprForVarIdentifiers(v, captured)
+		}
+	case *ast.StructLiteral:
+		for _, fv := range e.Values {
+			p.walkExprForVarIdentifiers(fv.Value, captured)
+		}
+	case *ast.TupleLiteral:
+		for _, v := range e.Values {
+			p.walkExprForVarIdentifiers(v, captured)
+		}
+	case *ast.EitherLiteral:
+		p.walkExprForVarIdentifiers(e.Value, captured)
+	case *ast.ResultLiteral:
+		p.walkExprForVarIdentifiers(e.Value, captured)
+	case *ast.ProcedureLiteral:
+		body := p.ast.Node(e.Body)
+		if block, ok := body.(*ast.Block); ok {
+			for _, s := range block.Statements {
+				p.walkNodeForVarIdentifiers(s, captured)
+			}
+		}
+	}
+}
+
+// walkNodeForVarIdentifiers walks a statement node tree and collects var identifiers.
+func (p *Parser) walkNodeForVarIdentifiers(nodeIdx ast.NodeIndex, captured map[string]struct{}) {
+	n := p.ast.Node(nodeIdx)
+	if n == nil {
+		return
+	}
+	switch n := n.(type) {
+	case *ast.Block:
+		for _, s := range n.Statements {
+			p.walkNodeForVarIdentifiers(s, captured)
+		}
+	case *ast.ExpressionStatement:
+		p.walkExprForVarIdentifiers(n.Expr, captured)
+	case *ast.Assignment:
+		p.walkExprForVarIdentifiers(n.Expr, captured)
+	case *ast.Return:
+		p.walkExprForVarIdentifiers(n.Value, captured)
+	case *ast.IfStatement:
+		p.walkExprForVarIdentifiers(n.Condition, captured)
+		if n.Consequence != nil {
+			p.walkNodeForVarIdentifiers(p.ast.AddNode(n.Consequence), captured)
+		}
+		if n.Alternative != nil {
+			p.walkNodeForVarIdentifiers(p.ast.AddNode(n.Alternative), captured)
+		}
+	case *ast.ForStatement:
+		if n.Range != ast.ZeroExprIndex {
+			p.walkExprForVarIdentifiers(n.Range, captured)
+		}
+		p.walkNodeForVarIdentifiers(p.ast.AddNode(n.Loop), captured)
+	case *ast.Switch:
+		if n.Identifier != nil {
+			p.walkExprForVarIdentifiers(p.ast.AddExpr(n.Identifier), captured)
+		}
+		for _, c := range n.Cases {
+			if c.Condition != ast.ZeroExprIndex {
+				p.walkExprForVarIdentifiers(c.Condition, captured)
+			}
+			for _, s := range c.Body {
+				p.walkNodeForVarIdentifiers(s, captured)
+			}
+		}
+		if n.Default != nil {
+			for _, s := range n.Default.Body {
+				p.walkNodeForVarIdentifiers(s, captured)
+			}
+		}
+	case *ast.Match:
+		p.walkExprForVarIdentifiers(n.Subject, captured)
+		for _, c := range n.Cases {
+			for _, s := range c.Body {
+				p.walkNodeForVarIdentifiers(s, captured)
+			}
+		}
+		if n.Default != nil {
+			for _, s := range n.Default.Body {
+				p.walkNodeForVarIdentifiers(s, captured)
+			}
+		}
+	case *ast.Defer:
+		p.walkExprForVarIdentifiers(n.Expr, captured)
+	case *ast.Branch:
+		// break/continue have no variable references.
+	case *ast.Comment:
+		// No variable references.
+	case *ast.Declaration:
+		if n.Assignment != nil {
+			p.walkExprForVarIdentifiers(n.Assignment.Expr, captured)
+		}
+	case *ast.Type:
+		// Type aliases don't contain runtime variable references.
+	}
+}
+
+// walkNodeForStructFieldAccess walks a statement node tree and collects struct field accesses.
+func (p *Parser) walkNodeForStructFieldAccess(nodeIdx ast.NodeIndex, captured map[string]map[string]struct{}) {
+	n := p.ast.Node(nodeIdx)
+	if n == nil {
+		return
+	}
+	switch n := n.(type) {
+	case *ast.Block:
+		for _, s := range n.Statements {
+			p.walkNodeForStructFieldAccess(s, captured)
+		}
+	case *ast.ExpressionStatement:
+		p.walkExprForStructFieldAccess(n.Expr, captured)
+	case *ast.Assignment:
+		p.walkExprForStructFieldAccess(n.Expr, captured)
+	case *ast.Return:
+		p.walkExprForStructFieldAccess(n.Value, captured)
+	case *ast.IfStatement:
+		p.walkExprForStructFieldAccess(n.Condition, captured)
+		if n.Consequence != nil {
+			p.walkNodeForStructFieldAccess(p.ast.AddNode(n.Consequence), captured)
+		}
+		if n.Alternative != nil {
+			p.walkNodeForStructFieldAccess(p.ast.AddNode(n.Alternative), captured)
+		}
+	case *ast.ForStatement:
+		if n.Range != ast.ZeroExprIndex {
+			p.walkExprForStructFieldAccess(n.Range, captured)
+		}
+		p.walkNodeForStructFieldAccess(p.ast.AddNode(n.Loop), captured)
+	case *ast.Switch:
+		if n.Identifier != nil {
+			p.walkExprForStructFieldAccess(p.ast.AddExpr(n.Identifier), captured)
+		}
+		for _, c := range n.Cases {
+			if c.Condition != ast.ZeroExprIndex {
+				p.walkExprForStructFieldAccess(c.Condition, captured)
+			}
+			for _, s := range c.Body {
+				p.walkNodeForStructFieldAccess(s, captured)
+			}
+		}
+		if n.Default != nil {
+			for _, s := range n.Default.Body {
+				p.walkNodeForStructFieldAccess(s, captured)
+			}
+		}
+	case *ast.Match:
+		p.walkExprForStructFieldAccess(n.Subject, captured)
+		for _, c := range n.Cases {
+			for _, s := range c.Body {
+				p.walkNodeForStructFieldAccess(s, captured)
+			}
+		}
+		if n.Default != nil {
+			for _, s := range n.Default.Body {
+				p.walkNodeForStructFieldAccess(s, captured)
+			}
+		}
+	case *ast.Defer:
+		p.walkExprForStructFieldAccess(n.Expr, captured)
+	case *ast.Branch:
+	case *ast.Comment:
+	case *ast.Declaration:
+		if n.Assignment != nil {
+			p.walkExprForStructFieldAccess(n.Assignment.Expr, captured)
+		}
+	case *ast.Type:
 	}
 }
 
@@ -213,6 +471,9 @@ func (s *SymbolTable) MarkConsumed(name string) error {
 	if !owning.IsAlive(name) {
 		return fmt.Errorf("cannot use %s: variable is consumed", name)
 	}
+	if state, ok := owning.ownership.Load(name); ok && state == stateReserved {
+		return fmt.Errorf("cannot use %s: reserved by defer", name)
+	}
 	owning.ownership.Store(name, stateConsumed)
 	return nil
 }
@@ -224,6 +485,9 @@ func (s *SymbolTable) MarkFieldConsumed(structVar, field string) error {
 	}
 	if !owning.IsFieldAlive(structVar, field) {
 		return fmt.Errorf("%s: field '%s' moved out here", structVar, field)
+	}
+	if owning.IsFieldReserved(structVar, field) {
+		return fmt.Errorf("cannot consume %s: field '%s' reserved by defer", structVar, field)
 	}
 	fields, ok := owning.fieldOwnership.Load(structVar)
 	if !ok {
@@ -305,7 +569,7 @@ func (s *SymbolTable) UpgradeBorrowToConsume(name string) {
 	if count, ok := s.borrowCounts.Load(name); ok && count > 0 {
 		s.borrowCounts.Store(name, 0)
 	}
-	s.ownership.Store(name, stateConsumed)
+	s.MarkConsumed(name)
 }
 
 // snapshotOwnership captures the current ownership state for cross-branch merging.

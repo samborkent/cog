@@ -27,8 +27,8 @@ main : proc() = {
     b : float32 = 0.0
     _ = b
 
-    var language := "cog" // utf8
-    var lang : utf8 = "cog"
+    language : var = "cog" // utf8
+    lang : var utf8 = "cog"
     _ = lang
     lng : ascii = "cog"
     @print(lng)
@@ -109,7 +109,7 @@ caseSwitch:
     // TODO: temporarily disabled, not fully implemented.
     // tuple : Tuple = {"hello", 10, false}
 
-    var utf : utf8?  = "hello"
+    utf : var utf8?  = "hello"
     // option : Option? // not allowed
     utf = "option"
     
@@ -124,7 +124,7 @@ caseSwitch:
     // Direct check persists — value remains accessible.
     @print(utf)
     
-    var option : uint64?
+    option : var uint64?
     
     if option? {
         @print("do not print")
@@ -145,15 +145,15 @@ caseSwitch:
 
     // Result type: T ! E — typed error handling.
     // Must-check: cannot access value or error without checking first.
-    var result : int64 ! DivError
+    result : var int64 ! DivError
     // @print(result)   // ERROR: must check result before accessing value
     // @print(result!)  // ERROR: must check result before accessing error
 
     // Static analysis: when assigned a value or error literal, the parser
     // knows statically which variant it is. No check needed.
-    var knownValue : int64 ! DivError = 42
+    knownValue : var int64 ! DivError = 42
     @print(knownValue)  // OK: assigned value literal, proven safe
-    var knownError : int64 ! DivError = DivError.DivByZero
+    knownError : var int64 ! DivError = DivError.DivByZero
     @print(knownError!)  // OK: assigned error literal, error access safe
 
     // Direct check: if result? = "is OK?"
@@ -166,7 +166,7 @@ caseSwitch:
 
     // Negated check: if !result? = "has error?"
     // Does NOT persist unless the block exits scope (return/break/continue).
-    var negatedResult : int64 ! DivError = safeDivide(10, 0)
+    negatedResult : var int64 ! DivError = safeDivide(10, 0)
     if !negatedResult? {
         @print(negatedResult!)
         // @print(negatedResult)  // ERROR: proven error, can't access value
@@ -174,7 +174,7 @@ caseSwitch:
     // @print(negatedResult)  // ERROR: negated check does not persist
 
     // Negated check with else: value safe in else branch.
-    var elseResult : int64 ! DivError = safeDivide(10, 2)
+    elseResult : var int64 ! DivError = safeDivide(10, 2)
     if !elseResult? {
         @print(elseResult!)
     } else {
@@ -185,14 +185,14 @@ caseSwitch:
     // (return/break/continue), the value check is promoted after the if.
 
     // return in function: processResult checks error, returns early on failure.
-    var processed : int64 ! DivError = processResult(safeDivide(10, 2))
+    processed : var int64 ! DivError = processResult(safeDivide(10, 2))
     if processed? {
         @print(processed)
     }
     @print(processed)
 
     // break in loop: error branch exits, so value is proven safe after.
-    var loopResult : int64 ! DivError = safeDivide(20, 4)
+    loopResult : var int64 ! DivError = safeDivide(20, 4)
     for {
         if !loopResult? {
             @print(loopResult!)
@@ -225,7 +225,7 @@ caseSwitch:
         20: "twenty",
     }
 
-    var localSlice : []utf8
+    localSlice : var []utf8
     localSlice = {"hello", "world"}
     localCopy := localSlice[0]
     _ = localCopy
@@ -253,7 +253,7 @@ caseSwitch:
 	}
 	_ = typedLiteralE
 
-    var index := 0
+    index : var = 0
 
 outerLoop:
 	for {
@@ -553,7 +553,7 @@ outerLoop:
     @print(idResult)
 
     fooVal := "hello"
-    var barRef := &fooVal
+    barRef : var = &fooVal
 
     bazVal := "world"
     barRef = &bazVal
@@ -565,7 +565,7 @@ outerLoop:
     _ = BarRef
     BazRefType ~ &complex128
 
-    var methodCaller : Exported = {
+    methodCaller : var Exported = {
         Method = 42,
     }
 
@@ -658,8 +658,8 @@ upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8
     return @go.strings.ToUpper(str) + optional + alsoOptional
 }
 
-dyn val : utf8 = "default"
-dyn other : uint64 // valid, will have zero value as default
+val : dyn utf8 = "default"
+other : dyn uint64 // valid, will have zero value as default
 
 someFunc : proc(str : utf8) = {
     @print(val) // default

@@ -29,7 +29,7 @@ Foo.Greet : proc() = {
 	@print("hi")
 }
 main : proc() = {
-	var f := Foo{ value = "hello" }
+	f : var = Foo{ value = "hello" }
 	f.Greet()
 }`)
 		if f.LenNodes() < 3 {

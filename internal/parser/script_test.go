@@ -15,7 +15,7 @@ func parseScript(t *testing.T, src string) {
 
 	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	p, err := parser.NewScriptParser(l)
+	p, err := parser.NewScriptParser(l, "test.cogs")
 	if err != nil {
 		t.Fatalf("parser init error: %v", err)
 	}
@@ -40,7 +40,7 @@ func parseScriptShouldError(t *testing.T, src string) {
 
 	l := lexer.New(strings.NewReader(src), uint32(len(src)), false)
 
-	p, err := parser.NewScriptParser(l)
+	p, err := parser.NewScriptParser(l, "test.cogs")
 	if err != nil {
 		return
 	}

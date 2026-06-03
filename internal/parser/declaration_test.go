@@ -43,7 +43,7 @@ main : proc() = {}`)
 
 		f := parse(t, `package p
 main : proc() = {
-	var x := 1
+	x : var = 1
 	@print(x)
 }`)
 		d := stmtAs[*ast.Declaration](t, f, 0)
@@ -88,7 +88,7 @@ main : proc() = {}`)
 	t.Run("dyn", func(t *testing.T) {
 		t.Parallel()
 		f := parse(t, `package p
-dyn val : utf8 = "default"
+val : dyn utf8 = "default"
 main : proc() = {}`)
 
 		d := stmtAs[*ast.Declaration](t, f, 0)
@@ -105,7 +105,7 @@ main : proc() = {}`)
 		t.Parallel()
 		parseShouldError(t, `package p
 main : proc() = {
-	dyn inner : utf8 = "nope"
+	inner : dyn utf8 = "nope"
 }`)
 	})
 }

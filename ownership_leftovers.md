@@ -77,10 +77,97 @@ The borrow counter supports nesting: `items.sort().reverse()` would increment on
 
 ---
 
+---
+
+## Rule 2: Taking `&` reference of `var` mutable value consumes the variable
+
+**When the dependency is added**: When the `&` (reference) operator is implemented in the parser.
+
+**What it does**: Taking `&x` where `x` is a `var` mutable value consumes `x` — the resulting `&` reference is the only way to access the data. The variable `x` is dead after the reference is taken.
+
+**Example**:
+```
+main : proc() = {
+    x : var int64 = 42
+    r := &x             // x is consumed; r is an immutable & reference
+    // x is dead here
+    @print(r)
+}
+```
+
+**Implementation**:
+
+In expression parsing for the prefix `&` operator (in `internal/parser/ebnf_parser.go`, the `unary` function):
+1. After parsing the operand expression, check if it is a `var` variable identifier.
+2. If so, call `p.symbols.MarkConsumed(name)` on it — the reference takes ownership.
+3. The resulting `&` reference is immutable — the variable's data is now accessible only through the reference.
+4. After `MarkConsumed`, `IsAlive` should report the variable as dead.
+
+```go
+// Inside the unary function, after parsing the operand expression:
+if n.Operator.Type == tokens.BitAnd {
+    if ident, ok := t.Expr(n.Right).(*ast.Identifier); ok &&
+        ident.Qualifier == ast.QualifierVariable {
+        if !p.symbols.IsAlive(ident.Token.Literal) {
+            p.error(ident.Token, fmt.Sprintf("cannot take reference of %s: variable is consumed", ident.Token.Literal), "unary")
+        }
+        p.symbols.MarkConsumed(ident.Token.Literal)
+    }
+}
+```
+
+**Files affected**: `internal/parser/ebnf_parser.go` (in the `unary` function)
+
+---
+
+## Rule 3: Dereferencing `var &` mutable reference consumes the reference
+
+**When the dependency is added**: When mutable references (`var &T`) and the `*` dereference operator are implemented in the parser.
+
+**What it does**: Dereferencing a `var &` mutable reference (`*r` where `r : var &T`) consumes the reference. The resulting dereferenced value is a copy (for value types) or an owned view.
+
+**Example**:
+```
+main : proc() = {
+    p : var Point = Point{...}
+    r : var &Point = &p     // r owns mutable access; p is dead
+    val := *r               // r is consumed; val is a copy of the pointed-to value
+    // r is dead here
+}
+```
+
+**Implementation**:
+
+In expression parsing for the prefix `*` operator (in `internal/parser/ebnf_parser.go`, the `unary` function):
+1. After parsing the operand expression, check if it is a `var &` mutable reference identifier (type is `types.Reference` and qualifier is `QualifierVariable`).
+2. If so, call `p.symbols.MarkConsumed(name)` on it — dereferencing consumes the reference.
+3. After `MarkConsumed`, `IsAlive` should report the variable as dead.
+
+```go
+// Inside the unary function, after parsing the operand expression:
+if n.Operator.Type == tokens.Asterisk {
+    if ident, ok := t.Expr(n.Right).(*ast.Identifier); ok &&
+        ident.Qualifier == ast.QualifierVariable {
+        if _, ok := ident.ValueType.(*types.Reference); ok {
+            if !p.symbols.IsAlive(ident.Token.Literal) {
+                p.error(ident.Token, fmt.Sprintf("cannot dereference %s: variable is consumed", ident.Token.Literal), "unary")
+            }
+            p.symbols.MarkConsumed(ident.Token.Literal)
+        }
+    }
+}
+```
+
+**Files affected**: `internal/parser/ebnf_parser.go` (in the `unary` function)
+
+---
+
 ## Summary
 
 | Rule | Depends on | Implementation effort |
 |------|-----------|---------------------|
+| 2 | `&` reference operator in parser | Low — single check in `unary` function |
+| 3 | `var &` mutable reference + `*` dereference in parser | Low — single check in `unary` function |
 | 12 | `async` keyword in grammar/lexer | Low — walker already exists |
 | 14 | Rule 12 (`async` keyword) | Low — `UpgradeBorrowToConsume` already implemented |
 | 25 | Chained `.Method()` after expressions | Medium — requires grammar changes + borrow tracking |

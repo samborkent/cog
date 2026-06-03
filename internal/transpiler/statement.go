@@ -25,7 +25,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 
 		return []goast.Stmt{&goast.DeclStmt{Decl: t.commentDecl(text)[0]}}, nil
 	case *ast.Assignment:
-		ident := &goast.Ident{Name: "_"}
+		var ident goast.Expr = &goast.Ident{Name: "_"}
 
 		assignmentExpr := t.Expr(n.Expr)
 
@@ -50,7 +50,14 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 				}, nil
 			}
 
-			ident = &goast.Ident{Name: name}
+			if n.FieldName != "" {
+				ident = &goast.SelectorExpr{
+					X:   &goast.Ident{Name: name},
+					Sel: &goast.Ident{Name: component.ConvertExport(n.FieldName, n.FieldExported, false)},
+				}
+			} else {
+				ident = &goast.Ident{Name: name}
+			}
 		}
 
 		expr, err := t.convertExpr(assignmentExpr)
@@ -128,6 +135,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 				astIdent.Qualifier != ast.QualifierVariable &&
 				astIdent.Qualifier != ast.QualifierDynamic &&
 				types.IsPointerLike(astIdent.Type()) {
+				t.addCogImport()
 				expr = &goast.CallExpr{
 					Fun: &goast.SelectorExpr{
 						X:   &goast.Ident{Name: "cog"},

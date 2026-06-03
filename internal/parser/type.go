@@ -592,6 +592,11 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 	isComplex := false
 
 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
+		// Skip semicolons (used in single-line struct definitions).
+		for p.lex.This().Type == tokens.Semicolon {
+			p.lex.Step()
+		}
+
 		tok := p.lex.This()
 		if tok.Type == tokens.RBrace {
 			break

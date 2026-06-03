@@ -511,13 +511,13 @@ func TestMultipleTokenSequence(t *testing.T) {
 func TestDeclarationSequence(t *testing.T) {
 	t.Parallel()
 
-	toks := lex(t, `dyn val : utf8 = "hello"`)
+	toks := lex(t, `val : dyn utf8 = "hello"`)
 	if len(toks) != 7 {
 		t.Fatalf("expected 7 tokens, got %d: %v", len(toks), toks)
 	}
 
 	expected := []tokens.Type{
-		tokens.Dynamic, tokens.Identifier, tokens.Colon,
+		tokens.Identifier, tokens.Colon, tokens.Dynamic,
 		tokens.UTF8, tokens.Assign, tokens.StringLiteral, tokens.EOF,
 	}
 	for i, exp := range expected {
@@ -937,7 +937,7 @@ func TestSeekTo(t *testing.T) {
 	}
 
 	// Seek back to the '{'.
-	l.SeekTo(braceOffset)
+	l.SeekTo(braceOffset, 0)
 	if got := l.This().Type; got != tokens.LBrace {
 		t.Fatalf("after SeekTo: expected LBrace, got %s", got)
 	}
@@ -965,7 +965,7 @@ func TestSeekToMultiple(t *testing.T) {
 	l.SkipBody() // skip to "c"
 
 	// Seek to second body.
-	l.SeekTo(off2)
+	l.SeekTo(off2, 0)
 	if got := l.This().Type; got != tokens.LBrace {
 		t.Fatalf("seek to off2: expected LBrace, got %s", got)
 	}
@@ -975,7 +975,7 @@ func TestSeekToMultiple(t *testing.T) {
 	}
 
 	// Seek to first body.
-	l.SeekTo(off1)
+	l.SeekTo(off1, 0)
 	if got := l.This().Type; got != tokens.LBrace {
 		t.Fatalf("seek to off1: expected LBrace, got %s", got)
 	}
