@@ -203,11 +203,19 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 	case *ast.ForStatement:
 		t.loopDepth++
 
+		prevDeferStack := t.deferStack
+		t.deferStack = nil
+
 		body, err := t.convertForBlock(n.Loop)
 		if err != nil {
+			t.deferStack = prevDeferStack
 			t.loopDepth--
 			return nil, err
 		}
+
+		t.injectDeferred(body)
+
+		t.deferStack = prevDeferStack
 
 		t.loopDepth--
 
@@ -305,34 +313,14 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 
 		returnStmts = stmts
 	case *ast.Defer:
-		if t.loopDepth > 0 {
-			expr := t.Expr(n.Expr)
-			callExpr, ok := expr.(*ast.Call)
-			if !ok {
-				return nil, fmt.Errorf("defer inside loop requires a procedure call")
-			}
-
-			goExpr, err := t.convertExpr(callExpr)
-			if err != nil {
-				return nil, err
-			}
-
-			goCall, ok := goExpr.(*goast.CallExpr)
-			if !ok {
-				return nil, fmt.Errorf("defer call expression is not a call")
-			}
-
-			returnStmts = []goast.Stmt{&goast.DeferStmt{Call: goCall}}
-		} else {
-			srcLine, _ := n.Pos()
-			expr := t.Expr(n.Expr)
-			stmts, err := t.convertDeferExpr(expr, srcLine)
-			if err != nil {
-				return nil, err
-			}
-
-			returnStmts = stmts
+		srcLine, _ := n.Pos()
+		expr := t.Expr(n.Expr)
+		stmts, err := t.convertDeferExpr(expr, srcLine)
+		if err != nil {
+			return nil, err
 		}
+
+		returnStmts = stmts
 	case *ast.Match:
 		stmts, err := t.convertMatch(n)
 		if err != nil {

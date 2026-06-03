@@ -66,12 +66,12 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 	}
 
 	// Rule 16: Snapshot ownership before consequence branch.
-	consOwn, consFieldOwn := p.symbols.snapshotOwnership()
+	consSnap := p.symbols.snapshotScopeChain()
 
 	consequence := p.parseBlockStatement(ctx)
 
 	// Capture consequence's ownership changes.
-	consDelta := p.symbols.diffOwnership(consOwn, consFieldOwn)
+	consDelta := p.symbols.diffScopeChain(consSnap)
 
 	if checkedVar != "" && !persistsAfterIf {
 		if hadPrevState {
@@ -110,15 +110,15 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 		}
 
 		// Rule 16: Restore pre-consequence ownership for alternative branch.
-		p.symbols.restoreOwnership(consOwn, consFieldOwn)
+		p.symbols.restoreScopeChain(consSnap)
 
 		alternative = p.parseBlockStatement(ctx)
 
 		// Capture alternative's ownership changes.
-		altDelta = p.symbols.diffOwnership(consOwn, consFieldOwn)
+		altDelta = p.symbols.diffScopeChain(consSnap)
 
 		// Restore again so the post-if state comes from the union.
-		p.symbols.restoreOwnership(consOwn, consFieldOwn)
+		p.symbols.restoreScopeChain(consSnap)
 
 		if checkedVar != "" && negated {
 			if hadPrevState {

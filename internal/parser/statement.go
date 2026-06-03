@@ -456,9 +456,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 		deferToken := p.lex.This()
 		p.lex.Step()
 
-		// Save ownership state before expression parsing so we can detect
-		// double-defer even when the call expression overwrites stateReserved.
-		preOwn, _ := p.symbols.snapshotOwnership()
+		preSnap := p.symbols.snapshotScopeChain()
 
 		exprIdx := p.expression(ctx, types.None)
 		if exprIdx == ast.ZeroExprIndex {
@@ -477,14 +475,14 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 		capturedFields := p.collectCapturedStructFields(exprIdx)
 		for name := range captured {
 			// Check reservation constraint using the pre-call snapshot.
-			if prevState, ok := preOwn[name]; ok && prevState == stateReserved {
+			if prevState := lookupSnapState(preSnap, name, stateReserved); prevState {
 				p.error(deferToken, fmt.Sprintf("cannot defer %s: already reserved by a defer", name), "parseStatement")
 				return ast.ZeroNodeIndex
 			}
 
 			// If the variable was already consumed before the defer expression,
 			// reject — the deferred call would find the variable dead at scope exit.
-			if prevState, ok := preOwn[name]; ok && prevState == stateConsumed {
+			if prevState := lookupSnapState(preSnap, name, stateConsumed); prevState {
 				p.error(deferToken, fmt.Sprintf("cannot defer %s: variable is already consumed", name), "parseStatement")
 				return ast.ZeroNodeIndex
 			}
@@ -553,17 +551,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 			if ident, ok := e.(*ast.Identifier); ok && ident.Qualifier == ast.QualifierVariable {
 				// Check struct fields before consuming the whole variable.
 				if ident.ValueType.Kind() == types.StructKind && !p.symbols.IsFullyAlive(ident.Token.Literal) {
-					var deadField string
-					if sym, ok := p.symbols.Resolve(ident.Token.Literal); ok && sym.Identifier.ValueType.Kind() == types.StructKind {
-						if st, ok := sym.Identifier.ValueType.Underlying().(*types.Struct); ok {
-							for _, f := range st.Fields {
-								if !p.symbols.IsFieldAlive(ident.Token.Literal, f.Name) {
-									deadField = f.Name
-									break
-								}
-							}
-						}
-					}
+					deadField := p.findDeadField(ident.Token.Literal)
 					p.error(returnToken, fmt.Sprintf("cannot move %s: field '%s' is already moved out", ident.Token.Literal, deadField), "parseReturn")
 					return ast.ZeroNodeIndex
 				}

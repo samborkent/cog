@@ -4,7 +4,10 @@ import "unicode"
 
 // ConvertExport adjusts identifier casing for Go export rules.
 func ConvertExport(name string, exported, global bool) string {
-	// Get first letter.
+	if len(name) == 0 {
+		return name
+	}
+
 	r := rune(name[0])
 
 	if exported && !unicode.IsUpper(r) {

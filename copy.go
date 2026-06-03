@@ -22,26 +22,18 @@ func copyVal(v reflect.Value) reflect.Value {
 
 	switch k {
 	case reflect.Array:
-		if v.Len() == 0 {
-			// Return empty array.
+		if v.IsNil() || v.Len() == 0 {
 			return v
 		}
 
-		elemType := v.Index(0).Type()
-
-		if isBasic(elemType.Kind()) {
-			// Underlying type is basic type, so we can simply return.
+		if isBasic(v.Index(0).Kind()) {
 			return v
 		}
 
-		array := reflect.New(reflect.ArrayOf(v.Len(), elemType))
+		array := reflect.New(v.Type()).Elem()
 
-		index := 0
-
-		// Element-wise deep copy.
-		for _, elem := range v.Seq2() {
-			array.Index(index).Set(copyVal(elem))
-			index++
+		for i := range v.Len() {
+			array.Index(i).Set(copyVal(v.Index(i)))
 		}
 
 		return array

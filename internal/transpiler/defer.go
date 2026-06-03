@@ -82,7 +82,7 @@ func (t *Transpiler) injectDeferredBody(stmts []goast.Stmt) {
 
 	deferredStmts := t.buildReversedDeferredStmts()
 
-	body := &goast.BlockStmt{List: stmts}
+	body := &goast.BlockStmt{List: append([]goast.Stmt(nil), stmts...)}
 
 	injectBeforeReturns(body, deferredStmts)
 
@@ -121,6 +121,12 @@ func injectBeforeReturns(block *goast.BlockStmt, deferredStmts []goast.Stmt) {
 	for i := 0; i < len(block.List); i++ {
 		switch s := block.List[i].(type) {
 		case *goast.ReturnStmt:
+			preamble := make([]goast.Stmt, len(deferredStmts))
+			copy(preamble, deferredStmts)
+			block.List = append(block.List[:i], append(preamble, block.List[i:]...)...)
+			i += len(preamble)
+
+		case *goast.BranchStmt:
 			preamble := make([]goast.Stmt, len(deferredStmts))
 			copy(preamble, deferredStmts)
 			block.List = append(block.List[:i], append(preamble, block.List[i:]...)...)

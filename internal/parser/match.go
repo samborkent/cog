@@ -110,7 +110,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 		p.lex.Step() // consume :
 
 		// Rule 16: Snapshot the enclosing scope's ownership before entering the arm.
-		caseOwn, caseFieldOwn := p.symbols.snapshotOwnership()
+		caseSnap := p.symbols.snapshotScopeChain()
 
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
@@ -137,8 +137,8 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 		p.symbols = p.symbols.Outer
 
 		// Rule 16: Capture delta and restore for next case.
-		branchDeltas = append(branchDeltas, p.symbols.diffOwnership(caseOwn, caseFieldOwn))
-		p.symbols.restoreOwnership(caseOwn, caseFieldOwn)
+		branchDeltas = append(branchDeltas, p.symbols.diffScopeChain(caseSnap))
+		p.symbols.restoreScopeChain(caseSnap)
 
 		cases = append(cases, caseNode)
 	}
@@ -161,7 +161,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 		p.lex.Step() // consume :
 
 		// Rule 16: Snapshot the enclosing scope's ownership before default arm.
-		caseOwn, caseFieldOwn := p.symbols.snapshotOwnership()
+		caseSnap := p.symbols.snapshotScopeChain()
 
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
@@ -188,8 +188,8 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 		p.checkUnused()
 		p.symbols = p.symbols.Outer
 
-		defDelta = p.symbols.diffOwnership(caseOwn, caseFieldOwn)
-		p.symbols.restoreOwnership(caseOwn, caseFieldOwn)
+		defDelta = p.symbols.diffScopeChain(caseSnap)
+		p.symbols.restoreScopeChain(caseSnap)
 	}
 
 	if p.lex.This().Type != tokens.RBrace {

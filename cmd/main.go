@@ -41,7 +41,7 @@ const minParallelFiles = 4
 
 func main() {
 	flag.StringVar(&fileName, "file", "", "Name of .cog/.cogs file or directory containing .cog files.")
-	flag.BoolVar(&debugMode, "debug", true, "Enable debug parser mode.")
+	flag.BoolVar(&debugMode, "debug", false, "Enable debug parser mode.")
 	flag.BoolVar(&write, "write", false, "Write to file.")
 	flag.BoolVar(&replaceLocalCog, "replace-local-cog", false, "Add replace directive for local cog module in generated go.mod.")
 	flag.Parse()
@@ -78,18 +78,17 @@ func main() {
 	if strings.HasSuffix(files[0], ".cogs") {
 		projectRoot := filepath.Dir(files[0])
 		if err := runScript(ctx, projectRoot, files[0], ""); err != nil {
-			fmt.Println(err.Error())
+			fmt.Fprintln(os.Stderr, err.Error())
 		}
 
 		return
 	}
 
-	// Determine project root: the directory of the entry package.
 	// Import paths are resolved relative to this root.
 	projectRoot := filepath.Dir(files[0])
 
 	if err := runProject(ctx, projectRoot, files); err != nil {
-		fmt.Println(err.Error())
+		fmt.Fprintln(os.Stderr, err.Error())
 	}
 }
 

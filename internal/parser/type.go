@@ -636,11 +636,19 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 				return nil
 			}
 
+			if field.PointerLike {
+				isComplex = true
+			}
+
 			fields = append(fields, field)
 		case tokens.Identifier:
 			field := p.parseField(ctx, false)
 			if field == nil {
 				return nil
+			}
+
+			if field.PointerLike {
+				isComplex = true
 			}
 
 			fields = append(fields, field)
@@ -683,7 +691,7 @@ func (p *Parser) parseField(ctx context.Context, exported bool) *types.Field {
 	if field.Type.Kind() == types.StructKind {
 		field.PointerLike = field.Type.Underlying().(*types.Struct).IsComplex
 	} else {
-		field.PointerLike = types.IsPointer(field.Type)
+		field.PointerLike = types.IsPointerLike(field.Type)
 	}
 
 	return field

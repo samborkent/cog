@@ -71,7 +71,7 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 		p.lex.Step() // consume :
 
 		// Rule 16: Snapshot ownership before each case body.
-		caseOwn, caseFieldOwn := p.symbols.snapshotOwnership()
+		caseSnap := p.symbols.snapshotScopeChain()
 
 		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 			if p.match(p.lex.This(), tokens.Case, tokens.Default, tokens.RBrace) {
@@ -87,8 +87,8 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 		}
 
 		// Rule 16: Capture delta and restore for next case.
-		branchDeltas = append(branchDeltas, p.symbols.diffOwnership(caseOwn, caseFieldOwn))
-		p.symbols.restoreOwnership(caseOwn, caseFieldOwn)
+		branchDeltas = append(branchDeltas, p.symbols.diffScopeChain(caseSnap))
+		p.symbols.restoreScopeChain(caseSnap)
 
 		cases = append(cases, caseNode)
 	}
@@ -199,7 +199,7 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 		p.lex.Step() // consume :
 
 		// Rule 16: Snapshot ownership before each case body.
-		caseOwn, caseFieldOwn := p.symbols.snapshotOwnership()
+		caseSnap := p.symbols.snapshotScopeChain()
 
 		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 			if p.match(p.lex.This(), tokens.Case, tokens.Default, tokens.RBrace) {
@@ -215,8 +215,8 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 		}
 
 		// Rule 16: Capture delta and restore for next case.
-		branchDeltas = append(branchDeltas, p.symbols.diffOwnership(caseOwn, caseFieldOwn))
-		p.symbols.restoreOwnership(caseOwn, caseFieldOwn)
+		branchDeltas = append(branchDeltas, p.symbols.diffScopeChain(caseSnap))
+		p.symbols.restoreScopeChain(caseSnap)
 
 		cases = append(cases, caseNode)
 	}
@@ -239,7 +239,7 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 		p.lex.Step() // consume :
 
 		// Rule 16: Snapshot for default case.
-		caseOwn, caseFieldOwn := p.symbols.snapshotOwnership()
+		caseSnap := p.symbols.snapshotScopeChain()
 
 		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 			if p.lex.This().Type == tokens.RBrace {
@@ -254,8 +254,8 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 			}
 		}
 
-		defDelta = p.symbols.diffOwnership(caseOwn, caseFieldOwn)
-		p.symbols.restoreOwnership(caseOwn, caseFieldOwn)
+		defDelta = p.symbols.diffScopeChain(caseSnap)
+		p.symbols.restoreScopeChain(caseSnap)
 
 		def = defaultNode
 	}

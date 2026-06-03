@@ -78,7 +78,7 @@ main : proc() = {
 		mustContain(t, got, "cleanup(ctx)")
 	})
 
-	t.Run("defer_inside_for_loop_uses_real_defer", func(t *testing.T) {
+	t.Run("defer_inside_for_loop_injected", func(t *testing.T) {
 		got := transpile(t, `package p
 cleanup : proc(x : int32) = {}
 main : proc() = {
@@ -87,7 +87,8 @@ main : proc() = {
 		break
 	}
 }`)
-		mustContain(t, got, "defer cleanup(ctx,")
+		mustContain(t, got, "cleanup(ctx,")
+		mustNotContain(t, got, "defer cleanup")
 	})
 
 	t.Run("defer_switch_case", func(t *testing.T) {
