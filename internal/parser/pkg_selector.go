@@ -68,6 +68,11 @@ func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.ExprI
 			return ast.ZeroExprIndex
 		}
 
+		if p.inPureFunc && !procType.Function {
+			p.error(p.lex.This(), "calling proc inside func is not allowed", "primary")
+			return ast.ZeroExprIndex
+		}
+
 		return p.ast.NewCall(p.lex.This(), sel, p.parseCallArguments(ctx, procType), procType.ReturnType)
 	}
 

@@ -10,7 +10,7 @@ import (
 	"github.com/samborkent/cog/internal/types"
 )
 
-// TODO: base this heuristics.
+// TODO: base this on heuristics.
 const (
 	arrayLiteralPreallocationSize = 4
 	mapLiteralPreallocationSize   = 4
@@ -207,6 +207,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				return ast.ZeroExprIndex
 			}
 
+			if p.inPureFunc && !procType.Function {
+				p.error(p.lex.This(), "calling proc inside func is not allowed", "primary")
+				return ast.ZeroExprIndex
+			}
+
 			identExpr := p.ast.AddExpr(symbol.Identifier)
 
 			args := p.parseCallArguments(ctx, procType)
@@ -234,6 +239,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			if !ok || len(procType.TypeParams) == 0 {
 				// Not a generic callable — let comparison() handle '<'.
 				return p.ast.AddExpr(symbol.Identifier)
+			}
+
+			if p.inPureFunc && !procType.Function {
+				p.error(p.lex.This(), "calling proc inside func is not allowed", "primary")
+				return ast.ZeroExprIndex
 			}
 
 			typeArgs := p.parseTypeArguments(ctx)
@@ -343,6 +353,11 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				procType, ok := exprType.(*types.Procedure)
 				if !ok {
 					panic("unable to cast procedure kind expressions to type in call parsing")
+				}
+
+				if p.inPureFunc && !procType.Function {
+					p.error(p.lex.This(), "calling proc inside func is not allowed", "primary")
+					return ast.ZeroExprIndex
 				}
 
 				var typeArgs []types.Type
