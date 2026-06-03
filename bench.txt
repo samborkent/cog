@@ -109,3 +109,16 @@ BenchmarkLargeFile-10                         48           2100135 ns/op        
 BenchmarkMultiFileTranspile-10                79           1345162 ns/op         1235308 B/op      17989 allocs/op
 BenchmarkWriteOutput/Disk-10                 715            180843 ns/op            1920 B/op         30 allocs/op
 BenchmarkWriteOutput/Memory-10             21789              5445 ns/op           38624 B/op          6 allocs/op
+
+2026-06-03 22:21 - Ownership model additions
+BenchmarkLexing-10                           680            172467 ns/op           39660 B/op       1650 allocs/op
+BenchmarkParsing-10                          225            521672 ns/op          559580 B/op       9185 allocs/op
+BenchmarkTranspiling-10                      330            353055 ns/op          539817 B/op      15266 allocs/op
+BenchmarkPrinting-10                          98           1225162 ns/op          864689 B/op       5032 allocs/op
+BenchmarkTranspileAndPrint-10                 66           1724035 ns/op         1401470 B/op      20300 allocs/op
+BenchmarkFullPipeline-10                      52           2442386 ns/op         1957178 B/op      29492 allocs/op
+BenchmarkGoBuild-10                            1         132588042 ns/op           12696 B/op         62 allocs/op
+BenchmarkLargeFile-10                         44           2478566 ns/op         1937748 B/op      29489 allocs/op
+BenchmarkMultiFileTranspile-10                70           1701950 ns/op         1419128 B/op      20300 allocs/op
+BenchmarkWriteOutput/Disk-10                 525            214708 ns/op            2240 B/op         35 allocs/op
+BenchmarkWriteOutput/Memory-10             18894              6251 ns/op           43488 B/op          7 allocs/op
