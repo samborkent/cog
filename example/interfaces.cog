@@ -28,11 +28,11 @@ export FooLoo.String : func() utf8 = {
     return f.value
 }
 
-(var f : &FooLoo).String4 : proc() utf8 = {
+(f : var &FooLoo).String4 : proc() utf8 = {
     return f.value
 }
 
-export (var f : &FooLoo).String5 : proc() utf8 = {
+export (f : var &FooLoo).String5 : proc() utf8 = {
     return f.value
 }
 
@@ -43,11 +43,11 @@ export (var f : &FooLoo).String5 : proc() utf8 = {
 // }
 
 // // Should fail, func cannot have variable pointer receiver.
-// (var f : &FooLoo).String7 : func() utf8 = {
+// (f : var &FooLoo).String7 : func() utf8 = {
 //     return f.value
 // }
 
 // // Should fail, duplicate method name.
-// export (var f : &FooLoo).String : proc() utf8 = {
+// export (f : var &FooLoo).String : proc() utf8 = {
 //     return f.value
 // }

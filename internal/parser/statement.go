@@ -113,15 +113,8 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 				return ast.ZeroNodeIndex
 			}
 		case tokens.LParen:
-			// Exported method with explicit receiver: export (f : Type).Method
+			// Exported method with explicit receiver: export (f : var Type).Method
 			p.lex.Step() // consume (
-
-			qualifier := ast.QualifierImmutable
-
-			if p.lex.This().Type == tokens.Variable {
-				qualifier = ast.QualifierVariable
-				p.lex.Step() // consume var
-			}
 
 			if p.lex.This().Type != tokens.Identifier {
 				p.error(p.lex.This(), "expected identifier after ( in exported method declaration", "parseStatement")
@@ -130,17 +123,29 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 
 			receiverIdent := &ast.Identifier{
 				Token:     p.lex.This(),
-				Qualifier: qualifier,
+				Qualifier: ast.QualifierImmutable,
 			}
 
 			p.lex.Step() // consume identifier
 
 			if p.lex.This().Type != tokens.Colon {
-				p.error(p.lex.This(), "expected : after receiver variable in exported method declaration", "parseStatement")
+				p.error(p.lex.This(), "expected : after receiver in exported method declaration", "parseStatement")
 				return ast.ZeroNodeIndex
 			}
 
 			p.lex.Step() // consume :
+
+			exportQualifier := ast.QualifierImmutable
+
+			if p.lex.This().Type == tokens.Variable {
+				exportQualifier = ast.QualifierVariable
+				p.lex.Step() // consume var
+			} else if p.lex.This().Type == tokens.Dynamic {
+				exportQualifier = ast.QualifierDynamic
+				p.lex.Step() // consume dyn
+			}
+
+			receiverIdent.Qualifier = exportQualifier
 
 			exportRef := false
 
@@ -388,13 +393,6 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 	case tokens.LParen:
 		p.lex.Step() // consume (
 
-		qualifier := ast.QualifierImmutable
-
-		if p.lex.This().Type == tokens.Variable {
-			qualifier = ast.QualifierVariable
-			p.lex.Step() // consume var
-		}
-
 		if p.lex.This().Type != tokens.Identifier {
 			p.error(p.lex.This(), "expected identifier after ( in method declaration", "parseStatement")
 			return ast.ZeroNodeIndex
@@ -402,17 +400,29 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 
 		receiverIdent := &ast.Identifier{
 			Token:     p.lex.This(),
-			Qualifier: qualifier,
+			Qualifier: ast.QualifierImmutable,
 		}
 
 		p.lex.Step() // consume identifier
 
 		if p.lex.This().Type != tokens.Colon {
-			p.error(p.lex.This(), "expected : after receiver variable in method declaration", "parseStatement")
+			p.error(p.lex.This(), "expected : after receiver in method declaration", "parseStatement")
 			return ast.ZeroNodeIndex
 		}
 
 		p.lex.Step() // consume :
+
+		qualifier := ast.QualifierImmutable
+
+		if p.lex.This().Type == tokens.Variable {
+			qualifier = ast.QualifierVariable
+			p.lex.Step() // consume var
+		} else if p.lex.This().Type == tokens.Dynamic {
+			qualifier = ast.QualifierDynamic
+			p.lex.Step() // consume dyn
+		}
+
+		receiverIdent.Qualifier = qualifier
 
 		reference := false
 

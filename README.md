@@ -13,6 +13,7 @@ The following basic features are missing that need to be implemented before Cog 
     This is required for method declaration, so we need to manually disallow using a type which is only defined later in the file in script mode.
 
 ### Features
+- Disallow use of `@go` inside of `func`, as we cannot control what code is invoked, and `func` may not have side-effects.
 - Implement monomorphization once Go 1.27 generics methods have been released.
 - Remove `@ref` allocator.
 - Design how iterators should work.
@@ -82,7 +83,7 @@ The following basic features are missing that need to be implemented before Cog 
 - Optional function parameters `foo(optional? : utf8)`
     - With default values `foo(default? : utf8 = "wassup")`
 - Value switch
-    - `switch var { case val: ... }`
+    - `switch val { case expr: ... }`
 - Conditional switch
     - `switch { case expr: ... }`
 - For-loops
@@ -104,7 +105,7 @@ The following basic features are missing that need to be implemented before Cog 
 - Result type `T ! E` with typed error handling
     - Error types: `MyError ~ error<utf8> { ... }` or typeless `MyError ~ error { ... }`
     - Only `error`, `error<ascii>`, and `error<utf8>` are allowed as error type parameters
-    - Declaration: `var r : int64 ! MyError`
+    - Declaration: `r : var int64 ! MyError`
     - Functions can return result: `func(...) int64 ! MyError`
     - Check: `if r? { ... }` (no error), `if !r? { ... }` (has error)
     - Error extraction: `r!` gives the error value
@@ -139,7 +140,7 @@ The following basic features are missing that need to be implemented before Cog 
     - Reference shorthand: `&Foo.Mutate : proc() = { ... }` (pointer receiver in Go output)
     - Explicit receiver: `(f : Foo).GetValue : func() utf8 = { return f.value }`
     - Explicit reference receiver: `(f : &Foo).Get : func() utf8 = { return f.value }`
-    - Mutable receiver: `(var f : &Foo).Set : proc(v : utf8) = { f.value = v }`
+    - Mutable receiver: `(f : var &Foo).Set : proc(v : utf8) = { f.value = v }`
     - Exported methods: `export Foo.String : func() utf8 = { ... }` or `export (f : Foo).String : func() utf8 = { ... }`
     - Methods can be declared in any order relative to the struct definition
     - Method names are scoped to their receiver type (no conflict with global names)
@@ -209,6 +210,11 @@ goimport (
     "strings"
 )
 
+import (
+    "geom"
+    "geom/metric"
+)
+
 a : int64 = 0
 
 export isExported := true
@@ -222,14 +228,16 @@ main : proc() = {
     _ = 10 // inline comment stays inline
 
     str := @go.strings.ToUpper("str")
+    _ = str
 
     b : float32 = 0.0
+    _ = b
 
-    var language := "cog" // utf8
-    var lang : utf8 = "cog"
-    var lng : ascii = "cog"
-
-    leeng := lng
+    language : var = "cog" // utf8
+    lang : var utf8 = "cog"
+    _ = lang
+    lng : ascii = "cog"
+    @print(lng)
     c1 := `hello
     
         world`
@@ -243,20 +251,23 @@ main : proc() = {
     if true {
         break
     } else {
-        lng = "else"
+        @print(lng)
     }
 
     if true != false {}
     if true == false && true != false {}
-    if (language == "cog") != (lng == "cog") {}
+    if true != false {}
     if 5 <= 6 {}
     if !true {}
 
     fl := -0.6e-7
+    _ = fl
 
-    collection : set<string> = { "hello1", "hello2" }
+    collection : set<utf8> = { "hello1", "hello2" }
+    _ = collection
 
     maths := 5 * 6 / (2 + 3)
+    _ = maths
 
 ifLabel:
     if true {
@@ -266,8 +277,10 @@ ifLabel:
     }
 
     newString := definedHere
+    _ = newString
 
     newLang := @if(language == "cog", 25 + 10 - 6, 5)
+    _ = newLang
 
     earth : planet = {
         radius = 10,
@@ -299,44 +312,101 @@ caseSwitch:
         @print(enum1)
     }
 
-    tuple : Tuple = {"hello", 10, false}
+    // TODO: temporarily disabled, not fully implemented.
+    // tuple : Tuple = {"hello", 10, false}
 
-    var utf : utf8?  = "hello"
+    utf : var utf8?  = "hello"
     // option : Option? // not allowed
     utf = "option"
     
-    // Must-check: cannot use utf without checking first.
-    // @print(utf)  // ERROR
+    // Must-check: cannot access option value without checking first.
+    // @print(utf)  // ERROR: must check utf before accessing value
     
+    // ? on option = "is set?"
     if utf? {
-        @print(utf)  // OK: proven set
+        // Inside checked block, value access is allowed.
+        @print(utf)
     }
-    @print(utf)  // OK: direct check persists
+    // Direct check persists — value remains accessible.
+    @print(utf)
     
-    var option : uint64?
+    option : var uint64?
+    
     if option? {
         @print("do not print")
     }
+
     option = 10
+
+    // Negated check: !option? = "is NOT set?"
     if !option? {
         @print("not set")
+        // @print(option)  // ERROR: proven not set, can't access value
     } else {
-        @print(option)  // OK: proven set in else
+        @print(option)
     }
 
-    // Result type: T ! E
-    DivError ~ error<utf8> {
-        DivByZero := "division by zero",
-    }
-    var divResult : int64 ! DivError = safeDivide(10, 2)
-    if divResult? {
-        @print(divResult)   // OK: proven no error
-    }
-    @print(divResult)       // OK: direct check persists
+    // Negated check does NOT persist.
+    // @print(option)  // ERROR: negated check is scoped
 
-    var earlyReturn : int64 ! DivError = safeDivide(10, 0)
-    if !earlyReturn? {
-        @print(earlyReturn!)  // OK: error extraction
+    // Result type: T ! E — typed error handling.
+    // Must-check: cannot access value or error without checking first.
+    result : var int64 ! DivError
+    // @print(result)   // ERROR: must check result before accessing value
+    // @print(result!)  // ERROR: must check result before accessing error
+
+    // Static analysis: when assigned a value or error literal, the parser
+    // knows statically which variant it is. No check needed.
+    knownValue : var int64 ! DivError = 42
+    @print(knownValue)  // OK: assigned value literal, proven safe
+    knownError : var int64 ! DivError = DivError.DivByZero
+    @print(knownError!)  // OK: assigned error literal, error access safe
+
+    // Direct check: if result? = "is OK?"
+    // Persists after if-block — value remains accessible.
+    if result? {
+        @print(result)
+        // @print(result!)  // ERROR: proven no error, can't access error
+    }
+    @print(result)
+
+    // Negated check: if !result? = "has error?"
+    // Does NOT persist unless the block exits scope (return/break/continue).
+    negatedResult : var int64 ! DivError = safeDivide(10, 0)
+    if !negatedResult? {
+        @print(negatedResult!)
+        // @print(negatedResult)  // ERROR: proven error, can't access value
+    }
+    // @print(negatedResult)  // ERROR: negated check does not persist
+
+    // Negated check with else: value safe in else branch.
+    elseResult : var int64 ! DivError = safeDivide(10, 2)
+    if !elseResult? {
+        @print(elseResult!)
+    } else {
+        @print(elseResult)
+    }
+
+    // Early-exit promotion: when the error branch exits scope
+    // (return/break/continue), the value check is promoted after the if.
+
+    // return in function: processResult checks error, returns early on failure.
+    processed : var int64 ! DivError = processResult(safeDivide(10, 2))
+    if processed? {
+        @print(processed)
+    }
+    @print(processed)
+
+    // break in loop: error branch exits, so value is proven safe after.
+    loopResult : var int64 ! DivError = safeDivide(20, 4)
+    for {
+        if !loopResult? {
+            @print(loopResult!)
+            break
+        }
+        // After error branch exits, value is proven safe.
+        @print(loopResult)
+        break
     }
 
     upperCaseString := upper(language)
@@ -361,29 +431,35 @@ caseSwitch:
         20: "twenty",
     }
 
-    var localSlice : []utf8
+    localSlice : var []utf8
     localSlice = {"hello", "world"}
     localCopy := localSlice[0]
+    _ = localCopy
     mapVal := otherMap[10]
     @print(mapVal)
 
     typedLiteralA := []int8{
 		5, 4, 3, 2, 1,
 	}
+	_ = typedLiteralA
 	typedLiteralB := [5]int8{
 		5, 4, 3, 2, 1,
 	}
+	_ = typedLiteralB
 	typedLiteralC := map<ascii, int8>{
 		"hello": 5,
 	}
+	_ = typedLiteralC
 	typedLiteralD := set<ascii>{
 		"hello",
 	}
+	_ = typedLiteralD
 	typedLiteralE := set<ASC>{
 		"hello",
 	}
+	_ = typedLiteralE
 
-    var index := 0
+    index : var = 0
 
 outerLoop:
 	for {
@@ -429,8 +505,10 @@ outerLoop:
 	_ = @map<utf8, ascii, uint32>(1)
 
 	settie := @set<utf8, uint16>(1000)
+	_ = settie
 
 	what := @if<uint64, bool>(5 != 6, 10, 6)
+	_ = what
 
 	ref := @ref<utf8>()
 	_ = ref
@@ -441,29 +519,176 @@ outerLoop:
 
 	arenaProc(arg)
 
+// @cast: bitwise type reinterpretation, returns B? (option type).
+    // Narrowing (src > dst) returns None; same-size or widening returns Some.
+    bits : int32 = 42
+    asFloat := @cast<float32>(bits)               // int32 -> float32 (same size, reinterpret bits)
+    asBigFloat := @cast<float64>(bits)            // int32 -> float64 (widen then reinterpret)
+    asUnsigned := @cast<uint32>(bits)             // int32 -> uint32 (same-width sign reinterpret)
+    flag := true
+    flagByte := @cast<uint8>(flag)                // bool -> uint8
+    h : float16 = 1.5
+    hWide := @cast<uint32>(h)                    // float16 -> uint32 (extract bits, widen)
+    narrow : uint8 = 255
+    wide := @cast<uint64>(narrow)                 // uint8 -> uint64 (zero-extend)
+    small : int8 = 1
+    withSource := @cast<int16, int8>(small)       // explicit source type annotation
+    withLiteral := @cast<int16, int8>(1)          // literal inferred as int8 from type arg
+
+    // Must check option before accessing value:
+    if asFloat? { _ = asFloat }
+    if asBigFloat? { _ = asBigFloat }
+    if asUnsigned? { _ = asUnsigned }
+    if flagByte? { _ = flagByte }
+    if hWide? { _ = hWide }
+    if wide? { _ = wide }
+    if withSource? { _ = withSource }
+    if withLiteral? { _ = withLiteral }
+
+    // @as: semantic value conversion (not bitwise reinterpretation).
+    // Returns B directly — no Option wrapping.
+    myInt : int32 = 42
+    myBool := true
+    myFloat : float64 = 3.14
+    myStr : utf8 = "42"
+
+    // identity: same type = passthrough.
+    same := @as<int32>(myInt)
+    _ = same
+
+    // numeric widening: safe direct conversion.
+    wider := @as<int64>(myInt)
+    _ = wider
+
+    // numeric narrowing: returns 0 on overflow.
+    narrower := @as<int8>(myInt)
+    _ = narrower
+
+    // bool ↔ numeric.
+    boolAsInt := @as<int8>(myBool)      // 1
+    intAsBool := @as<bool>(myInt)        // true (if non-zero)
+    @print(boolAsInt)
+    @print(intAsBool)
+
+    // bool ↔ string.
+    boolStr := @as<utf8>(myBool)         // "true"
+    _ = boolStr
+
+    // string ↔ numeric (parse/format).
+    strInt := @as<int32>(myStr)          // 42
+    intStr := @as<utf8>(myInt)           // "42"
+    @print(strInt)
+    @print(intStr)
+
+    // string ↔ float.
+    strFloat := @as<float32>(myStr)      // 42.0
+    floatStr := @as<utf8>(myFloat)       // "3.14"
+    _ = strFloat
+    _ = floatStr
+
+    // string ↔ bool.
+    strBool := @as<bool>("true")         // true
+    boolStr2 := @as<utf8>(myBool)        // "true"
+    _ = strBool
+    _ = boolStr2
+
+    // ascii ↔ utf8: same-string passthrough.
+    val := "hello"
+    asAscii := @as<ascii>(val)           // cog.ASCII wrapping
+    backToUTF8 := @as<utf8>(asAscii)     // same string
+    _ = asAscii
+    _ = backToUTF8
+
+    // integer → ascii: FormatInt wrapped in cog.ASCII.
+    intAsAscii := @as<ascii>(myInt)      // cog.ASCII("42")
+    _ = intAsAscii
+
+    // float → integer: NaN/infinity/fraction becomes 0.
+    fltInt := @as<int32>(myFloat)        // 3 (truncated)
+    _ = fltInt
+
+    // integer → float: always safe.
+    intFlt := @as<float64>(myInt)        // 42.0
+    _ = intFlt
+
+    // Cast still works for bitwise reinterpretation.
+    // ascii -> utf8 is not supported by @cast (different memory layouts).
+
     // float16: backed by x448/float16 package, arithmetic promotes to float32.
     half : float16 = 1.5
     halfNeg := -half
     halfSum := half + half
     halfCmp := half < halfNeg
+    _ = halfSum
+    _ = halfCmp
 
     // complex32: two float16 parts, arithmetic promotes to complex64.
     comp : complex32 = {1.0, 2.0}
     compNeg := -comp
     compSum := comp + comp
     compEq := comp == compNeg
+    _ = compSum
+    _ = compEq
 
     // uint128: backed by lukechampine.com/uint128, ops via methods.
     big : uint128 = 42
     bigSum := big + big
     bigMul := big * big
     bigCmp := big < bigSum
+    _ = bigMul
+    _ = bigCmp
 
     // int128: backed by ryanavella/wide, ops via methods.
     big128 : int128 = 42
     big128Neg := -big128
     big128Sum := big128 + big128
     big128Cmp := big128 < big128Neg
+    _ = big128Sum
+    _ = big128Cmp
+
+    // @as conversions for non-standard types.
+    // float32 → integer truncation: uses float64 wrapper for math.Trunc/math.IsNaN.
+    f32Val : float32 = 1.5
+    f32ToInt := @as<int32>(f32Val)
+    @print(f32ToInt)
+
+    // float16 → string conversion: uses Float16.String().
+    halfAsStr := @as<utf8>(half)
+    @print(halfAsStr)
+
+    // int128 → string conversion: uses Int128.String().
+    big128Str := @as<utf8>(big128)
+    @print(big128Str)
+
+    // uint128 → string conversion: uses Uint128.String().
+    bigStr := @as<utf8>(big)
+    @print(bigStr)
+
+    // string → int128/uint128 conversion.
+    parsedInt128 := @as<int128>("42")
+    parsedUint128 := @as<uint128>("42")
+    _ = parsedInt128
+    _ = parsedUint128
+
+    // complex32 → complex64 via Complex64().
+    compPromoted := @as<complex64>(comp)
+    _ = compPromoted
+
+    // complex32 → number: extract real via Complex64().
+    compReal := @as<float32>(comp)
+    @print(compReal)
+
+    // complex32 → string.
+    compStr := @as<utf8>(comp)
+    @print(compStr)
+
+    // Cross-family narrowing: signed ↔ unsigned overflow checks.
+    signedVal : int64 = 42
+    unsignedNarrow := @as<uint8>(signedVal)
+    _ = unsignedNarrow
+    unsignedWide : uint64 = 42
+    signedNarrow := @as<int8>(unsignedWide)
+    _ = signedNarrow
 
     // cross-file: Coordinate type and formatCoord function defined in other.cog.
     loc : Coordinate = {
@@ -472,16 +697,93 @@ outerLoop:
     }
     @print(formatCoord(loc))
 
-    // Generic function: type argument inferred from argument.
+    // Match on a generic type parameter constrained by a union.
+    describe(42)
+    describe("hello match")
+
+    // Match with binding variable — each arm narrows the binding type.
+    matchDescribe(3.14)
+    matchDescribe("world")
+
+    // Match with default case for unhandled types.
+    describeDefault(true)
+    describeDefault(99)
+
+    // Match with tilde case — matches the exact type (no constraint propagation).
+    matchExact("exact")
+    matchExact(100)
+
+    // imported package: geom.Origin and geom.Distance from geom/ subdirectory.
+    @print(geom.Origin)
+    @print(geom.Distance(geom.Origin, geom.Origin))
+
+    // subpackage: geom/metric (imported as "metric").
+    @print(metric.Pi)
+    @print(metric.CircleArea(5.0))
+
+    // Generic type alias with `any` constraint: works for every type.
+    names : List<utf8> = @slice<utf8>(3)
+    @print(names)
+
+    // Generic type alias with `number` constraint: int + uint + float + complex.
+    scores : NumSlice<int64> = @slice<int64>(5)
+    @print(scores)
+
+    // Generic type alias with `ordered` constraint: int + uint + float + string.
+    words : SortableSlice<utf8> = @slice<utf8>(10)
+    @print(words)
+
+    // Generic type alias with `comparable` constraint on map keys.
+    lookup : Dict<utf8, int64> = @map<utf8, int64>()
+    @print(lookup)
+
+    // Two-param generic: pair of any two types.
+    // TODO: temporarily disabled, not fully implemented.
+    // coord : Pair<float64, float64> = {1.0, 2.0}
+    // @print(coord)
+
+    // Multi-constraint: T must satisfy `string` or `int`.
+    labels : TagSlice<utf8> = @slice<utf8>(3)
+    @print(labels)
+
+    // Generic function: type parameter on the func type itself.
+    // Type argument is inferred from the argument type.
     genFunc("hello generics")
     genFunc(42)
 
-    // Explicit type argument.
+    // Explicit type argument: genFunc<utf8>("explicit")
     genFunc<utf8>("explicit type arg")
 
-    // Generic function with return type.
+    // Generic function with return type: T flows through.
     idResult := identity("identity")
     @print(idResult)
+
+    fooVal := "hello"
+    barRef : var = &fooVal
+
+    bazVal := "world"
+    barRef = &bazVal
+
+    _ = barRef
+
+    FooRef : &utf8 = &fooVal
+    BarRef : &ascii = &"hello"    _ = FooRef
+    _ = BarRef
+    BazRefType ~ &complex128
+
+    methodCaller : var Exported = {
+        Method = 42,
+    }
+
+    methodCaller = Exported{
+        Method = 67,
+    }
+
+    methodCaller.Export()
+
+    Print(FooLoo{
+        value = "Hello, world!",
+    })
 }
 
 // Generic function: type parameter on the func type.
@@ -528,29 +830,42 @@ planet ~ struct {
     )
 }
 
-Tuple ~ (utf8, uint64, bool)
+// TODO: temporarily disabled, not fully implemented.
+// Tuple ~ (utf8, uint64, bool)
 
 Either ~ utf8 ^ uint64
 
 Option ~ utf8?
 
 // Error type for result examples.
-DivError ~ int32
-divByZero : DivError = 1
+DivError ~ error<utf8> {
+    DivByZero := "division by zero",
+}
 
+// Function returning a result type.
 safeDivide : func(a : int64, b : int64) int64 ! DivError = {
     if b == 0 {
-        return divByZero
+        return DivError.DivByZero
     }
+
     return a / b
+}
+
+// Early return pattern: check error, return on failure, use value after.
+processResult : func(r : int64 ! DivError) int64 ! DivError = {
+    if !r? {
+        return r!
+    }
+    // After early return, value is proven safe.
+    return r
 }
 
 upper : func(str : utf8, optional? : utf8, alsoOptional? : utf8 = "wassup") utf8 = {
     return @go.strings.ToUpper(str) + optional + alsoOptional
 }
 
-dyn val : utf8 = "default"
-dyn other : uint64 // valid, will have zero value as default
+val : dyn utf8 = "default"
+other : dyn uint64 // valid, will have zero value as default
 
 someFunc : proc(str : utf8) = {
     @print(val) // default
@@ -564,34 +879,72 @@ array : [3]uint64 = {1, 2, 3}
 slice : []utf8 = {"foo", "bar", "baz", "qux"}
 SliceType ~ []uint64
 
-// Interfaces and methods.
-Stringer ~ interface {
-    String : func() utf8
+// any: accepts every type.
+List<T ~ any> ~ []T
+
+// number: int + uint + float + complex types.
+NumSlice<T ~ number> ~ []T
+
+// ordered: int + uint + float + string — types that support < > <= >=.
+SortableSlice<T ~ ordered> ~ []T
+
+// comparable: ordered + complex + bool + struct + array + enum + pointer + tuple + set.
+Dict<K ~ comparable, V ~ any> ~ map<K, V>
+
+// Multiple type params with any constraint.
+// TODO: temporarily disabled, not fully implemented.
+// Pair<A ~ any, B ~ any> ~ (A, B)
+
+// Multi-constraint union: T must be string or int.
+TagSlice<T ~ string | int> ~ []T
+
+// Match on a generic type parameter constrained by a union.
+// The type switch narrows T to each concrete case type inside the arm.
+describe : func<T ~ int64 | utf8>(x : T) = {
+    match x {
+    case int64:
+        @print("int64: ")
+        @print(x)
+    case utf8:
+        @print("utf8: ")
+        @print(x)
+    }
 }
 
-Print : func<T ~ Stringer>(x : T) = {
-    @print(x.String())
+// Match with binding variable — each arm narrows the binding to the case type.
+// The binding shadows the subject with the narrowed type.
+matchDescribe : func<T ~ float64 | utf8>(x : T) = {
+    match val := x {
+    case float64:
+        @print("float64: ")
+        @print(val)
+    case utf8:
+        @print("utf8: ")
+        @print(val)
+    }
 }
 
-export Foo ~ struct {
-    value : utf8
+// Match with default case for unhandled types.
+// The default branch receives the full union type.
+describeDefault : func<T ~ int64 | utf8 | bool>(x : T) = {
+    match x {
+    case int64:
+        @print("int matched")
+    default:
+        @print("fallback: ")
+        @print(x)
+    }
 }
 
-// Shorthand method (no receiver variable).
-export Foo.String : func() utf8 = {
-    return "value"
-}
-
-// Reference shorthand (pointer receiver in Go output).
-&Foo.Mutate : proc() = {}
-
-// Explicit receiver: access fields via receiver variable.
-(f : Foo).GetValue : func() utf8 = {
-    return f.value
-}
-
-// Mutable reference receiver: can assign to fields.
-(var f : &Foo).SetValue : proc(v : utf8) = {
-    f.value = v
+// Match with tilde case — the ~ prefix means "exact type match" and does
+// not propagate the constraint to the case body (for constraint types that
+// should not be narrowed).
+matchExact : func<T ~ utf8 | int64>(x : T) = {
+    match x {
+    case ~utf8:
+        @print("exact utf8")
+    case ~int64:
+        @print("exact int64")
+    }
 }
 ```
