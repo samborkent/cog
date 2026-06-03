@@ -56,6 +56,10 @@ func (p *Parser) parseGoImport(ctx context.Context) ast.NodeIndex {
 }
 
 func (p *Parser) parseGoCallExpression(ctx context.Context) ast.ExprIndex {
+	if p.inPureFunc {
+		p.error(p.lex.This(), "cannot use @go inside func (pure function)", "parseGoCallExpression")
+	}
+
 	expr := ast.New[ast.GoCallExpression](p.ast)
 	expr.Token = p.lex.This()
 

@@ -569,8 +569,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			prevReturnType := p.currentReturnType
 			p.currentReturnType = t.ReturnType
 
+			prevInPureFunc := p.inPureFunc
+			p.inPureFunc = p.inPureFunc || t.Function
+
 			body := p.parseBlockStatement(ctx)
 
+			p.inPureFunc = prevInPureFunc
 			p.currentReturnType = prevReturnType
 
 			if len(t.Parameters) > 0 {

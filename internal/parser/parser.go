@@ -32,6 +32,7 @@ type Parser struct {
 	currentReturnType types.Type // return type of the enclosing procedure (for result wrapping)
 	currentReceiver   *ast.Identifier
 	definedMethods    map[string]struct{}
+	inPureFunc        bool // true when parsing the body of a func (pure function)
 }
 
 // NewParserWithSymbols creates a parser that uses the provided symbol table.
@@ -208,11 +209,15 @@ func (p *Parser) ParseBodies(ctx context.Context) error {
 		prevReturnType := p.currentReturnType
 		p.currentReturnType = procType.ReturnType
 
+		prevInPureFunc := p.inPureFunc
+		p.inPureFunc = p.inPureFunc || procType.Function
+
 		// Seek to deferred offset and parse block.
 		p.lex.SeekTo(db.Offset, db.Token.Ln)
 
 		body := p.parseBlockStatement(ctx)
 
+		p.inPureFunc = prevInPureFunc
 		p.currentReturnType = prevReturnType
 
 		// Pop scopes.
