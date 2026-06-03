@@ -225,7 +225,7 @@ main : proc() = {}`)
 		parseShouldError(t, `package p
 NotAnError ~ int32
 main : proc() = {
-	var r : int64 ! NotAnError
+	r : var int64 ! NotAnError
 }`)
 	})
 
@@ -235,7 +235,7 @@ main : proc() = {
 MyErr ~ error { Fail }
 OtherErr ~ error { Bad }
 main : proc() = {
-	var r : MyErr ! OtherErr
+	r : var MyErr ! OtherErr
 }`)
 	})
 }

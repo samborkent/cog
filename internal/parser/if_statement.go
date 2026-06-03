@@ -65,7 +65,13 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 		p.symbols.MarkChecked(checkedVar, checkError)
 	}
 
+	// Rule 16: Snapshot ownership before consequence branch.
+	consSnap := p.symbols.snapshotScopeChain()
+
 	consequence := p.parseBlockStatement(ctx)
+
+	// Capture consequence's ownership changes.
+	consDelta := p.symbols.diffScopeChain(consSnap)
 
 	if checkedVar != "" && !persistsAfterIf {
 		if hadPrevState {
@@ -93,6 +99,7 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 	}
 
 	var alternative *ast.Block
+	var altDelta branchConsumption
 
 	if p.lex.This().Type == tokens.Else {
 		p.lex.Step() // consume 'else'
@@ -102,7 +109,16 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 			p.symbols.MarkChecked(checkedVar, checkValue)
 		}
 
+		// Rule 16: Restore pre-consequence ownership for alternative branch.
+		p.symbols.restoreScopeChain(consSnap)
+
 		alternative = p.parseBlockStatement(ctx)
+
+		// Capture alternative's ownership changes.
+		altDelta = p.symbols.diffScopeChain(consSnap)
+
+		// Restore again so the post-if state comes from the union.
+		p.symbols.restoreScopeChain(consSnap)
 
 		if checkedVar != "" && negated {
 			if hadPrevState {
@@ -115,6 +131,21 @@ func (p *Parser) parseIfStatement(ctx context.Context) ast.NodeIndex {
 		if alternative == nil {
 			p.error(p.lex.This(), "unable to parse else block", "parseIfStatement")
 			return ast.ZeroNodeIndex
+		}
+	}
+
+	// Rule 16: Union consumption across branches.
+	branches := []branchConsumption{consDelta}
+	if alternative != nil {
+		branches = append(branches, altDelta)
+	}
+	unionVars, unionFields := unionConsumption(branches)
+	for name := range unionVars {
+		p.symbols.MarkConsumed(name)
+	}
+	for sv, fs := range unionFields {
+		for f := range fs {
+			p.symbols.MarkFieldConsumed(sv, f)
 		}
 	}
 

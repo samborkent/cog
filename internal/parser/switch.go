@@ -41,6 +41,8 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 
 	cases := make([]*ast.Case, 0, switchCasePreallocationSize)
 
+	var branchDeltas []branchConsumption
+
 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 		t := p.lex.This()
 		if t.Type != tokens.Case {
@@ -68,6 +70,9 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 
 		p.lex.Step() // consume :
 
+		// Rule 16: Snapshot ownership before each case body.
+		caseSnap := p.symbols.snapshotScopeChain()
+
 		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 			if p.match(p.lex.This(), tokens.Case, tokens.Default, tokens.RBrace) {
 				break
@@ -80,6 +85,10 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 				p.synchronize(ctx)
 			}
 		}
+
+		// Rule 16: Capture delta and restore for next case.
+		branchDeltas = append(branchDeltas, p.symbols.diffScopeChain(caseSnap))
+		p.symbols.restoreScopeChain(caseSnap)
 
 		cases = append(cases, caseNode)
 	}
@@ -118,6 +127,19 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 
 	p.lex.Step() // consume }
 
+	// Rule 16: Union consumption across switch cases.
+	if len(branchDeltas) > 0 {
+		unionVars, unionFields := unionConsumption(branchDeltas)
+		for name := range unionVars {
+			p.symbols.MarkConsumed(name)
+		}
+		for sv, fs := range unionFields {
+			for f := range fs {
+				p.symbols.MarkFieldConsumed(sv, f)
+			}
+		}
+	}
+
 	return p.ast.NewSwitch(switchToken, label, nil, cases, def)
 }
 
@@ -141,6 +163,8 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 	p.lex.Step() // consume {
 
 	cases := make([]*ast.Case, 0, switchCasePreallocationSize)
+
+	var branchDeltas []branchConsumption
 
 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 		t := p.lex.This()
@@ -174,6 +198,9 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 
 		p.lex.Step() // consume :
 
+		// Rule 16: Snapshot ownership before each case body.
+		caseSnap := p.symbols.snapshotScopeChain()
+
 		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 			if p.match(p.lex.This(), tokens.Case, tokens.Default, tokens.RBrace) {
 				break
@@ -187,10 +214,15 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 			}
 		}
 
+		// Rule 16: Capture delta and restore for next case.
+		branchDeltas = append(branchDeltas, p.symbols.diffScopeChain(caseSnap))
+		p.symbols.restoreScopeChain(caseSnap)
+
 		cases = append(cases, caseNode)
 	}
 
 	var def *ast.Default
+	var defDelta branchConsumption
 
 	if p.lex.This().Type == tokens.Default {
 		defaultNode := &ast.Default{
@@ -206,6 +238,9 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 
 		p.lex.Step() // consume :
 
+		// Rule 16: Snapshot for default case.
+		caseSnap := p.symbols.snapshotScopeChain()
+
 		for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 			if p.lex.This().Type == tokens.RBrace {
 				break
@@ -219,10 +254,29 @@ func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) as
 			}
 		}
 
+		defDelta = p.symbols.diffScopeChain(caseSnap)
+		p.symbols.restoreScopeChain(caseSnap)
+
 		def = defaultNode
 	}
 
 	p.lex.Step() // consume }
+
+	// Rule 16: Union consumption across switch cases.
+	if len(branchDeltas) > 0 || (def != nil) {
+		if def != nil {
+			branchDeltas = append(branchDeltas, defDelta)
+		}
+		unionVars, unionFields := unionConsumption(branchDeltas)
+		for name := range unionVars {
+			p.symbols.MarkConsumed(name)
+		}
+		for sv, fs := range unionFields {
+			for f := range fs {
+				p.symbols.MarkFieldConsumed(sv, f)
+			}
+		}
+	}
 
 	return p.ast.NewSwitch(switchToken, label, symbol.Identifier, cases, def)
 }

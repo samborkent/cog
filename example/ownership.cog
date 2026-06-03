@@ -1,0 +1,142 @@
+package main
+
+// ── func borrows args; proc consumes them ──
+
+main_func_borrow : proc() = {
+    x : var []int64 = @slice<int64>(3)
+    y := len(x)
+    @print(y)
+    @print(x[0])
+}
+
+len : func(x : []int64) int64 = { return 0 }
+
+main_proc_consume : proc() = {
+    x : var []int64 = @slice<int64>(3)
+    y := len(x)
+    @print(y)
+    takes_slice(x)
+}
+
+takes_slice : proc(x : []int64) = {
+    @print(x[0])
+}
+
+// ── var → var transfers ownership ──
+
+main_var_to_var : proc() = {
+    x : var []int64 = @slice<int64>(3)
+    y : var []int64 = x
+    z := len(y)
+    @print(z)
+}
+
+// ── immutable → var deep-copies pointer-like types ──
+
+main_deep_copy : proc() = {
+    a : []int64 = {1, 2, 3}
+    b : var []int64 = a
+    x := len(b)
+    @print(a[0])
+    @print(x)
+}
+
+// ── immutable → var with primitive is trivial copy ──
+
+main_primitive_copy : proc() = {
+    a : int64 = 42
+    b : var int64 = a
+    b = 99
+    @print(a)
+    @print(b)
+}
+
+// ── & reference consumes var ──
+
+main_ref_consumes : proc() = {
+    x : var int64 = 42
+    r := &x
+    @print(r)
+}
+
+// ── deref var & consumes the reference ──
+
+//main_deref_consumes : proc() = {
+//    x : var int64 = 42
+//    r : var &int64 = &x
+//    val := *r
+//    @print(val)
+//}
+
+// ── Partial moves: field-level ownership ──
+
+Buf ~ struct { data : []int64; label : utf8 }
+
+main_partial_move : proc() = {
+    c : var Buf = Buf{
+        data = @slice<int64>(3),
+        label = "hello",
+    }
+    d := c.data
+    x := len(d)
+    @print(x)
+    @print(c.label)
+    c.data = @slice<int64>(5)
+    worker(c)
+}
+
+worker : proc(data : Buf) = { }
+
+// ── Conditional consumption is permanent across branches ──
+
+main_cond_consume : proc() = {
+    x : var []int64 = @slice<int64>(3)
+    if true {
+        takes_slice(x)
+    } else {
+        takes_slice(x)
+    }
+}
+
+// ── For-loop borrows iterable ──
+
+main_for_borrow : proc() = {
+    items : var []int64 = {1, 2, 3}
+    for item in items {
+        @print(item)
+    }
+    x := items[0]
+    @print(x)
+}
+
+// ── Defer reserves variable ──
+
+main_defer : proc() = {
+    x : var int64 = 42
+    defer echo(x)
+    @print(x + 1)
+}
+
+echo : proc(x : int64) = { @print(x) }
+
+// ── Index expression borrows container ──
+
+main_index_borrow : proc() = {
+    items : var []int64 = {1, 2, 3}
+    x := items[0]
+    @print(x)
+}
+
+// ── Switch consumption is permanent ──
+
+main_switch_consume : proc() = {
+    x : var []int64 = @slice<int64>(3)
+    switch {
+    case true:
+        d := x
+        y := len(d)
+        @print(y)
+    case false:
+        @print(x[0])
+    }
+}

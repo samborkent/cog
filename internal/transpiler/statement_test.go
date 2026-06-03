@@ -9,7 +9,7 @@ func TestConvertStmt(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
 main : proc() = {
-	var x := 1
+	x : var = 1
 	x = 2
 	@print(x)
 }`)
@@ -105,7 +105,7 @@ main : proc() = {}`)
 	t.Run("dyn_write", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-dyn val : utf8 = "default"
+val : dyn utf8 = "default"
 writer : proc() = {
 	val = "changed"
 }
@@ -116,7 +116,7 @@ main : proc() = {}`)
 	t.Run("dyn_write_in_func_errors", func(t *testing.T) {
 		t.Parallel()
 		mustFailTranspile(t, `package p
-dyn val : utf8 = "default"
+val : dyn utf8 = "default"
 writer : func() utf8 = {
 	val = "changed"
 	return val
@@ -138,7 +138,7 @@ main : proc() = {
 		t.Parallel()
 		got := transpile(t, `package p
 main : proc() = {
-	var x := 0
+	x : var = 0
 outerLoop:
 	for {
 		x = x + 1
@@ -162,7 +162,7 @@ main : proc() = {
 		t.Parallel()
 		got := transpile(t, `package p
 main : proc() = {
-	var x := 0
+	x : var = 0
 	for {
 		if x >= 10 {
 			break

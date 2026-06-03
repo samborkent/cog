@@ -118,3 +118,47 @@ func IsPointer(t Type) bool {
 	kind := t.Kind()
 	return kind == ReferenceKind || kind == SliceKind || kind == SetKind || kind == MapKind || kind == ProcedureKind
 }
+
+// IsPointerLike reports whether a type needs deep copy on immutable → var assignment.
+// Slices, Maps, Sets, Procedures (closures) are always pointer-like.
+// Structs are pointer-like only if they contain at least one pointer-like field (IsComplex).
+// Arrays are pointer-like if their element type is pointer-like.
+// References (&T) are NOT pointer-like (immutable, copied by pointer-copy).
+// Primitives (int, float, bool, string) are never pointer-like.
+// Options/Results/Eithers are pointer-like if any of their constituent types are.
+// Aliases recurse through Underlying().
+func IsPointerLike(t Type) bool {
+	t = t.Underlying()
+
+	switch v := t.(type) {
+	case *Basic:
+		return false
+	case *Enum:
+		return false
+	case *Reference:
+		return false
+	case *Slice:
+		return true
+	case *Map:
+		return true
+	case *Set:
+		return true
+	case *Procedure:
+		return true
+	case *Struct:
+		return v.IsComplex
+	case *Array:
+		if v.Element == nil {
+			return false
+		}
+		return IsPointerLike(v.Element)
+	case *Option:
+		return IsPointerLike(v.Value)
+	case *Result:
+		return IsPointerLike(v.Value) || IsPointerLike(v.Error)
+	case *Either:
+		return IsPointerLike(v.Left) || IsPointerLike(v.Right)
+	default:
+		return false
+	}
+}

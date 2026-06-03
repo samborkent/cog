@@ -11,7 +11,7 @@ func TestParseBlockStatement(t *testing.T) {
 		f := parse(t, `package p
 main : proc() = {
 	if true {
-		var x := 1
+		x : var = 1
 		x = 2
 		_ = x
 	}

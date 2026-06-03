@@ -21,6 +21,22 @@ func copyVal(v reflect.Value) reflect.Value {
 	}
 
 	switch k {
+	case reflect.Array:
+		if v.IsNil() || v.Len() == 0 {
+			return v
+		}
+
+		if isBasic(v.Index(0).Kind()) {
+			return v
+		}
+
+		array := reflect.New(v.Type()).Elem()
+
+		for i := range v.Len() {
+			array.Index(i).Set(copyVal(v.Index(i)))
+		}
+
+		return array
 	case reflect.Interface:
 		if v.IsNil() {
 			return v
@@ -110,9 +126,7 @@ func isBasic(k reflect.Kind) bool {
 		reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int,
 		reflect.Float32, reflect.Float64,
 		reflect.Complex64, reflect.Complex128,
-		reflect.String,
-		reflect.Array,
-		reflect.Func: // TODO: check if correct. It should copy the pointer of the function it points to, not the variable pointer.
+		reflect.String:
 		return true
 	default:
 		return false

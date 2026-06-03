@@ -34,6 +34,7 @@ type Transpiler struct {
 
 	dynamics       map[string]*ast.Identifier // dynamically scoped variable declarations
 	dynDefaults    map[string]ast.Expr        // Default expressions for dynamic variables
+	dynPointerLike map[string]bool            // per-dyn-field whether type is pointer-like
 	inFunc         bool
 	usesDyn        bool            // set during body conversion when a dyn var is read or written
 	needsContext   map[uint16]bool // per-file tracking of context requirement by file ID
@@ -45,6 +46,13 @@ type Transpiler struct {
 	lastSourceLine uint32              // tracks the source line of the previous statement
 
 	titleCaser cases.Caser
+
+	deferStack  []deferInfo
+	loopDepth   int
+}
+
+type deferInfo struct {
+	callStmts []goast.Stmt
 }
 
 type TranspilerOption func(*Transpiler)
@@ -63,8 +71,9 @@ func newTranspilerWithOptions(goModulePath string, files ast.MergedAST, opts ...
 		fset:         gotoken.NewFileSet(),
 		goModulePath: goModulePath,
 		dynamics:     make(map[string]*ast.Identifier),
-		dynDefaults:  make(map[string]ast.Expr),
-		needsContext: make(map[uint16]bool),
+		dynDefaults:    make(map[string]ast.Expr),
+		dynPointerLike: make(map[string]bool),
+		needsContext:   make(map[uint16]bool),
 		typeCache:    make(map[types.Type]goast.Expr),
 		dynComments:  make(map[string]string),
 		skipComments: make(map[uint64]struct{}),
@@ -168,6 +177,7 @@ func (t *Transpiler) fileWorker() *Transpiler {
 		skipComments: t.skipComments,
 		titleCaser:   t.titleCaser,
 		typeCache:    make(map[types.Type]goast.Expr),
+		deferStack:   make([]deferInfo, 0),
 	}
 }
 
@@ -179,6 +189,8 @@ func (t *Transpiler) resetFileState(fileIndex int) {
 	t.inFunc = false
 	t.usesDyn = false
 	t.ifLabelCounter = 0
+	t.deferStack = nil
+	t.loopDepth = 0
 }
 
 func (t *Transpiler) transpileFile(fileIndex int) (*goast.File, error) {
@@ -367,6 +379,7 @@ func (t *Transpiler) TranspileScript() (*goast.File, error) {
 		},
 	}
 
+	t.injectDeferred(mainFunc.Body)
 	t.injectArena(mainFunc.Body)
 
 	t.addGCImports()
@@ -398,6 +411,10 @@ func (t *Transpiler) predeclareGlobals() error {
 
 					if s.Assignment.Expr != ast.ZeroExprIndex {
 						t.dynDefaults[name] = t.files.Expr(uint16(id), s.Assignment.Expr)
+					}
+
+					if s.Assignment.Identifier.ValueType != nil {
+						t.dynPointerLike[name] = types.IsPointerLike(s.Assignment.Identifier.ValueType)
 					}
 
 					if i+1 < len(f.Statements) {

@@ -39,7 +39,7 @@ main : proc() = {
 		t.Parallel()
 		parseShouldError(t, `package p
 main : proc() = {
-	var x : int64?
+	x : var int64?
 	@print(x)
 }`)
 	})
@@ -48,7 +48,7 @@ main : proc() = {
 		t.Parallel()
 		_ = parse(t, `package p
 main : proc() = {
-	var x : int64? = 42
+	x : var int64? = 42
 	if x? {
 		@print(x)
 	}
@@ -59,7 +59,7 @@ main : proc() = {
 		t.Parallel()
 		_ = parse(t, `package p
 main : proc() = {
-	var x : int64? = 42
+	x : var int64? = 42
 	if !x? {
 		@print("not set")
 	} else {
@@ -72,7 +72,7 @@ main : proc() = {
 		t.Parallel()
 		parseShouldError(t, `package p
 main : proc() = {
-	var x : int64? = 42
+	x : var int64? = 42
 	if !x? {
 		@print(x)
 	}
@@ -83,7 +83,7 @@ main : proc() = {
 		t.Parallel()
 		_ = parse(t, `package p
 main : proc() = {
-	var x : int64? = 42
+	x : var int64? = 42
 	if x? {
 		@print(x)
 	}
@@ -95,7 +95,7 @@ main : proc() = {
 		t.Parallel()
 		parseShouldError(t, `package p
 main : proc() = {
-	var x : int64? = 42
+	x : var int64? = 42
 	if !x? {
 		@print("not set")
 	}
@@ -108,7 +108,7 @@ main : proc() = {
 		parseShouldError(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	@print(r)
 }`)
 	})
@@ -118,7 +118,7 @@ main : proc() = {
 		parseShouldError(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	@print(r!)
 }`)
 	})
@@ -128,7 +128,7 @@ main : proc() = {
 		_ = parse(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	if r? {
 		@print(r)
 	}
@@ -140,7 +140,7 @@ main : proc() = {
 		_ = parse(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	if !r? {
 		@print(r!)
 	}
@@ -152,7 +152,7 @@ main : proc() = {
 		_ = parse(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	if r? {
 		@print(r)
 	}
@@ -165,7 +165,7 @@ main : proc() = {
 		parseShouldError(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	if !r? {
 		@print(r!)
 	}
@@ -178,7 +178,7 @@ main : proc() = {
 		parseShouldError(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	if !r? {
 		@print(r)
 	}
@@ -190,7 +190,7 @@ main : proc() = {
 		_ = parse(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	if !r? {
 		@print(r!)
 	} else {
@@ -205,7 +205,7 @@ main : proc() = {
 		_ = parse(t, `package p
 MyErr ~ error { Fail }
 safeDivide : func(a : int64, b : int64) int64 ! MyErr = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	if !r? {
 		return r!
 	}
@@ -221,7 +221,7 @@ main : proc() = {}`)
 		_ = parse(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	for {
 		if !r? {
 			break
@@ -238,7 +238,7 @@ main : proc() = {
 		_ = parse(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	for {
 		if !r? {
 			continue
@@ -255,7 +255,7 @@ main : proc() = {
 		parseShouldError(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	if !r? {
 		@print(r!)
 	}
@@ -268,7 +268,7 @@ main : proc() = {
 		t.Parallel()
 		_ = parse(t, `package p
 getValue : func() utf8 = {
-	var opt : utf8?
+	opt : var utf8?
 	if !opt? {
 		return "default"
 	}
@@ -283,7 +283,7 @@ main : proc() = {}`)
 		_ = parse(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr = 42
+	r : var int64 ! MyErr = 42
 	@print(r)
 }`)
 	})
@@ -296,7 +296,7 @@ MyErr ~ error<utf8> {
 	NotFound := "not found",
 }
 main : proc() = {
-	var r : int64 ! MyErr = MyErr.NotFound
+	r : var int64 ! MyErr = MyErr.NotFound
 	@print(r!)
 }`)
 	})
@@ -310,7 +310,7 @@ fn : func() int64 ! MyErr = {
 	return 0
 }
 main : proc() = {
-	var r : int64 ! MyErr = fn()
+	r : var int64 ! MyErr = fn()
 	@print(r)
 }`)
 	})
@@ -321,7 +321,7 @@ main : proc() = {
 		_ = parse(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	r = 10 // value literal assigned, marked as checked value
 	@print(r)
 }`)
@@ -334,7 +334,7 @@ main : proc() = {
 		_ = parse(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr
+	r : var int64 ! MyErr
 	if r? {
 		@print(r)
 	}

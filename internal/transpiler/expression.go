@@ -5,6 +5,7 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"slices"
+	"strings"
 
 	"github.com/samborkent/cog/internal/ast"
 	"github.com/samborkent/cog/internal/tokens"
@@ -246,10 +247,21 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 
 			t.usesDyn = true
 
-			return component.DynRead(name), nil
+			return component.DynRead(name, t.dynPointerLike[name]), nil
 		}
 
-		goIdent := component.Ident(n)
+		// Handle selector identifiers: c.data → c.Data (selector expression)
+		name = component.ConvertExport(n.Token.Literal, n.Exported, n.Global)
+
+		var goIdent goast.Expr
+		if idx := strings.LastIndexByte(name, '.'); idx >= 0 {
+			goIdent = &goast.SelectorExpr{
+				X:   component.IdentName(name[:idx]),
+				Sel: component.IdentName(name[idx+1:]),
+			}
+		} else {
+			goIdent = component.Ident(n)
+		}
 
 		// Auto-unwrap checked option/result identifiers to .Value
 		if n.ValueType != nil {
@@ -598,6 +610,20 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 				return nil, fmt.Errorf("converting map literal value %d: %w", i, err)
 			}
 
+			// Map insertion: wrap var pointer-like keys/values in cog.Copy.
+			if keyIdent, ok := t.Expr(pair.Key).(*ast.Identifier); ok &&
+				keyIdent.Qualifier == ast.QualifierVariable &&
+				identIsPointerLike(keyIdent) {
+				t.addCogImport()
+				keyExpr = cogCopyExpr(keyExpr)
+			}
+			if valIdent, ok := t.Expr(pair.Value).(*ast.Identifier); ok &&
+				valIdent.Qualifier == ast.QualifierVariable &&
+				identIsPointerLike(valIdent) {
+				t.addCogImport()
+				valExpr = cogCopyExpr(valExpr)
+			}
+
 			exprs[i] = &goast.KeyValueExpr{
 				Key:   keyExpr,
 				Value: valExpr,
@@ -687,10 +713,12 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 
 		stmts := make([]goast.Stmt, 0, len(body.Statements))
 
-		// Track whether we're inside a func and reset usesDyn for this body.
 		prevInFunc := t.inFunc
 		prevUsesDyn := t.usesDyn
-
+		prevDeferStack := t.deferStack
+		prevLoopDepth := t.loopDepth
+		t.deferStack = nil
+		t.loopDepth = 0
 		t.usesDyn = false
 		if procType, ok := n.ProcedureType.(*types.Procedure); ok {
 			t.inFunc = procType.Function
@@ -707,7 +735,6 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			stmts = append(stmts, stmt...)
 		}
 
-		// Capture whether this body used dyn vars, then restore outer state.
 		bodyUsesDyn := t.usesDyn
 		t.usesDyn = prevUsesDyn || bodyUsesDyn
 		t.inFunc = prevInFunc
@@ -717,12 +744,19 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			return nil, fmt.Errorf("converting procedure type: %w", err)
 		}
 
-		return &goast.FuncLit{
+		funcLit := &goast.FuncLit{
 			Type: procType.(*goast.FuncType),
 			Body: &goast.BlockStmt{
 				List: stmts,
 			},
-		}, nil
+		}
+
+		t.injectDeferred(funcLit.Body)
+
+		t.deferStack = prevDeferStack
+		t.loopDepth = prevLoopDepth
+
+		return funcLit, nil
 	case *ast.Selector:
 		// TODO: update to handle new selector structure with slice of fields.
 
@@ -800,6 +834,14 @@ func (t *Transpiler) convertExpr(expr ast.Expr) (goast.Expr, error) {
 			goExpr, err := t.convertExpr(t.Expr(v))
 			if err != nil {
 				return nil, fmt.Errorf("converting set literal value %d: %w", i, err)
+			}
+
+			// Rule 24: Set insertion wraps var pointer-like values in cog.Copy.
+			if setIdent, ok := t.Expr(v).(*ast.Identifier); ok &&
+				setIdent.Qualifier == ast.QualifierVariable &&
+				identIsPointerLike(setIdent) {
+				t.addCogImport()
+				goExpr = cogCopyExpr(goExpr)
 			}
 
 			if isASCII {
@@ -1127,4 +1169,21 @@ func convertUnaryOperator(t tokens.Type) (gotoken.Token, error) {
 	default:
 		return gotoken.ILLEGAL, fmt.Errorf("unknown unary operator %s", t.String())
 	}
+}
+
+func cogCopyExpr(inner goast.Expr) goast.Expr {
+	return &goast.CallExpr{
+		Fun: &goast.SelectorExpr{
+			X:   &goast.Ident{Name: "cog"},
+			Sel: &goast.Ident{Name: "Copy"},
+		},
+		Args: []goast.Expr{inner},
+	}
+}
+
+func identIsPointerLike(ident *ast.Identifier) bool {
+	if ident.ValueType == nil {
+		return false
+	}
+	return types.IsPointerLike(ident.ValueType)
 }

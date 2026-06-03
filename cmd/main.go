@@ -77,16 +77,19 @@ func main() {
 	// Script mode: single .cogs file.
 	if strings.HasSuffix(files[0], ".cogs") {
 		projectRoot := filepath.Dir(files[0])
-		runScript(ctx, projectRoot, files[0], "")
+		if err := runScript(ctx, projectRoot, files[0], ""); err != nil {
+			fmt.Fprintln(os.Stderr, err.Error())
+		}
 
 		return
 	}
 
-	// Determine project root: the directory of the entry package.
 	// Import paths are resolved relative to this root.
 	projectRoot := filepath.Dir(files[0])
 
-	runProject(ctx, projectRoot, files)
+	if err := runProject(ctx, projectRoot, files); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+	}
 }
 
 // discoverFiles resolves the input flag to a sorted list of .cog file paths.
@@ -161,7 +164,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 
 	symbols := parser.NewSymbolTableAuto(1, minParallelFiles)
 
-	p, err := parser.NewScriptParserWithSymbols(toks, symbols, nil)
+	p, err := parser.NewScriptParserWithSymbols(toks, symbols, nil, scriptPath)
 	if err != nil {
 		return err
 	}
@@ -353,7 +356,6 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 	if len(entryLexed) < minParallelFiles {
 		for i, lf := range entryLexed {
 			if err := entryParsers[i].ParseBodies(ctx); err != nil {
-				fmt.Println(err.Error())
 				return err
 			}
 
@@ -368,7 +370,6 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 		for i, lf := range entryLexed {
 			group.Go(func() error {
 				if err := entryParsers[i].ParseBodies(ctx); err != nil {
-					fmt.Println(err.Error())
 					return err
 				}
 

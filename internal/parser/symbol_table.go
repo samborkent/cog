@@ -55,6 +55,10 @@ type SymbolTable struct {
 	cogimports *isync.Map[string, *CogImport]      // key: package name
 	fields     *isync.Map[string, *isync.Map[string, Symbol]]
 	checked    *isync.Map[string, checkState] // option/result variables verified in this scope
+
+	ownership      *isync.Map[string, ownershipState]            // walks up scope chains
+	fieldOwnership *isync.Map[string, *isync.Map[string, ownershipState]] // per-field within structs
+	borrowCounts   *isync.Map[string, int32]                     // per-scope only, does NOT walk up
 }
 
 func NewSymbolTable() *SymbolTable {
@@ -81,6 +85,9 @@ func NewSymbolTableWithConcurrency(concurrent bool) *SymbolTable {
 		cogimports: isync.NewMap[string, *CogImport](opts...),
 		fields:     isync.NewMap[string, *isync.Map[string, Symbol]](opts...),
 		checked:    isync.NewMap[string, checkState](opts...),
+		ownership:  isync.NewMap[string, ownershipState](opts...),
+		fieldOwnership: isync.NewMap[string, *isync.Map[string, ownershipState]](opts...),
+		borrowCounts:   isync.NewMap[string, int32](opts...),
 	}
 }
 

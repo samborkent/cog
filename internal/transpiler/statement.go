@@ -25,7 +25,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 
 		return []goast.Stmt{&goast.DeclStmt{Decl: t.commentDecl(text)[0]}}, nil
 	case *ast.Assignment:
-		ident := &goast.Ident{Name: "_"}
+		var ident goast.Expr = &goast.Ident{Name: "_"}
 
 		assignmentExpr := t.Expr(n.Expr)
 
@@ -46,11 +46,18 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 				}
 
 				return []goast.Stmt{
-					component.DynWrite(name, val),
+					component.DynWrite(name, val, t.dynPointerLike[name]),
 				}, nil
 			}
 
-			ident = &goast.Ident{Name: name}
+			if n.FieldName != "" {
+				ident = &goast.SelectorExpr{
+					X:   &goast.Ident{Name: name},
+					Sel: &goast.Ident{Name: component.ConvertExport(n.FieldName, n.FieldExported, false)},
+				}
+			} else {
+				ident = &goast.Ident{Name: name}
+			}
 		}
 
 		expr, err := t.convertExpr(assignmentExpr)
@@ -121,6 +128,24 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 			return nil, err
 		}
 
+		// Rule 5: immutable → var deep copy for pointer-like types (inside proc body).
+		if n.Assignment.Identifier.Qualifier == ast.QualifierVariable &&
+			n.Assignment.Expr != ast.ZeroExprIndex {
+			if astIdent, ok := t.Expr(n.Assignment.Expr).(*ast.Identifier); ok &&
+				astIdent.Qualifier != ast.QualifierVariable &&
+				astIdent.Qualifier != ast.QualifierDynamic &&
+				types.IsPointerLike(astIdent.Type()) {
+				t.addCogImport()
+				expr = &goast.CallExpr{
+					Fun: &goast.SelectorExpr{
+						X:   &goast.Ident{Name: "cog"},
+						Sel: &goast.Ident{Name: "Copy"},
+					},
+					Args: []goast.Expr{expr},
+				}
+			}
+		}
+
 		// Optional type declaration.
 		var declType goast.Expr
 
@@ -176,20 +201,31 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 			X: expr,
 		}}
 	case *ast.ForStatement:
+		t.loopDepth++
+
+		prevDeferStack := t.deferStack
+		t.deferStack = nil
+
 		body, err := t.convertForBlock(n.Loop)
 		if err != nil {
+			t.deferStack = prevDeferStack
+			t.loopDepth--
 			return nil, err
 		}
+
+		t.injectDeferred(body)
+
+		t.deferStack = prevDeferStack
+
+		t.loopDepth--
 
 		var stmt goast.Stmt
 
 		if n.Range == ast.ZeroExprIndex {
-			// C-style for loop.
 			stmt = &goast.ForStmt{
 				Body: body,
 			}
 		} else {
-			// Range based for loop.
 			rangeExpr, err := t.convertExpr(t.Expr(n.Range))
 			if err != nil {
 				return nil, err
@@ -273,6 +309,15 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 				Label: component.Ident(n.Label),
 				Stmt:  noOp,
 			})
+		}
+
+		returnStmts = stmts
+	case *ast.Defer:
+		srcLine, _ := n.Pos()
+		expr := t.Expr(n.Expr)
+		stmts, err := t.convertDeferExpr(expr, srcLine)
+		if err != nil {
+			return nil, err
 		}
 
 		returnStmts = stmts
@@ -381,7 +426,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 	// Attach //line directives to statements that don't already carry one.
 	// Comments return early above; declarations embed their own //line inline.
 	switch node.(type) {
-	case *ast.Comment, *ast.Declaration:
+	case *ast.Comment, *ast.Declaration, *ast.Defer:
 	default:
 		ln, _ := node.Pos()
 		lineComment := fmt.Sprintf("\n//line %s:%d", t.file.Name, ln)

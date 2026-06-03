@@ -146,6 +146,20 @@ The following basic features are missing that need to be implemented before Cog 
     - `func` methods cannot have a `var` receiver (pure functions cannot mutate state)
     - Duplicate method names on the same type are rejected
     - Selector assignment (`f.value = x`) requires a `var` receiver
+- Ownership model for `var` mutable variables:
+    - `var` to `var` assignment transfers ownership — source is dead after
+    - Immutable to `var` assignment: deep-copies slices/maps/sets (via `cog.Copy()`); primitives and structs of primitives simply copy
+    - `func` calls borrow `var` arguments — caller can use the variable again after the call
+    - `proc` calls consume `var` arguments — caller cannot use the variable after the call
+    - Returning a `var` value transfers ownership to the caller; structs must have all fields alive to be returned
+    - `defer` reserves a `var` for the deferred call — reassigning or moving it after the defer is rejected
+    - `for` iteration borrows the iterable — it is alive again after the loop
+    - Consumption is permanent across conditional branches: if any branch consumes a `var`, it is dead after the entire if/switch/match
+    - `dyn` variables deep-copy on read and write for pointer-like types; primitives copy trivially
+    - Struct fields support partial moves: `d := c.data` consumes only that field; reassigning `c.data = ...` revives it
+    - Pointer-like vs primitive determination is transitive through type aliases and generics
+    - Index expressions borrow the container
+    - Map/set insertion consumes the key and value map entries; non-comparable types rejected as keys/elements
 
 ### Partly implemented
 

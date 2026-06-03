@@ -4,7 +4,7 @@ version: '3'
 
 vars:
   FILE: example/
-  DEBUG: false
+  DEBUG: true
   REPLACE_LOCAL_COG: true
 
 tasks:

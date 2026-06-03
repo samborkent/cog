@@ -76,7 +76,7 @@ main : proc() = {}`)
 	t.Run("dyn_inline_comment", func(t *testing.T) {
 		t.Parallel()
 		got := transpileWithPrint(t, `package p
-dyn val : utf8 = "default" // dyn comment
+val : dyn utf8 = "default" // dyn comment
 main : proc() = {}`)
 		mustContain(t, got, "// dyn comment")
 		mustNotContain(t, got, "__cogReplaceMe")

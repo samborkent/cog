@@ -71,6 +71,22 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		bodyUsesDyn := t.usesDyn
 		t.usesDyn = prevUsesDyn
 
+		// Rule 5: immutable → var deep copy for pointer-like types.
+		if n.Assignment.Identifier.Qualifier == ast.QualifierVariable &&
+			types.IsPointerLike(assignmentExpr.Type()) {
+			if astIdent, ok := assignmentExpr.(*ast.Identifier); ok &&
+				astIdent.Qualifier != ast.QualifierVariable &&
+				astIdent.Qualifier != ast.QualifierDynamic {
+				expr = &goast.CallExpr{
+					Fun: &goast.SelectorExpr{
+						X:   &goast.Ident{Name: "cog"},
+						Sel: &goast.Ident{Name: "Copy"},
+					},
+					Args: []goast.Expr{expr},
+				}
+			}
+		}
+
 		if assignmentExpr.Type().Kind() == types.ProcedureKind {
 			// Procedure declaration - convert to function declaration
 			funcLiteral, ok := expr.(*goast.FuncLit)
@@ -154,6 +170,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 					}
 				}
 
+				t.injectDeferred(funcDecl.Body)
 				t.injectArena(funcDecl.Body)
 
 				return []goast.Decl{funcDecl}, nil
@@ -171,6 +188,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				t.addStdLibImport("context")
 			}
 
+			t.injectDeferred(funcDecl.Body)
 			t.injectArena(funcDecl.Body)
 
 			// Return function declaration for procedures

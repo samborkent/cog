@@ -88,7 +88,7 @@ main : proc() = {
 		got := transpile(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr = 1
+	r : var int64 ! MyErr = 1
 	ok := r?
 	@print(ok)
 }`)
@@ -98,7 +98,7 @@ main : proc() = {
 	t.Run("dyn_read", func(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
-dyn val : utf8 = "default"
+val : dyn utf8 = "default"
 main : proc() = {
 	@print(val)
 }`)
@@ -355,7 +355,7 @@ main : proc() = {
 		t.Parallel()
 		got := transpile(t, `package p
 main : proc() = {
-	var x : int64? = 42
+	x : var int64? = 42
 	if x? {
 		@print(x)
 	}
@@ -368,7 +368,7 @@ main : proc() = {
 		t.Parallel()
 		got := transpile(t, `package p
 main : proc() = {
-	var x : int64? = 42
+	x : var int64? = 42
 	ok := x?
 	@print(ok)
 }`)
@@ -380,7 +380,7 @@ main : proc() = {
 		got := transpile(t, `package p
 MyErr ~ error { Fail }
 main : proc() = {
-	var r : int64 ! MyErr = 1
+	r : var int64 ! MyErr = 1
 	if !r? {
 		e := r!
 		@print(e)
@@ -650,7 +650,7 @@ func TestConvertReassignment(t *testing.T) {
 		t.Parallel()
 		got := transpile(t, `package p
 main : proc() = {
-	var x : int64 = 0
+	x : var int64 = 0
 	x = x + 1
 	@print(x)
 }`)

@@ -172,15 +172,36 @@ func DynProcEntry() []goast.Stmt {
 }
 
 // DynRead generates a dynamic variable read expression: dyn.<fieldName>
-func DynRead(fieldName string) goast.Expr {
-	return &goast.SelectorExpr{
+// When isPointerLike is true, wraps the read in cog.Copy().
+func DynRead(fieldName string, isPointerLike bool) goast.Expr {
+	read := &goast.SelectorExpr{
 		X:   &goast.Ident{Name: dynVar},
 		Sel: &goast.Ident{Name: fieldName},
 	}
+	if isPointerLike {
+		return &goast.CallExpr{
+			Fun: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Copy"},
+			},
+			Args: []goast.Expr{read},
+		}
+	}
+	return read
 }
 
 // DynWrite generates a dynamic variable write statement: dyn.<fieldName> = val
-func DynWrite(fieldName string, val goast.Expr) *goast.AssignStmt {
+// When isPointerLike is true, wraps the value in cog.Copy().
+func DynWrite(fieldName string, val goast.Expr, isPointerLike bool) *goast.AssignStmt {
+	if isPointerLike {
+		val = &goast.CallExpr{
+			Fun: &goast.SelectorExpr{
+				X:   &goast.Ident{Name: "cog"},
+				Sel: &goast.Ident{Name: "Copy"},
+			},
+			Args: []goast.Expr{val},
+		}
+	}
 	return &goast.AssignStmt{
 		Tok: gotoken.ASSIGN,
 		Lhs: []goast.Expr{

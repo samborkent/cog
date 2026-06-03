@@ -80,6 +80,7 @@ const (
 	Return
 	Break
 	Continue
+	Defer
 	In
 	Async
 
@@ -263,6 +264,8 @@ func (t Type) String() string {
 		return "break"
 	case Continue:
 		return "continue"
+	case Defer:
+		return "defer"
 	case In:
 		return "in"
 	case Async:

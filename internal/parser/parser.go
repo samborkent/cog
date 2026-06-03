@@ -46,6 +46,7 @@ func NewParserWithSymbols(lex *lexer.Lexer, symbols *SymbolTable, fileName strin
 	p := &Parser{
 		lex:            lex,
 		symbols:        symbols,
+		filePath:       fileName,
 		ast:            ast.NewAST(a, fileID, lex.Len),
 		Errs:           make([]error, 0, errorPreallocationSize),
 		definedMethods: make(map[string]struct{}),
@@ -56,13 +57,13 @@ func NewParserWithSymbols(lex *lexer.Lexer, symbols *SymbolTable, fileName strin
 
 // NewScriptParser creates a parser in script mode for .cogs files.
 // Script mode forbids package declarations and export keywords.
-func NewScriptParser(lexer *lexer.Lexer) (*Parser, error) {
-	return NewScriptParserWithSymbols(lexer, NewSymbolTable(), nil)
+func NewScriptParser(lexer *lexer.Lexer, fileName string) (*Parser, error) {
+	return NewScriptParserWithSymbols(lexer, NewSymbolTable(), nil, fileName)
 }
 
 // NewScriptParserWithSymbols creates a script-mode parser with a shared symbol table.
 // If a is non-nil, it is used for AST node allocations.
-func NewScriptParserWithSymbols(lex *lexer.Lexer, symbols *SymbolTable, a *arena.Arena) (*Parser, error) {
+func NewScriptParserWithSymbols(lex *lexer.Lexer, symbols *SymbolTable, a *arena.Arena, fileName string) (*Parser, error) {
 	if lex == nil {
 		return nil, errors.New("no lexer provided to parser")
 	}
@@ -70,6 +71,7 @@ func NewScriptParserWithSymbols(lex *lexer.Lexer, symbols *SymbolTable, a *arena
 	p := &Parser{
 		lex:     lex,
 		symbols: symbols,
+		filePath: fileName,
 		// TODO: allow multi-file scripts?
 		ast:            ast.NewAST(a, 0, lex.Len),
 		Errs:           make([]error, 0, errorPreallocationSize),
@@ -121,7 +123,7 @@ func (p *Parser) ParseBodies(ctx context.Context) error {
 			continue
 		}
 
-		p.lex.SeekTo(de.Offset)
+		p.lex.SeekTo(de.Offset, de.Token.Ln)
 
 		resolved := p.expression(ctx, de.TypeHint)
 		if resolved != ast.ZeroExprIndex {
@@ -207,7 +209,7 @@ func (p *Parser) ParseBodies(ctx context.Context) error {
 		p.currentReturnType = procType.ReturnType
 
 		// Seek to deferred offset and parse block.
-		p.lex.SeekTo(db.Offset)
+		p.lex.SeekTo(db.Offset, db.Token.Ln)
 
 		body := p.parseBlockStatement(ctx)
 
@@ -334,10 +336,8 @@ func (p *Parser) parseFile(ctx context.Context, fileName string) (*ast.AST, erro
 		case tokens.Comment:
 			stmts = append(stmts, p.ast.NewComment(t))
 			p.lex.Step() // consume comment
-		case tokens.Dynamic,
-			tokens.Export,
+		case tokens.Export,
 			tokens.Identifier,
-			tokens.Variable,
 			tokens.Builtin,
 			tokens.If,
 			tokens.For,
@@ -416,8 +416,6 @@ func (p *Parser) synchronize(ctx context.Context) {
 			tokens.Switch,
 			tokens.Return,
 			tokens.Export,
-			tokens.Dynamic,
-			tokens.Variable,
 			tokens.GoImport,
 			tokens.Import,
 			tokens.RBrace,
