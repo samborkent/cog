@@ -29,6 +29,9 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 		return p.parseErrorType(ctx, ident)
 	case tokens.Function, tokens.Procedure:
 		return p.parseProcedureType(ctx, exported, global)
+	case tokens.Newline:
+		p.lex.Step()
+		return nil
 	}
 
 	typ := p.parseType(ctx)
@@ -274,6 +277,9 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		return &types.Set{Element: elemType}
 	case tokens.Struct:
 		return p.parseStruct(ctx)
+	case tokens.Newline:
+		p.lex.Step()
+		return p.parseType(ctx)
 	case tokens.BitAnd:
 		// Reference type parsing
 		p.lex.Step() // consume &
@@ -500,6 +506,11 @@ func (p *Parser) parseInterface(ctx context.Context) types.Type {
 			break
 		}
 
+		if tok.Type == tokens.Newline {
+			p.lex.Step()
+			continue
+		}
+
 		if tok.Type != tokens.Identifier {
 			p.error(tok, "unexpected token found in interface declaration", "parseInterface")
 			return nil
@@ -552,6 +563,11 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 		// Skip semicolons (used in single-line struct definitions).
 		for p.lex.This().Type == tokens.Semicolon {
+			p.lex.Step()
+		}
+
+		// Skip newlines.
+		for p.lex.This().Type == tokens.Newline {
 			p.lex.Step()
 		}
 
@@ -610,6 +626,8 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 			}
 
 			fields = append(fields, field)
+		case tokens.Newline:
+			p.lex.Step()
 		default:
 			p.error(p.lex.This(), "unexpected token found in struct declaration", "parseStruct")
 			return nil
@@ -876,6 +894,11 @@ func (p *Parser) parseEnumType(ctx context.Context, ident *ast.Identifier) types
 			break
 		}
 
+		if tok.Type == tokens.Newline {
+			p.lex.Step()
+			continue
+		}
+
 		if tok.Type != tokens.Identifier {
 			p.error(tok, "expected identifier in enum declaration", "parseEnumType")
 			return nil
@@ -956,6 +979,11 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 		tok := p.lex.This()
 		if tok.Type == tokens.RBrace {
 			break
+		}
+
+		if tok.Type == tokens.Newline {
+			p.lex.Step()
+			continue
 		}
 
 		if tok.Type != tokens.Identifier {

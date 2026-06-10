@@ -189,7 +189,7 @@ func (s *SymbolTable) DefineGlobalType(typ *ast.Type) {
 	if ok && types.IsNone(existing.Alias.Derived) {
 		// Register methods of existing type on new type if any.
 		typ.Alias.RegisterMethods(existing.Alias.Methods()...)
-		existing = typ
+		s.types.Store(typ.Alias.Name, typ)
 		return
 	}
 

@@ -90,8 +90,28 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 	// if p.symbols.Outer != nil && len(typeParams) == 0 {
 	if p.globalsPass {
 		globalScope.DefineGlobalIdent(ident)
+		// Also register the type in the symbol table for forward resolution.
+		p.symbols.DefineType(&ast.Type{
+			Token: typeToken,
+			Alias: &types.Alias{
+				Name:    ident.Token.Literal,
+				Derived: typ,
+				Exported: ident.Exported,
+				Global:   ident.Global,
+			},
+		})
 	} else {
 		p.symbols.DefineIdent(ident)
+		// Register the type for forward references.
+		p.symbols.DefineType(&ast.Type{
+			Token: typeToken,
+			Alias: &types.Alias{
+				Name:    ident.Token.Literal,
+				Derived: typ,
+				Exported: ident.Exported,
+				Global:   ident.Global,
+			},
+		})
 	}
 	// }
 

@@ -29,6 +29,11 @@ func (p *Parser) parseGoImport(ctx context.Context) ast.NodeIndex {
 			break
 		}
 
+		if t.Type == tokens.Newline {
+			p.lex.Step()
+			continue
+		}
+
 		if t.Type != tokens.StringLiteral {
 			p.error(t, "found non-string token in goimport list: "+t.Literal, "parseGoImport")
 			return ast.ZeroNodeIndex
