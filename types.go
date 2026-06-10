@@ -72,10 +72,25 @@ type Option[T any] struct {
 	Set   bool
 }
 
-type Either[L any, R any] struct {
+type Either[L, R any] struct {
 	Left    L
 	Right   R
 	IsRight bool
+}
+
+// NewEither sets only the left value.
+func NewEither[R, L any](either L) Either[L, R] {
+	return Either[L, R]{
+		Left: either,
+	}
+}
+
+// NewOr sets only the right value.
+func NewOr[L, R any](or R) Either[L, R] {
+	return Either[L, R]{
+		Right:   or,
+		IsRight: true,
+	}
 }
 
 type Result[T any, E any] struct {

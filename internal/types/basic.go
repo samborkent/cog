@@ -3,11 +3,11 @@ package types
 var None = &Basic{kind: Invalid}
 
 func IsNone(t Type) bool {
-	if t == nil {
+	if t == nil || t.Underlying() == nil {
 		return true
 	}
 
-	n, ok := t.(*Basic)
+	n, ok := t.Underlying().(*Basic)
 
 	return ok && n == None
 }

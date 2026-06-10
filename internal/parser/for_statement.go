@@ -115,12 +115,12 @@ func (p *Parser) parseForStatement(ctx context.Context) ast.NodeIndex {
 		p.symbols = NewEnclosedSymbolTable(p.symbols)
 
 		if valueVar != nil {
-			p.symbols.Define(valueVar)
+			p.symbols.DefineIdent(valueVar)
 			p.symbols.MarkUsed(valueVar.Token.Literal)
 		}
 
 		if indexVar != nil {
-			p.symbols.Define(indexVar)
+			p.symbols.DefineIdent(indexVar)
 			p.symbols.MarkUsed(indexVar.Token.Literal)
 		}
 	}

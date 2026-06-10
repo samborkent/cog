@@ -1,14 +1,16 @@
 package types
 
 type Alias struct {
-	Name       string
-	Derived    Type
-	Constraint Type // non-nil when this alias acts as a type parameter
-	Exported   bool
-	Global     bool
-	TypeParams []*Alias
-	TypeArgs   []Type // concrete type arguments for an instantiated generic alias
-	lazy       func() Type
+	Name           string
+	Derived        Type
+	Constraint     Type // non-nil when this alias acts as a type parameter
+	Exported       bool
+	Global         bool
+	TypeParameters []*Alias
+	TypeArguments  []Type // concrete type arguments for an instantiated generic alias
+	// Methods registered for this type alias.
+	methods []*Method
+	lazy    func() Type
 }
 
 // NewForwardAlias creates an alias for a type that hasn't been fully resolved yet.
@@ -21,6 +23,34 @@ func NewForwardAlias(name string, exported, global bool, resolver func() Type) *
 		Global:   global,
 		lazy:     resolver,
 	}
+}
+
+// Methods gets all methods of this alias, and any of it's derived aliases.
+func (a *Alias) Methods() []*Method {
+	methods := a.methods
+
+	derived, ok := a.Derived.(*Alias)
+	if ok {
+		methods = append(methods, derived.Methods()...)
+	}
+
+	return methods
+}
+
+// Method finds method by name, returns nil if method doesn't exist.
+func (a *Alias) Method(name string) *Method {
+	for _, method := range a.Methods() {
+		if method.Name == name {
+			return method
+		}
+	}
+
+	return nil
+}
+
+// RegisterMethods adds methods to this type alias.
+func (a *Alias) RegisterMethods(methods ...*Method) {
+	a.methods = append(a.methods, methods...)
 }
 
 func (a *Alias) ensureResolved() {
@@ -110,19 +140,19 @@ func (a *Alias) SatisfiedBy(concrete Type) bool {
 func (a *Alias) Instantiate(typeArgs map[string]Type) Type {
 	a.ensureResolved()
 
-	args := make([]Type, 0, len(a.TypeParams))
-	for _, tp := range a.TypeParams {
+	args := make([]Type, 0, len(a.TypeParameters))
+	for _, tp := range a.TypeParameters {
 		if concrete, ok := typeArgs[tp.Name]; ok {
 			args = append(args, concrete)
 		}
 	}
 
 	return &Alias{
-		Name:     a.Name,
-		Derived:  SubstituteType(a.Derived, typeArgs),
-		Exported: a.Exported,
-		Global:   a.Global,
-		TypeArgs: args,
+		Name:          a.Name,
+		Derived:       SubstituteType(a.Derived, typeArgs),
+		Exported:      a.Exported,
+		Global:        a.Global,
+		TypeArguments: args,
 	}
 }
 

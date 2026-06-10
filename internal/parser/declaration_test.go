@@ -207,12 +207,12 @@ main : proc() = {}`)
 			t.Fatalf("ValueType = %T (%v), want *types.Alias", vt, vt)
 		}
 
-		if len(alias.TypeArgs) != 1 {
-			t.Fatalf("TypeArgs len = %d, want 1", len(alias.TypeArgs))
+		if len(alias.TypeArguments) != 1 {
+			t.Fatalf("TypeArgs len = %d, want 1", len(alias.TypeArguments))
 		}
 
-		if alias.TypeArgs[0] != types.Basics[types.UTF8] {
-			t.Errorf("TypeArgs[0] = %v, want utf8", alias.TypeArgs[0])
+		if alias.TypeArguments[0] != types.Basics[types.UTF8] {
+			t.Errorf("TypeArgs[0] = %v, want utf8", alias.TypeArguments[0])
 		}
 
 		if alias.Kind() != types.SliceKind {

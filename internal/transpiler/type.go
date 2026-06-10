@@ -32,16 +32,17 @@ func (t *Transpiler) convertType(typ types.Type) (goast.Expr, error) {
 
 		expr = &goast.Ident{Name: name}
 
-		if len(alias.TypeArgs) == 1 {
-			argExpr, err := t.convertType(alias.TypeArgs[0])
+		if len(alias.TypeArguments) == 1 {
+			argExpr, err := t.convertType(alias.TypeArguments[0])
 			if err != nil {
 				return nil, fmt.Errorf("converting type argument: %w", err)
 			}
 
 			expr = &goast.IndexExpr{X: expr, Index: argExpr}
-		} else if len(alias.TypeArgs) > 1 {
-			indices := make([]goast.Expr, len(alias.TypeArgs))
-			for i, arg := range alias.TypeArgs {
+		} else if len(alias.TypeArguments) > 1 {
+			indices := make([]goast.Expr, len(alias.TypeArguments))
+
+			for i, arg := range alias.TypeArguments {
 				argExpr, err := t.convertType(arg)
 				if err != nil {
 					return nil, fmt.Errorf("converting type argument %d: %w", i, err)

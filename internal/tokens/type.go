@@ -43,6 +43,7 @@ const (
 	StringLiteral
 	IntLiteral
 	FloatLiteral
+	Newline
 
 	// Types
 	ASCII
@@ -202,6 +203,8 @@ func (t Type) String() string {
 		return "int_literal"
 	case FloatLiteral:
 		return "float_literal"
+	case Newline:
+		return "\\n"
 	case ASCII:
 		return "ascii"
 	case UTF8:

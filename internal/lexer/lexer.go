@@ -33,10 +33,17 @@ type Lexer struct {
 	baseLn  uint32 // line offset applied to tokens after SeekTo (0 for top-level parse)
 }
 
+func setupScanner(s *scanner.Scanner, r io.ReadSeeker) {
+	s.Init(r)
+	// Tokenize identifiers, floats, characters, (multi-line) strings, ints & comments.
+	s.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
+	// Tokenize new lines.
+	s.Whitespace = 1<<'\t' | 1<<'\r' | 1<<' '
+}
+
 func New(r io.ReadSeeker, len uint32, debug bool) *Lexer {
 	s := new(scanner.Scanner)
-	s.Init(r)
-	s.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
+	setupScanner(s, r)
 
 	l := &Lexer{
 		scan:  s,
@@ -74,8 +81,7 @@ func (l *Lexer) Err() error {
 
 func (l *Lexer) Reset() {
 	_, _ = l.src.Seek(0, io.SeekStart)
-	l.scan.Init(l.src)
-	l.scan.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
+	setupScanner(l.scan, l.src)
 	l.cursor = 0
 	l.errs = l.errs[:0]
 	l.scanErr = false
@@ -91,8 +97,7 @@ func (l *Lexer) Reset() {
 // position (absolute line baseLine) reports line baseLine.
 func (l *Lexer) SeekTo(offset uint32, baseLine uint32) {
 	_, _ = l.src.Seek(int64(offset), io.SeekStart)
-	l.scan.Init(l.src)
-	l.scan.Mode = (scanner.GoTokens | scanner.ScanInts) &^ scanner.SkipComments
+	setupScanner(l.scan, l.src)
 	l.cursor = 0
 	l.scanErr = false
 	l.window = [windowSize]tokenOffset{}
@@ -171,7 +176,7 @@ func (l *Lexer) Step() {
 	// Clear the stale +3 slot exposed by the cursor rotation.
 	l.window[l.windowIndex(3)] = tokenOffset{}
 
-	if l.debug && to.Type != tokens.Comment {
+	if l.debug {
 		from := to.Type.String()
 		if slices.Contains([]tokens.Type{
 			tokens.Identifier, tokens.StringLiteral, tokens.IntLiteral, tokens.FloatLiteral,
@@ -287,6 +292,9 @@ func (l *Lexer) scanNext() tokenOffset {
 		case scanner.Float:
 			t.Type = tokens.FloatLiteral
 			t.Literal = txt
+		case '\n':
+			t.Type = tokens.Newline
+			t.Literal = "\\n"
 		default:
 			tokenType, ok := tokens.Runes[tok]
 			if !ok {

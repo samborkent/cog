@@ -12,7 +12,6 @@ func TestInterface(t *testing.T) {
 		Function:   true,
 		ReturnType: Basics[UTF8],
 	}
-
 	iface := &Interface{
 		Methods: []*Method{
 			{Name: "String", Procedure: proc},
@@ -26,7 +25,6 @@ func TestInterface(t *testing.T) {
 			t.Errorf("Kind() = %v, want InterfaceKind", iface.Kind())
 		}
 	})
-
 	t.Run("string", func(t *testing.T) {
 		t.Parallel()
 
@@ -43,7 +41,6 @@ func TestInterface(t *testing.T) {
 			t.Errorf("String() = %q, missing method name", s)
 		}
 	})
-
 	t.Run("underlying", func(t *testing.T) {
 		t.Parallel()
 
@@ -51,7 +48,6 @@ func TestInterface(t *testing.T) {
 			t.Error("Underlying() should return self")
 		}
 	})
-
 	t.Run("empty_interface", func(t *testing.T) {
 		t.Parallel()
 
@@ -65,7 +61,6 @@ func TestInterface(t *testing.T) {
 			t.Errorf("empty String() = %q", s)
 		}
 	})
-
 	t.Run("multi_method_string", func(t *testing.T) {
 		t.Parallel()
 
@@ -96,80 +91,100 @@ func TestImplements(t *testing.T) {
 		},
 	}
 
-	t.Run("struct_with_method", func(t *testing.T) {
-		t.Parallel()
-
-		s := &Struct{
-			Methods: []*Method{
-				{Name: "String", Procedure: stringProc},
-			},
-		}
-
-		if !Implements(s, stringer) {
-			t.Error("struct with String method should implement Stringer")
-		}
-	})
-
-	t.Run("struct_missing_method", func(t *testing.T) {
+	t.Run("non alias type", func(t *testing.T) {
 		t.Parallel()
 
 		s := &Struct{}
 		if Implements(s, stringer) {
-			t.Error("struct without methods should not implement Stringer")
+			t.Error("type which is not an alias cannot implement methods")
 		}
 	})
-
-	t.Run("struct_wrong_signature", func(t *testing.T) {
+	t.Run("alias with methods", func(t *testing.T) {
 		t.Parallel()
 
-		s := &Struct{
-			Methods: []*Method{
-				{Name: "String", Procedure: &Procedure{
-					Function:   true,
-					ReturnType: Basics[Int64], // wrong return type
-				}},
-			},
+		a := &Alias{
+			Name:    "Struct",
+			Derived: &Struct{},
+		}
+
+		a.RegisterMethods(&Method{
+			Name:      "String",
+			Procedure: stringProc,
+		})
+
+		if !Implements(a, stringer) {
+			t.Error("alias with String method should implement Stringer")
+		}
+	})
+	t.Run("alias with derived methods", func(t *testing.T) {
+		t.Parallel()
+
+		derived := &Alias{
+			Name:    "Struct",
+			Derived: &Struct{},
+		}
+		derived.RegisterMethods(&Method{
+			Name:      "String",
+			Procedure: stringProc,
+		})
+
+		alias := &Alias{
+			Name:    "Derived",
+			Derived: derived,
+		}
+
+		if !Implements(alias, stringer) {
+			t.Error("alias with derived String method should implement Stringer")
+		}
+	})
+	t.Run("struct_missing_method", func(t *testing.T) {
+		t.Parallel()
+
+		s := &Alias{
+			Name:    "Struct",
+			Derived: &Struct{},
 		}
 
 		if Implements(s, stringer) {
+			t.Error("struct without methods should not implement Stringer")
+		}
+	})
+	t.Run("wrong signature", func(t *testing.T) {
+		t.Parallel()
+
+		alias := &Alias{
+			Name:    "Struct",
+			Derived: &Struct{},
+		}
+
+		alias.RegisterMethods(&Method{
+			Name: "String",
+			Procedure: &Procedure{
+				Function:   true,
+				ReturnType: Basics[Int64], // wrong return type
+			},
+		})
+
+		if Implements(alias, stringer) {
 			t.Error("struct with wrong return type should not implement Stringer")
 		}
 	})
-
-	t.Run("alias_wrapping_struct", func(t *testing.T) {
-		t.Parallel()
-
-		s := &Struct{
-			Methods: []*Method{
-				{Name: "String", Procedure: stringProc},
-			},
-		}
-		alias := &Alias{Name: "Foo", Derived: s}
-
-		if !Implements(alias, stringer) {
-			t.Error("alias wrapping struct with method should implement Stringer")
-		}
-	})
-
-	t.Run("non_struct_type", func(t *testing.T) {
+	t.Run("basic type cannot implement", func(t *testing.T) {
 		t.Parallel()
 
 		if Implements(Basics[Int64], stringer) {
 			t.Error("basic type should not implement interface")
 		}
 	})
-
-	t.Run("empty_interface", func(t *testing.T) {
+	t.Run("empty interface", func(t *testing.T) {
 		t.Parallel()
 
-		empty := &Interface{}
-		s := &Struct{}
+		alias := &Alias{}
 
-		if !Implements(s, empty) {
-			t.Error("any struct should implement empty interface")
+		if !Implements(alias, EmptyInterface) {
+			t.Error("any alias should implement empty interface")
 		}
 	})
-
 	t.Run("multi_method_interface", func(t *testing.T) {
 		t.Parallel()
 
@@ -180,18 +195,22 @@ func TestImplements(t *testing.T) {
 			},
 		}
 
-		full := &Struct{
-			Methods: []*Method{
-				{Name: "Read", Procedure: &Procedure{Function: true, ReturnType: Basics[Int64]}},
-				{Name: "Write", Procedure: &Procedure{Function: false}},
-			},
+		full := &Alias{
+			Name:    "Full",
+			Derived: &Struct{},
 		}
+		full.RegisterMethods(
+			&Method{Name: "Read", Procedure: &Procedure{Function: true, ReturnType: Basics[Int64]}},
+			&Method{Name: "Write", Procedure: &Procedure{Function: false}},
+		)
 
-		partial := &Struct{
-			Methods: []*Method{
-				{Name: "Read", Procedure: &Procedure{Function: true, ReturnType: Basics[Int64]}},
-			},
+		partial := &Alias{
+			Name:    "Partial",
+			Derived: Basics[UTF8],
 		}
+		partial.RegisterMethods(
+			&Method{Name: "Read", Procedure: &Procedure{Function: true, ReturnType: Basics[Int64]}},
+		)
 
 		if !Implements(full, readWrite) {
 			t.Error("full should implement readWrite")
@@ -211,37 +230,44 @@ func TestSatisfiesInterface(t *testing.T) {
 		Methods: []*Method{{Name: "String", Procedure: proc}},
 	}
 
-	t.Run("struct_satisfies", func(t *testing.T) {
+	t.Run("alias satisfies", func(t *testing.T) {
 		t.Parallel()
 
-		s := &Struct{
-			Methods: []*Method{{Name: "String", Procedure: proc}},
+		alias := &Alias{
+			Name:    "Struct",
+			Derived: &Struct{},
 		}
+		alias.RegisterMethods(&Method{Name: "String", Procedure: proc})
 
-		if !Satisfies(s, stringer) {
+		if !Satisfies(alias, stringer) {
 			t.Error("struct with matching method should satisfy interface constraint")
 		}
 	})
-
-	t.Run("struct_does_not_satisfy", func(t *testing.T) {
+	t.Run("alias does not statify", func(t *testing.T) {
 		t.Parallel()
 
-		s := &Struct{}
-		if Satisfies(s, stringer) {
-			t.Error("struct without method should not satisfy interface constraint")
+		alias := &Alias{
+			Name:    "Struct",
+			Derived: &Struct{},
+		}
+
+		if Satisfies(alias, stringer) {
+			t.Error("alias without method should not satisfy interface constraint")
 		}
 	})
-
-	t.Run("alias_to_interface_constraint", func(t *testing.T) {
+	t.Run("alias to interface constraint", func(t *testing.T) {
 		t.Parallel()
 
 		// Wrapping the interface in an alias (like a named constraint)
 		aliasConstraint := &Alias{Name: "Stringer", Derived: stringer}
-		s := &Struct{
-			Methods: []*Method{{Name: "String", Procedure: proc}},
-		}
 
-		if !Satisfies(s, aliasConstraint) {
+		alias := &Alias{
+			Name:    "Struct",
+			Derived: &Struct{},
+		}
+		alias.RegisterMethods(&Method{Name: "String", Procedure: proc})
+
+		if !Satisfies(alias, aliasConstraint) {
 			t.Error("struct should satisfy alias-wrapped interface")
 		}
 	})

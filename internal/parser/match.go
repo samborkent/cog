@@ -116,7 +116,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 
 		if binding != nil {
 			binding.ValueType = caseType
-			p.symbols.Define(binding)
+			p.symbols.DefineIdent(binding)
 			p.symbols.MarkUsed(binding.Token.Literal)
 		}
 
@@ -168,7 +168,7 @@ func (p *Parser) parseMatch(ctx context.Context) ast.NodeIndex {
 		if binding != nil {
 			// In default case, binding variable takes the original subject type
 			binding.ValueType = subjectType
-			p.symbols.Define(binding)
+			p.symbols.DefineIdent(binding)
 			p.symbols.MarkUsed(binding.Token.Literal)
 		}
 

@@ -48,8 +48,8 @@ func (p *Parser) parseTypedDeclaration(ctx context.Context, ident *ast.Identifie
 }
 
 func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, ident *ast.Identifier) ast.NodeIndex {
-	symbol, ok := p.symbols.Resolve(ident.Token.Literal)
-	if ok && ident.Qualifier != ast.QualifierMethod {
+	symbol, ok := p.symbols.ResolveIdent(ident.Token.Literal)
+	if ok {
 		if symbol.Scope != ScanScope {
 			p.error(ident.Token, "cannot redeclare variable", "parseDeclaration")
 			return ast.ZeroNodeIndex
@@ -88,9 +88,9 @@ func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, i
 
 		// Uninitialized variable
 		if p.globalsPass {
-			p.symbols.DefineGlobal(ident)
+			p.symbols.DefineGlobalIdent(ident)
 		} else {
-			p.symbols.Define(ident)
+			p.symbols.DefineIdent(ident)
 		}
 
 		return p.ast.NewDeclaration(declToken, assignment)
@@ -117,13 +117,14 @@ func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, i
 		p.symbols.MarkConsumed(sourceIdent.Token.Literal)
 	}
 
-	// Rule 19: field selector as RHS in declaration consumes that field.
+	// Field selector as RHS in declaration consumes that field.
 	if selector, ok := p.ast.Expr(expr).(*ast.Selector); ok {
 		if len(selector.Fields) > 0 {
 			structVar := selector.Fields[0].Token.Literal
 			fieldName := selector.Fields[len(selector.Fields)-1].Token.Literal
-			if sym, ok := p.symbols.Resolve(structVar); ok &&
-				sym.Identifier.Qualifier == ast.QualifierVariable {
+
+			sym, ok := p.symbols.ResolveIdent(structVar)
+			if ok && sym.Identifier.Qualifier == ast.QualifierVariable {
 				if err := p.symbols.MarkFieldConsumed(structVar, fieldName); err != nil {
 					p.error(assignToken, err.Error(), "parseDeclaration")
 					return ast.ZeroNodeIndex
@@ -137,12 +138,10 @@ func (p *Parser) parseDeclaration(ctx context.Context, declToken tokens.Token, i
 		assignment.Identifier.ValueType = exprType
 	}
 
-	if ident.Qualifier != ast.QualifierMethod {
-		if p.globalsPass {
-			p.symbols.DefineGlobal(ident)
-		} else {
-			p.symbols.Define(ident)
-		}
+	if p.globalsPass {
+		p.symbols.DefineGlobalIdent(ident)
+	} else {
+		p.symbols.DefineIdent(ident)
 	}
 
 	// Static result analysis: if the assigned expression's type matches the

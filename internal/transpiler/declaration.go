@@ -229,34 +229,44 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 			Specs: []goast.Spec{valueSpec},
 		}}, nil
 	case *ast.Method:
-		recType, err := t.convertType(n.Type)
+		recType, err := t.convertType(n.ReceiverType)
 		if err != nil {
 			return nil, err
+		}
+
+		methodType, err := t.convertType(n.Type)
+		if err != nil {
+			return nil, err
+		}
+
+		goType, ok := methodType.(*goast.FuncType)
+		if !ok {
+			return nil, errors.New("unable to cast method type as go FuncType")
 		}
 
 		var recIdent *goast.Ident
 
-		if n.Receiver != nil {
-			recIdent = &goast.Ident{Name: component.ConvertExport(n.Receiver.Token.Literal, n.Receiver.Exported, n.Receiver.Global)}
+		if n.ReceiverIdent != nil {
+			recIdent = component.Ident(n.ReceiverIdent)
 		}
 
-		decls, err := t.convertDecl(t.Node(n.Declaration))
+		methodBody, err := t.convertExpr(t.Expr(n.Body))
 		if err != nil {
 			return nil, err
 		}
 
-		if len(decls) != 1 {
-			return nil, fmt.Errorf("transpilation of method declaration resulted in an unexpected number of declarations: %d", len(decls))
-		}
-
-		funcDecl, ok := decls[0].(*goast.FuncDecl)
+		funcLit, ok := methodBody.(*goast.FuncLit)
 		if !ok {
-			return nil, errors.New("unable to assert function declartion during method transpilation")
+			return nil, errors.New("unable to cast method body as go FuncLit")
 		}
 
-		funcDecl.Recv = component.Receiver(recIdent, recType)
-
-		return decls, nil
+		return []goast.Decl{
+			&goast.FuncDecl{
+				Recv: component.Receiver(recIdent, recType),
+				Type: goType,
+				Body: funcLit.Body,
+			},
+		}, nil
 	case *ast.Type:
 		if n.Alias.Kind() == types.EnumKind || n.Alias.Kind() == types.ErrorKind {
 			return t.convertEnumDecl(n)
@@ -270,12 +280,12 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 		decls := make([]goast.Decl, 0, 2)
 
 		typeSpec := &goast.TypeSpec{
-			Name: component.Ident(n.Identifier),
+			Name: component.IdentName(n.Alias.Name),
 			Type: aliasType,
 		}
 
-		if len(n.TypeParameters) > 0 {
-			typeParams, err := t.convertTypeParams(n.TypeParameters)
+		if len(n.Alias.TypeParameters) > 0 {
+			typeParams, err := t.convertTypeParams(n.Alias.TypeParameters)
 			if err != nil {
 				return nil, fmt.Errorf("converting type parameters: %w", err)
 			}
@@ -294,7 +304,7 @@ func (t *Transpiler) convertDecl(node ast.Node) ([]goast.Decl, error) {
 				Tok: gotoken.TYPE,
 				Specs: []goast.Spec{
 					&goast.TypeSpec{
-						Name: &goast.Ident{Name: component.ConvertExport(n.Identifier.Token.Literal, n.Identifier.Exported, n.Identifier.Global) + "Hash"},
+						Name: &goast.Ident{Name: component.ConvertExport(n.Alias.Name, n.Alias.Exported, n.Alias.Global) + "Hash"},
 						Type: &goast.Ident{Name: gotypes.Typ[gotypes.Uint64].String()},
 					},
 				},
@@ -313,7 +323,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		values    []*types.EnumValue
 	)
 
-	switch a := n.Alias.(type) {
+	switch a := n.Alias.Underlying().(type) {
 	case *types.Enum:
 		valueType = a.ValueType
 		values = a.Values
@@ -329,7 +339,7 @@ func (t *Transpiler) convertEnumDecl(n *ast.Type) ([]goast.Decl, error) {
 		return nil, fmt.Errorf("cannot convert type %q to enum", n.Alias)
 	}
 
-	identifier := component.ConvertExport(n.Identifier.Token.Literal, n.Identifier.Exported, n.Identifier.Global)
+	identifier := component.ConvertExport(n.Alias.Name, n.Alias.Exported, n.Alias.Global)
 
 	var enumName string
 	if n.Alias.Kind() == types.ErrorKind {

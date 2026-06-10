@@ -14,6 +14,17 @@ type EnumValue struct {
 	Value Expression
 }
 
+// Value gets an enum value by name. Returns nil if not found.
+func (e *Enum) Value(name string) *EnumValue {
+	for _, value := range e.Values {
+		if value.Name == name {
+			return value
+		}
+	}
+
+	return nil
+}
+
 func (*Enum) Kind() Kind {
 	return EnumKind
 }

@@ -49,7 +49,7 @@ tasks:
       vars:
         FILE: '{{.FILE}}'
         REPLACE_LOCAL_COG: '{{.REPLACE_LOCAL_COG}}'
-    - cd tmp && GOEXPERIMENT=arenas rtk go run ./cmd/interfaces -asan -ldflags="-asan -race -s -w"
+    - cd tmp && GOEXPERIMENT=arenas rtk go run ./cmd/globals.cogs -asan -ldflags="-asan -race -s -w"
     silent: true
 
   stats:

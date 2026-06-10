@@ -231,11 +231,9 @@ func compilePackage(t testing.TB, pkg packageFiles) ([]*ast.AST, *parser.SymbolT
 // populateImportExports fills a CogImport's Exports from the imported
 // package's symbol table.
 func populateImportExports(imp *parser.CogImport, symbols *parser.SymbolTable) {
-	symbols.ForEachGlobal(func(name string, sym parser.Symbol) {
-		if sym.Identifier.Exported {
-			imp.Exports[name] = sym
-		}
-	})
+	for sym := range symbols.Symbols() {
+		imp.ExportValues[sym.Identifier.Token.Literal] = sym
+	}
 }
 
 // compileImports compiles imported packages in parallel and populates exports

@@ -306,7 +306,7 @@ func (p *Parser) unary(ctx context.Context, typeToken types.Type) ast.ExprIndex 
 
 	if (typeToken == nil || typeToken == types.None) && p.lex.This().Type == tokens.Identifier {
 		// TODO: get rid of double lookup for identifiers
-		symbol, ok := p.symbols.Resolve(p.lex.This().Literal)
+		symbol, ok := p.symbols.ResolveIdent(p.lex.This().Literal)
 		if !ok {
 			// If this is an imported package name, skip the type pre-lookup;
 			// primary() will handle it via parsePkgSelector.

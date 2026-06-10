@@ -61,8 +61,8 @@ B ~ int32
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
-		if ta.Identifier.Token.Literal != "A" {
-			t.Errorf("expected name 'A', got %q", ta.Identifier.Token.Literal)
+		if ta.Alias.Name != "A" {
+			t.Errorf("expected name 'A', got %q", ta.Alias.Name)
 		}
 	})
 

@@ -146,7 +146,7 @@ func (p *Parser) parseBoolSwitch(ctx context.Context, label *ast.Identifier) ast
 func (p *Parser) parseIdentSwitch(ctx context.Context, label *ast.Identifier) ast.NodeIndex {
 	switchToken := p.lex.Peek(-1)
 
-	symbol, ok := p.symbols.Resolve(p.lex.This().Literal)
+	symbol, ok := p.symbols.ResolveIdent(p.lex.This().Literal)
 	if !ok {
 		p.error(p.lex.This(), "unknown identifier in switch expression", "parseIdentSwitch")
 		return ast.ZeroNodeIndex

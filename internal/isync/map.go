@@ -1,4 +1,4 @@
-package htm
+package isync
 
 import (
 	"iter"
@@ -32,6 +32,10 @@ func NewMap[K comparable, V any](opts ...Option) *Map[K, V] {
 	}
 
 	return m
+}
+
+func (m *Map[K, V]) Map() map[K]V {
+	return m.m
 }
 
 func (m *Map[K, V]) All() iter.Seq2[K, V] {

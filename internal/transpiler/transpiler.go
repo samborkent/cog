@@ -47,8 +47,8 @@ type Transpiler struct {
 
 	titleCaser cases.Caser
 
-	deferStack  []deferInfo
-	loopDepth   int
+	deferStack []deferInfo
+	loopDepth  int
 }
 
 type deferInfo struct {
@@ -67,17 +67,17 @@ func NewTranspilerWithModule(goModulePath string, files ast.MergedAST, opts ...T
 
 func newTranspilerWithOptions(goModulePath string, files ast.MergedAST, opts ...TranspilerOption) *Transpiler {
 	t := &Transpiler{
-		files:        files,
-		fset:         gotoken.NewFileSet(),
-		goModulePath: goModulePath,
-		dynamics:     make(map[string]*ast.Identifier),
+		files:          files,
+		fset:           gotoken.NewFileSet(),
+		goModulePath:   goModulePath,
+		dynamics:       make(map[string]*ast.Identifier),
 		dynDefaults:    make(map[string]ast.Expr),
 		dynPointerLike: make(map[string]bool),
 		needsContext:   make(map[uint16]bool),
-		typeCache:    make(map[types.Type]goast.Expr),
-		dynComments:  make(map[string]string),
-		skipComments: make(map[uint64]struct{}),
-		titleCaser:   cases.Title(language.English),
+		typeCache:      make(map[types.Type]goast.Expr),
+		dynComments:    make(map[string]string),
+		skipComments:   make(map[uint64]struct{}),
+		titleCaser:     cases.Title(language.English),
 	}
 
 	for _, opt := range opts {
@@ -436,11 +436,7 @@ func (t *Transpiler) predeclareGlobals() error {
 					}
 				}
 			case *ast.Method:
-				decl := t.files.Node(uint16(id), s.Declaration).(*ast.Declaration)
-				assignType := t.files.Expr(uint16(id), decl.Assignment.Expr).Type()
-
-				procType, ok := assignType.(*types.Procedure)
-				if ok && !procType.Function {
+				if !s.Type.Function {
 					t.needsContext[uint16(id)] = true
 				}
 			}

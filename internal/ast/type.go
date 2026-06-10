@@ -9,19 +9,22 @@ import (
 
 var _ Node = &Type{}
 
+// Type is a type declaration.
 type Type struct {
-	Token          tokens.Token
-	Identifier     *Identifier
-	TypeParameters []*types.Alias
-	Alias          types.Type
+	Token tokens.Token
+	Alias *types.Alias
 }
 
 func (a *AST) NewType(token tokens.Token, ident *Identifier, params []*types.Alias, alias types.Type) NodeIndex {
 	node := New[Type](a)
 	node.Token = token
-	node.Identifier = ident
-	node.TypeParameters = params
-	node.Alias = alias
+	node.Alias = &types.Alias{
+		Name:           ident.Token.Literal,
+		Derived:        alias,
+		Exported:       ident.Exported,
+		Global:         ident.Global,
+		TypeParameters: params,
+	}
 	return a.AddNode(node)
 }
 
@@ -34,16 +37,16 @@ func (n *Type) Hash() uint64 {
 }
 
 func (n *Type) StringTo(out *strings.Builder, _ *AST) {
-	if n.Identifier.Exported {
+	if n.Alias.Exported {
 		_, _ = out.WriteString("export ")
 	}
 
-	_, _ = out.WriteString(n.Identifier.Token.Literal)
+	_, _ = out.WriteString(n.Alias.Name)
 
-	if len(n.TypeParameters) > 0 {
+	if len(n.Alias.TypeParameters) > 0 {
 		_, _ = out.WriteString("<")
 
-		for i, tp := range n.TypeParameters {
+		for i, tp := range n.Alias.TypeParameters {
 			if i > 0 {
 				_, _ = out.WriteString(", ")
 			}

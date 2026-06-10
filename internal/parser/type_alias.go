@@ -12,14 +12,12 @@ import (
 func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.NodeIndex {
 	if !p.globalsPass && p.symbols.Outer == nil {
 		// Ensure type already exists (created during globals pass)
-		_, ok := p.symbols.Resolve(ident.Token.Literal)
+		_, ok := p.symbols.ResolveType(ident.Token.Literal)
 		if !ok {
 			p.error(p.lex.This(), fmt.Sprintf("missing global type symbol %q", ident.Token.Literal), "parseTypeAlias")
 			return ast.ZeroNodeIndex
 		}
 	}
-
-	ident.Qualifier = ast.QualifierType
 
 	typeToken := p.lex.This()
 
@@ -47,13 +45,9 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 		p.symbols = NewEnclosedSymbolTable(globalScope)
 
 		for _, tp := range typeParams {
-			p.symbols.Define(&ast.Identifier{
-				Token: tokens.Token{
-					Type:    tokens.Identifier,
-					Literal: tp.Name,
-				},
-				ValueType: tp,
-				Qualifier: ast.QualifierType,
+			p.symbols.DefineType(&ast.Type{
+				Token: ident.Token,
+				Alias: tp,
 			})
 		}
 
@@ -65,14 +59,10 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 		return ast.ZeroNodeIndex
 	}
 
-	// Carry over methods registered during the global scan:
-	// findGlobalMethod attached methods to the original *Struct, but
-	// parseCombinedType just created a new *Struct that will replace it.
-	if newStruct, ok := typ.(*types.Struct); ok {
-		if existing, ok := globalScope.Resolve(ident.Token.Literal); ok {
-			if oldStruct, ok := existing.Identifier.ValueType.(*types.Struct); ok {
-				newStruct.Methods = oldStruct.Methods
-			}
+	// Carry over methods registered during the global scan.
+	if newAlias, ok := typ.(*types.Alias); ok {
+		if existing, ok := globalScope.ResolveType(ident.Token.Literal); ok {
+			newAlias.RegisterMethods(existing.Alias.Methods()...)
 		}
 	}
 
@@ -81,15 +71,15 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 	// Store type params on the alias for transpilation.
 	if len(typeParams) > 0 {
 		if alias, ok := typ.(*types.Alias); ok {
-			alias.TypeParams = typeParams
+			alias.TypeParameters = typeParams
 		} else {
 			// Wrap in an alias so type params can be carried.
 			wrapped := &types.Alias{
-				Name:       ident.Token.Literal,
-				Derived:    typ,
-				Exported:   ident.Exported,
-				Global:     ident.Global,
-				TypeParams: typeParams,
+				Name:           ident.Token.Literal,
+				Derived:        typ,
+				Exported:       ident.Exported,
+				Global:         ident.Global,
+				TypeParameters: typeParams,
 			}
 			ident.ValueType = wrapped
 		}
@@ -99,25 +89,26 @@ func (p *Parser) parseTypeAlias(ctx context.Context, ident *ast.Identifier) ast.
 	// TODO: find out why we had these restrictions.
 	// if p.symbols.Outer != nil && len(typeParams) == 0 {
 	if p.globalsPass {
-		globalScope.DefineGlobal(ident)
+		globalScope.DefineGlobalIdent(ident)
 	} else {
-		p.symbols.Define(ident)
+		p.symbols.DefineIdent(ident)
 	}
 	// }
 
-	if iface, ok := ident.ValueType.(*types.Interface); ok {
-		// Register interface methods as methods on the type for method call resolution.
-		for _, method := range iface.Methods {
-			p.symbols.DefineMethod(ident.Token.Literal, &ast.Identifier{
-				Token: tokens.Token{
-					Type:    tokens.Identifier,
-					Literal: method.Name,
-				},
-				ValueType: method.Procedure,
-				Qualifier: ast.QualifierMethod,
-			})
-		}
-	}
+	// TODO: check why this was necessary
+	// if iface, ok := ident.ValueType.(*types.Interface); ok {
+	// 	// Register interface methods as methods on the type for method call resolution.
+	// 	for _, method := range iface.Methods {
+	// 		p.symbols.DefineMethod(ident.Token.Literal, &ast.Identifier{
+	// 			Token: tokens.Token{
+	// 				Type:    tokens.Identifier,
+	// 				Literal: method.Name,
+	// 			},
+	// 			ValueType: method.Procedure,
+	// 			Qualifier: ast.QualifierMethod,
+	// 		})
+	// 	}
+	// }
 
 	return p.ast.NewType(typeToken, ident, typeParams, typ)
 }

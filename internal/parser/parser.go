@@ -31,7 +31,6 @@ type Parser struct {
 	globalsPass       bool
 	currentReturnType types.Type // return type of the enclosing procedure (for result wrapping)
 	currentReceiver   *ast.Identifier
-	definedMethods    map[string]struct{}
 	inPureFunc        bool // true when parsing the body of a func (pure function)
 }
 
@@ -45,12 +44,11 @@ func NewParserWithSymbols(lex *lexer.Lexer, symbols *SymbolTable, fileName strin
 	}
 
 	p := &Parser{
-		lex:            lex,
-		symbols:        symbols,
-		filePath:       fileName,
-		ast:            ast.NewAST(a, fileID, lex.Len),
-		Errs:           make([]error, 0, errorPreallocationSize),
-		definedMethods: make(map[string]struct{}),
+		lex:      lex,
+		symbols:  symbols,
+		filePath: fileName,
+		ast:      ast.NewAST(a, fileID, lex.Len),
+		Errs:     make([]error, 0, errorPreallocationSize),
 	}
 
 	return p, nil
@@ -70,14 +68,13 @@ func NewScriptParserWithSymbols(lex *lexer.Lexer, symbols *SymbolTable, a *arena
 	}
 
 	p := &Parser{
-		lex:     lex,
-		symbols: symbols,
+		lex:      lex,
+		symbols:  symbols,
 		filePath: fileName,
 		// TODO: allow multi-file scripts?
-		ast:            ast.NewAST(a, 0, lex.Len),
-		Errs:           make([]error, 0, errorPreallocationSize),
-		scriptMode:     true,
-		definedMethods: make(map[string]struct{}),
+		ast:        ast.NewAST(a, 0, lex.Len),
+		Errs:       make([]error, 0, errorPreallocationSize),
+		scriptMode: true,
 	}
 
 	return p, nil
@@ -156,35 +153,25 @@ func (p *Parser) ParseBodies(ctx context.Context) error {
 			p.symbols = NewEnclosedSymbolTable(p.symbols)
 
 			for _, tp := range procType.TypeParams {
-				p.symbols.Define(&ast.Identifier{
+				p.symbols.DefineType(&ast.Type{
 					Token: tokens.Token{
 						Type:    tokens.Identifier,
 						Literal: tp.Name,
 					},
-					ValueType: tp,
-					Qualifier: ast.QualifierType,
+					Alias: tp,
 				})
 
 				// Register interface methods from the constraint.
 				iface, ok := tp.Underlying().(*types.Interface)
 				if ok {
-					for _, method := range iface.Methods {
-						p.symbols.DefineMethod(tp.Name, &ast.Identifier{
-							Token: tokens.Token{
-								Type:    tokens.Identifier,
-								Literal: method.Name,
-							},
-							ValueType: method.Procedure,
-							Qualifier: ast.QualifierMethod,
-						})
-					}
+					tp.RegisterMethods(iface.Methods...)
 				}
 			}
 		}
 
 		if db.Receiver != nil {
 			p.symbols = NewEnclosedSymbolTable(p.symbols)
-			p.symbols.Define(db.Receiver)
+			p.symbols.DefineIdent(db.Receiver)
 			p.symbols.MarkUsed(db.Receiver.Token.Literal)
 		}
 
@@ -192,15 +179,14 @@ func (p *Parser) ParseBodies(ctx context.Context) error {
 			p.symbols = NewEnclosedSymbolTable(p.symbols)
 
 			for _, param := range procType.Parameters {
-				ident := &ast.Identifier{
+				p.symbols.DefineIdent(&ast.Identifier{
 					Token: tokens.Token{
 						Type:    tokens.Identifier,
 						Literal: param.Name,
 					},
 					ValueType: param.Type,
 					Qualifier: ast.QualifierImmutable,
-				}
-				p.symbols.Define(ident)
+				})
 				p.symbols.MarkUsed(param.Name)
 			}
 		}
@@ -266,17 +252,15 @@ func (p *Parser) findProcedureLiteralForBody(bodyIdx ast.NodeIndex) *ast.Procedu
 func (p *Parser) ValidateGlobals() error {
 	var errs []error
 
-	for name, sym := range p.symbols.table.All() {
-		if sym.Scope == ScanScope && sym.Identifier.Qualifier == ast.QualifierType &&
-			types.IsNone(sym.Identifier.ValueType) {
-			errs = append(errs, fmt.Errorf("%d:%d: undefined type: %s",
-				sym.Identifier.Token.Ln, sym.Identifier.Token.Col, name))
+	// Check types.
+	for name, typ := range p.symbols.types.All() {
+		if types.IsNone(typ.Alias) {
+			errs = append(errs, fmt.Errorf("%d:%d: undefined type: %s", typ.Token.Ln, typ.Token.Col, name))
 		}
 	}
 
-	for name, sym := range p.symbols.table.All() {
-		if sym.Scope == ScanScope && sym.Identifier.Qualifier != ast.QualifierType &&
-			types.IsNone(sym.Identifier.ValueType) {
+	for name, sym := range p.symbols.idents.All() {
+		if sym.Scope == ScanScope && types.IsNone(sym.Identifier.ValueType) {
 			errs = append(errs, fmt.Errorf("%d:%d: undefined identifier: %s",
 				sym.Identifier.Token.Ln, sym.Identifier.Token.Col, name))
 		}
@@ -311,7 +295,7 @@ func (p *Parser) parseFile(ctx context.Context, fileName string) (*ast.AST, erro
 	if p.scriptMode {
 		// Script mode: no package declaration allowed.
 		if p.lex.This().Type == tokens.Package {
-			p.error(p.lex.This(), "package declaration not allowed in script files", "Parse")
+			p.error(p.lex.This(), "package declaration not allowed in script files", "parseFile")
 		}
 
 		// Synthesize package main.
@@ -325,7 +309,7 @@ func (p *Parser) parseFile(ctx context.Context, fileName string) (*ast.AST, erro
 		}
 	} else {
 		if p.lex.This().Type != tokens.Package {
-			p.error(p.lex.This(), "missing package declaration", "Parse")
+			p.error(p.lex.This(), "missing package declaration", "parseFile")
 		}
 
 		pkg = p.parsePackage()
@@ -378,8 +362,10 @@ func (p *Parser) parseFile(ctx context.Context, fileName string) (*ast.AST, erro
 			} else {
 				p.synchronize(ctx)
 			}
+		case tokens.Newline:
+			p.lex.Step() // consume new line
 		default:
-			p.error(t, "unexpected token", "Parse")
+			p.error(t, "unexpected token", "parseFile")
 			p.synchronize(ctx)
 		}
 
@@ -436,7 +422,7 @@ func (p *Parser) synchronize(ctx context.Context) {
 
 func (p *Parser) error(t tokens.Token, msg string, scope ...string) {
 	if len(scope) > 0 {
-		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %v: %s", p.stringToken(t), scope, msg))
+		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %s %v", p.stringToken(t), msg, scope))
 	} else {
 		p.Errs = append(p.Errs, fmt.Errorf("\t%s: %s", p.stringToken(t), msg))
 	}
@@ -450,21 +436,7 @@ func (p *Parser) checkUnused() {
 }
 
 func (p *Parser) stringToken(t tokens.Token) string {
-	if t.Literal == "" {
-		return fmt.Sprintf("%s:\tln %d, col %d: %s",
-			p.filePath, t.Ln, t.Col, t.Type,
-		)
-	}
-
-	if t.Type == tokens.Builtin {
-		return fmt.Sprintf("%s:\tln %d, col %d: @%s",
-			p.filePath, t.Ln, t.Col, t.Literal,
-		)
-	}
-
-	return fmt.Sprintf("%s:\tln %d, col %d: %s: %s",
-		p.filePath, t.Ln, t.Col, t.Type, t.Literal,
-	)
+	return fmt.Sprintf("%s:%d:%d:", p.filePath, t.Ln, t.Col)
 }
 
 func (p *Parser) NodeString(i ast.NodeIndex) string {

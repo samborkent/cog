@@ -145,10 +145,12 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 
 		return p.ast.NewGrouped(lparenToken, expr, exprType)
 	case tokens.Identifier:
-		symbol, ok := p.symbols.Resolve(p.lex.This().Literal)
+		identName := p.lex.This().Literal
+
+		symbol, ok := p.symbols.ResolveIdent(identName)
 		if !ok {
 			// Check if this is an imported cog package name.
-			imp, isImport := p.symbols.ResolveCogImport(p.lex.This().Literal)
+			imp, isImport := p.symbols.ResolveCogImport(identName)
 			if isImport {
 				return p.parsePkgSelector(ctx, imp)
 			}
@@ -163,7 +165,7 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 					ValueType: types.None,
 				}
 
-				p.symbols.DefineGlobal(ident)
+				p.symbols.DefineGlobalIdent(ident)
 				p.lex.Step() // consume identifier
 
 				return p.ast.AddExpr(ident)
@@ -174,26 +176,30 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			return ast.ZeroExprIndex
 		}
 
-		p.symbols.MarkUsed(p.lex.This().Literal)
+		p.symbols.MarkUsed(identName)
 		p.lex.Step() // consume identifier
 
-		if symbol.Identifier.Qualifier == ast.QualifierType && p.lex.This().Type == tokens.LBrace {
-			// Named struct literal
-			literal := p.primary(ctx, symbol.Type())
-			if literal == ast.ZeroExprIndex {
-				return ast.ZeroExprIndex
+		if p.lex.This().Type == tokens.LBrace {
+			typ, ok := p.symbols.ResolveType(identName)
+			if ok {
+				// Named struct literal
+				literal := p.primary(ctx, typ.Alias)
+				if literal == ast.ZeroExprIndex {
+					return ast.ZeroExprIndex
+				}
+
+				literalExpr := p.ast.Expr(literal)
+
+				// TODO: check if still required.
+				literalExpr.(*ast.StructLiteral).StructType = &types.Alias{
+					Name:     symbol.Identifier.Token.Literal,
+					Derived:  typ.Alias,
+					Exported: symbol.Identifier.Exported,
+					Global:   symbol.Identifier.Global,
+				}
+
+				return literal
 			}
-
-			literalExpr := p.ast.Expr(literal)
-
-			literalExpr.(*ast.StructLiteral).StructType = &types.Alias{
-				Name:     symbol.Identifier.Token.Literal,
-				Derived:  literalExpr.Type(),
-				Exported: symbol.Identifier.Exported,
-				Global:   symbol.Identifier.Global,
-			}
-
-			return literal
 		}
 
 		switch p.lex.This().Type {
@@ -271,10 +277,15 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 			symbolType := symbol.Type()
 			kind := symbolType.Kind()
 
-			if symbol.Identifier.Qualifier == ast.QualifierType &&
-				kind != types.EnumKind && kind != types.ErrorKind {
-				p.error(p.lex.This(), fmt.Sprintf("%q is a type, not a value: cannot invoke methods on types", symbol.Identifier.Token.Literal), "primary")
-				return ast.ZeroExprIndex
+			typ, ok := p.symbols.ResolveType(identName)
+			if ok {
+				symbolType = typ.Alias
+				kind = typ.Alias.Kind()
+
+				if kind != types.EnumKind && kind != types.ErrorKind {
+					p.error(p.lex.This(), fmt.Sprintf("%q is a type, not a value: cannot invoke methods on types", identName), "primary")
+					return ast.ZeroExprIndex
+				}
 			}
 
 			// Selector expression
@@ -308,21 +319,76 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 					typName = symbolType.String()
 				}
 
-				field, ok := p.symbols.ResolveField(typName, p.lex.This().Literal)
-				if !ok {
-					p.error(p.lex.This(), fmt.Sprintf("undefined field %q for selector %q", p.lex.This().Literal, typName), "primary")
+				// Unwrap reference, as reference types always have same methods or fields.
+				methodType := symbolType
+				if ref, ok := symbolType.(*types.Reference); ok {
+					methodType = ref.Value
+				}
+
+				fieldName := p.lex.This().Literal
+
+				var (
+					methodFound bool
+					fieldFound  bool
+					exported    bool
+					valueType   types.Type
+					isEnum      bool
+				)
+
+				// Check methods on if type alias.
+				if alias, ok := methodType.(*types.Alias); ok {
+					method := alias.Method(fieldName)
+					if method != nil {
+						methodFound = true
+						valueType = method.Procedure.ReturnType
+					}
+
+					exported = alias.Exported
+				}
+
+				if !methodFound {
+					switch t := methodType.Underlying().(type) {
+					case *types.Enum:
+						enumValue := t.Value(fieldName)
+						if enumValue != nil {
+							fieldFound = true
+							valueType = t.ValueType
+							isEnum = true
+						}
+					case *types.Struct:
+						field := t.Field(fieldName)
+						if field != nil {
+							fieldFound = true
+							valueType = field.Type
+						}
+
+						exported = field.Exported
+					default:
+						p.error(p.lex.This(), fmt.Sprintf("type %q is not a valid selector", typName), "primary")
+						return ast.ZeroExprIndex
+					}
+				}
+
+				if !methodFound && !fieldFound {
+					p.error(p.lex.This(), fmt.Sprintf("undefined field or method %q for selector of type %q", p.lex.This().Literal, typName), "primary")
 					return ast.ZeroExprIndex
 				}
 
-				field.Identifier.Token = p.lex.This()
+				fieldIdent := &ast.Identifier{
+					Token:     p.lex.This(),
+					ValueType: valueType,
+					Exported:  exported,
+					Qualifier: ast.QualifierImmutable,
+				}
 
 				p.lex.Step() // consume field identifier
 
 				// For enum selectors, wrap the field type in an alias so the enum
 				// type can be inferred downstream.  For struct fields, preserve the
 				// original field type (e.g. float64) so arithmetic works correctly.
-				if field.Scope == EnumScope {
-					field.Identifier.ValueType = &types.Alias{
+				// TODO: check if still needed and correct
+				if isEnum {
+					fieldIdent.ValueType = &types.Alias{
 						Name:     symbol.Identifier.Token.Literal,
 						Derived:  symbol.Type(),
 						Exported: symbol.Identifier.Exported,
@@ -331,10 +397,10 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				}
 
 				// Add selected field to selector expression.
-				selExpr.Fields = append(selExpr.Fields, field.Identifier)
+				selExpr.Fields = append(selExpr.Fields, fieldIdent)
 
 				// Update symbolType for chained selector expressions.
-				symbolType = field.Type()
+				symbolType = fieldIdent.Type()
 			}
 
 			if selExpr != nil {
@@ -533,29 +599,13 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 				p.symbols = NewEnclosedSymbolTable(p.symbols)
 
 				for _, tp := range t.TypeParams {
-					p.symbols.Define(&ast.Identifier{
+					p.symbols.DefineType(&ast.Type{
 						Token: tokens.Token{
 							Type:    tokens.Identifier,
 							Literal: tp.Name,
 						},
-						ValueType: tp,
-						Qualifier: ast.QualifierType,
+						Alias: tp,
 					})
-
-					// Register interface methods from the constraint.
-					iface, ok := tp.Underlying().(*types.Interface)
-					if ok {
-						for _, method := range iface.Methods {
-							p.symbols.DefineMethod(tp.Name, &ast.Identifier{
-								Token: tokens.Token{
-									Type:    tokens.Identifier,
-									Literal: method.Name,
-								},
-								ValueType: method.Procedure,
-								Qualifier: ast.QualifierMethod,
-							})
-						}
-					}
 				}
 			}
 
@@ -568,7 +618,8 @@ func (p *Parser) primary(ctx context.Context, typeToken types.Type) ast.ExprInde
 					if param.Mutable {
 						qualifier = ast.QualifierVariable
 					}
-					p.symbols.Define(&ast.Identifier{
+
+					p.symbols.DefineIdent(&ast.Identifier{
 						Token: tokens.Token{
 							Type:    tokens.Identifier,
 							Literal: param.Name,

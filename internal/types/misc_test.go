@@ -87,9 +87,9 @@ func TestInstantiate(t *testing.T) {
 		t.Parallel()
 
 		a := &Alias{
-			Name:       "List",
-			Derived:    &Slice{Element: &Alias{Name: "T", Constraint: Any}},
-			TypeParams: []*Alias{{Name: "T", Constraint: Any}},
+			Name:           "List",
+			Derived:        &Slice{Element: &Alias{Name: "T", Constraint: Any}},
+			TypeParameters: []*Alias{{Name: "T", Constraint: Any}},
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Int32]})
 
@@ -116,7 +116,7 @@ func TestInstantiate(t *testing.T) {
 				Key:   &Alias{Name: "K", Constraint: Any},
 				Value: &Alias{Name: "V", Constraint: Any},
 			},
-			TypeParams: []*Alias{
+			TypeParameters: []*Alias{
 				{Name: "K", Constraint: Any},
 				{Name: "V", Constraint: Any},
 			},
@@ -152,7 +152,7 @@ func TestInstantiate(t *testing.T) {
 					&Alias{Name: "B", Constraint: Any},
 				},
 			},
-			TypeParams: []*Alias{
+			TypeParameters: []*Alias{
 				{Name: "A", Constraint: Any},
 				{Name: "B", Constraint: Any},
 			},
@@ -185,9 +185,9 @@ func TestInstantiate(t *testing.T) {
 		t.Parallel()
 
 		a := &Alias{
-			Name:       "Maybe",
-			Derived:    &Option{Value: &Alias{Name: "T", Constraint: Any}},
-			TypeParams: []*Alias{{Name: "T", Constraint: Any}},
+			Name:           "Maybe",
+			Derived:        &Option{Value: &Alias{Name: "T", Constraint: Any}},
+			TypeParameters: []*Alias{{Name: "T", Constraint: Any}},
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Float64]})
 
@@ -209,9 +209,9 @@ func TestInstantiate(t *testing.T) {
 		t.Parallel()
 
 		a := &Alias{
-			Name:       "MyInt",
-			Derived:    Basics[Int32],
-			TypeParams: []*Alias{{Name: "T", Constraint: Any}},
+			Name:           "MyInt",
+			Derived:        Basics[Int32],
+			TypeParameters: []*Alias{{Name: "T", Constraint: Any}},
 		}
 
 		result := a.Instantiate(map[string]Type{"T": Basics[UTF8]})
@@ -235,9 +235,9 @@ func TestInstantiate(t *testing.T) {
 			ReturnType: &Alias{Name: "T", Constraint: Any},
 		}
 		a := &Alias{
-			Name:       "MyFunc",
-			Derived:    proc,
-			TypeParams: []*Alias{{Name: "T", Constraint: Any}},
+			Name:           "MyFunc",
+			Derived:        proc,
+			TypeParameters: []*Alias{{Name: "T", Constraint: Any}},
 		}
 		result := a.Instantiate(map[string]Type{"T": Basics[Int64]})
 

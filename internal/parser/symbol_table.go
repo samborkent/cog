@@ -1,12 +1,12 @@
 package parser
 
 import (
-	"fmt"
 	"iter"
+	"maps"
 	"runtime"
 
 	"github.com/samborkent/cog/internal/ast"
-	isync "github.com/samborkent/cog/internal/sync"
+	"github.com/samborkent/cog/internal/isync"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
 )
@@ -32,9 +32,10 @@ var None = &ast.Identifier{
 
 // CogImport represents an imported cog package.
 type CogImport struct {
-	Path    string            // import path (e.g. "geom")
-	Name    string            // package name (last segment of path)
-	Exports map[string]Symbol // exported symbols from the imported package
+	Path         string               // import path (e.g. "geom")
+	Name         string               // package name (last segment of path)
+	ExportValues map[string]Symbol    // exported identifiers from the imported package
+	ExportTypes  map[string]*ast.Type // exported types from the imported package
 }
 
 // checkState tracks which accesses are safe for a checked option/result variable.
@@ -50,15 +51,15 @@ type SymbolTable struct {
 
 	concurrent bool
 
-	table      *isync.Map[string, Symbol]
+	idents     *isync.Map[string, Symbol]          // Key: identifier
+	types      *isync.Map[string, *ast.Type]       // Key: type name
 	goimports  *isync.Map[string, *ast.Identifier] // key: package name
 	cogimports *isync.Map[string, *CogImport]      // key: package name
-	fields     *isync.Map[string, *isync.Map[string, Symbol]]
-	checked    *isync.Map[string, checkState] // option/result variables verified in this scope
+	checked    *isync.Map[string, checkState]      // option/result variables verified in this scope
 
-	ownership      *isync.Map[string, ownershipState]            // walks up scope chains
+	ownership      *isync.Map[string, ownershipState]                     // walks up scope chains
 	fieldOwnership *isync.Map[string, *isync.Map[string, ownershipState]] // per-field within structs
-	borrowCounts   *isync.Map[string, int32]                     // per-scope only, does NOT walk up
+	borrowCounts   *isync.Map[string, int32]                              // per-scope only, does NOT walk up
 }
 
 func NewSymbolTable() *SymbolTable {
@@ -71,21 +72,21 @@ func NewSymbolTableWithConcurrency(concurrent bool) *SymbolTable {
 		opts = []isync.Option{isync.WithConcurrency()}
 	}
 
-	table := isync.NewMap[string, Symbol](opts...)
+	idents := isync.NewMap[string, Symbol](opts...)
 
-	table.Store("_", Symbol{
+	idents.Store("_", Symbol{
 		Identifier: None,
 		Scope:      LocalScope,
 	})
 
 	return &SymbolTable{
-		concurrent: concurrent,
-		table:      table,
-		goimports:  isync.NewMap[string, *ast.Identifier](opts...),
-		cogimports: isync.NewMap[string, *CogImport](opts...),
-		fields:     isync.NewMap[string, *isync.Map[string, Symbol]](opts...),
-		checked:    isync.NewMap[string, checkState](opts...),
-		ownership:  isync.NewMap[string, ownershipState](opts...),
+		concurrent:     concurrent,
+		idents:         idents,
+		types:          isync.NewMap[string, *ast.Type](opts...),
+		goimports:      isync.NewMap[string, *ast.Identifier](opts...),
+		cogimports:     isync.NewMap[string, *CogImport](opts...),
+		checked:        isync.NewMap[string, checkState](opts...),
+		ownership:      isync.NewMap[string, ownershipState](opts...),
 		fieldOwnership: isync.NewMap[string, *isync.Map[string, ownershipState]](opts...),
 		borrowCounts:   isync.NewMap[string, int32](opts...),
 	}
@@ -115,11 +116,26 @@ func NewEnclosedSymbolTable(outer *SymbolTable) *SymbolTable {
 	return s
 }
 
-func (s *SymbolTable) Define(ident *ast.Identifier) {
-	if ident.Token.Literal == "" {
-		panic("empty identifier")
+// Global gets global symbol table.
+func (s *SymbolTable) Global() *SymbolTable {
+	if s.Outer == nil {
+		return s
 	}
 
+	return s.Outer.Global()
+}
+
+// Symbols iterates over all symbols in this table.
+func (s *SymbolTable) Symbols() iter.Seq[Symbol] {
+	return maps.Values(s.idents.Map())
+}
+
+// Types iterates over all types in this table.
+func (s *SymbolTable) Types() iter.Seq[*ast.Type] {
+	return maps.Values(s.types.Map())
+}
+
+func (s *SymbolTable) DefineIdent(ident *ast.Identifier) {
 	if ident.ValueType == nil {
 		ident.ValueType = types.None
 	}
@@ -133,131 +149,51 @@ func (s *SymbolTable) Define(ident *ast.Identifier) {
 		symbol.Scope = GlobalScope
 	}
 
-	s.table.Store(ident.Token.Literal, symbol)
-
-	// TODO: investigate why this check was here
-	// if ident.Qualifier != ast.QualifierType {
-	switch ident.ValueType.Kind() {
-	case types.StructKind:
-		structType, ok := ident.ValueType.Underlying().(*types.Struct)
-		if !ok {
-			break
-		}
-
-		_, ok = s.fields.Load(ident.Token.Literal)
-		if ok {
-			break
-		}
-
-		var fields *isync.Map[string, Symbol]
-		fields = isync.NewMap[string, Symbol](s.opts()...)
-		s.fields.Store(ident.Token.Literal, fields)
-
-		for _, field := range structType.Fields {
-			fields.Store(field.Name, Symbol{
-				Identifier: &ast.Identifier{
-					Token: tokens.Token{
-						Type:    tokens.Identifier,
-						Literal: field.Name,
-					},
-					ValueType: field.Type,
-					Exported:  field.Exported,
-				},
-				Scope: StructScope,
-			})
-		}
-	}
-	// }
+	s.idents.Store(ident.Token.Literal, symbol)
 }
 
-func (s *SymbolTable) DefineMethod(receiver string, method *ast.Identifier) error {
-	if method.Qualifier != ast.QualifierMethod {
-		panic("DefineMethod may only be called for method identifiers")
-	}
-
-	fields, ok := s.fields.Load(receiver)
-	if !ok {
-		fields = isync.NewMap[string, Symbol](s.opts()...)
-		s.fields.Store(receiver, fields)
-	}
-
-	_, ok = fields.Load(method.Token.Literal)
-	if ok {
-		return fmt.Errorf("method name conflict: field with name %q already exists for type %q", method.String(), receiver)
-	}
-
-	fields.Store(method.Token.Literal, Symbol{
-		Identifier: method,
-		Scope:      StructScope,
-	})
-
-	return nil
+func (s *SymbolTable) DefineType(typ *ast.Type) {
+	s.types.Store(typ.Alias.Name, typ)
 }
 
-func (s *SymbolTable) DefineEnumValue(selector string, field *ast.Identifier) {
-	if field.Token.Literal == "" {
-		panic("empty enum value identifier")
-	}
-
-	fields, ok := s.fields.Load(selector)
-	if !ok {
-		fields = isync.NewMap[string, Symbol](s.opts()...)
-		s.fields.Store(selector, fields)
-	}
-
-	fields.Store(field.Token.Literal, Symbol{
-		Identifier: field,
-		Scope:      EnumScope,
-	})
-}
-
-func (s *SymbolTable) DefineGlobal(ident *ast.Identifier) {
+func (s *SymbolTable) DefineGlobalIdent(ident *ast.Identifier) {
 	// If a forward value stub exists (created during globalsPass for
 	// forward references), resolve it by copying the real declaration's
 	// info into the existing stub. All expression nodes referencing the
 	// stub share the same pointer, so mutating it updates all referents.
-	existing, ok := s.table.Load(ident.Token.Literal)
+	existing, ok := s.idents.Load(ident.Token.Literal)
 	if ok && existing.Scope == ScanScope && types.IsNone(existing.Identifier.ValueType) {
 		existing.Identifier.ValueType = ident.ValueType
 		existing.Identifier.Qualifier = ident.Qualifier
 		existing.Identifier.Exported = ident.Exported
-
-		// Register struct fields so selectors (e.g. val.x) resolve.
-		if ident.ValueType != nil && ident.ValueType.Kind() == types.StructKind {
-			if st, ok := ident.ValueType.Underlying().(*types.Struct); ok {
-				if _, exists := s.fields.Load(ident.Token.Literal); !exists {
-					fields := isync.NewMap[string, Symbol](s.opts()...)
-					s.fields.Store(ident.Token.Literal, fields)
-
-					for _, field := range st.Fields {
-						fields.Store(field.Name, Symbol{
-							Identifier: &ast.Identifier{
-								Token: tokens.Token{
-									Type:    tokens.Identifier,
-									Literal: field.Name,
-								},
-								ValueType: field.Type,
-								Exported:  field.Exported,
-							},
-							Scope: StructScope,
-						})
-					}
-				}
-			}
-		}
-
 		return
 	}
 
-	s.Define(ident)
+	s.DefineIdent(ident)
 
-	symbol, ok := s.table.Load(ident.Token.Literal)
+	symbol, ok := s.idents.Load(ident.Token.Literal)
 	if !ok {
 		panic("symbol not found after definition")
 	}
 
 	symbol.Scope = ScanScope
-	s.table.Store(ident.Token.Literal, symbol)
+	s.idents.Store(ident.Token.Literal, symbol)
+}
+
+func (s *SymbolTable) DefineGlobalType(typ *ast.Type) {
+	// If a forward value stub exists (created during globalsPass for
+	// forward references), resolve it by copying the real declaration's
+	// info into the existing stub. All expression nodes referencing the
+	// stub share the same pointer, so mutating it updates all referents.
+	existing, ok := s.types.Load(typ.Alias.Name)
+	if ok && types.IsNone(existing.Alias.Derived) {
+		// Register methods of existing type on new type if any.
+		typ.Alias.RegisterMethods(existing.Alias.Methods()...)
+		existing = typ
+		return
+	}
+
+	s.DefineType(typ)
 }
 
 func (s *SymbolTable) DefineGoImport(ident *ast.Identifier) {
@@ -272,10 +208,10 @@ func (s *SymbolTable) DefineGoImport(ident *ast.Identifier) {
 	s.goimports.Store(ident.Token.Literal, ident)
 }
 
-func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
-	obj, ok := s.table.Load(name)
+func (s *SymbolTable) ResolveIdent(name string) (Symbol, bool) {
+	obj, ok := s.idents.Load(name)
 	if !ok && s.Outer != nil {
-		obj, ok = s.Outer.Resolve(name)
+		obj, ok = s.Outer.ResolveIdent(name)
 		if !ok {
 			return Symbol{}, false
 		}
@@ -286,12 +222,26 @@ func (s *SymbolTable) Resolve(name string) (Symbol, bool) {
 	return obj, ok
 }
 
+func (s *SymbolTable) ResolveType(name string) (*ast.Type, bool) {
+	obj, ok := s.types.Load(name)
+	if !ok && s.Outer != nil {
+		obj, ok = s.Outer.ResolveType(name)
+		if !ok {
+			return nil, false
+		}
+
+		return obj, true
+	}
+
+	return obj, ok
+}
+
 // MarkUsed marks a symbol as used. It walks up scope chains to find the symbol.
 func (s *SymbolTable) MarkUsed(name string) {
-	sym, ok := s.table.Load(name)
+	sym, ok := s.idents.Load(name)
 	if ok {
 		sym.Used = true
-		s.table.Store(name, sym)
+		s.idents.Store(name, sym)
 		return
 	}
 
@@ -305,27 +255,28 @@ func (s *SymbolTable) MarkUsed(name string) {
 // identifiers, and dynamic variables are exempt from this check.
 func (s *SymbolTable) CheckUnused() iter.Seq2[string, Symbol] {
 	return func(yield func(string, Symbol) bool) {
-		for name, sym := range s.table.All() {
+		for name, sym := range s.idents.All() {
+			// Skip variables whicha are already marked as used.
 			if sym.Used {
 				continue
 			}
 
+			// Skip omitted variables.
 			if name == "_" {
 				continue
 			}
 
+			// Global variables may be unused.
 			if sym.Scope == GlobalScope || sym.Scope == ScanScope {
 				continue
 			}
 
+			// Exported variables may be unused.
 			if sym.Identifier.Exported {
 				continue
 			}
 
-			if sym.Identifier.Qualifier == ast.QualifierType {
-				continue
-			}
-
+			// Dynamic variables may be unused.
 			if sym.Identifier.Qualifier == ast.QualifierDynamic {
 				continue
 			}
@@ -337,41 +288,8 @@ func (s *SymbolTable) CheckUnused() iter.Seq2[string, Symbol] {
 	}
 }
 
-func (s *SymbolTable) ResolveField(typeName, field string) (Symbol, bool) {
-	fields, ok := s.fields.Load(typeName)
-	if !ok {
-		if s.Outer != nil {
-			return s.Outer.ResolveField(typeName, field)
-		}
-
-		return Symbol{}, false
-	}
-
-	return fields.Load(field)
-}
-
 func (s *SymbolTable) ResolveGoImport(name string) (*ast.Identifier, bool) {
 	return s.goimports.Load(name)
-}
-
-// ForEachGlobal iterates over all symbols in the root (global) table.
-func (s *SymbolTable) ForEachGlobal(fn func(name string, sym Symbol)) {
-	root := s
-	for root.Outer != nil {
-		root = root.Outer
-	}
-
-	for name, sym := range root.table.All() {
-		fn(name, sym)
-	}
-}
-
-func (s *SymbolTable) Update(name string, t types.Type) {
-	if symbol, ok := s.table.Load(name); ok {
-		symbol.Identifier.ValueType = t
-		// TODO: redundant because identifier is pointer?
-		s.table.Store(name, symbol)
-	}
 }
 
 func (s *SymbolTable) DefineCogImport(imp *CogImport) {
@@ -421,4 +339,18 @@ func (s *SymbolTable) IsErrorChecked(name string) bool {
 	}
 
 	return false
+}
+
+func (s *SymbolTable) FillExports(imp *CogImport) {
+	for name, symbol := range s.idents.All() {
+		if symbol.Identifier.Exported {
+			imp.ExportValues[name] = symbol
+		}
+	}
+
+	for name, typ := range s.types.All() {
+		if typ.Alias.Exported {
+			imp.ExportTypes[name] = typ
+		}
+	}
 }
