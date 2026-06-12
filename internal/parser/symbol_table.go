@@ -2,7 +2,6 @@ package parser
 
 import (
 	"iter"
-	"maps"
 	"runtime"
 
 	"github.com/samborkent/cog/internal/ast"
@@ -125,14 +124,52 @@ func (s *SymbolTable) Global() *SymbolTable {
 	return s.Outer.Global()
 }
 
-// Symbols iterates over all symbols in this table.
+// Symbols iterates over all symbols in this table and its parents.
 func (s *SymbolTable) Symbols() iter.Seq[Symbol] {
-	return maps.Values(s.idents.Map())
+	return func(yield func(Symbol) bool) {
+		_ = s.everyIdent(yield)
+	}
 }
 
-// Types iterates over all types in this table.
+// Types iterates over all types in this table and its parents.
 func (s *SymbolTable) Types() iter.Seq[*ast.Type] {
-	return maps.Values(s.types.Map())
+	return func(yield func(*ast.Type) bool) {
+		_ = s.everyType(yield)
+	}
+}
+
+// Efficiently yield every identifier of this symbol table and its parents.
+func (s *SymbolTable) everyIdent(f func(Symbol) bool) bool {
+	if s == nil || s.idents == nil {
+		return true
+	}
+
+	// Yield every identifier of parent recursively if set.
+	result := s.Outer == nil || s.Outer.everyIdent(f)
+
+	// Yield every identifier of this symbol table.
+	for _, ident := range s.idents.Map {
+		result = result && f(ident)
+	}
+
+	return result
+}
+
+// Efficiently yield every type of this symbol table and its parents.
+func (s *SymbolTable) everyType(f func(*ast.Type) bool) bool {
+	if s == nil || s.types == nil {
+		return true
+	}
+
+	// Yield every type of parent recursively if set.
+	result := s.Outer == nil || s.Outer.everyType(f)
+
+	// Yield every type of this symbol table.
+	for _, typ := range s.types.Map {
+		result = result && f(typ)
+	}
+
+	return result
 }
 
 func (s *SymbolTable) DefineIdent(ident *ast.Identifier) {

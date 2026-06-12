@@ -436,7 +436,11 @@ func (p *Parser) checkUnused() {
 }
 
 func (p *Parser) stringToken(t tokens.Token) string {
-	return fmt.Sprintf("%s:%d:%d:", p.filePath, t.Ln, t.Col)
+	if p.filePath == "" {
+		return fmt.Sprintf("%d:%d", t.Ln, t.Col)
+	}
+
+	return fmt.Sprintf("%s:%d:%d", p.filePath, t.Ln, t.Col)
 }
 
 func (p *Parser) NodeString(i ast.NodeIndex) string {
