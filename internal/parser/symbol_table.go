@@ -149,7 +149,7 @@ func (s *SymbolTable) everyIdent(f func(Symbol) bool) bool {
 
 	// Yield every identifier of this symbol table.
 	for _, ident := range s.idents.Map {
-		result = result && f(ident)
+		result = f(ident) && result
 	}
 
 	return result
@@ -166,7 +166,7 @@ func (s *SymbolTable) everyType(f func(*ast.Type) bool) bool {
 
 	// Yield every type of this symbol table.
 	for _, typ := range s.types.Map {
-		result = result && f(typ)
+		result = f(typ) && result
 	}
 
 	return result
@@ -230,6 +230,10 @@ func (s *SymbolTable) DefineGlobalType(typ *ast.Type) {
 		return
 	}
 
+	if typ.Alias.Derived == nil {
+		typ.Alias.Derived = types.None
+	}
+
 	s.DefineType(typ)
 }
 
@@ -249,11 +253,6 @@ func (s *SymbolTable) ResolveIdent(name string) (Symbol, bool) {
 	obj, ok := s.idents.Load(name)
 	if !ok && s.Outer != nil {
 		obj, ok = s.Outer.ResolveIdent(name)
-		if !ok {
-			return Symbol{}, false
-		}
-
-		return obj, true
 	}
 
 	return obj, ok
@@ -263,11 +262,6 @@ func (s *SymbolTable) ResolveType(name string) (*ast.Type, bool) {
 	obj, ok := s.types.Load(name)
 	if !ok && s.Outer != nil {
 		obj, ok = s.Outer.ResolveType(name)
-		if !ok {
-			return nil, false
-		}
-
-		return obj, true
 	}
 
 	return obj, ok

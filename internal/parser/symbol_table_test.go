@@ -344,8 +344,8 @@ func TestForEachGlobal(t *testing.T) {
 		}
 	}
 
-	if len(names) != 2 {
-		t.Fatalf("expected 2 globals, got %d: %v", len(names), names)
+	if len(names) != 3 {
+		t.Fatalf("expected 3 symbols, got %d: %v", len(names), names)
 	}
 }
 
