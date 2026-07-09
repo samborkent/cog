@@ -10,21 +10,26 @@ import (
 var _ Node = &Method{}
 
 type Method struct {
-	Token       tokens.Token
-	Export      bool
-	Receiver    *Identifier
-	Type        types.Type
-	Declaration NodeIndex
+	Token         tokens.Token
+	Export        bool
+	ReceiverIdent *Identifier // may be nil
+	ReceiverType  types.Type
+	Type          *types.Procedure
+	Body          ExprIndex // ProcedureLiteral
 }
 
-func (a *AST) NewMethod(t tokens.Token, export bool, receiver *Identifier, typ types.Type, declaration NodeIndex) NodeIndex {
+func (a *AST) NewMethod(
+	t tokens.Token, export bool, receiverIdent *Identifier,
+	receiverType types.Type, typ *types.Procedure, body ExprIndex,
+) NodeIndex {
 	node := New[Method](a)
 
 	node.Token = t
 	node.Export = export
-	node.Receiver = receiver
+	node.ReceiverIdent = receiverIdent
+	node.ReceiverType = receiverType
 	node.Type = typ
-	node.Declaration = declaration
+	node.Body = body
 
 	return a.AddNode(node)
 }
@@ -42,9 +47,9 @@ func (n *Method) StringTo(out *strings.Builder, a *AST) {
 		_, _ = out.WriteString("export ")
 	}
 
-	if n.Receiver != nil {
+	if n.ReceiverIdent != nil {
 		_ = out.WriteByte('(')
-		_, _ = out.WriteString(n.Receiver.Token.Literal)
+		_, _ = out.WriteString(n.ReceiverIdent.Token.Literal)
 		_, _ = out.WriteString(" : ")
 		_, _ = out.WriteString(n.Type.String())
 		_ = out.WriteByte(')')
@@ -53,6 +58,11 @@ func (n *Method) StringTo(out *strings.Builder, a *AST) {
 	}
 
 	_ = out.WriteByte('.')
+	_, _ = out.WriteString(n.Token.Literal)
+	_, _ = out.WriteString(" : ")
+	_, _ = out.WriteString(n.Type.String())
 
-	a.nodes[n.Declaration].StringTo(out, a)
+	_, _ = out.WriteString(" = ")
+
+	a.exprs[n.Body].StringTo(out, a)
 }

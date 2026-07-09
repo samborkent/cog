@@ -245,18 +245,13 @@ func Satisfies(concrete, constraint Type) bool {
 // Implements reports whether a concrete type implements the given interface,
 // i.e. has all required methods with matching signatures.
 func Implements(concrete Type, iface *Interface) bool {
-	// Unwrap aliases to find the underlying struct.
-	underlying := concrete
-	for {
-		a, ok := underlying.(*Alias)
-		if !ok || a.Constraint != nil {
-			break
-		}
-
-		underlying = a.Underlying()
+	// Everything implements empty interface.
+	if iface == EmptyInterface {
+		return true
 	}
 
-	s, ok := underlying.(*Struct)
+	// Only type aliases can have methods.
+	alias, ok := concrete.(*Alias)
 	if !ok {
 		return false
 	}
@@ -264,7 +259,7 @@ func Implements(concrete Type, iface *Interface) bool {
 	for _, required := range iface.Methods {
 		found := false
 
-		for _, m := range s.Methods {
+		for _, m := range alias.Methods() {
 			if m.Name != required.Name {
 				continue
 			}

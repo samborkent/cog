@@ -17,8 +17,8 @@ MyInt ~ int32
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
-		if ta.Identifier.Token.Literal != "MyInt" {
-			t.Errorf("expected name 'MyInt', got %q", ta.Identifier.Token.Literal)
+		if ta.Alias.Name != "MyInt" {
+			t.Errorf("expected name 'MyInt', got %q", ta.Alias.Name)
 		}
 
 		if ta.Alias.Kind() != types.Int32 {
@@ -250,20 +250,20 @@ List<T ~ any> ~ []T
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
-		if ta.Identifier.Token.Literal != "List" {
-			t.Errorf("expected name 'List', got %q", ta.Identifier.Token.Literal)
+		if ta.Alias.Name != "List" {
+			t.Errorf("expected name 'List', got %q", ta.Alias.Name)
 		}
 
-		if len(ta.TypeParameters) != 1 {
-			t.Fatalf("expected 1 type param, got %d", len(ta.TypeParameters))
+		if len(ta.Alias.TypeParameters) != 1 {
+			t.Fatalf("expected 1 type param, got %d", len(ta.Alias.TypeParameters))
 		}
 
-		if ta.TypeParameters[0].Name != "T" {
-			t.Errorf("expected type param name 'T', got %q", ta.TypeParameters[0].Name)
+		if ta.Alias.TypeParameters[0].Name != "T" {
+			t.Errorf("expected type param name 'T', got %q", ta.Alias.TypeParameters[0].Name)
 		}
 
-		if ta.TypeParameters[0].ConstraintString() != "any" {
-			t.Errorf("expected constraint 'any', got %q", ta.TypeParameters[0].ConstraintString())
+		if ta.Alias.TypeParameters[0].ConstraintString() != "any" {
+			t.Errorf("expected constraint 'any', got %q", ta.Alias.TypeParameters[0].ConstraintString())
 		}
 	})
 
@@ -274,12 +274,12 @@ Pair<A ~ any, B ~ any> ~ (A, B)
 main : proc() = {}`)
 		ta := stmtAs[*ast.Type](t, f, 0)
 
-		if len(ta.TypeParameters) != 2 {
-			t.Fatalf("expected 2 type params, got %d", len(ta.TypeParameters))
+		if len(ta.Alias.TypeParameters) != 2 {
+			t.Fatalf("expected 2 type params, got %d", len(ta.Alias.TypeParameters))
 		}
 
-		if ta.TypeParameters[0].Name != "A" || ta.TypeParameters[1].Name != "B" {
-			t.Errorf("expected params [A, B], got [%s, %s]", ta.TypeParameters[0].Name, ta.TypeParameters[1].Name)
+		if ta.Alias.TypeParameters[0].Name != "A" || ta.Alias.TypeParameters[1].Name != "B" {
+			t.Errorf("expected params [A, B], got [%s, %s]", ta.Alias.TypeParameters[0].Name, ta.Alias.TypeParameters[1].Name)
 		}
 	})
 
@@ -290,8 +290,8 @@ NumList<T ~ number> ~ []T
 main : proc() = {}`)
 		ta := stmtAs[*ast.Type](t, f, 0)
 
-		if ta.TypeParameters[0].ConstraintString() != "number" {
-			t.Errorf("expected constraint 'number', got %q", ta.TypeParameters[0].ConstraintString())
+		if ta.Alias.TypeParameters[0].ConstraintString() != "number" {
+			t.Errorf("expected constraint 'number', got %q", ta.Alias.TypeParameters[0].ConstraintString())
 		}
 	})
 
@@ -302,7 +302,7 @@ SList<T ~ string | int> ~ []T
 main : proc() = {}`)
 		ta := stmtAs[*ast.Type](t, f, 0)
 
-		cs := ta.TypeParameters[0].ConstraintString()
+		cs := ta.Alias.TypeParameters[0].ConstraintString()
 		if cs != "string | int" {
 			t.Errorf("expected constraint 'string | int', got %q", cs)
 		}
@@ -315,8 +315,8 @@ Dict<K ~ comparable, V ~ any> ~ map<K, V>
 main : proc() = {}`)
 		ta := stmtAs[*ast.Type](t, f, 0)
 
-		if len(ta.TypeParameters) != 2 {
-			t.Fatalf("expected 2 type params, got %d", len(ta.TypeParameters))
+		if len(ta.Alias.TypeParameters) != 2 {
+			t.Fatalf("expected 2 type params, got %d", len(ta.Alias.TypeParameters))
 		}
 	})
 
@@ -469,15 +469,15 @@ Stringer ~ interface {
 main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
-		if ta.Identifier.Token.Literal != "Stringer" {
-			t.Errorf("expected name 'Stringer', got %q", ta.Identifier.Token.Literal)
+		if ta.Alias.Name != "Stringer" {
+			t.Errorf("expected name 'Stringer', got %q", ta.Alias.Name)
 		}
 
 		if ta.Alias.Kind() != types.InterfaceKind {
 			t.Errorf("expected InterfaceKind, got %s", ta.Alias.Kind())
 		}
 
-		iface, ok := ta.Alias.(*types.Interface)
+		iface, ok := ta.Alias.Derived.(*types.Interface)
 		if !ok {
 			t.Fatal("expected *types.Interface")
 		}
@@ -503,7 +503,7 @@ main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
 
-		iface, ok := ta.Alias.(*types.Interface)
+		iface, ok := ta.Alias.Derived.(*types.Interface)
 		if !ok {
 			t.Fatal("expected *types.Interface")
 		}
@@ -530,7 +530,7 @@ main : proc() = {}`)
 
 		ta := stmtAs[*ast.Type](t, f, 0)
 
-		iface, ok := ta.Alias.(*types.Interface)
+		iface, ok := ta.Alias.Derived.(*types.Interface)
 		if !ok {
 			t.Fatal("expected *types.Interface")
 		}

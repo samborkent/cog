@@ -2,6 +2,8 @@ package types
 
 import "strings"
 
+var EmptyInterface = &Interface{}
+
 type Interface struct {
 	TypeParams []*Alias
 	Methods    []*Method
@@ -10,6 +12,17 @@ type Interface struct {
 type Method struct {
 	Name      string
 	Procedure *Procedure
+}
+
+// Method finds method by name, returns nil if method doesn't exist.
+func (i *Interface) Method(name string) *Method {
+	for _, method := range i.Methods {
+		if method.Name == name {
+			return method
+		}
+	}
+
+	return nil
 }
 
 func (n *Interface) Kind() Kind {

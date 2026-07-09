@@ -9,8 +9,12 @@ The following basic features are missing that need to be implemented before Cog 
 ## TODO:
 
 ### Bugs
-- When declaring type alias in script mode, the type gets placed in global scope, instead of inside of main.
-    This is required for method declaration, so we need to manually disallow using a type which is only defined later in the file in script mode.
+- When declaring type alias or method in script mode, the type gets placed in global scope, instead of inside of main.
+    This is required for method declaration (may only be global in Go), so we need to manually disallow using a type or method which is only defined later in the file in script mode.
+
+### Idea:
+- `main : proc()` is no longer the entry point. `.cog` files cannot have an entry point. `.cogs` are only entry points of `.cog` programs. Compiler will only look for `.cogs` files and their imports.
+- `export` is not allowed in `.cogs`.
 
 ### Features
 - Disallow use of `@go` inside of `func`, as we cannot control what code is invoked, and `func` may not have side-effects.

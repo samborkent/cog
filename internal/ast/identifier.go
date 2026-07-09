@@ -10,9 +10,7 @@ import (
 type Qualifier uint8
 
 const (
-	QualifierType Qualifier = iota
-	QualifierMethod
-	QualifierImmutable
+	QualifierImmutable Qualifier = iota + 1
 	QualifierVariable
 	QualifierDynamic
 	// QualifierConstant

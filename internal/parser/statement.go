@@ -159,16 +159,13 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 				return ast.ZeroNodeIndex
 			}
 
-			typeSymbol, ok := p.symbols.Resolve(p.lex.This().Literal)
-			if !ok || typeSymbol.Identifier.Qualifier != ast.QualifierType {
+			typeSymbol, ok := p.symbols.ResolveType(p.lex.This().Literal)
+			if !ok {
 				p.error(p.lex.This(), "unknown type found in type declaration", "parseType")
 				return ast.ZeroNodeIndex
 			}
 
-			receiverIdent.ValueType = &types.Alias{
-				Name:    typeSymbol.Identifier.Token.Literal,
-				Derived: typeSymbol.Identifier.ValueType,
-			}
+			receiverIdent.ValueType = typeSymbol.Alias
 
 			p.lex.Step() // consume identifier
 
@@ -181,7 +178,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 
 			return p.parseMethod(ctx,
 				receiverIdent,
-				typeSymbol.Identifier.Token.Literal,
+				typeSymbol.Token.Literal,
 				true,
 				exportRef,
 			)
@@ -209,7 +206,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 			// Could be generic call (genFunc<utf8>(...)) or type alias.
 			// If the symbol is a generic callable, don't consume the identifier
 			// so expression parsing handles it.
-			if sym, ok := p.symbols.Resolve(p.lex.This().Literal); ok {
+			if sym, ok := p.symbols.ResolveIdent(p.lex.This().Literal); ok {
 				if proc, ok := sym.Identifier.ValueType.(*types.Procedure); ok && len(proc.TypeParams) > 0 {
 					// Generic function call — let expression handle it.
 				} else {
@@ -280,7 +277,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 				}
 
 				// Resolve the receiver and check mutability.
-				symbol, ok := p.symbols.Resolve(ident.Token.Literal)
+				symbol, ok := p.symbols.ResolveIdent(ident.Token.Literal)
 				if !ok {
 					p.error(ident.Token, "unknown identifier", "parseStatement")
 					return ast.ZeroNodeIndex
@@ -385,7 +382,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 
 			fallthrough
 		default:
-			p.error(p.lex.This(), "unexpected token found after identifier", "parseStatement")
+			p.error(p.lex.This(), fmt.Sprintf("unexpected token %q found after identifier", p.lex.This().Type), "parseStatement")
 			return ast.ZeroNodeIndex
 		}
 	case tokens.If:
@@ -436,16 +433,13 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 			return ast.ZeroNodeIndex
 		}
 
-		typeSymbol, ok := p.symbols.Resolve(p.lex.This().Literal)
-		if !ok || typeSymbol.Identifier.Qualifier != ast.QualifierType {
+		typeSymbol, ok := p.symbols.ResolveType(p.lex.This().Literal)
+		if !ok {
 			p.error(p.lex.This(), "unknown type found in type declaration", "parseType")
 			return ast.ZeroNodeIndex
 		}
 
-		receiverIdent.ValueType = &types.Alias{
-			Name:    typeSymbol.Identifier.Token.Literal,
-			Derived: typeSymbol.Identifier.ValueType,
-		}
+		receiverIdent.ValueType = typeSymbol.Alias
 
 		p.lex.Step() // consume identifier
 
@@ -458,7 +452,7 @@ func (p *Parser) parseStatement(ctx context.Context) ast.NodeIndex {
 
 		return p.parseMethod(ctx,
 			receiverIdent,
-			typeSymbol.Identifier.Token.Literal,
+			typeSymbol.Token.Literal,
 			false,
 			reference,
 		)

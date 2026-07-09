@@ -25,25 +25,34 @@ main : proc() = {}`)
 		// Statement 0: type alias, statement 1: method, statement 2: main
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		if m.Receiver == nil {
-			t.Fatal("method receiver is nil")
+		if m.ReceiverIdent == nil {
+			t.Fatal("method receiver identifier is nil")
 		}
 
-		if m.Receiver.Token.Literal != "f" {
-			t.Errorf("expected receiver name f, got %q", m.Receiver.Token.Literal)
+		if m.ReceiverIdent.Token.Literal != "f" {
+			t.Errorf("expected receiver name f, got %q", m.ReceiverIdent.Token.Literal)
 		}
 
-		if m.Declaration == ast.ZeroNodeIndex {
-			t.Fatal("method declaration is nil")
+		if m.ReceiverType == nil {
+			t.Fatal("method receiver type is nil")
 		}
 
-		decl := f.Node(m.Declaration).(*ast.Declaration)
+		if m.ReceiverType.Kind() != types.StructKind {
+			t.Errorf("expected struct kind receiver type, got %q", m.ReceiverType.Kind())
+		}
 
-		if decl.Assignment.Identifier.Token.Literal != "GetValue" {
-			t.Errorf("expected method name GetValue, got %q", decl.Assignment.Identifier.Token.Literal)
+		if m.Type == nil {
+			t.Fatal("method type is nil")
+		}
+
+		if m.Body == ast.ZeroExprIndex {
+			t.Fatal("method body is nil")
+		}
+
+		if m.Token.Literal != "GetValue" {
+			t.Errorf("expected method name GetValue, got %q", m.Token.Literal)
 		}
 	})
-
 	t.Run("this_return", func(t *testing.T) {
 		t.Parallel()
 
@@ -58,22 +67,18 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		if m.Declaration == ast.ZeroNodeIndex {
-			t.Fatal("method declaration is nil")
+		if m.Type == nil {
+			t.Fatal("method type is nil")
 		}
 
-		decl := f.Node(m.Declaration).(*ast.Declaration)
-
-		procType, ok := decl.Assignment.Identifier.ValueType.(*types.Procedure)
-		if !ok {
-			t.Fatal("method type is not a procedure")
+		if m.Body == ast.ZeroExprIndex {
+			t.Fatal("method body is nil")
 		}
 
-		if procType.ReturnType == nil || procType.ReturnType.Kind() != types.Int64 {
-			t.Errorf("expected return type int64, got %v", procType.ReturnType)
+		if m.Type.ReturnType == nil || m.Type.ReturnType.Kind() != types.Int64 {
+			t.Errorf("expected return type int64, got %v", m.Type.ReturnType)
 		}
 	})
-
 	t.Run("this_outside_method_errors", func(t *testing.T) {
 		t.Parallel()
 
@@ -82,7 +87,6 @@ main : proc() = {
 	x := this
 }`)
 	})
-
 	t.Run("this_in_function_errors", func(t *testing.T) {
 		t.Parallel()
 
@@ -92,7 +96,6 @@ f : func(a : int64) int64 = {
 }
 main : proc() = {}`)
 	})
-
 	t.Run("method_name_shadows_global", func(t *testing.T) {
 		t.Parallel()
 
@@ -110,17 +113,14 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 2)
 
-		if m.Receiver.Token.Literal != "f" {
-			t.Errorf("expected receiver f, got %q", m.Receiver.Token.Literal)
+		if m.ReceiverIdent.Token.Literal != "f" {
+			t.Errorf("expected receiver f, got %q", m.ReceiverIdent.Token.Literal)
 		}
 
-		decl := f.Node(m.Declaration).(*ast.Declaration)
-
-		if decl.Assignment.Identifier.Token.Literal != "String" {
-			t.Errorf("expected method name String, got %q", decl.Assignment.Identifier.Token.Literal)
+		if m.Token.Literal != "String" {
+			t.Errorf("expected method name String, got %q", m.Token.Literal)
 		}
 	})
-
 	t.Run("exported_method", func(t *testing.T) {
 		t.Parallel()
 
@@ -135,9 +135,7 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		decl := f.Node(m.Declaration).(*ast.Declaration)
-
-		if !decl.Assignment.Identifier.Exported {
+		if !m.Export {
 			t.Error("expected exported method")
 		}
 	})
@@ -156,20 +154,19 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		if m.Type.Kind() != types.ReferenceKind {
+		if m.ReceiverType.Kind() != types.ReferenceKind {
 			t.Error("expected reference receiver")
 		}
 
-		refType, ok := m.Type.(*types.Reference)
+		refType, ok := m.ReceiverType.(*types.Reference)
 		if !ok {
 			t.Fatalf("unable to cast reference receiver type")
 		}
 
 		if refType.Value.String() != "Foo" {
-			t.Errorf("expected receiver Foo, got %q", m.Receiver.Token.Literal)
+			t.Errorf("expected receiver Foo, got %q", refType.Value.String())
 		}
 	})
-
 	t.Run("exported_reference_method", func(t *testing.T) {
 		t.Parallel()
 
@@ -188,7 +185,6 @@ main : proc() = {}`)
 			t.Error("expected exported method")
 		}
 	})
-
 	t.Run("method_proc_no_return", func(t *testing.T) {
 		t.Parallel()
 
@@ -203,13 +199,10 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		decl := f.Node(m.Declaration).(*ast.Declaration)
-
-		if decl.Assignment.Identifier.Token.Literal != "Greet" {
-			t.Errorf("expected method name 'Greet', got %q", decl.Assignment.Identifier.Token.Literal)
+		if m.Token.Literal != "Greet" {
+			t.Errorf("expected method name 'Greet', got %q", m.Token.Literal)
 		}
 	})
-
 	t.Run("multiple_methods_on_struct", func(t *testing.T) {
 		t.Parallel()
 
@@ -229,18 +222,14 @@ main : proc() = {}`)
 		m1 := stmtAs[*ast.Method](t, f, 1)
 		m2 := stmtAs[*ast.Method](t, f, 2)
 
-		decl1 := f.Node(m1.Declaration).(*ast.Declaration)
-		decl2 := f.Node(m2.Declaration).(*ast.Declaration)
-
-		if decl1.Assignment.Identifier.Token.Literal != "GetX" {
-			t.Errorf("expected first method 'GetX', got %q", decl1.Assignment.Identifier.Token.Literal)
+		if m1.Token.Literal != "GetX" {
+			t.Errorf("expected first method 'GetX', got %q", m1.Token.Literal)
 		}
 
-		if decl2.Assignment.Identifier.Token.Literal != "GetY" {
-			t.Errorf("expected second method 'GetY', got %q", decl2.Assignment.Identifier.Token.Literal)
+		if m2.Token.Literal != "GetY" {
+			t.Errorf("expected second method 'GetY', got %q", m2.Token.Literal)
 		}
 	})
-
 	t.Run("exported_method_on_unexported_type_errors", func(t *testing.T) {
 		t.Parallel()
 
@@ -274,19 +263,12 @@ main : proc() = {}`)
 
 		m := stmtAs[*ast.Method](t, f, 1)
 
-		decl := f.Node(m.Declaration).(*ast.Declaration)
-
-		procType, ok := decl.Assignment.Identifier.ValueType.(*types.Procedure)
-		if !ok {
-			t.Fatal("expected procedure type")
+		if len(m.Type.Parameters) != 1 {
+			t.Fatalf("expected 1 param, got %d", len(m.Type.Parameters))
 		}
 
-		if len(procType.Parameters) != 1 {
-			t.Fatalf("expected 1 param, got %d", len(procType.Parameters))
-		}
-
-		if procType.Parameters[0].Name != "n" {
-			t.Errorf("expected param 'n', got %q", procType.Parameters[0].Name)
+		if m.Type.Parameters[0].Name != "n" {
+			t.Errorf("expected param 'n', got %q", m.Type.Parameters[0].Name)
 		}
 	})
 

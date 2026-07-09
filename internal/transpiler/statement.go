@@ -413,7 +413,7 @@ func (t *Transpiler) convertStmt(node ast.Node) ([]goast.Stmt, error) {
 				Tok: gotoken.TYPE,
 				Specs: []goast.Spec{
 					&goast.TypeSpec{
-						Name: component.Ident(n.Identifier),
+						Name: component.IdentName(n.Alias.Name),
 						Type: typ,
 					},
 				},

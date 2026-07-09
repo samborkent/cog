@@ -35,7 +35,8 @@ func (p *Parser) parsePkgSelector(ctx context.Context, imp *CogImport) ast.ExprI
 	symbolName := p.lex.This().Literal
 
 	// Look up the exported symbol from the imported package.
-	sym, ok := imp.Exports[symbolName]
+	// TODO: this only looks up values. Usage of exported types currently doesn't work.
+	sym, ok := imp.ExportValues[symbolName]
 	if !ok {
 		p.error(p.lex.This(), fmt.Sprintf("package %q has no exported symbol %q", imp.Name, symbolName), "parsePkgSelector")
 		return ast.ZeroExprIndex

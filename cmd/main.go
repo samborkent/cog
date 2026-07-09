@@ -121,6 +121,20 @@ func discoverFiles(input string) ([]string, error) {
 	files := make([]string, 0, len(entries))
 
 	for _, entry := range entries {
+		// if entry.IsDir() {
+		// 	subDir := path.Join(input, entry.Name())
+
+		// 	subFiles, err := discoverFiles(path.Join(input, entry.Name()))
+		// 	if err != nil {
+		// 		return nil, fmt.Errorf("reading sub directory %q: %w", subDir, err)
+		// 	}
+
+		// 	files = append(files, subFiles...)
+		// 	continue
+		// } else if !strings.HasSuffix(entry.Name(), ".cog") {
+		// 	continue
+		// }
+
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".cog") {
 			continue
 		}
@@ -192,7 +206,7 @@ func runScript(ctx context.Context, projectRoot string, scriptPath string, goMod
 			importedPkgs[imp.Path] = pkg
 			importLock.Unlock()
 
-			populateImportExports(imp, pkg.symbols)
+			pkg.symbols.FillExports(imp)
 
 			return nil
 		})
@@ -319,7 +333,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 	}
 
 	// A package that declares a main proc must be named "main".
-	if _, hasMain := entrySymbols.Resolve("main"); hasMain && entryPkgName != "main" {
+	if _, hasMain := entrySymbols.ResolveIdent("main"); hasMain && entryPkgName != "main" {
 		return fmt.Errorf("package %q declares a main proc but is not named \"main\"", entryPkgName)
 	}
 
@@ -342,7 +356,7 @@ func runProject(ctx context.Context, projectRoot string, entryFiles []string) er
 			importedLock.Unlock()
 
 			// Populate the entry package's import exports from the imported package.
-			populateImportExports(imp, pkg.symbols)
+			pkg.symbols.FillExports(imp)
 
 			return nil
 		})
@@ -570,7 +584,7 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 	}
 
 	// Imported packages must not declare a main proc.
-	if sym, hasMain := symbols.Resolve("main"); hasMain {
+	if sym, hasMain := symbols.ResolveIdent("main"); hasMain {
 		ln, col := sym.Identifier.Token.Ln, sym.Identifier.Token.Col
 
 		return nil, fmt.Errorf("%s:%d:%d: imported package %q must not declare a main proc",
@@ -591,15 +605,6 @@ func compileImportedPackage(ctx context.Context, projectRoot, importPath string)
 		astFiles:   ast.MergeASTs(astFiles...),
 		symbols:    symbols,
 	}, nil
-}
-
-// populateImportExports fills a CogImport's Exports map from the imported package's symbol table.
-func populateImportExports(imp *parser.CogImport, symbols *parser.SymbolTable) {
-	symbols.ForEachGlobal(func(name string, sym parser.Symbol) {
-		if sym.Identifier.Exported {
-			imp.Exports[name] = sym
-		}
-	})
 }
 
 // outputProject transpiles and writes all packages.

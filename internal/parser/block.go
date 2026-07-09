@@ -23,6 +23,12 @@ func (p *Parser) parseBlockStatement(ctx context.Context) *ast.Block {
 
 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 		t := p.lex.This()
+
+		if t.Type == tokens.Newline {
+			p.lex.Step() // consume newline
+			t = p.lex.This()
+		}
+
 		if t.Type == tokens.RBrace {
 			endToken = t
 			break

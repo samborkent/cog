@@ -134,18 +134,6 @@ main : proc() = {}`
 		t.Fatalf("parse error: %v", err)
 	}
 
-	// Print AST nodes for debugging
-	fmt.Println("=== AST Statements ===")
-	file := f.Node(f.FileIndex).(*ast.File)
-	for i, stmtIdx := range file.Statements {
-		node := f.Node(stmtIdx)
-		fmt.Printf("%d: %T\n", i, node)
-		if m, ok := node.(*ast.Method); ok {
-			decl := f.Node(m.Declaration).(*ast.Declaration)
-			fmt.Printf("   Method: %s, Receiver: %+v\n", decl.Assignment.Identifier.Token.Literal, m.Receiver)
-		}
-	}
-
 	tr := transpiler.NewTranspiler(ast.MergeASTs(f))
 
 	gofile, err := tr.Transpile()

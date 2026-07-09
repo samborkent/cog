@@ -4,15 +4,15 @@ import (
 	"fmt"
 
 	"github.com/samborkent/cog/internal/ast"
+	isync "github.com/samborkent/cog/internal/isync"
 	"github.com/samborkent/cog/internal/tokens"
 	"github.com/samborkent/cog/internal/types"
-	isync "github.com/samborkent/cog/internal/sync"
 )
 
 type ownershipState uint8
 
 const (
-	stateAlive    ownershipState = iota
+	stateAlive ownershipState = iota
 	stateConsumed
 	stateReserved
 )
@@ -25,7 +25,7 @@ type branchConsumption struct {
 // findDeadField returns the name of the first moved-out field on a struct variable,
 // or empty string if the variable is not a struct or all fields are alive.
 func (p *Parser) findDeadField(varName string) string {
-	if sym, ok := p.symbols.Resolve(varName); ok && sym.Identifier.ValueType.Kind() == types.StructKind {
+	if sym, ok := p.symbols.ResolveIdent(varName); ok && sym.Identifier.ValueType.Kind() == types.StructKind {
 		if st, ok := sym.Identifier.ValueType.Underlying().(*types.Struct); ok {
 			for _, f := range st.Fields {
 				if !p.symbols.IsFieldAlive(varName, f.Name) {
@@ -34,6 +34,7 @@ func (p *Parser) findDeadField(varName string) string {
 			}
 		}
 	}
+
 	return ""
 }
 
@@ -97,16 +98,16 @@ func (p *Parser) walkExprVars(exprIdx ast.ExprIndex, vars map[string]struct{}, f
 	switch e := e.(type) {
 	case *ast.Identifier:
 		if vars != nil && e.Qualifier == ast.QualifierVariable {
-			if _, ok := p.symbols.Resolve(e.Token.Literal); ok {
+			if _, ok := p.symbols.ResolveIdent(e.Token.Literal); ok {
 				vars[e.Token.Literal] = struct{}{}
 			}
 		}
 	case *ast.Selector:
-		if len(e.Fields) >= 2 && e.Fields[0] != nil &&
-			e.Fields[0].Qualifier == ast.QualifierVariable {
+		if len(e.Fields) >= 2 && e.Fields[0] != nil && e.Fields[0].Qualifier == ast.QualifierVariable {
 			sv := e.Fields[0].Token.Literal
 			fn := e.Fields[len(e.Fields)-1].Token.Literal
-			if _, ok := p.symbols.Resolve(sv); ok {
+
+			if _, ok := p.symbols.ResolveIdent(sv); ok {
 				if vars != nil {
 					vars[sv] = struct{}{}
 				}
@@ -261,12 +262,14 @@ func (p *Parser) walkNodeVars(nodeIdx ast.NodeIndex, vars map[string]struct{}, f
 }
 
 func (s *SymbolTable) owningScope(name string) *SymbolTable {
-	if _, ok := s.table.Load(name); ok {
+	if _, ok := s.idents.Load(name); ok {
 		return s
 	}
+
 	if s.Outer != nil {
 		return s.Outer.owningScope(name)
 	}
+
 	return nil
 }
 

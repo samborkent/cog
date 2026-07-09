@@ -29,6 +29,11 @@ func (p *Parser) parseImport(ctx context.Context) ast.NodeIndex {
 			break
 		}
 
+		if t.Type == tokens.Newline {
+			p.lex.Step()
+			continue
+		}
+
 		if t.Type != tokens.StringLiteral {
 			p.error(t, "found non-string token in import list: "+t.Literal, "parseImport")
 			return ast.ZeroNodeIndex
@@ -69,9 +74,10 @@ func (p *Parser) parseImport(ctx context.Context) ast.NodeIndex {
 		// Exports will be populated later by the driver (cmd/main.go)
 		// after the imported package has been parsed.
 		p.symbols.DefineCogImport(&CogImport{
-			Path:    importPath,
-			Name:    pkgName,
-			Exports: make(map[string]Symbol),
+			Path:         importPath,
+			Name:         pkgName,
+			ExportValues: make(map[string]Symbol),
+			ExportTypes:  make(map[string]*ast.Type),
 		})
 
 		p.lex.Step()

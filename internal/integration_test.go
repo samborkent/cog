@@ -1152,7 +1152,7 @@ main : proc() = {
 	}
 
 	// Replicate the check from runProject: main exists but package != "main".
-	if _, hasMain := symbols.Resolve("main"); !hasMain {
+	if _, hasMain := symbols.ResolveIdent("main"); !hasMain {
 		t.Fatal("expected symbol table to contain main")
 	}
 }
@@ -1320,7 +1320,7 @@ main : proc() = {
 	}
 
 	// Replicate the check from compileImportedPackage: imported packages must not have main.
-	if _, hasMain := symbols.Resolve("main"); !hasMain {
+	if _, hasMain := symbols.ResolveIdent("main"); !hasMain {
 		t.Fatal("expected symbol table to contain main for this test scenario")
 	}
 }

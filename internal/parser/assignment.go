@@ -10,30 +10,28 @@ import (
 )
 
 func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) ast.NodeIndex {
-	symbol, ok := p.symbols.Resolve(ident.String())
+	symbol, ok := p.symbols.ResolveIdent(ident.String())
 	if !ok {
 		// Field assignment: resolve just the struct variable name.
+		// TODO: wtf is this?
 		name := ident.String()
 		if idx := strings.IndexByte(name, '.'); idx >= 0 {
-			symbol, ok = p.symbols.Resolve(name[:idx])
+			symbol, ok = p.symbols.ResolveIdent(name[:idx])
 		}
+
 		if !ok {
 			p.error(p.lex.Peek(-1), "unknown identifier", "parseAssignment")
 			return ast.ZeroNodeIndex
 		}
 	}
 
-	switch symbol.Identifier.Qualifier {
-	case ast.QualifierImmutable:
+	if symbol.Identifier.Qualifier == ast.QualifierImmutable {
 		p.error(p.lex.Peek(-1), "cannot reassign a constant", "parseAssignment")
 
 		// Skip until next line.
 		p.lex.Step() // consume =
 		_ = p.expression(ctx, symbol.Type())
 
-		return ast.ZeroNodeIndex
-	case ast.QualifierType:
-		p.error(p.lex.Peek(-1), "cannot assign to a type identifier", "parseAssignment")
 		return ast.ZeroNodeIndex
 	}
 
@@ -66,13 +64,14 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) ast
 		p.symbols.MarkConsumed(sourceIdent.Token.Literal)
 	}
 
-	// Rule 19: field selector as RHS consumes that specific field.
+	// Field selector as RHS consumes that specific field.
 	if selector, ok := p.ast.Expr(expr).(*ast.Selector); ok {
 		if len(selector.Fields) > 0 {
 			structVar := selector.Fields[0].Token.Literal
 			fieldName := selector.Fields[len(selector.Fields)-1].Token.Literal
-			if sym, ok := p.symbols.Resolve(structVar); ok &&
-				sym.Identifier.Qualifier == ast.QualifierVariable {
+
+			sym, ok := p.symbols.ResolveIdent(structVar)
+			if ok && sym.Identifier.Qualifier == ast.QualifierVariable {
 				if err := p.symbols.MarkFieldConsumed(structVar, fieldName); err != nil {
 					p.error(assignmentToken, err.Error(), "parseAssignment")
 					return ast.ZeroNodeIndex
@@ -103,14 +102,8 @@ func (p *Parser) parseAssignment(ctx context.Context, ident *ast.Identifier) ast
 		}
 	}
 
-	if symbol.Identifier.String() != "_" &&
-		(symbol.Identifier.ValueType == nil || symbol.Identifier.ValueType == types.None) {
+	if symbol.Identifier.String() != "_" && (symbol.Identifier.ValueType == nil || symbol.Identifier.ValueType == types.None) {
 		symbol.Identifier.ValueType = exprType
-	}
-
-	if symbol.Identifier.String() != "_" && symbol.Type() == types.None {
-		// TODO: this seems unnecessary, as we do the same just above.
-		p.symbols.Update(ident.String(), exprType)
 	}
 
 	return p.ast.NewAssignment(assignmentToken, symbol.Identifier, expr)

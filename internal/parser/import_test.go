@@ -246,7 +246,7 @@ main : proc() = {
 		}
 
 		// val should be resolvable by the shared symbol table.
-		_, ok := syms.Resolve("val")
+		_, ok := syms.ResolveIdent("val")
 		if !ok {
 			t.Fatal("expected 'val' to be in shared symbol table")
 		}
@@ -291,7 +291,7 @@ main : proc() = {}
 		t.Fatal("expected cog import 'geom'")
 	}
 
-	imp.Exports["Distance"] = parser.Symbol{
+	imp.ExportValues["Distance"] = parser.Symbol{
 		Identifier: &ast.Identifier{
 			Token: tokens.Token{
 				Type:    tokens.Identifier,
@@ -301,7 +301,7 @@ main : proc() = {}
 			Exported:  true,
 		},
 	}
-	imp.Exports["Pi"] = parser.Symbol{
+	imp.ExportValues["Pi"] = parser.Symbol{
 		Identifier: &ast.Identifier{
 			Token: tokens.Token{
 				Type:    tokens.Identifier,
@@ -313,15 +313,15 @@ main : proc() = {}
 	}
 
 	// Verify exports are accessible.
-	if len(imp.Exports) != 2 {
-		t.Fatalf("expected 2 exports, got %d", len(imp.Exports))
+	if len(imp.ExportValues) != 2 {
+		t.Fatalf("expected 2 exports, got %d", len(imp.ExportValues))
 	}
 
-	if _, ok := imp.Exports["Distance"]; !ok {
+	if _, ok := imp.ExportValues["Distance"]; !ok {
 		t.Error("missing export Distance")
 	}
 
-	if _, ok := imp.Exports["Pi"]; !ok {
+	if _, ok := imp.ExportValues["Pi"]; !ok {
 		t.Error("missing export Pi")
 	}
 }

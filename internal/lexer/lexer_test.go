@@ -384,7 +384,7 @@ func TestCommentsArePreserved(t *testing.T) {
 		comment string
 	}{
 		{"line_comment", "// this is a comment\n42", "// this is a comment"},
-		{"block_comment", "/* block */ 42", "/* block */"},
+		{"block_comment", "/* block */\n42", "/* block */"},
 	}
 
 	for _, tt := range tests {
@@ -392,8 +392,8 @@ func TestCommentsArePreserved(t *testing.T) {
 			t.Parallel()
 
 			toks := lex(t, tt.src)
-			if len(toks) != 3 {
-				t.Fatalf("expected 3 tokens (comment + int + EOF), got %d: %v", len(toks), toks)
+			if len(toks) != 4 {
+				t.Fatalf("expected 4 tokens (comment + \n + int + EOF), got %d: %v", len(toks), toks)
 			}
 
 			if toks[0].Type != tokens.Comment {
@@ -404,8 +404,8 @@ func TestCommentsArePreserved(t *testing.T) {
 				t.Errorf("expected comment literal %q, got %q", tt.comment, toks[0].Literal)
 			}
 
-			if toks[1].Type != tokens.IntLiteral {
-				t.Errorf("expected IntLiteral, got %s", toks[1].Type)
+			if toks[2].Type != tokens.IntLiteral {
+				t.Errorf("expected IntLiteral, got %s", toks[2].Type)
 			}
 		})
 	}
@@ -551,16 +551,16 @@ func TestLineAndColumnTracking(t *testing.T) {
 	t.Parallel()
 
 	toks := lex(t, "x\ny")
-	if len(toks) != 3 {
-		t.Fatalf("expected 3 tokens, got %d", len(toks))
+	if len(toks) != 4 {
+		t.Fatalf("expected 4 tokens, got %d", len(toks))
 	}
 
 	if toks[0].Ln != 1 || toks[0].Col != 1 {
 		t.Errorf("'x' at (%d:%d), expected (1:1)", toks[0].Ln, toks[0].Col)
 	}
 
-	if toks[1].Ln != 2 || toks[1].Col != 1 {
-		t.Errorf("'y' at (%d:%d), expected (2:1)", toks[1].Ln, toks[1].Col)
+	if toks[2].Ln != 2 || toks[2].Col != 1 {
+		t.Errorf("'y' at (%d:%d), expected (2:1)", toks[2].Ln, toks[2].Col)
 	}
 }
 

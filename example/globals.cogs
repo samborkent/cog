@@ -1,0 +1,14 @@
+// Should fail, [Int] hasn't been defined yet.
+a : Int = 10
+_ = a
+
+Int ~ int64
+
+b : Int = 10
+_ = b
+
+(a : Int).add : func(b : Int) Int = {
+    return 0
+}
+
+c := a.add(b)

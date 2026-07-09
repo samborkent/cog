@@ -29,6 +29,9 @@ func (p *Parser) parseCombinedType(ctx context.Context, exported, global bool) t
 		return p.parseErrorType(ctx, ident)
 	case tokens.Function, tokens.Procedure:
 		return p.parseProcedureType(ctx, exported, global)
+	case tokens.Newline:
+		p.lex.Step()
+		return nil
 	}
 
 	typ := p.parseType(ctx)
@@ -169,7 +172,7 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		switch p.lex.This().Type {
 		case tokens.IntLiteral:
 		case tokens.Identifier:
-			symbol, ok := p.symbols.Resolve(p.lex.This().Literal)
+			symbol, ok := p.symbols.ResolveIdent(p.lex.This().Literal)
 			if ok && types.IsFixed(symbol.Identifier.ValueType) {
 				break
 			}
@@ -274,6 +277,9 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 		return &types.Set{Element: elemType}
 	case tokens.Struct:
 		return p.parseStruct(ctx)
+	case tokens.Newline:
+		p.lex.Step()
+		return p.parseType(ctx)
 	case tokens.BitAnd:
 		// Reference type parsing
 		p.lex.Step() // consume &
@@ -313,24 +319,12 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 					return nil
 				}
 
-				sym, found := imp.Exports[p.lex.This().Literal]
-				if !found || sym.Identifier.Qualifier != ast.QualifierType {
-					p.error(p.lex.This(), fmt.Sprintf("package %q has no exported type %q", imp.Name, p.lex.This().Literal), "parseType")
-					return nil
-				}
+				typToken := p.lex.This()
 
-				ident := sym.Identifier
-				if types.IsNone(ident.ValueType) {
-					typ = types.NewForwardAlias(ident.Token.Literal, ident.Exported, ident.Global, func() types.Type {
-						return ident.ValueType
-					})
-				} else {
-					typ = &types.Alias{
-						Name:     ident.Token.Literal,
-						Derived:  ident.ValueType,
-						Exported: ident.Exported,
-						Global:   ident.Global,
-					}
+				typ, found := imp.ExportTypes[typToken.Literal]
+				if !found {
+					p.error(p.lex.This(), fmt.Sprintf("package %q has no exported type %q", imp.Name, typToken.Literal), "parseType")
+					return nil
 				}
 
 				p.lex.Step() // consume type name
@@ -338,75 +332,45 @@ func (p *Parser) parseType(ctx context.Context) types.Type {
 				if p.lex.This().Type == tokens.Question {
 					p.lex.Step() // consume ?
 
-					if typ.Kind() == types.OptionKind {
+					if typ.Alias.Kind() == types.OptionKind {
 						p.error(p.lex.This(), "nested optional types are not allowed", "parseType")
 						return nil
 					}
 
-					return &types.Option{Value: typ}
+					return &types.Option{Value: typ.Alias}
 				}
 
-				return typ
+				return typ.Alias
 			}
 		}
 
 		// Non-basic type, try to find in symbol table.
-		typeSymbol, ok := p.symbols.Resolve(p.lex.This().Literal)
+		typeSymbol, ok := p.symbols.ResolveType(p.lex.This().Literal)
 		if !ok && p.globalsPass && p.lex.This().Type == tokens.Identifier {
 			// Forward type reference. Register stub, resolve lazily.
-			ident := &ast.Identifier{
-				Token:     p.lex.This(),
-				Qualifier: ast.QualifierType,
-				Global:    true,
+			forwardType := &ast.Type{
+				Token: p.lex.This(),
+				Alias: &types.Alias{
+					Name:    p.lex.This().Literal,
+					Derived: types.None,
+					Global:  true,
+				},
 			}
 
-			p.symbols.DefineGlobal(ident) // registers with ScanScope + ValueType=None
-
-			typ = types.NewForwardAlias(ident.Token.Literal, ident.Exported, ident.Global, func() types.Type {
-				return ident.ValueType
-			})
+			p.symbols.DefineGlobalType(forwardType) // registers with Derived=None
+			typeSymbol = forwardType
 
 			// Don't return — fall through to consume the type name and
 			// handle generic instantiation (<...>) and optional (?) suffixes.
 		}
 
-		if typ == nil && (!ok || typeSymbol.Identifier.Qualifier != ast.QualifierType) {
+		if typ == nil && !ok {
 			p.error(p.lex.This(), "unknown type found in type declaration", "parseType")
 			return nil
 		}
 
 		if typ == nil {
-			ident := typeSymbol.Identifier
-
-			// If the symbol is a type parameter (inside a generic alias body),
-			// return the type parameter alias directly.
-			if alias, ok := ident.ValueType.(*types.Alias); ok && alias.IsTypeParam() {
-				p.lex.Step() // consume type param name
-				return alias
-			}
-
-			if types.IsNone(ident.ValueType) {
-				// Forward reference: type name is pre-registered but not yet resolved.
-				// Create a lazy alias that resolves when the type is accessed.
-				typ = types.NewForwardAlias(ident.Token.Literal, ident.Exported, ident.Global, func() types.Type {
-					return ident.ValueType
-				})
-			} else {
-				// Copy type parameters from the original type if it's an alias
-				var typeParams []*types.Alias
-
-				if originalAlias, ok := ident.ValueType.(*types.Alias); ok {
-					typeParams = originalAlias.TypeParams
-				}
-
-				typ = &types.Alias{
-					Name:       ident.Token.Literal,
-					Derived:    ident.ValueType,
-					Exported:   ident.Exported,
-					Global:     ident.Global,
-					TypeParams: typeParams,
-				}
-			}
+			typ = typeSymbol.Alias
 		}
 	}
 
@@ -450,14 +414,14 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 	var genAlias *types.Alias
 
 	if alias.Derived != nil && !types.IsNone(alias.Derived) {
-		if a, ok := alias.Derived.(*types.Alias); ok && len(a.TypeParams) > 0 {
+		if a, ok := alias.Derived.(*types.Alias); ok && len(a.TypeParameters) > 0 {
 			genAlias = a
 		}
 	}
 
 	if genAlias == nil {
 		// The alias itself may carry TypeParams (for direct resolutions).
-		if len(alias.TypeParams) > 0 {
+		if len(alias.TypeParameters) > 0 {
 			genAlias = alias
 		}
 	}
@@ -466,7 +430,7 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 		// Try resolving the underlying value type (set during findGlobalType).
 		switch v := alias.Derived.(type) {
 		case *types.Alias:
-			if len(v.TypeParams) > 0 {
+			if len(v.TypeParameters) > 0 {
 				genAlias = v
 			}
 		}
@@ -480,11 +444,11 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 			typeArgs := p.parseTypeArguments(ctx)
 
 			return &types.Alias{
-				Name:     alias.Name,
-				Derived:  alias, // chain to forward alias so Kind()/Underlying() resolve lazily
-				Exported: alias.Exported,
-				Global:   alias.Global,
-				TypeArgs: typeArgs,
+				Name:          alias.Name,
+				Derived:       alias, // chain to forward alias so Kind()/Underlying() resolve lazily
+				Exported:      alias.Exported,
+				Global:        alias.Global,
+				TypeArguments: typeArgs,
 			}
 		}
 
@@ -497,16 +461,16 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 		return nil
 	}
 
-	if len(typeArgs) != len(genAlias.TypeParams) {
+	if len(typeArgs) != len(genAlias.TypeParameters) {
 		p.error(p.lex.This(), fmt.Sprintf("wrong number of type arguments for %q: expected %d, got %d",
-			alias.Name, len(genAlias.TypeParams), len(typeArgs)), "instantiateGenericAlias")
+			alias.Name, len(genAlias.TypeParameters), len(typeArgs)), "instantiateGenericAlias")
 
 		return nil
 	}
 
 	// Check constraint satisfaction.
 	for i, arg := range typeArgs {
-		tp := genAlias.TypeParams[i]
+		tp := genAlias.TypeParameters[i]
 		if !tp.SatisfiedBy(arg) {
 			p.error(p.lex.This(), fmt.Sprintf("type argument %q does not satisfy constraint %q for parameter %q",
 				arg.String(), tp.ConstraintString(), tp.Name), "instantiateGenericAlias")
@@ -517,7 +481,7 @@ func (p *Parser) instantiateGenericAlias(ctx context.Context, typ types.Type) ty
 
 	// Build substitution map and instantiate.
 	argMap := make(map[string]types.Type, len(typeArgs))
-	for i, tp := range genAlias.TypeParams {
+	for i, tp := range genAlias.TypeParameters {
 		argMap[tp.Name] = typeArgs[i]
 	}
 
@@ -540,6 +504,11 @@ func (p *Parser) parseInterface(ctx context.Context) types.Type {
 		tok := p.lex.This()
 		if tok.Type == tokens.RBrace {
 			break
+		}
+
+		if tok.Type == tokens.Newline {
+			p.lex.Step()
+			continue
 		}
 
 		if tok.Type != tokens.Identifier {
@@ -594,6 +563,11 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 	for p.lex.This().Type != tokens.EOF && ctx.Err() == nil {
 		// Skip semicolons (used in single-line struct definitions).
 		for p.lex.This().Type == tokens.Semicolon {
+			p.lex.Step()
+		}
+
+		// Skip newlines.
+		for p.lex.This().Type == tokens.Newline {
 			p.lex.Step()
 		}
 
@@ -652,6 +626,8 @@ func (p *Parser) parseStruct(ctx context.Context) types.Type {
 			}
 
 			fields = append(fields, field)
+		case tokens.Newline:
+			p.lex.Step()
 		default:
 			p.error(p.lex.This(), "unexpected token found in struct declaration", "parseStruct")
 			return nil
@@ -716,13 +692,12 @@ func (p *Parser) parseProcedureType(ctx context.Context, exported, global bool) 
 
 		// Pre-register type parameters in symbol table for recursive references.
 		for _, tp := range procType.TypeParams {
-			p.symbols.Define(&ast.Identifier{
+			p.symbols.DefineType(&ast.Type{
 				Token: tokens.Token{
 					Type:    tokens.Identifier,
 					Literal: tp.Name,
 				},
-				ValueType: tp,
-				Qualifier: ast.QualifierType,
+				Alias: tp,
 			})
 		}
 
@@ -919,6 +894,11 @@ func (p *Parser) parseEnumType(ctx context.Context, ident *ast.Identifier) types
 			break
 		}
 
+		if tok.Type == tokens.Newline {
+			p.lex.Step()
+			continue
+		}
+
 		if tok.Type != tokens.Identifier {
 			p.error(tok, "expected identifier in enum declaration", "parseEnumType")
 			return nil
@@ -929,8 +909,6 @@ func (p *Parser) parseEnumType(ctx context.Context, ident *ast.Identifier) types
 			ValueType: valType,
 			Exported:  ident.Exported,
 		}
-
-		p.symbols.DefineEnumValue(ident.Token.Literal, valIdent)
 
 		p.lex.Step() // consume identifier
 
@@ -1003,6 +981,11 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 			break
 		}
 
+		if tok.Type == tokens.Newline {
+			p.lex.Step()
+			continue
+		}
+
 		if tok.Type != tokens.Identifier {
 			p.error(tok, "expected identifier in error declaration", "parseErrorType")
 			return nil
@@ -1015,14 +998,6 @@ func (p *Parser) parseErrorType(ctx context.Context, ident *ast.Identifier) type
 		if valType == nil {
 			valType = types.Basics[types.UTF8]
 		}
-
-		valIdent := &ast.Identifier{
-			Token:     tok,
-			ValueType: valType,
-			Exported:  ident.Exported,
-		}
-
-		p.symbols.DefineEnumValue(ident.Token.Literal, valIdent)
 
 		p.lex.Step() // consume identifier
 

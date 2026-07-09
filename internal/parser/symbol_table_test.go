@@ -16,12 +16,21 @@ func makeIdent(name string, vt types.Type) *ast.Identifier {
 	}
 }
 
+func makeType(name string, vt types.Type) *ast.Type {
+	return &ast.Type{
+		Token: tokens.Token{Type: tokens.Identifier, Literal: name},
+		Alias: &types.Alias{
+			Derived: vt,
+		},
+	}
+}
+
 func TestNewSymbolTable(t *testing.T) {
 	t.Parallel()
 
 	s := NewSymbolTable()
 
-	sym, ok := s.Resolve("_")
+	sym, ok := s.ResolveIdent("_")
 	if !ok {
 		t.Fatal("expected blank identifier")
 	}
@@ -52,9 +61,9 @@ func TestDefineAndResolve(t *testing.T) {
 	s := NewSymbolTable()
 
 	ident := makeIdent("x", types.Basics[types.Int64])
-	s.Define(ident)
+	s.DefineIdent(ident)
 
-	sym, ok := s.Resolve("x")
+	sym, ok := s.ResolveIdent("x")
 	if !ok {
 		t.Fatal("expected to resolve x")
 	}
@@ -76,9 +85,9 @@ func TestDefineNilType(t *testing.T) {
 	ident := &ast.Identifier{
 		Token: tokens.Token{Type: tokens.Identifier, Literal: "y"},
 	}
-	s.Define(ident)
+	s.DefineIdent(ident)
 
-	sym, ok := s.Resolve("y")
+	sym, ok := s.ResolveIdent("y")
 	if !ok {
 		t.Fatal("expected to resolve y")
 	}
@@ -93,7 +102,7 @@ func TestResolveNotFound(t *testing.T) {
 
 	s := NewSymbolTable()
 
-	_, ok := s.Resolve("nonexistent")
+	_, ok := s.ResolveIdent("nonexistent")
 	if ok {
 		t.Fatal("expected resolve to fail")
 	}
@@ -103,16 +112,16 @@ func TestEnclosedSymbolTable(t *testing.T) {
 	t.Parallel()
 
 	outer := NewSymbolTable()
-	outer.Define(makeIdent("a", types.Basics[types.UTF8]))
+	outer.DefineIdent(makeIdent("a", types.Basics[types.UTF8]))
 
 	inner := NewEnclosedSymbolTable(outer)
-	inner.Define(makeIdent("b", types.Basics[types.Int64]))
+	inner.DefineIdent(makeIdent("b", types.Basics[types.Int64]))
 
-	if _, ok := inner.Resolve("b"); !ok {
+	if _, ok := inner.ResolveIdent("b"); !ok {
 		t.Fatal("expected inner to resolve b")
 	}
 
-	sym, ok := inner.Resolve("a")
+	sym, ok := inner.ResolveIdent("a")
 	if !ok {
 		t.Fatal("expected inner to resolve a from outer")
 	}
@@ -121,7 +130,7 @@ func TestEnclosedSymbolTable(t *testing.T) {
 		t.Errorf("type = %v, want utf8", sym.Type())
 	}
 
-	bsym, _ := inner.Resolve("b")
+	bsym, _ := inner.ResolveIdent("b")
 	if bsym.Scope != LocalScope {
 		t.Errorf("inner scope = %v, want LocalScope", bsym.Scope)
 	}
@@ -133,9 +142,9 @@ func TestDefineGlobal(t *testing.T) {
 	s := NewSymbolTable()
 
 	ident := makeIdent("g", types.Basics[types.Float64])
-	s.DefineGlobal(ident)
+	s.DefineGlobalIdent(ident)
 
-	sym, ok := s.Resolve("g")
+	sym, ok := s.ResolveIdent("g")
 	if !ok {
 		t.Fatal("expected to resolve g")
 	}
@@ -151,9 +160,8 @@ func TestDefineGlobalResolvesForwardStub(t *testing.T) {
 	s := NewSymbolTable()
 
 	// Create a forward stub (ScanScope, ValueType=None).
-	stub := makeIdent("Point", types.None)
-	stub.Qualifier = ast.QualifierType
-	s.DefineGlobal(stub)
+	stub := makeType("Point", types.None)
+	s.DefineGlobalType(stub)
 
 	// Now resolve the stub with the real struct type.
 	structType := &types.Struct{
@@ -162,37 +170,37 @@ func TestDefineGlobalResolvesForwardStub(t *testing.T) {
 			{Name: "y", Type: types.Basics[types.Float64], Exported: true},
 		},
 	}
-	real := makeIdent("Point", structType)
-	real.Qualifier = ast.QualifierType
-	s.DefineGlobal(real)
+	real := makeType("Point", structType)
+	s.DefineGlobalType(real)
 
 	// The stub pointer should have been updated in-place.
-	sym, ok := s.Resolve("Point")
+	sym, ok := s.ResolveType("Point")
 	if !ok {
 		t.Fatal("expected to resolve Point")
 	}
 
-	if sym.Identifier.ValueType.Kind() != types.StructKind {
-		t.Fatalf("expected StructKind, got %v", sym.Identifier.ValueType.Kind())
+	foundType, ok := sym.Alias.Derived.(*types.Struct)
+	if !ok {
+		t.Fatalf("expected StructKind, got %v", sym.Alias.Kind())
 	}
 
 	// Struct fields must be registered on the symbol table.
-	xField, ok := s.ResolveField("Point", "x")
-	if !ok {
+	xField := foundType.Field("x")
+	if xField == nil {
 		t.Fatal("expected to resolve field x")
 	}
 
-	if xField.Type().Kind() != types.Float64 {
-		t.Errorf("field x type = %v, want Float64", xField.Type())
+	if xField.Type.Kind() != types.Float64 {
+		t.Errorf("field x type = %v, want Float64", xField.Type)
 	}
 
-	yField, ok := s.ResolveField("Point", "y")
-	if !ok {
+	yField := foundType.Field("y")
+	if yField == nil {
 		t.Fatal("expected to resolve field y")
 	}
 
-	if yField.Type().Kind() != types.Float64 {
-		t.Errorf("field y type = %v, want Float64", yField.Type())
+	if yField.Type.Kind() != types.Float64 {
+		t.Errorf("field y type = %v, want Float64", yField.Type)
 	}
 }
 
@@ -203,13 +211,13 @@ func TestDefineGlobalResolvesForwardStubNonStruct(t *testing.T) {
 
 	// Create a forward stub.
 	stub := makeIdent("count", types.None)
-	s.DefineGlobal(stub)
+	s.DefineGlobalIdent(stub)
 
 	// Resolve with a non-struct type.
 	real := makeIdent("count", types.Basics[types.Int64])
-	s.DefineGlobal(real)
+	s.DefineGlobalIdent(real)
 
-	sym, ok := s.Resolve("count")
+	sym, ok := s.ResolveIdent("count")
 	if !ok {
 		t.Fatal("expected to resolve count")
 	}
@@ -256,9 +264,9 @@ func TestDefineCogImportAndResolve(t *testing.T) {
 	s := NewSymbolTable()
 
 	imp := &CogImport{
-		Path:    "geom",
-		Name:    "geom",
-		Exports: make(map[string]Symbol),
+		Path:         "geom",
+		Name:         "geom",
+		ExportValues: make(map[string]Symbol),
 	}
 	s.DefineCogImport(imp)
 
@@ -288,8 +296,8 @@ func TestCogImports(t *testing.T) {
 
 	s := NewSymbolTable()
 
-	s.DefineCogImport(&CogImport{Path: "a", Name: "a", Exports: make(map[string]Symbol)})
-	s.DefineCogImport(&CogImport{Path: "b/c", Name: "c", Exports: make(map[string]Symbol)})
+	s.DefineCogImport(&CogImport{Path: "a", Name: "a", ExportValues: make(map[string]Symbol)})
+	s.DefineCogImport(&CogImport{Path: "b/c", Name: "c", ExportValues: make(map[string]Symbol)})
 
 	imports := s.CogImports()
 	if imports.Len() != 2 {
@@ -309,7 +317,7 @@ func TestCogImportSharedInEnclosed(t *testing.T) {
 	t.Parallel()
 
 	outer := NewSymbolTable()
-	outer.DefineCogImport(&CogImport{Path: "pkg", Name: "pkg", Exports: make(map[string]Symbol)})
+	outer.DefineCogImport(&CogImport{Path: "pkg", Name: "pkg", ExportValues: make(map[string]Symbol)})
 
 	inner := NewEnclosedSymbolTable(outer)
 
@@ -322,22 +330,22 @@ func TestForEachGlobal(t *testing.T) {
 	t.Parallel()
 
 	outer := NewSymbolTable()
-	outer.Define(makeIdent("a", types.Basics[types.Int64]))
-	outer.Define(makeIdent("b", types.Basics[types.UTF8]))
+	outer.DefineIdent(makeIdent("a", types.Basics[types.Int64]))
+	outer.DefineIdent(makeIdent("b", types.Basics[types.UTF8]))
 
 	inner := NewEnclosedSymbolTable(outer)
-	inner.Define(makeIdent("c", types.Basics[types.Bool]))
+	inner.DefineIdent(makeIdent("c", types.Basics[types.Bool]))
 
 	var names []string
 
-	inner.ForEachGlobal(func(name string, sym Symbol) {
-		if name != "_" {
-			names = append(names, name)
+	for symbol := range inner.Symbols() {
+		if symbol.Identifier.Token.Literal != "_" {
+			names = append(names, symbol.Identifier.Token.Literal)
 		}
-	})
+	}
 
-	if len(names) != 2 {
-		t.Fatalf("expected 2 globals, got %d: %v", len(names), names)
+	if len(names) != 3 {
+		t.Fatalf("expected 3 symbols, got %d: %v", len(names), names)
 	}
 }
 
@@ -345,11 +353,14 @@ func TestUpdate(t *testing.T) {
 	t.Parallel()
 
 	s := NewSymbolTable()
-	s.Define(makeIdent("x", types.Basics[types.Int64]))
 
-	s.Update("x", types.Basics[types.Float64])
+	ident := makeIdent("x", types.Basics[types.Int64])
 
-	sym, ok := s.Resolve("x")
+	s.DefineIdent(ident)
+
+	ident.ValueType = types.Basics[types.Float64]
+
+	sym, ok := s.ResolveIdent("x")
 	if !ok {
 		t.Fatal("expected to resolve x")
 	}
@@ -359,107 +370,15 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-func TestUpdateNonexistent(t *testing.T) {
-	t.Parallel()
-
-	s := NewSymbolTable()
-
-	// Should not panic when updating a non-existent symbol.
-	s.Update("missing", types.Basics[types.Int64])
-}
-
-func TestResolveField(t *testing.T) {
-	t.Parallel()
-
-	s := NewSymbolTable()
-
-	structType := &types.Struct{
-		Fields: []*types.Field{
-			{Name: "x", Type: types.Basics[types.Float64]},
-			{Name: "y", Type: types.Basics[types.Float64]},
-		},
-	}
-	ident := makeIdent("point", structType)
-	ident.Qualifier = ast.QualifierVariable
-	s.Define(ident)
-
-	sym, ok := s.ResolveField("point", "x")
-	if !ok {
-		t.Fatal("expected to resolve field x")
-	}
-
-	if sym.Type().Kind() != types.Float64 {
-		t.Errorf("field type = %v, want float64", sym.Type())
-	}
-
-	if sym.Scope != StructScope {
-		t.Errorf("field scope = %v, want StructScope", sym.Scope)
-	}
-}
-
-func TestResolveFieldNotFound(t *testing.T) {
-	t.Parallel()
-
-	s := NewSymbolTable()
-
-	_, ok := s.ResolveField("point", "z")
-	if ok {
-		t.Fatal("expected resolve to fail for missing type")
-	}
-}
-
-func TestResolveFieldFromOuter(t *testing.T) {
-	t.Parallel()
-
-	outer := NewSymbolTable()
-	structType := &types.Struct{
-		Fields: []*types.Field{
-			{Name: "x", Type: types.Basics[types.Int64]},
-		},
-	}
-	ident := makeIdent("pt", structType)
-	ident.Qualifier = ast.QualifierVariable
-	outer.Define(ident)
-
-	inner := NewEnclosedSymbolTable(outer)
-
-	sym, ok := inner.ResolveField("pt", "x")
-	if !ok {
-		t.Fatal("expected enclosed table to resolve field from outer")
-	}
-
-	if sym.Type().Kind() != types.Int64 {
-		t.Errorf("field type = %v, want int64", sym.Type())
-	}
-}
-
-func TestDefineEnumValue(t *testing.T) {
-	t.Parallel()
-
-	s := NewSymbolTable()
-
-	valIdent := makeIdent("Open", types.Basics[types.UTF8])
-	s.DefineEnumValue("Status", valIdent)
-
-	sym, ok := s.ResolveField("Status", "Open")
-	if !ok {
-		t.Fatal("expected to resolve enum value")
-	}
-
-	if sym.Scope != EnumScope {
-		t.Errorf("scope = %v, want EnumScope", sym.Scope)
-	}
-}
-
 func TestSymbolType(t *testing.T) {
 	t.Parallel()
 
 	s := NewSymbolTable()
 
 	ident := makeIdent("v", types.Basics[types.Bool])
-	s.Define(ident)
+	s.DefineIdent(ident)
 
-	sym, _ := s.Resolve("v")
+	sym, _ := s.ResolveIdent("v")
 	if sym.Type().Kind() != types.Bool {
 		t.Errorf("Type() = %v, want bool", sym.Type())
 	}
